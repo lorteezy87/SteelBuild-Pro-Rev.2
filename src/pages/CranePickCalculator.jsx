@@ -2,34 +2,54 @@
  * CranePickCalculator.jsx
  *
  * PM / field tool for pre-lift planning on structural-steel picks.
- * Computes total hook load, per-leg sling tension, LAF, and capacity
- * utilization for a symmetric rigging configuration. Exposes a
- * printable / copy-pasteable "Pick Summary" for lift plans and JHAs.
+ * Computes gross hook load against the crane chart, per-leg sling tension
+ * (symmetric or offset-CG), LAF, sling / shackle utilization against their
+ * WLLs, boom angle and tip height, and crane capacity utilization. Draws the
+ * pick in 3D and exposes a printable / copy-pasteable "Pick Summary" for lift
+ * plans and JHAs.
  *
  * This is a planning / cross-check tool — NOT a substitute for an
  * engineered lift plan. The disclaimer is displayed on the page AND
  * embedded in the exported Pick Summary so it survives copy-paste.
  *
- * Math lives in src/utils/riggingCalculations.js.
+ * Math lives in src/utils/riggingCalculations.js (symmetric sling math) and
+ * src/utils/cranePickMath.ts (parsing, gross load, offset CG, WLL checks,
+ * boom geometry). The 3D view is presentation only.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  calculateTotalLoad,
   calculateSlingTension,
   loadBearingLegs,
   calculateLAF,
   calculateUtilization,
-  getCapacityStatus,
   getAngleStatus,
   angleFromHeightSpan,
   buildWarnings,
 } from "@/utils/riggingCalculations";
+import {
+  parseNumericInput,
+  isBlankInput,
+  grossLoadForChart,
+  angleFromSlingLength,
+  fourLegHorizontalReach,
+  offsetTwoLegBridle,
+  wllUtilization,
+  getRiggingStatus,
+  boomGeometry,
+  getCapacityStatusForLift,
+  buildExtendedWarnings,
+} from "@/utils/cranePickMath";
+import { ILLUSTRATIVE_BOOM_FT, ILLUSTRATIVE_RADIUS_FT } from "@/components/calculators/cranePickScene";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import CalcKey from "@/components/calculators/CalcKey";
 import CalcTape from "@/components/calculators/CalcTape";
 import useCalcTape from "@/components/calculators/useCalcTape";
 import "@/components/calculators/calc.css";
+
+// Three.js is ~600 KB — keep it out of the calculator chunk until the 3D view renders.
+const CranePick3D = lazyWithRetry(() => import("@/components/calculators/CranePick3D"));
 
 // Persisted Pick-History tape key (device-kit history, NOT part of the math).
 const PICK_TAPE_KEY = "crane-pick-history";
@@ -66,6 +86,7 @@ const labelStyle = {
   marginBottom: 6,
   display: "block",
 };
+const hintStyle = { ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.45 };
 
 // Status pill colors — reuse the bright tier we introduced in the
 // palette-unification pass. RED pulls extra weight so users don't miss
@@ -81,31 +102,67 @@ const STATUS_LABEL = {
   red:    "CRITICAL",
 };
 
-// Angle entry modes — users either type degrees directly or measure
-// H / S with a tape in the field.
+// Angle entry modes — degrees from a protractor / angle finder, height over
+// horizontal reach measured with a tape, or sling length (from the tag) and
+// height.
 const ANGLE_MODES = {
   DEGREES:     "degrees",
   HEIGHT_SPAN: "height-span",
+  SLING:       "sling-length",
 };
+
+// Centre-of-gravity position for a 2-leg bridle.
+const CG_MODES = { CENTERED: "centered", OFFSET: "offset" };
+
+const LIFT_TYPES = { STANDARD: "standard", PERSONNEL: "personnel" };
 
 // Quick-pick angle buttons (nice-to-have from spec).
 const ANGLE_PRESETS = [30, 45, 60, 90];
+
+// Sling length assumed for the 3D drawing when the angle is typed in degrees
+// (the angle alone doesn't fix the rigging's size). Drawing only.
+const DRAW_SLING_FT = 16;
+
+/**
+ * A numeric field's state: blank, invalid text, or a number. Blank and invalid
+ * are different — "12k" is a typo to report, "" is just not entered yet.
+ */
+function readField(raw) {
+  if (isBlankInput(raw)) return { blank: true, value: NaN, invalid: false };
+  const value = parseNumericInput(raw);
+  return { blank: false, value, invalid: !Number.isFinite(value) };
+}
+
+const NOT_A_NUMBER = "isn't a number — use digits only (commas are allowed as thousands separators, e.g. 12,500).";
 
 export default function CranePickCalculator() {
   // ── Inputs ──────────────────────────────────────────────────
   const [pieceWeight, setPieceWeight]     = useState("");
   const [riggingWeight, setRiggingWeight] = useState("0");
+  const [hookBlock, setHookBlock]         = useState("");
+  const [otherDeduct, setOtherDeduct]     = useState("");
   const [numLegs, setNumLegs]             = useState(2);
+  const [cgMode, setCgMode]               = useState(CG_MODES.CENTERED);
   const [angleMode, setAngleMode]         = useState(ANGLE_MODES.DEGREES);
   const [angleDeg, setAngleDeg]           = useState("60");
   const [hspanH, setHspanH]               = useState("");
   const [hspanS, setHspanS]               = useState("");
+  const [hspanW, setHspanW]               = useState("");
+  const [slingLen, setSlingLen]           = useState("");
+  const [slingH, setSlingH]               = useState("");
+  const [offH, setOffH]                   = useState("");
+  const [offD1, setOffD1]                 = useState("");
+  const [offD2, setOffD2]                 = useState("");
+  const [slingWll, setSlingWll]           = useState("");
+  const [shackleWll, setShackleWll]       = useState("");
+  const [liftType, setLiftType]           = useState(LIFT_TYPES.STANDARD);
   const [craneCapacity, setCraneCapacity] = useState("");
-  const [refOpen, setRefOpen]             = useState(false);
-  const [craneModel, setCraneModel]       = useState("");
   const [boomLength, setBoomLength]       = useState("");
   const [workingRadius, setWorkingRadius] = useState("");
+  const [refOpen, setRefOpen]             = useState(false);
+  const [craneModel, setCraneModel]       = useState("");
   const [counterweight, setCounterweight] = useState("");
+  const [show3d, setShow3d]               = useState(true);
   // The summary modal renders a SNAPSHOT (`summaryData`) rather than reading
   // live state directly, so a Pick-History recall can re-open a past pick.
   const [summaryData, setSummaryData]     = useState(null);
@@ -114,100 +171,252 @@ export default function CranePickCalculator() {
   // ── Pick History (device-kit tape — persisted, NOT part of the math) ──
   const pickTape = useCalcTape(PICK_TAPE_KEY, 30);
 
-  // ── Derived values (live, no Calculate button) ──────────────
-  // Parse all inputs once — downstream computations propagate NaN for
-  // anything that isn't a valid positive number, which lets the UI
-  // gate results off of Number.isFinite checks rather than try/catch.
-  const piece   = parseFloat(pieceWeight);
-  const rigging = parseFloat(riggingWeight || "0");
-  const cap     = parseFloat(craneCapacity);
+  // ── Parse (strictly — parseFloat("12,500") is 12) ───────────
+  const f = {
+    piece:   readField(pieceWeight),
+    rigging: readField(riggingWeight),
+    hook:    readField(hookBlock),
+    other:   readField(otherDeduct),
+    cap:     readField(craneCapacity),
+    angle:   readField(angleDeg),
+    hsH:     readField(hspanH),
+    hsS:     readField(hspanS),
+    hsW:     readField(hspanW),
+    slL:     readField(slingLen),
+    slH:     readField(slingH),
+    offH:    readField(offH),
+    offD1:   readField(offD1),
+    offD2:   readField(offD2),
+    slWll:   readField(slingWll),
+    shWll:   readField(shackleWll),
+    boom:    readField(boomLength),
+    radius:  readField(workingRadius),
+  };
+  const piece    = f.piece.value;
+  const rigging  = f.rigging.blank ? 0 : f.rigging.value;
+  const hookWt   = f.hook.blank ? 0 : f.hook.value;
+  const otherWt  = f.other.blank ? 0 : f.other.value;
+  const cap      = f.cap.value;
+  const isOffset = numLegs === 2 && cgMode === CG_MODES.OFFSET;
+
+  // ── Loads ───────────────────────────────────────────────────
+  // Sling load: what the slings hold (piece + rigging below the hook).
+  // Gross load: what the crane chart rates (adds hook block + chart deductions).
+  const slingLoad = Number.isFinite(piece) && Number.isFinite(rigging) && piece > 0 && rigging >= 0
+    ? piece + rigging : NaN;
+  const grossLoad = grossLoadForChart({
+    pieceWeight: piece, riggingWeight: rigging, hookBlockWeight: hookWt, otherDeductions: otherWt,
+  });
+
+  // ── Geometry ───────────────────────────────────────────────
+  const offsetResult = useMemo(
+    () => (isOffset ? offsetTwoLegBridle(slingLoad, f.offH.value, f.offD1.value, f.offD2.value) : null),
+    [isOffset, slingLoad, f.offH.value, f.offD1.value, f.offD2.value],
+  );
+
+  // Horizontal reach (hook plumb → one pick point) in the H/S mode's units.
+  const hsReach = numLegs === 4 ? fourLegHorizontalReach(f.hsS.value, f.hsW.value) : f.hsS.value;
 
   const effectiveAngle = useMemo(() => {
     if (numLegs === 1) return 90; // vertical pick — angle is irrelevant
-    if (angleMode === ANGLE_MODES.HEIGHT_SPAN) {
-      return angleFromHeightSpan(parseFloat(hspanH), parseFloat(hspanS));
-    }
-    return parseFloat(angleDeg);
-  }, [angleMode, angleDeg, hspanH, hspanS, numLegs]);
+    if (isOffset) return offsetResult ? Math.min(offsetResult.angle1, offsetResult.angle2) : NaN;
+    if (angleMode === ANGLE_MODES.HEIGHT_SPAN) return angleFromHeightSpan(f.hsH.value, hsReach);
+    if (angleMode === ANGLE_MODES.SLING) return angleFromSlingLength(f.slL.value, f.slH.value);
+    return f.angle.value;
+  }, [numLegs, isOffset, offsetResult, angleMode, f.hsH.value, hsReach, f.slL.value, f.slH.value, f.angle.value]);
 
-  const totalLoad = useMemo(
-    () => calculateTotalLoad(piece, rigging),
-    [piece, rigging]
-  );
-  const laf = useMemo(
-    () => (numLegs === 1 ? 1 : calculateLAF(effectiveAngle)),
-    [numLegs, effectiveAngle]
-  );
-  const tensionPerLeg = useMemo(
-    () => calculateSlingTension(totalLoad, numLegs, effectiveAngle),
-    [totalLoad, numLegs, effectiveAngle]
-  );
-  const utilization = useMemo(
-    () => calculateUtilization(totalLoad, cap),
-    [totalLoad, cap]
-  );
-  const capacityStatus = getCapacityStatus(utilization);
+  const laf = numLegs === 1 ? 1 : (isOffset ? NaN : calculateLAF(effectiveAngle));
+  const tensionPerLeg = isOffset
+    ? (offsetResult ? Math.max(offsetResult.tension1, offsetResult.tension2) : NaN)
+    : calculateSlingTension(slingLoad, numLegs, effectiveAngle);
+
+  const utilization = calculateUtilization(grossLoad, cap);
+  const capacityStatus = getCapacityStatusForLift(utilization, liftType);
   // Single-leg vertical picks don't have a meaningful sling-angle risk
   // (nothing to splay), so suppress the angle status for that case.
   const angleStatus = numLegs === 1 ? null : getAngleStatus(effectiveAngle);
+
+  const slingUtil   = f.slWll.blank ? NaN : wllUtilization(tensionPerLeg, f.slWll.value);
+  const shackleUtil = f.shWll.blank ? NaN : wllUtilization(tensionPerLeg, f.shWll.value);
+
+  const boomEntered = !f.boom.blank && !f.radius.blank;
+  const boomGeo = boomEntered ? boomGeometry(f.boom.value, f.radius.value) : null;
 
   // ── Input validation ───────────────────────────────────────
   // Collect every failure upfront so the user sees a single "fix
   // these" list rather than whack-a-mole errors as fields clear.
   const errors = useMemo(() => {
     const e = [];
-    if (pieceWeight === "") {
-      e.push("Enter piece weight.");
-    } else if (!(piece > 0)) {
-      e.push("Piece weight must be a positive number.");
+    const num = (fld, label, { required = false, min = 0, strictlyPositive = false } = {}) => {
+      if (fld.blank) { if (required) e.push(`Enter ${label}.`); return; }
+      if (fld.invalid) { e.push(`${label[0].toUpperCase()}${label.slice(1)} ${NOT_A_NUMBER}`); return; }
+      if (strictlyPositive ? !(fld.value > 0) : fld.value < min) {
+        e.push(`${label[0].toUpperCase()}${label.slice(1)} must be ${strictlyPositive ? "a positive number" : "zero or more"}.`);
+      }
+    };
+    num(f.piece, "piece weight", { required: true, strictlyPositive: true });
+    num(f.rigging, "rigging weight");
+    num(f.hook, "hook block weight");
+    num(f.other, "other chart deductions");
+    num(f.cap, "the crane's rated capacity at the planned radius", { required: true, strictlyPositive: true });
+    num(f.slWll, "sling WLL", { strictlyPositive: true });
+    num(f.shWll, "shackle WLL", { strictlyPositive: true });
+    num(f.boom, "boom length", { strictlyPositive: true });
+    num(f.radius, "working radius", { strictlyPositive: true });
+    if (boomEntered && !f.boom.invalid && !f.radius.invalid && f.boom.value > 0 && f.radius.value > 0 && !boomGeo) {
+      e.push("Working radius must be less than the boom length.");
     }
-    if (rigging < 0) e.push("Rigging weight cannot be negative.");
-    if (craneCapacity === "") {
-      e.push("Enter the crane's rated capacity at the planned radius.");
-    } else if (!(cap > 0)) {
-      e.push("Crane capacity must be a positive number.");
-    }
+
     if (numLegs !== 1) {
-      if (!(effectiveAngle > 0 && effectiveAngle <= 90)) {
+      if (isOffset) {
+        num(f.offH, "hook height above pick points", { required: true, strictlyPositive: true });
+        num(f.offD1, "CG → pick point 1 distance", { required: true, strictlyPositive: true });
+        num(f.offD2, "CG → pick point 2 distance", { required: true, strictlyPositive: true });
+      } else if (angleMode === ANGLE_MODES.HEIGHT_SPAN) {
+        num(f.hsH, "height H", { required: true, strictlyPositive: true });
+        num(f.hsS, numLegs === 4 ? "half-length" : "half-span S", { required: true });
+        if (numLegs === 4) num(f.hsW, "half-width", { required: true });
+      } else if (angleMode === ANGLE_MODES.SLING) {
+        num(f.slL, "sling length", { required: true, strictlyPositive: true });
+        num(f.slH, "height H", { required: true, strictlyPositive: true });
+        if (f.slL.value > 0 && f.slH.value > f.slL.value) e.push("Height H cannot exceed the sling length.");
+      } else {
+        num(f.angle, "sling angle", { required: true });
+      }
+      const geometryErrored = e.length > 0;
+      if (!geometryErrored && !(effectiveAngle > 0 && effectiveAngle <= 90)) {
         e.push("Sling angle must be > 0° and ≤ 90°.");
       }
     }
     return e;
-  }, [pieceWeight, piece, rigging, craneCapacity, cap, numLegs, effectiveAngle]);
+    // f is rebuilt each render; the raw strings are the real inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pieceWeight, riggingWeight, hookBlock, otherDeduct, craneCapacity, slingWll, shackleWll,
+      boomLength, workingRadius, numLegs, isOffset, angleMode, angleDeg, hspanH, hspanS, hspanW,
+      slingLen, slingH, offH, offD1, offD2, effectiveAngle, boomEntered, boomGeo]);
 
   const hasValidResults = errors.length === 0
-    && Number.isFinite(totalLoad)
+    && Number.isFinite(grossLoad)
     && Number.isFinite(tensionPerLeg)
     && Number.isFinite(utilization);
 
   const warnings = useMemo(
-    () => (hasValidResults ? buildWarnings({
-      angleStatus,
-      capacityStatus,
-      angleDegrees: effectiveAngle,
-      utilizationPercent: utilization,
-      // Drives the rigid-load disclosure for a 4-leg bridle, where tension is
-      // computed assuming only two legs carry.
-      numLegs,
-    }) : []),
-    [hasValidResults, angleStatus, capacityStatus, effectiveAngle, utilization, numLegs]
+    () => (hasValidResults ? [
+      ...buildWarnings({
+        angleStatus,
+        capacityStatus,
+        angleDegrees: effectiveAngle,
+        utilizationPercent: utilization,
+        // Drives the rigid-load disclosure for a 4-leg bridle, where tension is
+        // computed assuming only two legs carry.
+        numLegs,
+        liftType,
+      }),
+      ...buildExtendedWarnings({
+        slingUtilization: slingUtil,
+        shackleUtilization: shackleUtil,
+        hookBlockEntered: hookWt > 0,
+        offset: offsetResult,
+      }),
+    ].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "red" ? -1 : 1)) : []),
+    [hasValidResults, angleStatus, capacityStatus, effectiveAngle, utilization, numLegs, liftType,
+      slingUtil, shackleUtil, hookWt, offsetResult],
   );
+
+  // ── 3D scene spec (feet). Drawing only — no new engineering values. ──
+  const sceneSpec = useMemo(() => {
+    const boomFt = boomGeo ? f.boom.value : ILLUSTRATIVE_BOOM_FT;
+    const radiusFt = boomGeo ? f.radius.value : ILLUSTRATIVE_RADIUS_FT;
+    const angleOk = effectiveAngle > 0 && effectiveAngle <= 90;
+    const legStatus = angleStatus;
+    let legHeight = 6;
+    let reach = 0;
+    if (numLegs !== 1) {
+      if (isOffset && offsetResult) {
+        legHeight = f.offH.value;
+      } else if (!isOffset && angleMode === ANGLE_MODES.HEIGHT_SPAN && f.hsH.value > 0 && Number.isFinite(hsReach)) {
+        legHeight = f.hsH.value / 12; reach = hsReach / 12;   // inches → ft
+      } else if (!isOffset && angleMode === ANGLE_MODES.SLING && angleOk) {
+        legHeight = f.slH.value; reach = Math.sqrt(Math.max(0, f.slL.value ** 2 - f.slH.value ** 2));
+      } else {
+        const a = (angleOk ? effectiveAngle : 60) * Math.PI / 180;
+        legHeight = DRAW_SLING_FT * Math.sin(a); reach = DRAW_SLING_FT * Math.cos(a);
+      }
+    }
+    let pickPoints;
+    let loadLength;
+    let loadWidth = 1;
+    let loadCenterZ = 0;
+    if (numLegs === 1) {
+      pickPoints = [{ x: 0, z: 0, status: null }];
+      loadLength = 20;
+    } else if (isOffset && offsetResult) {
+      pickPoints = [
+        { x: 0, z: -f.offD1.value, status: getAngleStatus(offsetResult.angle1) },
+        { x: 0, z: f.offD2.value, status: getAngleStatus(offsetResult.angle2) },
+      ];
+      loadLength = f.offD1.value + f.offD2.value + 2;
+      // The piece spans the pick points; its CG (under the hook) is off its middle.
+      loadCenterZ = (f.offD2.value - f.offD1.value) / 2;
+    } else if (numLegs === 4) {
+      let a; let b;
+      if (angleMode === ANGLE_MODES.HEIGHT_SPAN && f.hsS.value >= 0 && f.hsW.value >= 0 && Number.isFinite(hsReach)) {
+        a = f.hsS.value / 12; b = f.hsW.value / 12;
+      } else {
+        a = reach / Math.SQRT2; b = reach / Math.SQRT2;
+      }
+      pickPoints = [-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ x: sx * b, z: sz * a, status: legStatus })));
+      loadLength = 2 * a + 2;
+      loadWidth = Math.max(2.5, 2 * b + 1);
+    } else {
+      pickPoints = [{ x: 0, z: -reach, status: legStatus }, { x: 0, z: reach, status: legStatus }];
+      loadLength = 2 * reach + 3;
+    }
+    return {
+      boomLength: boomFt,
+      radius: radiusFt,
+      legHeight: Number.isFinite(legHeight) && legHeight > 0 ? legHeight : 6,
+      pickPoints,
+      loadLength: Math.max(4, Number.isFinite(loadLength) ? loadLength : 20),
+      loadWidth,
+      loadCenterZ,
+      capacityStatus: hasValidResults ? capacityStatus : null,
+      illustrative: !boomGeo,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boomGeo, boomLength, workingRadius, effectiveAngle, angleStatus, numLegs, isOffset, offsetResult,
+      angleMode, hspanH, hspanS, hspanW, slingLen, slingH, offH, offD1, offD2, hsReach, hasValidResults, capacityStatus]);
+
+  const sceneLabel = `3D view: ${numLegs}-leg pick`
+    + (hasValidResults ? `, ${Math.round(grossLoad).toLocaleString()} lb gross, ${utilization.toFixed(0)}% of rated capacity` : "")
+    + (boomGeo ? `, ${f.boom.value} ft boom at ${boomGeo.boomAngle.toFixed(0)}°, ${f.radius.value} ft radius` : ", illustrative crane geometry");
 
   // ── Actions ────────────────────────────────────────────────
   const clearAll = () => {
-    setPieceWeight(""); setRiggingWeight("0");
-    setNumLegs(2);
+    setPieceWeight(""); setRiggingWeight("0"); setHookBlock(""); setOtherDeduct("");
+    setNumLegs(2); setCgMode(CG_MODES.CENTERED);
     setAngleMode(ANGLE_MODES.DEGREES);
-    setAngleDeg("60"); setHspanH(""); setHspanS("");
-    setCraneCapacity("");
-    setCraneModel(""); setBoomLength(""); setWorkingRadius(""); setCounterweight("");
+    setAngleDeg("60"); setHspanH(""); setHspanS(""); setHspanW("");
+    setSlingLen(""); setSlingH(""); setOffH(""); setOffD1(""); setOffD2("");
+    setSlingWll(""); setShackleWll("");
+    setLiftType(LIFT_TYPES.STANDARD);
+    setCraneCapacity(""); setBoomLength(""); setWorkingRadius("");
+    setCraneModel(""); setCounterweight("");
   };
 
   // Build a self-contained snapshot of the current pick for the summary modal
   // AND the Pick-History tape. Pure data — derives nothing new from the math.
   const buildSnapshot = () => ({
-    pieceWeight: piece, riggingWeight: rigging, totalLoad,
+    capturedAt: new Date().toISOString(),
+    pieceWeight: piece, riggingWeight: rigging,
+    hookBlockWeight: hookWt, otherDeductions: otherWt,
+    slingLoad,
+    // `totalLoad` is the GROSS load compared to the chart (utilization basis).
+    // Kept under this name so picks recalled from older tapes still render.
+    totalLoad: grossLoad,
     numLegs, angleDegrees: effectiveAngle, laf, tensionPerLeg,
+    cgMode: isOffset ? CG_MODES.OFFSET : CG_MODES.CENTERED,
+    offset: isOffset && offsetResult ? { ...offsetResult, H: f.offH.value, d1: f.offD1.value, d2: f.offD2.value } : null,
     // How many legs the tension figure ASSUMES are carrying. For a 4-leg
     // bridle on a rigid load that is 2, not 4 (ASME B30.9). Stamped into the
     // snapshot so the summary and the text export can state it, and so a pick
@@ -215,8 +424,12 @@ export default function CranePickCalculator() {
     // before this assumption was applied (those have no field and their
     // 4-leg tension is understated by 2x — see legsCarryingNote()).
     legsAssumedCarrying: loadBearingLegs(numLegs),
+    slingWll: f.slWll.value, slingUtil, shackleWll: f.shWll.value, shackleUtil,
+    liftType,
     craneCapacity: cap, utilization,
     capacityStatus, angleStatus, warnings,
+    boomAngle: boomGeo ? boomGeo.boomAngle : NaN,
+    tipHeight: boomGeo ? boomGeo.tipHeightAboveFoot : NaN,
     craneModel, boomLength, workingRadius, counterweight,
   });
 
@@ -239,6 +452,26 @@ export default function CranePickCalculator() {
     if (row && row.snapshot) setSummaryData(row.snapshot);
   };
 
+  const field = (label, value, setter, placeholder, opts = {}) => (
+    <div>
+      <label style={{ ...labelStyle, ...(opts.small ? { fontSize: 8 } : null) }}>{label}</label>
+      <input style={inputStyle} inputMode={opts.text ? "text" : "decimal"} value={value}
+        onChange={(e) => setter(e.target.value)} placeholder={placeholder} aria-label={label} />
+      {opts.hint && <div style={hintStyle}>{opts.hint}</div>}
+    </div>
+  );
+
+  const tensionLabel = numLegs === 1
+    ? "Tension (single leg)"
+    : isOffset
+      ? "Max Leg Tension (offset CG)"
+      : numLegs === 4
+        // Say the assumption in the label. A rigger reading
+        // "×4" would reasonably assume the load was split four
+        // ways; it is not (ASME B30.9 rigid-load rule).
+        ? "Tension per Leg (4-leg bridle — 2 legs assumed carrying)"
+        : `Tension per Leg (×${numLegs})`;
+
   // ── Render ────────────────────────────────────────────────
   return (
     <div className="sb-dashboard-reference-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
@@ -254,7 +487,7 @@ export default function CranePickCalculator() {
             Crane Pick Calculator
           </div>
           <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 4 }}>
-            Symmetric picks · lb → tension · LAF · capacity utilization · ASME B30.9 / OSHA 1926.1400
+            Gross load · sling tension · offset CG · sling &amp; shackle WLL · boom geometry · 3D · ASME B30.5 / B30.9 · OSHA 1926 Subpart CC
           </div>
         </div>
 
@@ -290,29 +523,32 @@ export default function CranePickCalculator() {
             <div style={cardStyle}>
               <SectionHeader n={1} label="Load Inputs" />
               <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-                <div>
-                  <label style={labelStyle}>Piece Weight (lb)</label>
-                  <input style={inputStyle} inputMode="decimal" value={pieceWeight}
-                    onChange={(e) => setPieceWeight(e.target.value)}
-                    placeholder="e.g. 12,500" />
+                {field("Piece Weight (lb)", pieceWeight, setPieceWeight, "e.g. 12,500")}
+                {field("Rigging Weight (lb)", riggingWeight, setRiggingWeight, "0",
+                  { hint: "Below the hook: slings, shackles, spreader, chokers, tag lines." })}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {field("Hook Block / Ball (lb)", hookBlock, setHookBlock, "e.g. 1,200", { small: true })}
+                  {field("Other Chart Deductions (lb)", otherDeduct, setOtherDeduct, "0", { small: true })}
                 </div>
-                <div>
-                  <label style={labelStyle}>Rigging Weight (lb)</label>
-                  <input style={inputStyle} inputMode="decimal" value={riggingWeight}
-                    onChange={(e) => setRiggingWeight(e.target.value)}
-                    placeholder="0" />
-                  <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6 }}>
-                    Include slings, shackles, spreader, chokers, tag lines.
+                <div style={{ ...hintStyle, marginTop: -4 }}>
+                  The chart rates the GROSS load: hook block, and any stowed/erected jib, load-line or attachment deductions listed in the chart notes.
+                </div>
+                <div style={{ ...mono, fontSize: 10, color: "var(--text-secondary)", background: "var(--bg-surface-low)", padding: "8px 10px", borderRadius: 4, display: "grid", gap: 4 }}>
+                  <div>
+                    Load on Slings:
+                    <span style={{ color: "var(--text-primary)", fontWeight: 800, marginLeft: 8 }}>
+                      {Number.isFinite(slingLoad) ? lbOrDash(slingLoad) : "—"}
+                    </span>
                   </div>
-                </div>
-                <div style={{ ...mono, fontSize: 10, color: "var(--text-secondary)", background: "var(--bg-surface-low)", padding: "8px 10px", borderRadius: 4 }}>
-                  Total Load on Hook:
-                  <span style={{ color: "var(--accent)", fontWeight: 800, marginLeft: 8 }}>
-                    {Number.isFinite(totalLoad) ? `${totalLoad.toLocaleString(undefined, { maximumFractionDigits: 1 })} lb` : "—"}
-                  </span>
-                  <span style={{ color: "var(--text-muted)", marginLeft: 8 }}>
-                    {Number.isFinite(totalLoad) ? `(${(totalLoad / 2000).toFixed(3)} T)` : ""}
-                  </span>
+                  <div>
+                    Gross Load (vs. chart):
+                    <span style={{ color: "var(--accent)", fontWeight: 800, marginLeft: 8 }}>
+                      {Number.isFinite(grossLoad) ? lbOrDash(grossLoad) : "—"}
+                    </span>
+                    <span style={{ color: "var(--text-muted)", marginLeft: 8 }}>
+                      {Number.isFinite(grossLoad) ? `(${tonsOrDash(grossLoad)})` : ""}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -322,8 +558,8 @@ export default function CranePickCalculator() {
               <SectionHeader n={2} label="Rigging Configuration" />
               <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div>
-                  <label style={labelStyle}>Number of Sling Legs</label>
-                  <select style={selectStyle} value={numLegs}
+                  <label style={labelStyle} htmlFor="crane-legs">Number of Sling Legs</label>
+                  <select id="crane-legs" style={selectStyle} value={numLegs}
                     onChange={(e) => setNumLegs(Number(e.target.value))}>
                     <option value={1}>1 (Single Vertical)</option>
                     <option value={2}>2 (Bridle)</option>
@@ -331,32 +567,65 @@ export default function CranePickCalculator() {
                   </select>
                 </div>
 
-                {/* Angle inputs suppressed for single-leg vertical */}
-                {numLegs !== 1 && (
+                {numLegs === 2 && (
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={labelStyle}>Load Centre of Gravity</span>
+                    <div className="crane-pick-keyrow" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <CalcKey label="CENTERED" variant={cgMode === CG_MODES.CENTERED ? "accent" : "fn"}
+                        onPress={() => setCgMode(CG_MODES.CENTERED)} ariaLabel="Centre of gravity centred between pick points" />
+                      <CalcKey label="OFFSET" variant={cgMode === CG_MODES.OFFSET ? "accent" : "fn"}
+                        onPress={() => setCgMode(CG_MODES.OFFSET)} ariaLabel="Centre of gravity offset toward one pick point" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Offset CG geometry (2-leg only) */}
+                {isOffset && (
+                  <div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                      {field("Hook ↕ Picks H (ft)", offH, setOffH, "e.g. 8", { small: true })}
+                      {field("CG → Pick 1 (ft)", offD1, setOffD1, "e.g. 4", { small: true })}
+                      {field("CG → Pick 2 (ft)", offD2, setOffD2, "e.g. 12", { small: true })}
+                    </div>
+                    <div style={hintStyle}>
+                      Horizontal distances from the CG to each pick point; H is the vertical from the hook down to the pick points (same elevation). The hook settles plumb over the CG.
+                    </div>
+                    {offsetResult && (
+                      <div style={{ ...mono, fontSize: 10, color: "var(--text-secondary)", marginTop: 8, display: "grid", gap: 3 }}>
+                        <div>Leg 1: {lbOrDash(offsetResult.tension1)} · {offsetResult.angle1.toFixed(1)}° · {offsetResult.length1.toFixed(2)} ft · {(offsetResult.share1 * 100).toFixed(0)}% of vertical <StatusPill status={getAngleStatus(offsetResult.angle1)} /></div>
+                        <div>Leg 2: {lbOrDash(offsetResult.tension2)} · {offsetResult.angle2.toFixed(1)}° · {offsetResult.length2.toFixed(2)} ft · {(offsetResult.share2 * 100).toFixed(0)}% of vertical <StatusPill status={getAngleStatus(offsetResult.angle2)} /></div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Angle inputs suppressed for single-leg vertical and offset CG */}
+                {numLegs !== 1 && !isOffset && (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 8, flexWrap: "wrap" }}>
                       <span style={{ ...labelStyle, marginBottom: 0 }}>Sling Angle</span>
                       <div className="crane-pick-keyrow" style={{ display: "flex", gap: 4 }}>
                         {[
-                          { key: ANGLE_MODES.DEGREES,     label: "DEG" },
-                          { key: ANGLE_MODES.HEIGHT_SPAN, label: "H/S" },
+                          { key: ANGLE_MODES.DEGREES,     label: "DEG",   aria: "Degrees angle mode" },
+                          { key: ANGLE_MODES.HEIGHT_SPAN, label: "H/S",   aria: "Height over span angle mode" },
+                          { key: ANGLE_MODES.SLING,       label: "SLING", aria: "Sling length and height angle mode" },
                         ].map((m) => (
                           <CalcKey
                             key={m.key}
                             label={m.label}
                             variant={angleMode === m.key ? "accent" : "fn"}
                             onPress={() => setAngleMode(m.key)}
-                            ariaLabel={m.key === ANGLE_MODES.DEGREES ? "Degrees angle mode" : "Height over span angle mode"}
+                            ariaLabel={m.aria}
                           />
                         ))}
                       </div>
                     </div>
 
-                    {angleMode === ANGLE_MODES.DEGREES ? (
+                    {angleMode === ANGLE_MODES.DEGREES && (
                       <>
                         <input style={inputStyle} inputMode="decimal" value={angleDeg}
                           onChange={(e) => setAngleDeg(e.target.value)}
-                          placeholder="0 – 90" />
+                          placeholder="0 – 90" aria-label="Sling angle (degrees from horizontal)" />
                         <div className="crane-pick-keyrow" style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                           {ANGLE_PRESETS.map((a) => (
                             <CalcKey
@@ -368,22 +637,32 @@ export default function CranePickCalculator() {
                             />
                           ))}
                         </div>
+                        <div style={hintStyle}>Measured from horizontal.</div>
                       </>
-                    ) : (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                        <div>
-                          <label style={{ ...labelStyle, fontSize: 8 }}>Height H (in)</label>
-                          <input style={inputStyle} inputMode="decimal" value={hspanH}
-                            onChange={(e) => setHspanH(e.target.value)}
-                            placeholder="vertical drop" />
+                    )}
+                    {angleMode === ANGLE_MODES.HEIGHT_SPAN && (
+                      <>
+                        <div style={{ display: "grid", gridTemplateColumns: numLegs === 4 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8 }}>
+                          {field("Height H (in)", hspanH, setHspanH, "vertical drop", { small: true })}
+                          {field(numLegs === 4 ? "Half-length (in)" : "Half-span S (in)", hspanS, setHspanS, "horizontal", { small: true })}
+                          {numLegs === 4 && field("Half-width (in)", hspanW, setHspanW, "horizontal", { small: true })}
                         </div>
-                        <div>
-                          <label style={{ ...labelStyle, fontSize: 8 }}>Half-span S (in)</label>
-                          <input style={inputStyle} inputMode="decimal" value={hspanS}
-                            onChange={(e) => setHspanS(e.target.value)}
-                            placeholder="horizontal" />
+                        <div style={hintStyle}>
+                          {numLegs === 4
+                            ? "Half the pick-point spacing each way. The leg runs to the corner, so the reach used is the half-diagonal √(a² + b²)."
+                            : "S is the horizontal distance from the hook plumb line to one pick point."}
+                          {numLegs === 4 && Number.isFinite(hsReach) && ` Reach = ${hsReach.toFixed(1)} in.`}
                         </div>
-                      </div>
+                      </>
+                    )}
+                    {angleMode === ANGLE_MODES.SLING && (
+                      <>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          {field("Sling Length L (ft)", slingLen, setSlingLen, "from the tag", { small: true })}
+                          {field("Height H (ft)", slingH, setSlingH, "hook → pick point", { small: true })}
+                        </div>
+                        <div style={hintStyle}>sin θ = H / L, so LAF = L / H. Use the same unit for both.</div>
+                      </>
                     )}
 
                     <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 8 }}>
@@ -399,26 +678,55 @@ export default function CranePickCalculator() {
                     </div>
                   </div>
                 )}
+
+                {/* Rigging gear ratings */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {field("Sling WLL at Hitch (lb)", slingWll, setSlingWll, "from the tag", { small: true })}
+                  {field("Shackle WLL (lb)", shackleWll, setShackleWll, "e.g. 17,000", { small: true })}
+                </div>
+                <div style={{ ...hintStyle, marginTop: -4 }}>
+                  Optional. Use the tag rating for the hitch actually rigged (vertical / choker / basket). Choke angles under 120° reduce a choker rating further — see the manufacturer's table.
+                </div>
               </div>
             </div>
 
             {/* SECTION 3 — Crane Capacity */}
             <div style={cardStyle}>
-              <SectionHeader n={3} label="Crane Capacity" />
+              <SectionHeader n={3} label="Crane" />
               <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div>
-                  <label style={labelStyle}>Rated Capacity at Radius (lb)</label>
-                  <input style={inputStyle} inputMode="decimal" value={craneCapacity}
-                    onChange={(e) => setCraneCapacity(e.target.value)}
-                    placeholder="e.g. 180,000" />
-                  <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6 }}>
-                    From the crane's load chart at the planned working radius, boom configuration, and counterweight setup.
+                  <span style={labelStyle}>Lift Type</span>
+                  <div className="crane-pick-keyrow" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <CalcKey label="STANDARD" variant={liftType === LIFT_TYPES.STANDARD ? "accent" : "fn"}
+                      onPress={() => setLiftType(LIFT_TYPES.STANDARD)} ariaLabel="Standard material lift" />
+                    <CalcKey label="PERSONNEL" variant={liftType === LIFT_TYPES.PERSONNEL ? "accent" : "fn"}
+                      onPress={() => setLiftType(LIFT_TYPES.PERSONNEL)} ariaLabel="Personnel platform lift" />
                   </div>
+                  <div style={hintStyle}>
+                    {liftType === LIFT_TYPES.PERSONNEL
+                      ? "Personnel platform: loaded platform + rigging ≤ 50% of rated capacity (29 CFR 1926.1431)."
+                      : "Standard: caution at 75%, critical above 90% (common contractor lift-planning thresholds)."}
+                  </div>
+                </div>
+                {field("Rated Capacity at Radius (lb)", craneCapacity, setCraneCapacity, "e.g. 180,000",
+                  { hint: "From the crane's load chart at the planned working radius, boom configuration, and counterweight setup." })}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {field("Boom Length (ft)", boomLength, setBoomLength, "e.g. 110", { small: true })}
+                  {field("Working Radius (ft)", workingRadius, setWorkingRadius, "e.g. 45", { small: true })}
+                </div>
+                <div style={{ ...hintStyle, marginTop: -4 }}>
+                  Optional — drives boom angle, tip height and the 3D view. Radius is measured from the centre of rotation; boom deflection increases it under load.
+                  {boomGeo && (
+                    <span style={{ color: "var(--text-secondary)" }}>
+                      {" "}Boom angle ≈ {boomGeo.boomAngle.toFixed(1)}° · tip ≈ {boomGeo.tipHeightAboveFoot.toFixed(1)} ft above boom foot.
+                    </span>
+                  )}
                 </div>
 
                 {/* Optional crane metadata — collapsible, not used in math */}
                 <div>
                   <button
+                    type="button"
                     onClick={() => setRefOpen((v) => !v)}
                     style={keycapButtonStyle(false, { fullWidth: false })}
                   >
@@ -426,28 +734,8 @@ export default function CranePickCalculator() {
                   </button>
                   {refOpen && (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
-                      <div>
-                        <label style={{ ...labelStyle, fontSize: 8 }}>Crane Make / Model</label>
-                        <input style={inputStyle} value={craneModel}
-                          onChange={(e) => setCraneModel(e.target.value)}
-                          placeholder="e.g. Grove GMK5150L" />
-                      </div>
-                      <div>
-                        <label style={{ ...labelStyle, fontSize: 8 }}>Boom Length (ft)</label>
-                        <input style={inputStyle} inputMode="decimal" value={boomLength}
-                          onChange={(e) => setBoomLength(e.target.value)} />
-                      </div>
-                      <div>
-                        <label style={{ ...labelStyle, fontSize: 8 }}>Working Radius (ft)</label>
-                        <input style={inputStyle} inputMode="decimal" value={workingRadius}
-                          onChange={(e) => setWorkingRadius(e.target.value)} />
-                      </div>
-                      <div>
-                        <label style={{ ...labelStyle, fontSize: 8 }}>Counterweight</label>
-                        <input style={inputStyle} value={counterweight}
-                          onChange={(e) => setCounterweight(e.target.value)}
-                          placeholder="e.g. 53,000 lb" />
-                      </div>
+                      {field("Crane Make / Model", craneModel, setCraneModel, "e.g. Grove GMK5150L", { small: true, text: true })}
+                      {field("Counterweight", counterweight, setCounterweight, "e.g. 53,000 lb", { small: true, text: true })}
                     </div>
                   )}
                 </div>
@@ -478,25 +766,40 @@ export default function CranePickCalculator() {
                   </div>
                 ) : (
                   <>
-                    <ResultRow label="Total Load on Hook"
-                      primary={`${totalLoad.toLocaleString(undefined, { maximumFractionDigits: 1 })} lb`}
-                      secondary={`${(totalLoad / 2000).toFixed(3)} T`} />
-                    <ResultRow label={numLegs === 1
-                      ? "Tension (single leg)"
-                      : numLegs === 4
-                        // Say the assumption in the label. A rigger reading
-                        // "×4" would reasonably assume the load was split four
-                        // ways; it is not (ASME B30.9 rigid-load rule).
-                        ? "Tension per Leg (4-leg bridle — 2 legs assumed carrying)"
-                        : `Tension per Leg (×${numLegs})`}
-                      primary={`${tensionPerLeg.toLocaleString(undefined, { maximumFractionDigits: 1 })} lb`}
-                      secondary={`${(tensionPerLeg / 2000).toFixed(3)} T`} />
-                    <ResultRow label="Load Angle Factor (LAF)"
-                      primary={Number.isFinite(laf) ? laf.toFixed(3) : "—"} />
+                    <ResultRow label="Gross Load (vs. chart)"
+                      primary={lbOrDash(grossLoad)}
+                      secondary={tonsOrDash(grossLoad)} />
+                    <ResultRow label="Load on Slings"
+                      primary={lbOrDash(slingLoad)}
+                      secondary={tonsOrDash(slingLoad)} />
+                    <ResultRow label={tensionLabel}
+                      primary={lbOrDash(tensionPerLeg)}
+                      secondary={tonsOrDash(tensionPerLeg)} />
+                    {isOffset && offsetResult && (
+                      <ResultRow label="Leg 1 / Leg 2"
+                        primary={`${Math.round(offsetResult.tension1).toLocaleString()} / ${Math.round(offsetResult.tension2).toLocaleString()} lb`} />
+                    )}
+                    {!isOffset && (
+                      <ResultRow label="Load Angle Factor (LAF)"
+                        primary={Number.isFinite(laf) ? laf.toFixed(3) : "—"} />
+                    )}
+                    {Number.isFinite(slingUtil) && (
+                      <ResultRow label="Sling Utilization"
+                        primary={<GearValue pct={slingUtil} />} />
+                    )}
+                    {Number.isFinite(shackleUtil) && (
+                      <ResultRow label="Shackle Utilization"
+                        primary={<GearValue pct={shackleUtil} />} />
+                    )}
+                    {boomGeo && (
+                      <ResultRow label="Boom Angle / Tip Height"
+                        primary={`${boomGeo.boomAngle.toFixed(1)}°`}
+                        secondary={`${boomGeo.tipHeightAboveFoot.toFixed(1)} ft above foot`} />
+                    )}
                     <div style={{ height: 1, background: "var(--divider)", margin: "10px 0" }} />
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                       <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                        Capacity Utilization
+                        Capacity Utilization{liftType === LIFT_TYPES.PERSONNEL ? " (50% limit)" : ""}
                       </span>
                       <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{
@@ -533,6 +836,7 @@ export default function CranePickCalculator() {
             {/* SECTION 5 — Actions (keycap-styled to match the device kit) */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button
+                type="button"
                 onClick={openSummary}
                 disabled={!hasValidResults}
                 style={keycapButtonStyle("accent", { disabled: !hasValidResults })}
@@ -540,6 +844,7 @@ export default function CranePickCalculator() {
                 Generate Pick Summary
               </button>
               <button
+                type="button"
                 onClick={clearAll}
                 style={keycapButtonStyle("danger")}
               >
@@ -562,10 +867,43 @@ export default function CranePickCalculator() {
           </div>
         </div>
 
+        {/* SECTION 6 — 3D pick view (full width) */}
+        <div style={{ ...cardStyle, marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 18px", borderBottom: show3d ? "1px solid var(--divider)" : "none", background: "var(--bg-surface-low)", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <SectionBadge n={6} />
+              <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                3D Pick View
+              </span>
+              {sceneSpec.illustrative && show3d && (
+                <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+                  · illustrative crane — enter boom length &amp; radius to draw yours
+                </span>
+              )}
+            </div>
+            <button type="button" onClick={() => setShow3d((v) => !v)} style={keycapButtonStyle("ghost", { compact: true })}>
+              {show3d ? "Hide" : "Show"} 3D
+            </button>
+          </div>
+          {show3d && (
+            <div style={{ padding: "14px 18px" }}>
+              <Suspense fallback={<div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", padding: 16 }}>Loading 3D view…</div>}>
+                <CranePick3D spec={sceneSpec} ariaLabel={sceneLabel} />
+              </Suspense>
+              <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 8, display: "flex", gap: 14, flexWrap: "wrap" }}>
+                <span>Sling legs: coloured by angle status</span>
+                <span>Load: coloured by crane utilization</span>
+                <span>Generic crane body — not to the scale of any model; boom drawn without deflection.</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Mobile: collapse the grid */}
         <style>{`
           @media (max-width: 820px) {
             .crane-pick-grid { grid-template-columns: 1fr !important; }
+            .crane-pick-grid > div { position: static !important; }
           }
           @media print {
             body > :not(.pick-summary-print-root),
@@ -598,10 +936,11 @@ export default function CranePickCalculator() {
 function legsSummaryValue(d) {
   const legs = Number(d?.numLegs);
   const carrying = Number(d?.legsAssumedCarrying);
+  const offset = d?.cgMode === CG_MODES.OFFSET ? " — offset CG" : "";
   if (Number.isFinite(carrying) && Number.isFinite(legs) && carrying !== legs) {
-    return `${legs} (${carrying} assumed carrying)`;
+    return `${legs} (${carrying} assumed carrying)${offset}`;
   }
-  return String(d?.numLegs ?? "—");
+  return `${d?.numLegs ?? "—"}${offset}`;
 }
 
 /**
@@ -625,6 +964,29 @@ function legsCarryingNote(d) {
   return "Rigid load: only 2 of 4 legs assumed carrying (ASME B30.9). Rate every leg for the full value above.";
 }
 
+/**
+ * Picks saved before the gross-load fix have no `slingLoad`, and their
+ * `totalLoad` excluded the hook block. Say so rather than letting the recalled
+ * utilization read as if it had been checked against the gross load.
+ */
+function grossLoadNote(d) {
+  if (d && d.slingLoad === undefined) {
+    return "⚠ RECORDED BEFORE HOOK-BLOCK DEDUCTIONS WERE SUPPORTED — this load excludes the hook block and chart deductions, so utilization may be understated. Re-run this pick.";
+  }
+  return "";
+}
+
+/** When the pick was captured — recalled picks must not show "now". */
+function capturedLabel(d) {
+  if (d?.capturedAt) {
+    const t = new Date(d.capturedAt);
+    if (!Number.isNaN(t.getTime())) return t.toLocaleString();
+  }
+  return "Capture time not recorded";
+}
+
+const pctOrDash = (n) => (Number.isFinite(Number(n)) ? `${Number(n).toFixed(1)}%` : "—");
+
 function PickSummaryModal({ onClose, data }) {
   const copySummary = async () => {
     try {
@@ -638,6 +1000,8 @@ function PickSummaryModal({ onClose, data }) {
   const doPrint = () => {
     window.print();
   };
+
+  const personnel = data.liftType === LIFT_TYPES.PERSONNEL;
 
   return (
     <div
@@ -675,10 +1039,10 @@ function PickSummaryModal({ onClose, data }) {
               Pick Summary
             </div>
             <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 2 }}>
-              {new Date().toLocaleString()}
+              {capturedLabel(data)}
             </div>
           </div>
-          <button onClick={onClose} aria-label="Close" style={{
+          <button type="button" onClick={onClose} aria-label="Close" style={{
             background: "transparent", border: "none", color: "var(--text-muted)",
             fontSize: 20, lineHeight: 1, cursor: "pointer", padding: 4,
           }}>×</button>
@@ -701,20 +1065,45 @@ function PickSummaryModal({ onClose, data }) {
           <SummarySection title="Load">
             <SummaryRow k="Piece Weight"       v={lbOrDash(data.pieceWeight)} />
             <SummaryRow k="Rigging Weight"     v={lbOrDash(data.riggingWeight)} />
-            <SummaryRow k="Total Load on Hook" v={`${lbOrDash(data.totalLoad)} (${tonsOrDash(data.totalLoad)})`} bold />
+            {data.slingLoad !== undefined && (
+              <>
+                <SummaryRow k="Load on Slings"       v={`${lbOrDash(data.slingLoad)} (${tonsOrDash(data.slingLoad)})`} />
+                <SummaryRow k="Hook Block / Ball"    v={lbOrDash(data.hookBlockWeight)} />
+                <SummaryRow k="Other Chart Deductions" v={lbOrDash(data.otherDeductions)} />
+              </>
+            )}
+            <SummaryRow k="Gross Load (vs. chart)" v={`${lbOrDash(data.totalLoad)} (${tonsOrDash(data.totalLoad)})`} bold />
+            {grossLoadNote(data) && <SummaryRow k="" v={grossLoadNote(data)} />}
           </SummarySection>
 
           <SummarySection title="Rigging Configuration">
             <SummaryRow k="Number of Legs" v={legsSummaryValue(data)} />
-            <SummaryRow k="Sling Angle"    v={data.numLegs === 1 ? "Single vertical pick" : `${data.angleDegrees.toFixed(1)}°`} />
-            <SummaryRow k="Load Angle Factor (LAF)" v={Number.isFinite(data.laf) ? data.laf.toFixed(3) : "—"} />
-            <SummaryRow k={data.numLegs === 1 ? "Tension (single leg)" : "Tension per Leg"} v={`${lbOrDash(data.tensionPerLeg)} (${tonsOrDash(data.tensionPerLeg)})`} bold />
+            {data.offset ? (
+              <>
+                <SummaryRow k="Geometry" v={`H ${data.offset.H} ft · CG→pick 1 ${data.offset.d1} ft · CG→pick 2 ${data.offset.d2} ft`} />
+                <SummaryRow k="Leg 1" v={`${lbOrDash(data.offset.tension1)} @ ${data.offset.angle1.toFixed(1)}° (${(data.offset.share1 * 100).toFixed(0)}% of vertical)`} />
+                <SummaryRow k="Leg 2" v={`${lbOrDash(data.offset.tension2)} @ ${data.offset.angle2.toFixed(1)}° (${(data.offset.share2 * 100).toFixed(0)}% of vertical)`} />
+              </>
+            ) : (
+              <>
+                <SummaryRow k="Sling Angle"    v={data.numLegs === 1 ? "Single vertical pick" : `${Number(data.angleDegrees).toFixed(1)}°`} />
+                <SummaryRow k="Load Angle Factor (LAF)" v={Number.isFinite(data.laf) ? data.laf.toFixed(3) : "—"} />
+              </>
+            )}
+            <SummaryRow k={data.numLegs === 1 ? "Tension (single leg)" : data.offset ? "Max Leg Tension" : "Tension per Leg"} v={`${lbOrDash(data.tensionPerLeg)} (${tonsOrDash(data.tensionPerLeg)})`} bold />
             {legsCarryingNote(data) && (
               <SummaryRow k="" v={legsCarryingNote(data)} />
+            )}
+            {Number.isFinite(data.slingUtil) && (
+              <SummaryRow k="Sling WLL / Utilization" v={`${lbOrDash(data.slingWll)} · ${pctOrDash(data.slingUtil)}`} />
+            )}
+            {Number.isFinite(data.shackleUtil) && (
+              <SummaryRow k="Shackle WLL / Utilization" v={`${lbOrDash(data.shackleWll)} · ${pctOrDash(data.shackleUtil)}`} />
             )}
           </SummarySection>
 
           <SummarySection title="Capacity">
+            {data.liftType && <SummaryRow k="Lift Type" v={personnel ? "Personnel platform (50% limit, 1926.1431)" : "Standard"} />}
             <SummaryRow k="Rated Crane Capacity" v={lbOrDash(data.craneCapacity)} />
             <SummaryRow
               k="Utilization"
@@ -724,10 +1113,12 @@ function PickSummaryModal({ onClose, data }) {
           </SummarySection>
 
           {(data.craneModel || data.boomLength || data.workingRadius || data.counterweight) && (
-            <SummarySection title="Reference">
+            <SummarySection title="Crane">
               {data.craneModel     && <SummaryRow k="Make / Model"     v={data.craneModel} />}
               {data.boomLength     && <SummaryRow k="Boom Length"      v={`${data.boomLength} ft`} />}
               {data.workingRadius  && <SummaryRow k="Working Radius"   v={`${data.workingRadius} ft`} />}
+              {Number.isFinite(data.boomAngle) && <SummaryRow k="Boom Angle (approx.)" v={`${data.boomAngle.toFixed(1)}°`} />}
+              {Number.isFinite(data.tipHeight) && <SummaryRow k="Tip Height above Foot (approx.)" v={`${data.tipHeight.toFixed(1)} ft`} />}
               {data.counterweight  && <SummaryRow k="Counterweight"    v={data.counterweight} />}
             </SummarySection>
           )}
@@ -755,9 +1146,9 @@ function PickSummaryModal({ onClose, data }) {
           borderTop: "1px solid var(--divider)", background: "var(--bg-surface-low)",
           justifyContent: "flex-end",
         }}>
-          <button onClick={onClose}    style={keycapButtonStyle("ghost", { compact: true })}>Close</button>
-          <button onClick={copySummary} style={keycapButtonStyle("ghost", { compact: true })}>Copy</button>
-          <button onClick={doPrint}     style={keycapButtonStyle("accent", { compact: true })}>Print</button>
+          <button type="button" onClick={onClose}    style={keycapButtonStyle("ghost", { compact: true })}>Close</button>
+          <button type="button" onClick={copySummary} style={keycapButtonStyle("ghost", { compact: true })}>Copy</button>
+          <button type="button" onClick={doPrint}     style={keycapButtonStyle("accent", { compact: true })}>Print</button>
         </div>
       </div>
     </div>
@@ -778,34 +1169,50 @@ function buildSummaryText(d) {
   const lines = [];
   lines.push("PICK SUMMARY — PLANNING TOOL ONLY");
   lines.push("Does not replace an engineered lift plan.");
-  lines.push(new Date().toLocaleString());
+  lines.push(capturedLabel(d));
   lines.push("");
   lines.push("LOAD");
   lines.push(`  Piece Weight:        ${lbOrDash(d.pieceWeight)}`);
   lines.push(`  Rigging Weight:      ${lbOrDash(d.riggingWeight)}`);
-  lines.push(`  Total Load on Hook:  ${lbOrDash(d.totalLoad)}  (${tonsOrDash(d.totalLoad)})`);
+  if (d.slingLoad !== undefined) {
+    lines.push(`  Load on Slings:      ${lbOrDash(d.slingLoad)}  (${tonsOrDash(d.slingLoad)})`);
+    lines.push(`  Hook Block / Ball:   ${lbOrDash(d.hookBlockWeight)}`);
+    lines.push(`  Other Deductions:    ${lbOrDash(d.otherDeductions)}`);
+  }
+  lines.push(`  Gross Load (chart):  ${lbOrDash(d.totalLoad)}  (${tonsOrDash(d.totalLoad)})`);
+  const grossNote = grossLoadNote(d);
+  if (grossNote) lines.push(`                       ${grossNote}`);
   lines.push("");
   lines.push("RIGGING");
   lines.push(`  Number of Legs:      ${legsSummaryValue(d)}`);
-  if (d.numLegs === 1) {
+  if (d.offset) {
+    lines.push(`  Geometry:            H ${d.offset.H} ft, CG→pick 1 ${d.offset.d1} ft, CG→pick 2 ${d.offset.d2} ft`);
+    lines.push(`  Leg 1:               ${lbOrDash(d.offset.tension1)} @ ${d.offset.angle1.toFixed(1)}°`);
+    lines.push(`  Leg 2:               ${lbOrDash(d.offset.tension2)} @ ${d.offset.angle2.toFixed(1)}°`);
+  } else if (d.numLegs === 1) {
     lines.push(`  Sling Angle:         Single vertical pick`);
   } else {
     lines.push(`  Sling Angle:         ${Number(d.angleDegrees).toFixed(1)}°`);
   }
-  lines.push(`  Load Angle Factor:   ${Number.isFinite(d.laf) ? d.laf.toFixed(3) : "—"}`);
-  lines.push(`  Tension per Leg:     ${lbOrDash(d.tensionPerLeg)}  (${tonsOrDash(d.tensionPerLeg)})`);
+  if (!d.offset) lines.push(`  Load Angle Factor:   ${Number.isFinite(d.laf) ? d.laf.toFixed(3) : "—"}`);
+  lines.push(`  ${d.offset ? "Max Leg Tension:    " : "Tension per Leg:    "} ${lbOrDash(d.tensionPerLeg)}  (${tonsOrDash(d.tensionPerLeg)})`);
   const carryNote = legsCarryingNote(d);
   if (carryNote) lines.push(`                       ${carryNote}`);
+  if (Number.isFinite(d.slingUtil)) lines.push(`  Sling WLL:           ${lbOrDash(d.slingWll)}  (${pctOrDash(d.slingUtil)} used)`);
+  if (Number.isFinite(d.shackleUtil)) lines.push(`  Shackle WLL:         ${lbOrDash(d.shackleWll)}  (${pctOrDash(d.shackleUtil)} used)`);
   lines.push("");
   lines.push("CAPACITY");
+  if (d.liftType) lines.push(`  Lift Type:           ${d.liftType === LIFT_TYPES.PERSONNEL ? "Personnel platform (50% limit, 29 CFR 1926.1431)" : "Standard"}`);
   lines.push(`  Rated Capacity:      ${lbOrDash(d.craneCapacity)}`);
   lines.push(`  Utilization:         ${Number(d.utilization).toFixed(1)}%  (${STATUS_LABEL[d.capacityStatus] || "—"})`);
   if (d.craneModel || d.boomLength || d.workingRadius || d.counterweight) {
     lines.push("");
-    lines.push("REFERENCE");
+    lines.push("CRANE");
     if (d.craneModel)    lines.push(`  Make / Model:        ${d.craneModel}`);
     if (d.boomLength)    lines.push(`  Boom Length:         ${d.boomLength} ft`);
     if (d.workingRadius) lines.push(`  Working Radius:      ${d.workingRadius} ft`);
+    if (Number.isFinite(d.boomAngle)) lines.push(`  Boom Angle (approx): ${d.boomAngle.toFixed(1)}°`);
+    if (Number.isFinite(d.tipHeight)) lines.push(`  Tip above Foot:      ${d.tipHeight.toFixed(1)} ft (approx)`);
     if (d.counterweight) lines.push(`  Counterweight:       ${d.counterweight}`);
   }
   if (d.warnings?.length) {
@@ -814,6 +1221,17 @@ function buildSummaryText(d) {
     d.warnings.forEach((w) => lines.push(`  [${w.severity.toUpperCase()}] ${w.message}`));
   }
   return lines.join("\n");
+}
+
+/** Sling / shackle utilization with its own (no-critical-band) status pill. */
+function GearValue({ pct }) {
+  const s = getRiggingStatus(pct);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span style={{ color: STATUS_COLOR[s] || "var(--text-primary)" }}>{pct.toFixed(1)}%</span>
+      {s && <StatusPill status={s} />}
+    </span>
+  );
 }
 
 /**
@@ -894,21 +1312,27 @@ function pickTapeExpr(s) {
 function SectionHeader({ n, label }) {
   return (
     <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", alignItems: "center", gap: 10 }}>
-      {/* Keycap-style step badge — ties the section card to the device kit. */}
-      <span style={{
-        ...mono, fontSize: 9, fontWeight: 800, color: "var(--accent)",
-        letterSpacing: "0.10em",
-        minWidth: 22, height: 22, display: "inline-flex",
-        alignItems: "center", justifyContent: "center",
-        borderRadius: 6, border: "1px solid var(--accent)",
-        background: "color-mix(in srgb, var(--accent) 12%, transparent)",
-        boxShadow: "0 1px 0 var(--border-strong), inset 0 1px 0 rgba(255,255,255,0.04)",
-      }}>{String(n).padStart(2, "0")}</span>
+      <SectionBadge n={n} />
       <span style={{
         ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)",
         letterSpacing: "0.14em", textTransform: "uppercase",
       }}>{label}</span>
     </div>
+  );
+}
+
+/** Keycap-style step badge — ties the section card to the device kit. */
+function SectionBadge({ n }) {
+  return (
+    <span style={{
+      ...mono, fontSize: 9, fontWeight: 800, color: "var(--accent)",
+      letterSpacing: "0.10em",
+      minWidth: 22, height: 22, display: "inline-flex",
+      alignItems: "center", justifyContent: "center",
+      borderRadius: 6, border: "1px solid var(--accent)",
+      background: "color-mix(in srgb, var(--accent) 12%, transparent)",
+      boxShadow: "0 1px 0 var(--border-strong), inset 0 1px 0 rgba(255,255,255,0.04)",
+    }}>{String(n).padStart(2, "0")}</span>
   );
 }
 
