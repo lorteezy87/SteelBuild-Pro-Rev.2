@@ -539,7 +539,7 @@ branches and every PR:
 2. TypeScript — four gates: `typecheck` (TS), `typecheck:js` (JS/JSX), and the
    `typecheck:strict` (strictNullChecks) + `typecheck:noimplicitany` ratchets,
    all blocking
-3. Vitest (710 files / 6,835 tests as of 2026-09-22)
+3. Vitest (712 files / 6,842 tests as of 2026-09-22)
 4. Production Vite build
 
 Three sibling jobs run alongside `ci` and **also gate the deploy**:
@@ -617,7 +617,7 @@ anchor. See `docs/runbooks/backup-dr.md` + `incident-response.md`.
 
 ### Unit / integration
 
-Vitest. 6,835 tests across 710 files (2026-09-22) covering pure helpers (`drawingHub`, `submittalStageMapping`,
+Vitest. 6,842 tests across 712 files (2026-09-22) covering pure helpers (`drawingHub`, `submittalStageMapping`,
 `costRollup`, `projectKpis`, `payapp`, `backcharge`, `pdfSheetExtractor`, etc.),
 hook-level tests, and jsdom integration tests that drive real components +
 import flows with the Supabase client mocked.

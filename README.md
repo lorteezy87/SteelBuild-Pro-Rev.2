@@ -216,7 +216,7 @@ suites (default `node` env) plus jsdom integration tests
 Supabase client mocked. Playwright smoke and fab-release gate specs are available
 under `e2e/`, but remain opt-in and nonblocking until dedicated test fixtures are
 configured. Counts change as tested helper modules are added; run `npm test --
---run` for the current total (710 files / 6,835 tests as of 2026-09-22).
+--run` for the current total (712 files / 6,842 tests as of 2026-09-22).
 
 ## CI/CD
 

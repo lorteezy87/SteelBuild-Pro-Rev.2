@@ -11,7 +11,7 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 ## Commands
 - `npm run dev` — local dev server
 - `npm run lint` — lint (must be clean before commit)
-- `npm run test` — full test suite (6,835 tests / 710 files as of 2026-09-22)
+- `npm run test` — full test suite (6,842 tests / 712 files as of 2026-09-22)
 - `npm run build` — production build
 - CI gates — every PR must pass all of them: `lint`, `typecheck`, `typecheck:js`, `typecheck:strict`, `typecheck:noimplicitany`, `check:no-new-js`, `test`, `build`.
   - New source files must be `.ts`/`.tsx` (enforced by `check:no-new-js`). Editing existing `.js`/`.jsx` files is fine.
