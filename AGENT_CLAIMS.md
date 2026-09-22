@@ -32,7 +32,6 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-09-22T00:00:00Z | claude-epic-ritchie-audit-docs | Documentation reconciliation after the production-readiness audit | CLAUDE.md; README.md; TECH_DEBT.md; ARCHITECTURE.md; AGENTS.md; docs/app-store/SUBMISSION.md; docs/runbooks/backup-dr.md; ENTERPRISE_READINESS_AUDIT.md | Docs only. Refresh stale counts/hosting/CI facts and record the audit's open invariant regressions. No application code, migrations, config or dependencies. |
 | ~~2026-09-21~~ released | codex-launch-security-hardening | Verified launch audit fixes | CI/deploy scripts, owned Edge Functions, scoped authorization migration/tests, privacy disclosures and audit/runbook evidence | Owner approved #461; migration and three reviewed functions are live and verified. Frontend merge proceeds after final staging/CI checks. Remaining audit work is tracked separately. |
 | ~~2026-09-21~~ released | codex-claude-pending-issues | Reconcile three Claude handoffs | drawing register/viewer, RFI vocabulary, exports, comments/project reads, related tests and handoff docs | Fixes consolidated in #460; staging and production backend verified after owner approval. Frontend release proceeds through gated CI. |
 | ~~2026-09-13~~ released | codex-supabase-drift-repair | Supabase production drift reconciliation | supabase/production-ownership-manifest.json; scripts/supabase*; scripts/__tests__/supabase*; recovered migration sources; docs/runbooks/supabase-production-ownership.md; focused drift evidence/tests | Compare live ledger/schema and repair verified drift; preserve data and release gates. |
@@ -58,6 +57,7 @@ Notes:
 | 2026-07-06T19:05:00Z | dashboard-command-ui-handoff | Dashboard + Portfolio derive parity cleanup | src/pages/Dashboard.jsx, src/pages/portfolio/portfolioControlCenter.derive.ts, src/pages/portfolio/__tests__/portfolioControlCenter.derive.test.ts | Add command-mode portfolio entrypoint data wiring/buffering + sync scoring inputs with shared `computePortfolioProjectHealth` helper; update derive tests for delayed-task and late-delivery semantics. |
 
 ## Recently released
+- 2026-09-22 · claude-epic-ritchie-audit-docs · Reconciled CLAUDE.md, README, TECH_DEBT, ARCHITECTURE, AGENTS, the App Store runbook and the backup/DR runbook against the 2026-09-21 production-readiness audit and re-measured production state. Docs only.
 - 2026-09-13 · claude-drift-followups · Made the Supabase retirement workflow file valid (GitHub had failed a run on every push) and hardened the drift entrypoint SQL test: six database shapes, a catalog-wide scope check and 13 guard cases.
 - 2026-08-06 · cursor-page-refactor-2696 · Piece Register and Onboarding large-page extracts re-landed clean and merged as #249 and #250; Resource Scheduling remains unclaimed for a future focused PR.
 - 2026-08-05 · pr-hygiene-train · Merged supersedes: #221–#225, #227, #229, #232–#233, #236–#237, #239 (Package Board chain still open if #240 pending). Dirty mega-PRs re-landed clean; see `.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md`.
