@@ -1,5 +1,5 @@
 /**
- * dateMath.js — shared date arithmetic, one convention.
+ * dateMath.ts — shared date arithmetic, one convention.
  *
  * Every user-visible "due date" in the app lives in a Postgres DATE column,
  * which is timezone-naive. The user thinks of the date in their local
@@ -22,6 +22,9 @@
 const MS_PER_DAY = 86_400_000;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Anything the helpers below accept as "a day". */
+export type DateInput = Date | string | number | null | undefined;
+
 /**
  * Parse any value into a Date anchored to **local midnight** of the
  * corresponding day. Returns null on invalid input.
@@ -32,10 +35,10 @@ const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
  *   - Date object → local midnight of its local day
  *   - number (ms) → local midnight of that instant's local day
  */
-export function toLocalMidnight(value) {
+export function toLocalMidnight(value: DateInput): Date | null {
   if (value == null || value === "") return null;
 
-  let d;
+  let d: Date;
   if (value instanceof Date) {
     d = new Date(value.getTime());
   } else if (typeof value === "number") {
@@ -52,13 +55,13 @@ export function toLocalMidnight(value) {
   } else {
     return null;
   }
-  if (isNaN(d)) return null;
+  if (Number.isNaN(d.getTime())) return null;
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
 /** Local midnight of today. */
-export function startOfToday() {
+export function startOfToday(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
@@ -68,7 +71,7 @@ export function startOfToday() {
  * Integer day difference using local midnights.
  * Positive if `to` is later than `from`.
  */
-export function daysBetween(from, to) {
+export function daysBetween(from: DateInput, to: DateInput): number {
   const a = toLocalMidnight(from);
   const b = toLocalMidnight(to);
   if (!a || !b) return 0;
@@ -81,7 +84,7 @@ export function daysBetween(from, to) {
  * 0 if today. Returns `Infinity` on a null/invalid input (preserves
  * urgencyEngine's existing "no date" sentinel behavior).
  */
-export function daysUntil(value) {
+export function daysUntil(value: DateInput): number {
   const target = toLocalMidnight(value);
   if (!target) return Infinity;
   return Math.round((target.getTime() - startOfToday().getTime()) / MS_PER_DAY);
@@ -93,14 +96,14 @@ export function daysUntil(value) {
  * 0 if today. Returns 0 on null/invalid (preserves urgencyEngine's
  * existing `|| 0` fallback).
  */
-export function daysSince(value) {
+export function daysSince(value: DateInput): number {
   const source = toLocalMidnight(value);
   if (!source) return 0;
   return Math.round((startOfToday().getTime() - source.getTime()) / MS_PER_DAY);
 }
 
 /** True if the given value is today in local time. */
-export function isToday(value) {
+export function isToday(value: DateInput): boolean {
   return daysUntil(value) === 0;
 }
 
@@ -111,7 +114,7 @@ export function isToday(value) {
  * is pinned to TZ=UTC, where local and UTC agree and the §2.5 bug is invisible,
  * and Node caches the zone before a test file can switch it.
  */
-export function todayLocalISO(now = new Date()) {
+export function todayLocalISO(now: Date = new Date()): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
@@ -138,6 +141,6 @@ export function todayLocalISO(now = new Date()) {
  * anchor is still UTC midnight. Do NOT "simplify" this to all-UTC or
  * all-local getters — each breaks one of the two halves.
  */
-export function todayUtcMidnightFromLocal(now = new Date()) {
+export function todayUtcMidnightFromLocal(now: Date = new Date()): Date {
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 }
