@@ -244,7 +244,7 @@ describe('the real manifest', () => {
 });
 
 /**
- * The live ledger at the time these overrides were written (124 rows). Kept as
+ * The live ledger at the time these overrides were written (125 rows). Kept as
  * a literal so the "nothing unclassified" test above is deterministic and needs
  * no network access.
  */
@@ -277,4 +277,19 @@ const LEDGER = new Set([
   // Applied out-of-band 2026-09-19 08:27:58 by the Section Cut work (PR #437)
   // before its file was committed; verified present in the live ledger.
   '20260919082758',
+  // ball_in_court vocabulary. Applied and stamped by hand because
+  // `supabase db push` cannot run against this project at all: 42 versions in
+  // the remote ledger have no local files -- 41 of them owned by the sibling
+  // app per production-ownership-manifest.json -- and the CLI refuses rather
+  // than understanding a database two repos share. Its own suggested remedy
+  // (`migration repair --status reverted`) would have marked those 41 applied
+  // migrations as reverted, corrupting the ledger for BOTH apps.
+  // Verified present in the live ledger with the file's contents as its
+  // single statement.
+  '20260920014500',
+  // Applied 2026-09-21 03:42:12 by the ball-in-court constraint work: the same
+  // vocabulary on submittal_rounds, which 20260920014500 left unconstrained.
+  // Committed file is the ledger payload byte-for-byte (sha256 9037d66d...,
+  // 1929 bytes).
+  '20260921034212',
 ]);

@@ -47,9 +47,9 @@ export function computeCostUsd(
   inputTokens: number | null | undefined,
   outputTokens: number | null | undefined,
 ): number | null {
-  const providerRates = RATE_CARD[provider];
+  const providerRates = Object.hasOwn(RATE_CARD, provider) ? RATE_CARD[provider] : undefined;
   if (!providerRates) return null;
-  const rate = providerRates[model];
+  const rate = Object.hasOwn(providerRates, model) ? providerRates[model] : undefined;
   if (!rate) return null;
 
   const inTok = Number(inputTokens) || 0;
@@ -67,7 +67,7 @@ export function computeCostUsd(
  * model via an explicit provider/model override. To allow a model, price it here.
  */
 export function isModelPriced(provider: string, model: string): boolean {
-  return Boolean(RATE_CARD[provider]?.[model]);
+  return Object.hasOwn(RATE_CARD, provider) && Object.hasOwn(RATE_CARD[provider], model);
 }
 
 /** Exported for tests + admin tooling. */

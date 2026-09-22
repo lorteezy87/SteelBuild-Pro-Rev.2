@@ -16,7 +16,7 @@
 
 import React from "react";
 import { parseUTCDate } from "@/components/shared/formatters";
-import { mono, BIC_COLORS, BIC_PARTIES, PRIORITY_CFG, STATUS_CFG, statusColumns } from "./constants";
+import { mono, BIC_COLORS, UNASSIGNED_BIC_COLORS, BIC_PARTIES, PRIORITY_CFG, STATUS_CFG, statusColumns } from "./constants";
 import { isOverdue } from "./utils";
 import { Pill, Section, Meta, ContentBox } from "./subcomponents";
 import CommentThread from "@/components/collaboration/CommentThread";
@@ -54,9 +54,9 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
                     </span>
                   )}
                   <Pill
-                    label={rfi.ball_in_court || "Contractor"}
-                    color={(BIC_COLORS[rfi.ball_in_court || "Contractor"] || BIC_COLORS.Contractor).text}
-                    bg={(BIC_COLORS[rfi.ball_in_court || "Contractor"] || BIC_COLORS.Contractor).bg}
+                    label={rfi.ball_in_court || "Unassigned"}
+                    color={(BIC_COLORS[rfi.ball_in_court || "Unassigned"] || UNASSIGNED_BIC_COLORS).text}
+                    bg={(BIC_COLORS[rfi.ball_in_court || "Unassigned"] || UNASSIGNED_BIC_COLORS).bg}
                   />
                 </div>
               </div>
@@ -136,7 +136,7 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
             <Section title="Ball in Court">
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {BIC_PARTIES.map((p) => {
-                  const cfg = BIC_COLORS[p] || BIC_COLORS.Contractor;
+                  const cfg = BIC_COLORS[p] || UNASSIGNED_BIC_COLORS;
                   const active = rfi.ball_in_court === p;
                   return (
                     <button

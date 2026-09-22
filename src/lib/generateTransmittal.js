@@ -40,6 +40,16 @@ function statusColor(s) { return STATUS_COLOR[s] || C.muted; }
  * @param {string} opts.purpose   — e.g. "For Review", "For Approval", "For Construction"
  * @param {string} opts.notes     — optional transmittal notes
  * @param {string} opts.transmittalNumber — e.g. "T-001"
+ * @param {object} opts.issuer    — the sending company: { name, tagline, website }.
+ *   `name` comes from the signed-in organization (OrgContext `currentOrg.name`,
+ *   i.e. organizations.name, which is NOT NULL). This header used to hardcode
+ *   one customer's name, its tagline, and "steelbuildpro.com" — the software
+ *   vendor's own domain — onto a document the GC reads as coming from the
+ *   fabricator. Every tenant got the wrong sender.
+ *
+ *   Each line is omitted when absent rather than defaulted. A transmittal with
+ *   no sender is visibly incomplete; one with somebody else's name is a false
+ *   record, and TransmittalModal will not generate without a name.
  */
 export function generateTransmittal({
   project = {},
@@ -49,6 +59,7 @@ export function generateTransmittal({
   purpose = "For Review",
   notes = "",
   transmittalNumber = "",
+  issuer = {},
 }) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
   const PAGE_W = 612;
@@ -76,15 +87,24 @@ export function generateTransmittal({
   // ── Header: Company + Title ──────────────────────────────────────────────
   y = 30;
 
-  // Left: Company name
-  font(20, "bold");
-  color(C.black);
-  pdf.text("S&H Steel", MARGIN, y);
+  // Left: issuing company, from the signed-in organization. Nothing is
+  // invented here: a missing line is left blank rather than filled with a
+  // placeholder that would misattribute the document.
+  const issuerName = String(issuer.name ?? "").trim();
+  const issuerTagline = String(issuer.tagline ?? "").trim();
+  const issuerWebsite = String(issuer.website ?? "").trim();
+
+  if (issuerName) {
+    font(20, "bold");
+    color(C.black);
+    pdf.text(issuerName, MARGIN, y);
+  }
 
   font(8);
   color(C.muted);
-  pdf.text("Structural Steel Construction", MARGIN, y + 14);
-  pdf.text("steelbuildpro.com", MARGIN, y + 26);
+  let subY = y + 14;
+  if (issuerTagline) { pdf.text(issuerTagline, MARGIN, subY); subY += 12; }
+  if (issuerWebsite) { pdf.text(issuerWebsite, MARGIN, subY); }
 
   // Right: TRANSMITTAL label
   font(22, "bold");

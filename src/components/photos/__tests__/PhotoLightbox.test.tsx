@@ -14,7 +14,9 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 const PHOTO: PhotoRecord = {
   category: "Progress",
+  client_op_id: null,
   created_at: "2026-09-12T12:00:00Z",
+  created_by: null,
   daily_log_id: null,
   deleted_at: null,
   description: "North elevation steel",
@@ -31,6 +33,7 @@ const PHOTO: PhotoRecord = {
   taken_date: "2026-09-12T12:00:00Z",
   title: "North elevation",
   updated_at: null,
+  work_package_id: null,
 };
 
 describe("PhotoLightbox", () => {

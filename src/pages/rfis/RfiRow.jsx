@@ -103,7 +103,7 @@ function RfiRow({ rfi, selected, onToggleSelect, onOpen }) {
       </div>
 
       <div className="rfi-row-owner">
-        <BicPill bic={rfi.ball_in_court || "Contractor"} />
+        <BicPill bic={rfi.ball_in_court || "Unassigned"} />
         {rfi.assigned_to && <div className="rfi-row-owner-sub">{rfi.assigned_to}</div>}
       </div>
 

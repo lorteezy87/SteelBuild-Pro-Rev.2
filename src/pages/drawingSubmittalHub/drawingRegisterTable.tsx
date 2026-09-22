@@ -11,6 +11,7 @@ import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawing
 import { effectiveDetailingState, isPackageReleasedForFab } from "@/lib/detailingPackageState";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { usePermissions } from "@/services/permissions";
+import { TitleblockActionButton } from "@/components/drawings/register/TitleblockActionButton";
 import {
   accent,
   border,
@@ -57,6 +58,7 @@ interface RegisterRowHandlers {
   canEdit: boolean;
   aiDiffEnabled: boolean;
   onOpenSummary?: (summary: any) => void;
+  onMarkTitleblock?: (setId: string) => void;
   setHealthDetail: (h: any) => void;
   setRevisionSet: (pkg: any) => void;
   setReportSet: (pkg: any) => void;
@@ -67,7 +69,7 @@ interface RegisterRowHandlers {
 // table's auto-layout: a wide set-name column, content columns, then the
 // right-aligned numeric / action columns.
 const REGISTER_GRID_COLS =
-  "minmax(220px, 2.4fr) minmax(64px, 0.8fr) minmax(80px, 0.9fr) 64px minmax(120px, 1.1fr) minmax(96px, 1fr) minmax(80px, 0.8fr) minmax(96px, 1fr) 56px minmax(150px, 1fr)";
+  "minmax(220px, 2.4fr) minmax(64px, 0.8fr) minmax(80px, 0.9fr) 64px minmax(120px, 1.1fr) minmax(96px, 1fr) minmax(80px, 0.8fr) minmax(96px, 1fr) 56px minmax(280px, 1fr)";
 
 // ⚠ MIRROR of the table-branch <Td> cells in DrawingRegisterTable (the
 // !shouldVirtualize branch). Any column add/edit MUST be made in BOTH places.
@@ -104,6 +106,10 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
       <GridCell><DueChip info={r.due} /></GridCell>
       <GridCell align="right" style={{ color: textMuted }}>{r.maxRev || "—"}</GridCell>
       <GridCell align="right" style={{ whiteSpace: "nowrap" }}>
+        {h.canEdit && r.pkg.parent && h.onMarkTitleblock && (
+          <TitleblockActionButton setId={r.pkg.parent.id} setName={r.pkg.name}
+            locked={r.locked} onMarkTitleblock={h.onMarkTitleblock} style={{ ...h.rowBtn, marginRight: 6 }} />
+        )}
         {h.canEdit && r.pkg.parent && (
           <button
             type="button"
@@ -208,7 +214,7 @@ function RegisterVirtualList({
  * Full sheet-level management still lives on the standalone Drawings page.
  */
 export function DrawingRegisterTable({
-  setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey, currentRevByDrawingId, summariesBySet, onRevisionUploaded, onOpenSummary,
+  setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey, currentRevByDrawingId, summariesBySet, onRevisionUploaded, onOpenSummary, onMarkTitleblock,
 }: {
   setPackages: any[]; projectId?: string; activeProject?: any; drawingSets?: any[]; isLoading?: boolean;
   healthByKey?: Map<string, any>;
@@ -218,6 +224,7 @@ export function DrawingRegisterTable({
   summariesBySet?: Map<string, any>;
   onRevisionUploaded?: (pkgKey: string) => void;
   onOpenSummary?: (summary: any) => void;
+  onMarkTitleblock?: (setId: string) => void;
 }) {
   const aiDiffEnabled = useFlag("revision_ai_diff");
   // Phase 5 display: the register's Due chip is driven by the governing
@@ -335,7 +342,7 @@ export function DrawingRegisterTable({
   const VIRTUALIZE_THRESHOLD = 100;
   const shouldVirtualize = rows.length > VIRTUALIZE_THRESHOLD;
   const rowHandlers: RegisterRowHandlers = {
-    rowBtn, canEdit, aiDiffEnabled, onOpenSummary, setHealthDetail, setRevisionSet, setReportSet,
+    rowBtn, canEdit, aiDiffEnabled, onOpenSummary, onMarkTitleblock, setHealthDetail, setRevisionSet, setReportSet,
   };
 
   if (isLoading) return <LoadingSkeleton />;
@@ -446,6 +453,10 @@ export function DrawingRegisterTable({
                 <Td><DueChip info={r.due} /></Td>
                 <Td className="is-num" style={{ textAlign: "right", color: textMuted }}>{r.maxRev || "—"}</Td>
                 <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  {canEdit && r.pkg.parent && onMarkTitleblock && (
+                    <TitleblockActionButton setId={r.pkg.parent.id} setName={r.pkg.name}
+                      locked={r.locked} onMarkTitleblock={onMarkTitleblock} style={{ ...rowBtn, marginRight: 6 }} />
+                  )}
                   {canEdit && r.pkg.parent && (
                     <button
                       type="button"

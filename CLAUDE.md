@@ -21,7 +21,7 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 
 ## Deploy — Cloudflare Workers
 - **Production:** the static-asset Worker `steelbuild-pro-rev-2`, configured in `wrangler.jsonc`.
-- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after a green `ci` run. PRs get a Cloudflare preview.
+- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after green `ci`, `secret-scan`, `supabase-drift`, and `edge-typecheck` jobs. PRs get a Cloudflare preview.
 - **Custom domains:** `steelbuild-pro.com` and `www.steelbuild-pro.com`.
 - **Vercel is retired.** Don't reintroduce it.
 - **`wrangler.jsonc`:** keep `workers_dev` and `preview_urls` set explicitly. Adding `routes` silently turns both off, which once broke the post-deploy health check.
@@ -40,6 +40,17 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - Check `auth_rls_initplan` pattern on any new policy — wrap `auth.uid()` calls in `(select ...)`.
 - SECURITY DEFINER functions must set `search_path` explicitly.
 - Known-fixed classes of bugs (do not reintroduce): feature_flags privilege escalation, vendors blanket-true policies.
+
+## Applying a migration — the file lands with the stamp, DO NOT regress
+`supabase db push` **cannot run against this project**: 42 versions in the remote ledger have no local file (41 of them owned by the sibling 2026 app), and the CLI refuses rather than understanding a database two repos share. Its own suggested remedy, `migration repair --status reverted`, would mark those applied migrations as reverted and **corrupt the ledger for both apps** — never run it. MCP `apply_migration` is also out: it stamps its own apply-time version, which is how the ledger drifted from the repo in the first place.
+
+So migrations here are applied and stamped by hand, and *that* is what makes the ordering a rule rather than a nicety:
+
+- **Commit the file in the same change that applies the migration — file first if anything.** `Supabase drift check` reads production's ledger against the repo's `supabase/migrations/` on **every branch**, so a stamp whose file is still unmerged turns `main` red *and* every open PR red, each one a PR whose own diff is innocent. This has happened three times in two days: `20260919082758` (#441), `20260920014500` (#445), `20260921034212` (#455). Each cost several sessions a red-CI diagnosis.
+- **The name must be the stamped ledger version**, not the authoring timestamp — the check matches local filenames against remote versions.
+- **Verify the committed file against the ledger payload** (`supabase_migrations.schema_migrations.statements`) rather than trusting that it is what ran. Hash it.
+- **Never clear a drift failure by weakening the check** — no manifest override, no exclusion, no deleting the stamp. Production holding an asset the repo can't account for is exactly the condition the check exists to catch on a shared database. Land the file.
+- If a drift failure names a version another branch already carries, **port that file alone** (byte-identical, so neither branch conflicts) instead of waiting for that PR to merge.
 
 ## Number-sequence integrity — DO NOT regress
 Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC `get_next_sequence_number` — never derive the next number client-side. `src/components/shared/numberSequencing.jsx` once floored the RPC with a client-side `Math.max()`, which could mint duplicate numbers under concurrency; that was removed (fixed c5612168) — `getNextFormattedNumber` now re-allocates from the RPC until it clears any existing records, and fails closed if the RPC is unavailable. Keep it RPC-only. Gated by a hook (see `.claude/hooks/`).
@@ -129,7 +140,8 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 ## Sibling app: SteelBuild-Pro-2026
 - `lorteezy87/SteelBuild-Pro-2026` is a **reference only**. Borrow ideas, layout and logic from it, not code wholesale; Rev.2 is the product.
 - Both apps share the production Supabase project, and which repo owns the schema is still undecided.
-- Without the owner's say-so, don't add migrations for 2026-only tables or columns: `gc_drawings`, `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
+- The owner authorized Rev.2's GC register on 2026-09-19. Migration `20260919120000_gc_document_register.sql` adopts `gc_drawings` and `gc_drawing_sets` into Rev.2's lineage; changes still have to preserve sibling callers.
+- Without the owner's say-so, don't add migrations for the other 2026-only tables or columns: `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
 
 ## MCP server
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.
@@ -138,7 +150,11 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 `main` is the integration and GitHub default branch (verified 2026-09-11). Open PRs against `main`. Check the live default branch and `git rev-list --count origin/main..HEAD` before opening a PR; older notes naming `codex/base44-deploy-nick` are stale.
 
 ## Workflow rules
-- There is no legal issue or legal hold involving S&H Steel and this app (confirmed by the owner, 2026-09-11). An earlier version of this file said otherwise; that was false. Don't reintroduce it, and don't treat billing, multi-tenant signup or marketing work as blocked. (S&H Steel is the founding customer org; references to it in the repo are ordinary domain and seed data.)
+- **S&H Steel does not belong in this product's logic.** It is a private company with no part in the creation, distribution or marketing of this product, and no rights in it (owner, 2026-09-21). An earlier version of this file called repo references to it "ordinary domain and seed data" — that is withdrawn. No vocabulary, class-membership set, default, menu option or generated document may name it.
+  - `src/lib/ballInCourt.ts` is the one ball-in-court vocabulary. A new party goes there and into the three DB CHECK constraints (`chk_rfis_ball_in_court`, `chk_submittals_ball_in_court`, `chk_submittal_rounds_ball_in_court`) — never into a local `BIC_CHOICES` list. Five such lists offered `"S&H"`, which no constraint allowed, so choosing it lost the user's save (fixed in #455).
+  - Outward-facing documents take the sending company from the signed-in org, never a literal. The transmittal PDF hardcoded a company, a tagline and `steelbuildpro.com` — this product's own domain — as the sender a GC reads as the fabricator (fixed in #455).
+  - Correct to leave alone: `importDrawingLog` parses a GC's drawing log whose text contains `FABRICATOR NAME : S&H`, and `extractIfcRoster` handles a Tekla export quirk. Those read somebody else's file format; they do not put the name into our logic.
+- There is no legal issue or legal hold involving S&H Steel and this app (confirmed by the owner, 2026-09-11). An earlier version of this file said otherwise; that was false. Don't reintroduce it, and don't treat billing, multi-tenant signup or marketing work as blocked.
 - Git safety: stage files explicitly, never force-push, and deploy only when asked.
 - Before touching Stripe/webhook code: idempotency is already implemented, don't remove it.
 - Playwright E2E spec for the fab-release gate must stay green — this is a P0 path.

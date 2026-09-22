@@ -55,9 +55,36 @@ describe("RFI import helpers", () => {
       rfi_number: "RFI #002",
       title: "Missing submitted date",
       status: "Open",
-      ball_in_court: "Engineer",
+      // "Engineer" is not in the ball-in-court vocabulary and
+      // chk_rfis_ball_in_court rejects it, so importing a log whose Assigned
+      // To column said "Engineer" failed the whole row. It normalises to EOR,
+      // the party it was a synonym for.
+      ball_in_court: "EOR",
     });
     expect(rows[0].submitted_date).toBeNull();
+    // The raw spreadsheet text survives, so normalising loses nothing.
+    expect(rows[0].assigned_to).toBe("Engineer");
+  });
+
+  it("never writes free-text Assigned To into ball_in_court", () => {
+    // Real GC logs put a PERSON in Assigned To. The old default wrote that
+    // string straight through, which the constraint rejects -- every
+    // unanswered row of the import failed.
+    const { rows } = buildRfiImportRows({
+      projectId: "project-1",
+      rfis: [
+        { rfi_number: "10", title: "Person assignee", assigned_to: "John Doe, PE" },
+        { rfi_number: "11", title: "Blank assignee" },
+        { rfi_number: "12", title: "Real party", assigned_to: "GC" },
+        { rfi_number: "13", title: "Company assignee", assigned_to: "S&H" },
+      ],
+    });
+
+    expect(rows.map((r) => r.ball_in_court)).toEqual([null, null, "GC", null]);
+    // A recognised party is taken as given; the person's name is preserved
+    // where it belongs and does not become a party.
+    expect(rows[0].assigned_to).toBe("John Doe, PE");
+    expect(rows[3].assigned_to).toBe("S&H");
   });
 
   it("marks answered imported RFIs closed", () => {
