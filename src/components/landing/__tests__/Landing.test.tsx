@@ -2,12 +2,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { MARK_AMBER, MARK_PATH } from "@/components/brand/steelBuildMarkGeometry";
 import Landing from "@/pages/Landing";
 
 afterEach(cleanup);
 const callbacks = () => ({ onLogin: vi.fn().mockResolvedValue(undefined), onSignUp: vi.fn().mockResolvedValue({success:true,needsConfirmation:true}), onForgotPassword: vi.fn().mockResolvedValue({success:true}), isSubmitting:false, loginError:null as string | null });
 
 describe("public marketing account entry", () => {
+  it("uses the approved marketing badge and preserves the app brand inside sign-in", () => {
+    render(<Landing {...callbacks()}/>);
+    expect(screen.getAllByAltText("SteelBuild Pro steel diamond badge")[0]).toHaveAttribute("src", "/marketing/steelbuild-pro-logo.jpg");
+    fireEvent.click(screen.getAllByRole("button", {name:"Log in"})[0]);
+    const mark=within(screen.getByRole("dialog")).getByRole("img", {name:"SteelBuild-Pro"}).querySelector("path");
+    expect(mark).toHaveAttribute("d", MARK_PATH);
+    expect(mark).toHaveAttribute("fill", `var(--brand-amber, ${MARK_AMBER})`);
+  });
   it("opens sign-in from the header and passes the credentials to the existing handler", async () => {
     const props=callbacks(); render(<Landing {...props}/>);
     fireEvent.click(screen.getAllByRole("button",{name:"Log in"})[0]);
