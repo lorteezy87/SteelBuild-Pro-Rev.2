@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap");
 .marketing-landing {
   --marketing-color-1: #ecede9;
   --marketing-color-2: #9ba5aa;
@@ -163,4 +163,3 @@
 @media(prefers-reduced-motion:reduce) { .marketing-landing * { transition:none!important; scroll-behavior:auto!important; } }
 
 .marketing-landing h1, .marketing-landing h2, .marketing-landing h3 { font-family: var(--marketing-font); }
-

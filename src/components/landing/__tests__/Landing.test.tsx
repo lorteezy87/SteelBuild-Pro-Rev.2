@@ -51,5 +51,3 @@ describe("public marketing account entry", () => {
     expect(screen.getByRole("link",{name:"Security"})).toHaveAttribute("href","/Security");
   });
 });
-
-
