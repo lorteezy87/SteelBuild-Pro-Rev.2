@@ -19,7 +19,7 @@
 
 import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
+import { corsHeaders, isAllowedOrigin, isNativeAppOrigin } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 import { type BillingConfig, checkoutOrgUpdate, subscriptionOrgUpdate } from "./webhookLogic.ts";
 import { billingReadiness } from "./configGuard.ts";
@@ -209,8 +209,12 @@ async function handleRequest(req: Request): Promise<Response> {
   // unvalidated Origin would let an attacker point checkout success/cancel — and
   // the billing-portal return — at an arbitrary site (post-payment open redirect).
   // Any disallowed/missing origin falls back to the canonical production URL.
+  // So does the iOS app's origin: it is allowed to call functions, but
+  // capacitor://localhost is not a page Stripe can send anyone back to.
   const rawOrigin = req.headers.get("origin") ?? "";
-  const origin = isAllowedOrigin(rawOrigin) ? rawOrigin : "https://steelbuild-pro.com";
+  const origin = isAllowedOrigin(rawOrigin) && !isNativeAppOrigin(rawOrigin)
+    ? rawOrigin
+    : "https://steelbuild-pro.com";
 
   if (action === "checkout") {
     const PRICE: Record<string, string> = { pro: cfg.pricePro, business: cfg.priceBusiness };

@@ -21,10 +21,20 @@
 // pattern. (Nothing here is an authorization control; RLS and the per-function
 // JWT checks still are. CORS just stops the browser being the attacker's
 // delivery vehicle.)
+//
+// The iOS app is the one non-http(s) origin. Capacitor serves the bundled web
+// app from `capacitor://localhost` and WKWebView sends exactly that as Origin;
+// before it was listed here every call the app made to these functions was
+// refused. A web page cannot present that origin, so allowing it opens nothing
+// to the web. WHATWG URL gives a custom scheme an opaque "null" origin, so it is
+// matched as an exact string and never parsed.
+
+export const IOS_APP_ORIGIN = "capacitor://localhost";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://steelbuild-pro.com",
   "https://www.steelbuild-pro.com",
+  IOS_APP_ORIGIN,
   "http://localhost:5173",
   "http://localhost:4173",
   "http://127.0.0.1:5173",
@@ -43,6 +53,7 @@ function configuredOrigins(): string[] | null {
 function normalizeOrigin(value: string): string | null {
   const raw = value.trim();
   if (!raw || raw === "*") return null;
+  if (raw.toLowerCase() === IOS_APP_ORIGIN) return IOS_APP_ORIGIN;
 
   try {
     const url = new URL(raw);
@@ -76,6 +87,14 @@ export function isAllowedOrigin(origin: string | null | undefined): boolean {
   const normalized = origin ? normalizeOrigin(origin) : null;
   if (!normalized) return false;
   return effectiveOrigins().includes(normalized);
+}
+
+/**
+ * True for the native app's origin. It may call these functions, but it is not
+ * a web page, so it must never become a redirect target (Stripe return URLs).
+ */
+export function isNativeAppOrigin(origin: string | null | undefined): boolean {
+  return (origin ?? "").trim().toLowerCase() === IOS_APP_ORIGIN;
 }
 
 export function corsHeaders(

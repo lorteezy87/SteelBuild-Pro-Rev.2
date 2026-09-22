@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { corsHeaders, isAllowedOrigin, parseAllowedOrigins } from "../cors.ts";
+import { IOS_APP_ORIGIN, corsHeaders, isAllowedOrigin, isNativeAppOrigin, parseAllowedOrigins } from "../cors.ts";
 
 const env = new Map<string, string>();
 
@@ -90,6 +90,40 @@ describe("shared Edge Function CORS", () => {
 
     it("does not allow loopback on an unlisted port", () => {
       expect(isAllowedOrigin("http://localhost:9999")).toBe(false);
+    });
+
+    it("allows the iOS app, whose origin is a custom scheme", () => {
+      // WKWebView sends the Capacitor origin verbatim. new URL() would turn it
+      // into the opaque origin "null", so parsing it could never match.
+      expect(new URL(IOS_APP_ORIGIN).origin).toBe("null");
+      expect(isAllowedOrigin(IOS_APP_ORIGIN)).toBe(true);
+
+      const app = corsHeaders(new Request("https://functions.example.test", {
+        headers: { Origin: IOS_APP_ORIGIN },
+      }));
+      expect(app["Access-Control-Allow-Origin"]).toBe(IOS_APP_ORIGIN);
+    });
+  });
+
+  describe("native app origin", () => {
+    it("is honoured in ALLOWED_ORIGINS and still exact", () => {
+      expect(parseAllowedOrigins(`${stagingOrigin}, Capacitor://LOCALHOST`)).toEqual([stagingOrigin, IOS_APP_ORIGIN]);
+      // Only the one Capacitor origin: no other custom scheme, host or path.
+      expect(parseAllowedOrigins("capacitor://evil.example,ionic://localhost,capacitor://localhost/app")).toEqual([]);
+    });
+
+    it("is refused when a configured allowlist leaves it out", () => {
+      // ALLOWED_ORIGINS is the complete list: setting it without the app's
+      // origin cuts the app off, exactly as it would a web origin.
+      env.set("ALLOWED_ORIGINS", stagingOrigin);
+      expect(isAllowedOrigin(IOS_APP_ORIGIN)).toBe(false);
+    });
+
+    it("is recognised so it never becomes a redirect target", () => {
+      expect(isNativeAppOrigin(IOS_APP_ORIGIN)).toBe(true);
+      expect(isNativeAppOrigin(" CAPACITOR://localhost ")).toBe(true);
+      expect(isNativeAppOrigin("https://steelbuild-pro.com")).toBe(false);
+      expect(isNativeAppOrigin(null)).toBe(false);
     });
   });
 });
