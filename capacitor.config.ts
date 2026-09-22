@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
-// Capacitor wraps the built web app (dist/) in a native iOS shell for App Store
-// distribution. The web deploy on Vercel is untouched by this file — it is read
+// Capacitor wraps the built web app (dist/) in native iOS and Android shells for store
+// distribution. The web deploy on Cloudflare is untouched by this file — it is read
 // only by the `@capacitor/cli` when syncing/opening the native project.
 //
 //  - appId  MUST equal the Bundle Identifier you register in App Store Connect

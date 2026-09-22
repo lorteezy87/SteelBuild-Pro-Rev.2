@@ -39,9 +39,14 @@
     "ios": "npm run cap:sync && cap open ios",
     "supabase:drift": "node scripts/supabase-drift-check.mjs",
     "supabase:reconcile:plan": "node scripts/supabase-reconciliation-plan.mjs",
-    "supabase:delete-deprecated-fns": "node scripts/delete-deprecated-edge-functions.mjs"
+    "supabase:delete-deprecated-fns": "node scripts/delete-deprecated-edge-functions.mjs",
+    "cap:add:android": "cap add android",
+    "cap:sync:android": "npm run build && cap sync android",
+    "cap:open:android": "cap open android",
+    "android": "npm run cap:sync:android && cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.0",
     "@capacitor/app": "^8.1.1",
     "@capacitor/camera": "^8.2.2",
     "@capacitor/core": "^8.5.0",

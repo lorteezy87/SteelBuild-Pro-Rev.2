@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SteelBuild Pro</string>
+    <string name="title_activity_main">SteelBuild Pro</string>
+    <string name="package_name">com.steelbuildpro.app</string>
+    <string name="custom_url_scheme">com.steelbuildpro.app</string>
+</resources>

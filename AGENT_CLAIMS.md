@@ -32,7 +32,6 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-09-22 | codex-store-readiness | Store release foundations | capacitor.config.ts; package*.json; android/**; mobile/**; docs/app-store/**; native release scripts/tests | Add Android packaging and release checks; document verified submission blockers. |
 | ~~2026-09-21~~ released | codex-launch-security-hardening | Verified launch audit fixes | CI/deploy scripts, owned Edge Functions, scoped authorization migration/tests, privacy disclosures and audit/runbook evidence | Owner approved #461; migration and three reviewed functions are live and verified. Frontend merge proceeds after final staging/CI checks. Remaining audit work is tracked separately. |
 | ~~2026-09-21~~ released | codex-claude-pending-issues | Reconcile three Claude handoffs | drawing register/viewer, RFI vocabulary, exports, comments/project reads, related tests and handoff docs | Fixes consolidated in #460; staging and production backend verified after owner approval. Frontend release proceeds through gated CI. |
 | ~~2026-09-13~~ released | codex-supabase-drift-repair | Supabase production drift reconciliation | supabase/production-ownership-manifest.json; scripts/supabase*; scripts/__tests__/supabase*; recovered migration sources; docs/runbooks/supabase-production-ownership.md; focused drift evidence/tests | Compare live ledger/schema and repair verified drift; preserve data and release gates. |
