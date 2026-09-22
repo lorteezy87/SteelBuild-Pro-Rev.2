@@ -829,7 +829,7 @@ No file touched by these findings changed between `ada5426` and `7227d32` unless
 - **Input validation:** SEC-1 (`fabRelease.ts:276` `CSV_QUOTE` and the other three exporters unchanged), SEC-2, SEC-3, SEC-4, SEC-5.
 - **Schema/migrations:** DB-1 … DB-11 (the new migrations are guarded, `NOT VALID`-free and end with `NOTIFY pgrst`; `20260921080604` was validated in a rolled-back staging transaction per the manifest, which is the review path DB-6 asks for).
 - **Performance:** PERF-1 … PERF-10 (`Projects.jsx` still calls `listAll()` for four tables; `Model3DTab.jsx`, `useCanonicalReportingRealtime.ts`, `softDelete.ts`, `PieceRegisterRegisterView.tsx` unchanged).
-- **Mobile/store:** MOB-1 … MOB-10 (`Landing.jsx` still renders plan prices and "Start free" with no native gate; no `ios/` or `android/`).
+- **Mobile/store:** MOB-1 … MOB-10 (no `ios/` or `android/`). **Re-checked 2026-09-22 after `main@c443b82` (#467) rewrote the landing page:** MOB-4 still stands and has moved — the pricing UI now lives in `src/components/landing/MarketingLanding.tsx` (rendered by `src/pages/Landing.jsx`, which shrank from 842 to 197 lines). That component renders plan cards at `$99` / `$299`, a plan-comparison table, "Start free" buttons and an FAQ quoting the prices, and `isNativePlatform` appears nowhere in either file. The finding is unchanged in substance; only the file to gate has.
 - **Web/CI/observability/DR:** CI-2 (deploy jobs still have no `environment:`, so the production Cloudflare token remains reachable from any branch's workflow), CI-5, CI-7, WEB-1 (`sw.js` only gained a precache URL), WEB-2, WEB-3, WEB-4, OBS-1, OBS-2, DR-1, DR-2, DR-3.
 - **Hygiene/tests/a11y/compliance:** HYG-1, TEST-1, A11Y-1, the DRAFT markers in COMP-1, DEP-1.
 

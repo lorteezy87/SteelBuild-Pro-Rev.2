@@ -243,7 +243,8 @@ no debounce), PERF-4 (every entity read ships every column), PERF-5…PERF-10.
 MOB-2…MOB-10 for iOS: no `ios/` project is committed, the four native plugins
 the App Store 4.2 defence cites have **zero call sites**, auth e-mails redirect
 to `capacitor://localhost`, signed-out users see plan prices in the native
-shell, and downloads are dead in WKWebView. See
+shell (the pricing section in `src/components/landing/MarketingLanding.tsx`
+has no native gate at all), and downloads are dead in WKWebView. See
 [`docs/app-store/SUBMISSION.md`](docs/app-store/SUBMISSION.md).
 
 **Owner-only, unverifiable from the repo:** PITR, backup restore rehearsal,
