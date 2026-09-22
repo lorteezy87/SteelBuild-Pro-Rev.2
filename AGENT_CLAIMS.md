@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-09-22 | codex-mobile-store-readiness | Android Capacitor and store-release readiness | package.json; package-lock.json; docs/app-store/google-play-submission.md; mobile/android/**; README.md | Add the Android native wrapper contract and reproducible Google Play submission path without changing production services or iOS UI. |
 | ~~2026-09-21~~ released | codex-launch-security-hardening | Verified launch audit fixes | CI/deploy scripts, owned Edge Functions, scoped authorization migration/tests, privacy disclosures and audit/runbook evidence | Owner approved #461; migration and three reviewed functions are live and verified. Frontend merge proceeds after final staging/CI checks. Remaining audit work is tracked separately. |
 | ~~2026-09-21~~ released | codex-claude-pending-issues | Reconcile three Claude handoffs | drawing register/viewer, RFI vocabulary, exports, comments/project reads, related tests and handoff docs | Fixes consolidated in #460; staging and production backend verified after owner approval. Frontend release proceeds through gated CI. |
 | ~~2026-09-13~~ released | codex-supabase-drift-repair | Supabase production drift reconciliation | supabase/production-ownership-manifest.json; scripts/supabase*; scripts/__tests__/supabase*; recovered migration sources; docs/runbooks/supabase-production-ownership.md; focused drift evidence/tests | Compare live ledger/schema and repair verified drift; preserve data and release gates. |
