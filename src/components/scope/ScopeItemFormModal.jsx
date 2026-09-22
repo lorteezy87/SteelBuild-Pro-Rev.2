@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Paperclip, Upload, X as XIcon } from "lucide-react";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import ScopeAttachmentLink from "./ScopeAttachmentLink";
 
 export default function ScopeItemFormModal({ projectId, editing, onClose, onSave }) {
   const qc = useQueryClient();
@@ -392,10 +393,8 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
               {formData.file_url ? (
                 <>
                   <Paperclip size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
-                  <a
-                    href={formData.file_url}
-                    target="_blank"
-                    rel="noreferrer"
+                  <ScopeAttachmentLink
+                    fileUrl={formData.file_url}
                     style={{
                       flex: 1, minWidth: 0,
                       color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12,
@@ -403,7 +402,7 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
                     }}
                   >
                     {formData.file_name || "Attached PDF"}
-                  </a>
+                  </ScopeAttachmentLink>
                   <button
                     type="button"
                     onClick={() => fileInput.current?.click()}
