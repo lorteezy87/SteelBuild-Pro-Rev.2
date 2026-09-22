@@ -97,12 +97,10 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: '2.9.6'
-      - name: Check the reviewed backend release entrypoints
+      - name: Check every repository Edge Function entrypoint
         run: >-
           deno check --node-modules-dir=none --no-config --no-lock
-          supabase/functions/llm-proxy/index.ts
-          supabase/functions/project-export/index.ts
-          supabase/functions/stripe-billing/index.ts
+          supabase/functions/*/index.ts
 
   ci:
     name: Lint + Typecheck + Test + Build
