@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { normalizeBallInCourt } from "@/lib/ballInCourt";
+import { buildBulkAddRows } from "./bulkAddRows";
 
 /**
  * SubmittalBulkAddModal — bulk-create submittals from one of two flows:
@@ -27,27 +27,9 @@ import { normalizeBallInCourt } from "@/lib/ballInCourt";
  * none of which apply here.
  */
 
-const STATUSES = [
-  "Draft", "Submitted", "Under Review", "Approved", "Approved as Noted",
-  "Revise and Resubmit", "Rejected", "Released for Fabrication", "Void",
-];
-// Standardized across the submittal modals — see src/pages/Submittals.jsx
-// for the canonical list and stage-mapping rationale.
-// DB CHECK constraint allows only these values for submittal_type (or NULL).
-// Anything else from a pasted CSV produces a 400 from PostgREST, so we clamp
-// to canonical values here. Match is case/punctuation-insensitive.
-const SUBMITTAL_TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
-
-function clampToEnum(value, choices) {
-  if (value == null) return null;
-  const v = String(value).trim();
-  if (!v) return null;
-  const norm = v.toLowerCase().replace(/[^a-z0-9]+/g, "");
-  for (const c of choices) {
-    if (c.toLowerCase().replace(/[^a-z0-9]+/g, "") === norm) return c;
-  }
-  return null;
-}
+// The status/type vocabularies and the commit-time enrichment live in
+// ./bulkAddRows, so they can be tested without rendering this modal. Nothing
+// in the render reads them.
 
 // Header synonym → canonical column. Lower-cased + stripped of non-
 // alphanumerics on lookup, so "Submittal #", "submittal_number",
@@ -239,43 +221,11 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit, busy =
   const commit = () => {
     if (busy) return;
     if (parsed.rows.length === 0) return;
-    // Apply defaults + DB-safety clamps at commit time so the parent
-    // doesn't need to know about them. The submittals table requires
-    // BOTH submittal_number AND title (NOT NULL), and the
-    // submittal_type / status CHECK constraints reject any value not
-    // in the canonical enum. Without these clamps a pasted CSV with
-    // only a number column, or with lower-cased "shop drawing", would
-    // 400 every row from PostgREST.
-    const enriched = parsed.rows.map((r) => {
-      const clampedType = clampToEnum(r.submittal_type, SUBMITTAL_TYPES);
-      const clampedStatus = clampToEnum(r.status, STATUSES) || "Draft";
-      // Backfill missing NOT NULLs from whichever column the user
-      // gave us — better than a row-failed toast for "no title".
-      const submittal_number = (r.submittal_number || r.title || "").trim();
-      const title = (r.title || r.submittal_number || "").trim();
-      // ball_in_court needs the same clamp as status/submittal_type above:
-      // chk_submittals_ball_in_court rejects anything outside the party
-      // vocabulary, and the spread of `r` puts the RAW CSV cell over the
-      // default, so a "reviewer" column holding a company or a person's name
-      // 400'd the row. normalizeBallInCourt returns null for anything it
-      // cannot place; null is legal here and honest -- the party is unknown,
-      // not Contractor.
-      const out = {
-        ...r,
-        ball_in_court: "ball_in_court" in r
-          ? normalizeBallInCourt(r.ball_in_court)
-          : "Contractor",
-        submittal_number,
-        title,
-        status: clampedStatus,
-      };
-      // submittal_type: clamp to enum or omit entirely (column is
-      // nullable; sending an empty string would hit the CHECK).
-      if (clampedType) out.submittal_type = clampedType;
-      else delete out.submittal_type;
-      return out;
-    });
-    onSubmit(enriched);
+    // Defaults and DB-safety clamps are applied in ./bulkAddRows so the
+    // parent does not need to know about them -- and so the ordering that
+    // keeps a raw CSV cell from overwriting a clamped value is covered by a
+    // test rather than by a comment.
+    onSubmit(buildBulkAddRows(parsed.rows));
   };
 
   if (!open) return null;
