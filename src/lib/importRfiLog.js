@@ -250,6 +250,36 @@ export async function commitRfiLog({
   return { created: rows.length, skipped };
 }
 
+/**
+ * Ball-in-court for an imported, unanswered RFI.
+ *
+ * `assigned_to` is free text out of a spreadsheet and there are THREE cases,
+ * which are not the same thing:
+ *
+ *   "GC"                            a recognised party -> store it.
+ *   ""                              nobody was named -> EOR, the party the
+ *                                   old "Engineer" default meant. The column
+ *                                   said nothing, so the prior default stands.
+ *   "Jane Smith, Turner Const."     UNKNOWN, and the common case: a real log
+ *                                   names a PERSON and their firm.
+ *
+ * That third case must not become EOR. chk_rfis_ball_in_court would take it,
+ * but it asserts a specific wrong party: an RFI actually sitting with the GC
+ * would be recorded as the engineer's, counted under EOR in
+ * ballInCourtSummary, and flagged by the unanswered-external signal as
+ * awaiting the EOR. A PM chases the wrong party.
+ *
+ * Absence is not evidence -- null leaves the row visibly unrouted, which is
+ * true and actionable, and the raw text is kept in `assigned_to` for a human
+ * to read. Mapping spellings like "Engineer" or a company name onto a party
+ * is an alias decision that does not belong in the importer.
+ */
+function bicFromAssignedTo(raw) {
+  const text = typeof raw === "string" ? raw.trim() : "";
+  if (!text) return "EOR";
+  return normalizeBallInCourt(text);
+}
+
 export function buildRfiImportRows({ rfis = [], projectId, projectName, existingNumbers = new Set() }) {
   const rows = [];
   const seenNumbers = new Set(existingNumbers);
@@ -281,15 +311,9 @@ export function buildRfiImportRows({ rfis = [], projectId, projectName, existing
       date_answered:  answered,
       status:         answered ? "Closed" : "Open",
       priority:       "Medium",
-      // assigned_to is free text from a spreadsheet -- often a PERSON ("John
-      // Doe, PE"), which is not a party and which chk_rfis_ball_in_court
-      // rejects, failing the whole row. Normalise it, and fall back to EOR
-      // (the synonym the old "Engineer" default meant) only when the column
-      // says nothing. The raw value is preserved in assigned_to above, so
-      // normalising loses no information.
       ball_in_court:  answered
         ? "Contractor"
-        : (normalizeBallInCourt(r.assigned_to) ?? "EOR"),
+        : bicFromAssignedTo(r.assigned_to),
     });
   }
 

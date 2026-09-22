@@ -55,11 +55,12 @@ describe("RFI import helpers", () => {
       rfi_number: "RFI #002",
       title: "Missing submitted date",
       status: "Open",
-      // "Engineer" is not in the ball-in-court vocabulary and
-      // chk_rfis_ball_in_court rejects it, so importing a log whose Assigned
-      // To column said "Engineer" failed the whole row. It normalises to EOR,
-      // the party it was a synonym for.
-      ball_in_court: "EOR",
+      // "Engineer" is not in the vocabulary and chk_rfis_ball_in_court
+      // rejects it, so importing a log whose Assigned To column said
+      // "Engineer" used to fail the whole row. It is now null -- unknown --
+      // NOT EOR: mapping that spelling onto a party is an alias decision,
+      // and guessing one would assert an owner the log did not name.
+      ball_in_court: null,
     });
     expect(rows[0].submitted_date).toBeNull();
     // The raw spreadsheet text survives, so normalising loses nothing.
@@ -67,22 +68,30 @@ describe("RFI import helpers", () => {
   });
 
   it("never writes free-text Assigned To into ball_in_court", () => {
-    // Real GC logs put a PERSON in Assigned To. The old default wrote that
-    // string straight through, which the constraint rejects -- every
-    // unanswered row of the import failed.
+    // Real GC logs put a PERSON and their firm in Assigned To. The old
+    // default wrote that string straight through, which the constraint
+    // rejects -- every unanswered row of the import failed.
     const { rows } = buildRfiImportRows({
       projectId: "project-1",
       rfis: [
-        { rfi_number: "10", title: "Person assignee", assigned_to: "John Doe, PE" },
+        { rfi_number: "10", title: "Person assignee", assigned_to: "Jane Smith, Turner Construction" },
         { rfi_number: "11", title: "Blank assignee" },
         { rfi_number: "12", title: "Real party", assigned_to: "GC" },
+        { rfi_number: "13", title: "Whitespace assignee", assigned_to: "   " },
       ],
     });
 
-    expect(rows.map((r) => r.ball_in_court)).toEqual(["EOR", "EOR", "GC"]);
-    // A recognised party is taken as given; the person's name is preserved
-    // where it belongs and does not become a party.
-    expect(rows[0].assigned_to).toBe("John Doe, PE");
+    // Three outcomes, deliberately different:
+    //   an unrecognised name -> null, because we do not know the party. EOR
+    //     here would record an RFI that is with the GC as the engineer's, and
+    //     a PM would chase the wrong party.
+    //   blank (or whitespace) -> EOR, the prior default; the column named
+    //     nobody, so nothing is being overridden.
+    //   a real party -> taken as given.
+    expect(rows.map((r) => r.ball_in_court)).toEqual([null, "EOR", "GC", "EOR"]);
+    // The person's name is preserved where it belongs, so nothing is lost by
+    // declining to guess a party from it.
+    expect(rows[0].assigned_to).toBe("Jane Smith, Turner Construction");
   });
 
   it("marks answered imported RFIs closed", () => {
