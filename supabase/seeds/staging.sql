@@ -1,9 +1,19 @@
 -- Staging fixture — a minimal, signed-in-able steel project.
 --
--- Wired in via [remotes.staging.db.seed] in ../config.toml, so it runs as step 6
--- of the branch deployment DAG (Clone → Pull → Health → Configure → Migrate →
--- Seed → Deploy). A failure here fails the branch build, so every statement
--- below is either idempotent or guarded.
+-- NOT WIRED IN YET. config.toml declares only [db.seed] with
+-- sql_paths = ["./seed.sql"]; there is no [remotes.staging.db.seed] section, so
+-- nothing runs this file today. Wiring it in needs that section AND the
+-- persistent staging branch to exist, which is a Supabase CLI step nobody has
+-- run. An earlier version of this header claimed the file was already wired
+-- into the branch deployment DAG -- it was not, and a comment asserting
+-- behaviour the config does not have is how a reader concludes this fixture is
+-- covered when it is untested.
+--
+-- Once it IS wired in it becomes step 6 of the branch deployment DAG
+-- (Clone → Pull → Health → Configure → Migrate → Seed → Deploy), where a
+-- failure fails the whole branch build -- so every statement below is either
+-- idempotent or guarded, and every literal has to satisfy its CHECK the first
+-- time. Nothing has executed this end to end against an empty database yet.
 --
 -- WHY THIS IS NOT A PILE OF INSERTS
 -- ---------------------------------
@@ -127,15 +137,30 @@ begin
   -- insert. project_id is its only NOT NULL column without a default; note the
   -- name column is set_name, and category/register are NOT NULL but defaulted.
   -- ---------------------------------------------------------------------
-  insert into public.drawing_sets (project_id, set_name, description, discipline, is_locked)
-  values (v_proj, 'STG Erection Drawings — Area A', 'Staging fixture set', 'Structural', false)
+  -- `category` is set explicitly. It is NOT NULL but defaults to 'shop', so a
+  -- set named "Erection Drawings" would have been categorised as shop drawings
+  -- and found by nothing filtering for erection. Allowed: shop / field /
+  -- erection. `register` keeps its 'shop' default -- that column is whose
+  -- register this is (ours vs the GC's), not what kind of drawings they are.
+  insert into public.drawing_sets (project_id, set_name, description, discipline, category, is_locked)
+  values (v_proj, 'STG Erection Drawings — Area A', 'Staging fixture set', 'Structural', 'erection', false)
   returning id into v_set;
 
-  insert into public.drawings (project_id, drawing_set_id, sheet_number, title, stage)
+  -- `stage` is deliberately NOT set, for the same reason the submittal's status
+  -- below is not: it is workflow state, and the schema's own default
+  -- ('Not Started') is the truthful value for sheets nobody has submitted yet.
+  --
+  -- It previously hand-wrote 'Detailing', which chk_drawings_stage rejects --
+  -- the stage vocabulary is Not Started / IFA / OFA / BFA / OFS / IFC /
+  -- Released, and "Detailing" is a PROJECT PHASE, not a drawing stage. Because
+  -- every statement here runs inside one DO block, that one bad value aborted
+  -- the whole fixture and rolled back the user, organization and project with
+  -- it, so the first real branch deployment would have failed outright.
+  insert into public.drawings (project_id, drawing_set_id, sheet_number, title)
   values
-    (v_proj, v_set, 'E-101', 'Anchor Bolt Plan',        'Detailing'),
-    (v_proj, v_set, 'E-102', 'Column Schedule',         'Detailing'),
-    (v_proj, v_set, 'E-201', 'Framing Plan — Level 2',  'Detailing');
+    (v_proj, v_set, 'E-101', 'Anchor Bolt Plan'),
+    (v_proj, v_set, 'E-102', 'Column Schedule'),
+    (v_proj, v_set, 'E-201', 'Framing Plan — Level 2');
 
   -- ---------------------------------------------------------------------
   -- 5. One submittal, numbered through the RPC.
