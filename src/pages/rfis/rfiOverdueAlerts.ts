@@ -93,7 +93,7 @@ export function buildRfiOverdueAlertDescription(rfi: {
   ball_in_court?: string | null;
   priority?: string | null;
 }): string {
-  return `${rfi.rfi_number}: "${(rfi.title || "").slice(0, 60)}" · BIC: ${rfi.ball_in_court || "Contractor"} · Priority: ${rfi.priority}`;
+  return `${rfi.rfi_number}: "${(rfi.title || "").slice(0, 60)}" · BIC: ${rfi.ball_in_court || "Unassigned"} · Priority: ${rfi.priority}`;
 }
 
 /**

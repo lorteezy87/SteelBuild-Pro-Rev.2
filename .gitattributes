@@ -1,5 +1,5 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+* text=auto eol=lf
 
 # Captures under supabase/_capture/ are verbatim records of what is live in
 # production, checkable against an md5 the database itself computed. Some

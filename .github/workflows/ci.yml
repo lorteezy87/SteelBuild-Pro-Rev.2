@@ -7,7 +7,8 @@
 #                request to any branch, so contributors get green/red feedback
 #                before merge.
 #   - deploy-cloudflare: THE production deploy — `wrangler deploy` to the
-#                Cloudflare Worker. GATED on `ci` and ONLY on a push to main, so
+#                Cloudflare Worker. GATED on `ci`, secret scan, Edge typecheck
+#                and production drift, and ONLY on a push to main, so
 #                a red lint/typecheck/test/build cannot reach
 #                steelbuild-pro.com. That gate only holds while this is the SOLE
 #                publisher, so Cloudflare's own Workers Builds git integration
@@ -32,15 +33,10 @@
 # REMOVED (2026-09): the `deploy` and `deploy-staging` jobs, which shipped to
 # Vercel. That account is closed, so both could only ever fail.
 #
-# `deploy-staging` took the staging ENVIRONMENT with it. The two staging E2E
-# jobs survive on `needs: ci`, but they carry the staging-branch/push condition
-# in their OWN `if:` — do not remove it. They previously inherited that gate by
-# depending on `deploy-staging` (GitHub skips a job whose `needs` were skipped);
-# repointing them at `ci` without restating it made them run on every pull
-# request, where they failed against a staging environment that no longer
-# exists. Beyond the dead Vercel project, the staging SUPABASE project no longer
-# resolves either (`getaddrinfo ENOTFOUND`), so staging needs rebuilding from
-# scratch — see docs/runbooks/cloudflare-migration.md step 8.
+# deploy-staging-cloudflare replaces the deleted Vercel staging job, using a
+# separate Worker and persistent Supabase branch. Both E2E jobs depend on that
+# deploy and retain their explicit staging-branch/push conditions.
+# See docs/runbooks/staging-setup.md for current targets and opt-ins.
 #
 #   - secret-scan: gitleaks over the full history. BLOCKING — a committed
 #                credential is compromised on push; rotation is the only fix, so
@@ -52,9 +48,10 @@
 #     (see ENTERPRISE_READINESS_AUDIT.md L13).
 #   - Lighthouse / a11y / bundle-size budgets (queued for later).
 #
-# NOTE ON ENFORCEMENT: none of these gates bind until branch protection on
-# `main` requires them. Until then a direct push deploys ungated and the
-# "a red CI cannot reach steelbuild-pro.com" claim above is aspirational.
+# NOTE ON ENFORCEMENT: deploy dependencies block a failed build from publishing.
+# Branch protection must ALSO require these checks to prevent unchecked merges
+# or direct changes to the workflow itself. Repository credentials still need
+# migration into restricted environments; YAML alone does not isolate secrets.
 # See TECH_DEBT.md B41-P1-005.
 
 name: CI
@@ -66,6 +63,7 @@ on:
       - master
       - staging
       - "claude/**"
+      - "codex/**"
   pull_request:
     branches:
       - main
@@ -88,6 +86,22 @@ permissions:
   contents: read
 
 jobs:
+  edge-typecheck:
+    name: Release Edge Function typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.6'
+      - name: Check every repository Edge Function entrypoint
+        run: >-
+          deno check --node-modules-dir=none --no-config --no-lock
+          supabase/functions/*/index.ts
+
   ci:
     name: Lint + Typecheck + Test + Build
     runs-on: ubuntu-latest
@@ -105,6 +119,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -126,6 +142,8 @@ jobs:
         # .js/.jsx additions vs origin/main (existing JS may remain until
         # intentionally converted with real types).
         run: npm run check:no-new-js
+        env:
+          NO_NEW_JS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
       - name: Typecheck (TypeScript)
         # Blocking: guards Supabase table names, hook contracts,
@@ -340,7 +358,7 @@ jobs:
   # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers (production)
-    needs: ci
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -486,7 +504,7 @@ jobs:
   # public/_headers marks them noindex, and Cloudflare Access is the real fix.
   preview-cloudflare:
     name: Cloudflare preview (PR)
-    needs: ci
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
     # Same-repo PRs only. Secrets are not exposed to forked-PR workflows, so a
     # fork would trip the config check below instead of building something
     # broken; skipping outright is clearer.
@@ -557,6 +575,60 @@ jobs:
         # deploy tool version is reviewed like any other dependency bump.
         run: npx wrangler versions upload
 
+  # Staging has its own Worker and Supabase branch. Never inherit prod env.
+  deploy-staging-cloudflare:
+    name: Deploy to Cloudflare Workers (staging)
+    needs: [ci, secret-scan, edge-typecheck]
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: cloudflare-staging-deploy
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VITE_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Verify isolated staging configuration
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const expected = 'https://ndyfjffsulfbwpmwdmic.supabase.co';
+          if (process.env.VITE_SUPABASE_URL !== expected || !process.env.VITE_SUPABASE_ANON_KEY) {
+            throw new Error('Staging must use its own Supabase URL and browser key');
+          }
+          if (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID) {
+            throw new Error('Cloudflare deploy credentials are missing');
+          }
+          const config = JSON.parse(fs.readFileSync('wrangler.staging.jsonc', 'utf8'));
+          if (config.name !== 'steelbuild-pro-staging' || config.routes.length !== 0) {
+            throw new Error('Staging must use its separate Worker without production routes');
+          }
+          NODE
+      - name: Build staging
+        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          VITE_APP_VERSION: ${{ github.sha }}
+      - name: Deploy staging
+        run: npx wrangler deploy --config wrangler.staging.jsonc
+      - name: Check staging health
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl --fail --silent --output /dev/null https://steelbuild-pro-staging.n-lortz1987.workers.dev; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::Staging health check failed"
+          exit 1
+
   # ── Authenticated STAGING smoke (read-only, post-deploy) ─────────────────
   # Runs only the browser navigation specs; no mutation-aware spec is selected.
   # This job starts after deploy-staging completes, so it cannot block or cancel
@@ -564,7 +636,7 @@ jobs:
   # hostname or a Supabase URL that is not the documented staging project.
   staging-e2e-readonly:
     name: E2E smoke (staging, read-only)
-    needs: ci
+    needs: deploy-staging-cloudflare
     # The branch/event condition is LOAD-BEARING, not decoration. This job used
     # to be `needs: deploy-staging`, and that job carried
     # `github.ref == refs/heads/staging && github.event_name == push`; because
@@ -602,7 +674,7 @@ jobs:
         env:
           E2E_TARGET: staging
           E2E_BASE_URL: ${{ vars.STAGING_BASE_URL }}
-          E2E_EXPECTED_SUPABASE_REF: abbeavtbifuddtrifvae
+          E2E_EXPECTED_SUPABASE_REF: ndyfjffsulfbwpmwdmic
           E2E_USER: ${{ secrets.STAGING_E2E_USER }}
           E2E_PASS: ${{ secrets.STAGING_E2E_PASS }}
           E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
@@ -622,7 +694,7 @@ jobs:
   # They are staging-only and are never selected by staging-e2e-readonly.
   staging-e2e-mutations:
     name: E2E gates (staging, disposable mutations)
-    needs: ci
+    needs: deploy-staging-cloudflare
     # Same load-bearing branch/event gate as staging-e2e-readonly above — see
     # the comment there for why dropping it broke pull requests.
     if: >-
@@ -653,7 +725,7 @@ jobs:
         env:
           E2E_TARGET: staging
           E2E_BASE_URL: ${{ vars.STAGING_BASE_URL }}
-          E2E_EXPECTED_SUPABASE_REF: abbeavtbifuddtrifvae
+          E2E_EXPECTED_SUPABASE_REF: ndyfjffsulfbwpmwdmic
           E2E_MUTATIONS_ENABLED: "true"
           E2E_MUTATION_FIXTURE_KIND: disposable
           E2E_USER: ${{ secrets.STAGING_E2E_USER }}

@@ -1,111 +1,65 @@
-# Staging Environment — Setup Runbook (H3)
+# Staging setup and operation
 
-**SteelBuild Pro — Enterprise Readiness**
-Purpose: stand up a pre-production environment so schema migrations, edge-function changes, RLS changes, DR-restore rehearsals, and destructive features (e.g. H11 erasure) can be validated **off production**. Today every change is validated against live prod — this removes that risk.
+Last reviewed: 2026-09-21. Vercel staging and Supabase abbeavtbifuddtrifvae are retired.
 
-> The **code half is already shipped**: `.github/workflows/ci.yml` has a guarded `deploy-staging` job that deploys the `staging` branch to a separate Vercel project. It is **inert** until you complete the owner steps below and set `STAGING_ENABLED=true`.
+| Component | Current staging target |
+| --- | --- |
+| Supabase persistent branch | ndyfjffsulfbwpmwdmic (parent kjrwqagyeswwoxpjkcko) |
+| Supabase URL | https://ndyfjffsulfbwpmwdmic.supabase.co |
+| Cloudflare Worker | steelbuild-pro-staging |
+| Frontend | https://steelbuild-pro-staging.n-lortz1987.workers.dev |
+| Deploy config | wrangler.staging.jsonc (no production routes) |
+| Git branch | staging |
 
-Refs:
-- Production Supabase: `kjrwqagyeswwoxpjkcko` · Production Vercel: `steelbuildpro-og` · Repo: `lorteezy87/SteelBuild-Pro-Rev.2`
+The owner approved Supabase's $0.01344/hour quote before creation: approximately $9.81 per 730-hour month, plus metered usage. See [Supabase branching billing](https://supabase.com/docs/guides/platform/manage-your-usage/branching).
 
----
+## Database readiness
 
-## Architecture
+The branch was created persistent and without production data. Automatic replay stopped after migration 20260712141821. The production ledger is shared with sibling applications and is not a replayable baseline for a new branch.
 
-```
- feature branch ──PR──▶  main  ──CI gate──▶  PRODUCTION (steelbuildpro-og  →  Supabase kjrwqagyeswwoxpjkcko)
-                          │
-                          └─(promote)─▶  staging branch ──CI gate──▶  STAGING (new Vercel proj → new Supabase proj)
-```
+The empty staging database was recovered from a current schema-only pg_dump of public/private. The first restore rolled back because platform-owned supabase_admin default privileges cannot be changed by postgres. The successful atomic restore left those platform-owned defaults alone and preserved the application table/function grants, policies and triggers. Auth profile creation and all five Storage policies were restored. No production Auth users, customer rows, stored objects, secrets or scheduled jobs were copied.
 
-- **Two Supabase projects**: prod (existing) + a new **staging** project (own DB, own keys, own storage).
-- **Two Vercel projects**: prod (`steelbuildpro-og`) + a **staging** Vercel project whose env `VITE_SUPABASE_*` point at the **staging** Supabase project (never prod).
-- The **same `ci` gate job** (lint/typecheck/test/build) runs before both deploys — no drift.
+Source dump SHA-256: 134d9aac061b8c3b7d9627505eccc707f6f1ac935cb8cf7486fcd51b8ea67653.
+Before new migrations, parity was 140 public tables, 140 RLS tables, 393 policies and 352 functions. All public function definitions matched exactly (combined MD5 ac446bb3130e1fd6cf5a5ec3b1d67729).
 
----
+Migrations 20260921054458 and 20260921055027 were then tested, applied and stamped with their exact SQL on staging. Following explicit owner approval and final checks, they were also applied and stamped atomically in production on 2026-09-21; see docs/claude-issue-review-2026-09-21.md for hashes and verification. Supabase's historical branch-workflow label may still display MIGRATIONS_FAILED for the original replay; it is not proof of the manually restored schema's readiness. Do not claim that automatic branch replay is fixed.
 
-## Owner steps (one-time)
+**Never run db push, migration repair, branch merge or unreviewed replay against production.** Do not connect automatic Git migration replay to this manually recovered branch. Recreating it currently requires a reviewed schema-only restore and parity checks.
 
-> ⚠ When creating the staging Supabase project, **do NOT connect the GitHub integration** (the "update schema in code, push to GitHub, Supabase deploys automatically" option). It would auto-apply migrations on push, which breaks the "staging first, then prod" model and diverges from how prod applies migrations (manually). Migrations go to staging via `supabase db push --project-ref <staging-ref>`.
+## Synthetic fixture and secrets
 
-### 1. Create the staging Supabase project
-- Supabase dashboard → **New project** (same org, same region `us-east-1`). Name it e.g. `SteelBuild-Pro-staging`.
-- Note its **project ref**, **URL**, **anon key**, **service-role key**.
-- Apply the schema: from a checkout, `npx supabase db push --project-ref <staging-ref>` (applies everything in `supabase/migrations/`). Then deploy edge functions to staging: `npx supabase functions deploy <name> --project-ref <staging-ref>` (repeat per function; match each function's `verify_jwt` — see CLAUDE.md §16).
-- Seed a **throwaway test org + project** for rehearsals (never copy real customer data into staging).
+Run scripts/seed-staging.mjs with STAGING_SUPABASE_URL, STAGING_SERVICE_ROLE_KEY, STAGING_ANON_KEY and a random STAGING_E2E_PASS of at least 24 characters. The script rejects every project except ndyfjffsulfbwpmwdmic. Credentials must come from a secret store, never source code.
 
-### 2. Create the staging Vercel project
-- Vercel → **Add New Project** → import the same repo. Name e.g. `steelbuild-pro-staging`.
-  - (You can repurpose the existing preview-only `steel-build-pro-rev-2` project instead of making a new one.)
-- **Disable Vercel git auto-deploy** for it (Settings → Git → turn off, mirroring prod) so the GitHub Action is the only deploy path.
-- Set its **Environment Variables** (Production scope): `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` = the **staging** Supabase values from step 1. Add `VITE_SENTRY_DSN` (optional; a separate Sentry env/project for staging is cleaner).
-- Note its **Project ID**.
+The synthetic account is staging.pm@steelbuild-pro.invalid. The fixture includes Example Fabrication (staging), STG-0001, three drawing sheets and one drawing set/submittal. The later disposable fab-gate fixture adds a separate clean set, a fourth sheet, a second submittal and a viewer account; both submittals follow the normal review/checklist transition to IFC. A synthetic PDF is uploaded under the staging organization/project path. It uses Auth admin creation, normal authenticated RPCs and atomic numbering. Both storage buckets are private; app-files is 50 MiB with the configured MIME allowlist and email-attachments is 25 MiB.
 
-### 3. Add GitHub secrets + variables
-Repo → Settings → Secrets and variables → Actions:
+GitHub Actions secrets: STAGING_E2E_USER, STAGING_E2E_PASS, STAGING_E2E_SUPABASE_URL and STAGING_E2E_SUPABASE_ANON_KEY. The service-role key is not needed by the frontend or read-only E2E jobs. The fixture password has been stored in the repository's encrypted secrets.
 
-| Kind | Name | Value |
-|---|---|---|
-| Secret | `STAGING_VERCEL_PROJECT_ID` | staging Vercel project ID (step 2) |
-| Secret | `STAGING_VERCEL_TOKEN` | a Vercel token scoped to the staging project |
-| Variable | `STAGING_ENABLED` | `true` |
-| Variable | `STAGING_BASE_URL` | staging URL, e.g. `https://steelbuild-pro-staging.vercel.app` (optional — enables the post-deploy health check) |
-| Variable | `STAGING_E2E_ENABLED` | `true` after all four staging E2E secrets below exist |
-| Secret | `STAGING_E2E_USER` | synthetic staging-only confirmed user |
-| Secret | `STAGING_E2E_PASS` | synthetic staging-only password |
-| Secret | `STAGING_E2E_SUPABASE_URL` | staging Supabase URL |
-| Secret | `STAGING_E2E_SUPABASE_ANON_KEY` | staging browser anon key |
+Auth settings are in supabase/config.staging.toml. Copy that file to a temporary directory's supabase/config.toml, review config diff, then config push with that workdir and the explicit staging ref. This avoids applying unrelated CLI defaults. Auth redirects target the staging frontend, email confirmation stays enabled, and OTP length is eight.
 
-`VERCEL_ORG_ID` and `SENTRY_AUTH_TOKEN` are reused from the existing prod secrets (same Vercel team).
+project-export is deployed with JWT verification. Its ALLOWED_ORIGINS setting explicitly includes the staging frontend and local development origins. Other external integrations are not automatically enabled or copied from production.
 
-### 4. Create the `staging` branch
-```bash
-git checkout main && git pull
-git checkout -b staging && git push -u origin staging
-```
-The push triggers CI → `deploy-staging` → staging site goes live. Confirm `STAGING_BASE_URL` serves 200.
-When enabled, authenticated read-only smoke runs next. See
-`docs/runbooks/staging-e2e-automation.md` for bootstrap and mutation isolation.
+## CI deployment and browser checks
 
----
+deploy-staging-cloudflare runs after ci, secret-scan and edge-typecheck, only on a push to staging with STAGING_ENABLED=true. It builds from staging-only Supabase secrets, verifies the exact project URL and separate Worker name, deploys with wrangler.staging.jsonc, then checks the staging URL.
 
-## Day-to-day promotion flow (once staging exists)
+The read-only and disposable-mutation E2E jobs both depend on that deploy and retain explicit staging-branch/push gates. E2E rejects the production app host and production database even if the expected project ref is misconfigured.
 
-1. **Migrations / edge / RLS / destructive features** — apply to **staging first**:
-   - `npx supabase db push --project-ref <staging-ref>` (or MCP `apply_migration` against staging).
-   - Deploy any changed edge functions to staging; field-verify against the staging app.
-2. Merge/promote the branch to **`staging`**, let CI deploy, and **exercise the change** on the staging site.
-3. Only after it passes on staging: apply the same migration to **prod** and merge to **`main`** (the existing prod pipeline deploys the frontend).
-4. Keep `supabase/migrations/` as the single source of truth applied to **both** projects, in the same order (see the migration-replay note in memory).
+Set STAGING_BASE_URL to the frontend above. Enable STAGING_E2E_ENABLED only after fixture secrets and the staging deployment exist. STAGING_E2E_MUTATIONS_ENABLED is enabled after provisioning the disposable fab-gate fixtures. Full Piece Control lifecycle fixtures remain disabled; the basic direct-table-denial check is configured.
 
-## DR-restore rehearsal target (H24)
-Use the staging **Supabase** project as the restore target for the PITR rehearsal: restore a prod backup into staging, then verify login + project-list + drawing-register + a signed-URL file open. Record measured RTO/RPO in `backup-dr.md`.
+Read-only browser verification passed in [staging CI run 35569765272](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/35569765272): four navigation tests and two authentication/sign-out tests. The same run passed all 6,744 unit tests and 18 desktop/mobile shell-recovery checks, then deployed the isolated Worker. A real project-export request returned all 96 table sections, while inaccessible-project and unauthenticated requests returned 403 and 401.
 
-## As-built (provisioned 2026-07-03)
-- **Staging Supabase project**: `SteelBuild-Pro Staging` · ref **`abbeavtbifuddtrifvae`** · region `us-east-1` · URL `https://abbeavtbifuddtrifvae.supabase.co`. Schema applied via `supabase db push` (16 migrations; parity-verified vs prod: 103 tables, 103/103 RLS, 52 definer fns). Edge functions NOT yet deployed to staging (deploy per-function when rehearsing an edge/LLM/billing change; needs staging secrets incl. Stripe **test-mode** keys).
-- **Staging Vercel project**: `steelbuild-pro-staging` · project id `prj_W0dhGzRfU3uQPkqxZLhnzwXTMQO8` · URL **https://steelbuild-pro-staging.vercel.app**.
-- **GitHub secrets/vars set**: `STAGING_VERCEL_PROJECT_ID`, `STAGING_VERCEL_TOKEN`, `STAGING_ENABLED=true`, `STAGING_BASE_URL=https://steelbuild-pro-staging.vercel.app`.
-- **`staging` branch** created from `origin/main`; first `deploy-staging` run green.
-- `vercel.json` `git.deploymentEnabled` = `{ main:false, staging:false }` so Vercel git auto-deploy is off for both — the GitHub Action (`--prebuilt`) is the sole deploy path for both environments.
-- ⚠ The `STAGING_VERCEL_TOKEN` was pasted in a chat transcript during setup — rotate it once convenient (`gh secret set STAGING_VERCEL_TOKEN` with a fresh Vercel token).
+The fabrication-release server was also exercised using real staging user JWTs: blocked RFI refused, admin override recorded and snapshotted, clean separate set released, viewer denied. CI run 35571242322 also passed the four fab-gate checks and one Piece Control direct-write denial. Three separate Piece Control lifecycle/cross-tenant fixtures are intentionally skipped. The final export implementation preserves production v2 row-file references and canonical piece/GC records, pages project calendars and note-folder descendants, and passes a Deno type check.
 
-## Rollback
-- **Frontend**: Vercel → staging project → Deployments → promote a previous deployment. (Prod identically.)
-- **Database**: staging is where you prove a migration is reversible *before* prod. There is no automatic DB rollback in prod — write down-migrations or a documented reversal for anything risky, and rehearse it on staging first.
+## Database regression tests
 
-## Batch 42 candidate reconciliation
+Run supabase/tests/pending_issue_permissions.sql with psql and ON_ERROR_STOP against staging. It includes the two candidate migrations, uses synthetic rows, enables normal triggers/RLS for assertions, and rolls everything back. It checks authorization, atomic numbering and date aliases, including unknown dates and clearing.
 
-- The expected staging targets remain the separate `steelbuild-pro-staging`
-  Vercel project and the separate Supabase staging project described above.
-- This runbook contains no credential values. Secret names are references to
-  GitHub, Vercel, Supabase, Stripe, Sentry, and provider secret stores only.
-- The existing as-built statements require owner re-verification during the
-  staging run. Batch 41 did not independently verify migration history, Edge
-  Function revisions, secret parity, backup freshness, or Storage policy state
-  from the local checkout.
-- The legacy flat Storage finding is accepted for the current single-tenant
-  staging candidate because no active leak is established by the available
-  evidence. It remains a hard gate before organization #2 and must be reviewed
-  with the legal-review gate.
-- No staging deploy, migration application, Edge Function deployment, or remote
-  setting change is authorized by Batch 42 itself.
+## Rollout and rollback
+
+The #460 migrations (`20260921054458`, `20260921055027`) were approved, applied and stamped together in production on September 21; their ledger payload hashes match the committed SQL. #460 then passed production CI at `4837dd6bb` and deployed successfully. They are no longer pending.
+
+The separate launch-security migration `20260921080604` was owner-approved and applied/stamped in production and staging on September 21. Its ledger payload matches committed SQL MD5 `cdf1be475b4c306ac1fa12c336f9d769`. The boundary suite and exact release package both passed rollback rehearsals before application. The boundary suite includes the migration and is intended for the pre-migration baseline, not an already migrated database. Follow [the reviewed backend release runbook](reviewed-backend-release.md) for rollout evidence and remaining workflow setup.
+
+To reverse the access-policy change, restore the field-role INSERT policy and original field-role RPC guard. To reverse date synchronization, remove trg_sync_rfi_date_aliases and sync_rfi_date_aliases(); do not erase valid copied dates. Rehearse reversals on staging first.
+
+For frontend rollback, deploy a previously validated commit to the staging Worker. The production Worker and routes are separate.

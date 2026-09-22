@@ -21,7 +21,7 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 
 ## Deploy — Cloudflare Workers
 - **Production:** the static-asset Worker `steelbuild-pro-rev-2`, configured in `wrangler.jsonc`.
-- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after a green `ci` run. PRs get a Cloudflare preview.
+- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after green `ci`, `secret-scan`, `supabase-drift`, and `edge-typecheck` jobs. PRs get a Cloudflare preview.
 - **Custom domains:** `steelbuild-pro.com` and `www.steelbuild-pro.com`.
 - **Vercel is retired.** Don't reintroduce it.
 - **`wrangler.jsonc`:** keep `workers_dev` and `preview_urls` set explicitly. Adding `routes` silently turns both off, which once broke the post-deploy health check.
@@ -140,7 +140,8 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 ## Sibling app: SteelBuild-Pro-2026
 - `lorteezy87/SteelBuild-Pro-2026` is a **reference only**. Borrow ideas, layout and logic from it, not code wholesale; Rev.2 is the product.
 - Both apps share the production Supabase project, and which repo owns the schema is still undecided.
-- Without the owner's say-so, don't add migrations for 2026-only tables or columns: `gc_drawings`, `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
+- The owner authorized Rev.2's GC register on 2026-09-19. Migration `20260919120000_gc_document_register.sql` adopts `gc_drawings` and `gc_drawing_sets` into Rev.2's lineage; changes still have to preserve sibling callers.
+- Without the owner's say-so, don't add migrations for the other 2026-only tables or columns: `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
 
 ## MCP server
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.
@@ -149,7 +150,11 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 `main` is the integration and GitHub default branch (verified 2026-09-11). Open PRs against `main`. Check the live default branch and `git rev-list --count origin/main..HEAD` before opening a PR; older notes naming `codex/base44-deploy-nick` are stale.
 
 ## Workflow rules
-- There is no legal issue or legal hold involving S&H Steel and this app (confirmed by the owner, 2026-09-11). An earlier version of this file said otherwise; that was false. Don't reintroduce it, and don't treat billing, multi-tenant signup or marketing work as blocked. (S&H Steel is the founding customer org; references to it in the repo are ordinary domain and seed data.)
+- **S&H Steel does not belong in this product's logic.** It is a private company with no part in the creation, distribution or marketing of this product, and no rights in it (owner, 2026-09-21). An earlier version of this file called repo references to it "ordinary domain and seed data" — that is withdrawn. No vocabulary, class-membership set, default, menu option or generated document may name it.
+  - `src/lib/ballInCourt.ts` is the one ball-in-court vocabulary. A new party goes there and into the three DB CHECK constraints (`chk_rfis_ball_in_court`, `chk_submittals_ball_in_court`, `chk_submittal_rounds_ball_in_court`) — never into a local `BIC_CHOICES` list. Five such lists offered `"S&H"`, which no constraint allowed, so choosing it lost the user's save (fixed in #455).
+  - Outward-facing documents take the sending company from the signed-in org, never a literal. The transmittal PDF hardcoded a company, a tagline and `steelbuildpro.com` — this product's own domain — as the sender a GC reads as the fabricator (fixed in #455).
+  - Correct to leave alone: `importDrawingLog` parses a GC's drawing log whose text contains `FABRICATOR NAME : S&H`, and `extractIfcRoster` handles a Tekla export quirk. Those read somebody else's file format; they do not put the name into our logic.
+- There is no legal issue or legal hold involving S&H Steel and this app (confirmed by the owner, 2026-09-11). An earlier version of this file said otherwise; that was false. Don't reintroduce it, and don't treat billing, multi-tenant signup or marketing work as blocked.
 - Git safety: stage files explicitly, never force-push, and deploy only when asked.
 - Before touching Stripe/webhook code: idempotency is already implemented, don't remove it.
 - Playwright E2E spec for the fab-release gate must stay green — this is a P0 path.

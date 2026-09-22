@@ -22,6 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 import { type BillingConfig, checkoutOrgUpdate, subscriptionOrgUpdate } from "./webhookLogic.ts";
+import { billingReadiness } from "./configGuard.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -31,12 +32,8 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
 // Built per-invocation. livemode (the default + current prod) uses STRIPE_SECRET_KEY,
 // so the live billing path is UNCHANGED. Only an explicit billing_config.livemode=false
-// selects STRIPE_SK_TEST — so a test-mode E2E never overwrites the live key. Falls back
-// to STRIPE_SECRET_KEY if the test key isn't set.
-function stripeClient(livemode: boolean): Stripe {
-  const key = livemode
-    ? (Deno.env.get("STRIPE_SECRET_KEY") ?? "")
-    : (Deno.env.get("STRIPE_SK_TEST") ?? Deno.env.get("STRIPE_SECRET_KEY") ?? "");
+// selects STRIPE_SK_TEST — a missing test key fails closed instead of using live billing.
+function stripeClient(key: string): Stripe {
   return new Stripe(key, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
 }
 
@@ -124,18 +121,26 @@ Deno.serve(async (req) => {
     // (Stripe, no browser) handles its own errors above and returns before this;
     // any escape here is an app-action or config failure where CORS matters.
     await reportError(e, "stripe-billing", { unhandled: true });
-    const message = e instanceof Error ? e.message : String(e);
-    return json({ error: `Internal error: ${message}` }, 500, req);
+    return json({ error: "Billing request failed. Please try again." }, 500, req);
   }
 });
 
 async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, req);
   const url = new URL(req.url);
   // Load config FIRST so the Stripe client uses the correct key (live vs test) —
   // billing_config is the single source of truth for the live/test environment.
   const cfg = await loadConfig();
-  const stripe = stripeClient(cfg.livemode !== false);
+  const readiness = billingReadiness({
+    livemode: cfg.livemode !== false,
+    liveKey: Deno.env.get("STRIPE_SECRET_KEY"),
+    testKey: Deno.env.get("STRIPE_SK_TEST"),
+    webhook: url.pathname.endsWith("/webhook"),
+    webhookSecret: cfg.webhookSecret,
+  });
+  if (!readiness.ok) return json({ error: readiness.error }, 503, req);
+  const stripe = stripeClient(readiness.key);
 
   // ── Stripe webhook (signature-verified; no JWT) ──
   if (url.pathname.endsWith("/webhook")) {
@@ -144,8 +149,8 @@ async function handleRequest(req: Request): Promise<Response> {
     let event;
     try {
       event = await stripe.webhooks.constructEventAsync(raw, sig ?? "", cfg.webhookSecret);
-    } catch (e) {
-      return new Response(`Webhook signature verification failed: ${(e as Error).message}`, { status: 400 });
+    } catch {
+      return new Response("Webhook signature verification failed", { status: 400 });
     }
     // Idempotency: short-circuit only if a PRIOR delivery FULLY processed this
     // event. The marker is written AFTER handleEvent succeeds (below), so a
@@ -209,7 +214,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
   if (action === "checkout") {
     const PRICE: Record<string, string> = { pro: cfg.pricePro, business: cfg.priceBusiness };
-    const priceId = plan ? PRICE[plan] : "";
+    const priceId = plan && Object.hasOwn(PRICE, plan) ? PRICE[plan] : "";
     if (!priceId) return json({ error: `Plan "${plan}" isn't available for checkout yet` }, 400, req);
 
     const { data: org } = await admin.from("organizations").select("stripe_customer_id, name").eq("id", org_id).single();

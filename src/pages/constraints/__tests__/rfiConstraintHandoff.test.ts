@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { buildConstraintPrefillFromRfi } from "../rfiConstraintHandoff";
 
 describe("buildConstraintPrefillFromRfi", () => {
+  it("uses the canonical RFI deadline instead of an empty legacy alias", () => {
+    expect(buildConstraintPrefillFromRfi({ date_required: "2026-09-25", due_date: null }).due_date).toBe("2026-09-25");
+  });
+
   it("prefills title, description, and meeting reference from the RFI", () => {
     expect(
       buildConstraintPrefillFromRfi(

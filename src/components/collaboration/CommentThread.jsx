@@ -5,6 +5,7 @@ import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { AuthContext } from "@/lib/AuthContext";
 import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
+import { fetchThreadComments } from "./commentQueries";
 
 // Comment-resolution status (migration 073). Cycle matches the markup
 // status (3a) palette so resolution semantics read the same across
@@ -78,20 +79,9 @@ export default function CommentThread({
   const canModerate = roleAtLeast(projectRole, "pm");
 
   // Fetch
-  const { data: comments = [], isLoading } = useQuery({
+  const { data: comments = [], isLoading, error, refetch } = useQuery({
     queryKey: QKEY(entityType, entityId),
-    queryFn: async () => {
-      if (!entityId) return [];
-      const { data, error } = await supabase
-        .from("comments")
-        .select("*")
-        .eq("entity_type", entityType)
-        .eq("entity_id", entityId)
-        .eq("is_deleted", false)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data || [];
-    },
+    queryFn: () => fetchThreadComments(entityType, entityId),
     enabled: !!entityId && !!entityType,
     staleTime: 30_000,
     refetchInterval: 5 * 60_000,   // fallback poll in case realtime is off
@@ -221,7 +211,12 @@ export default function CommentThread({
             Loading comments…
           </div>
         )}
-        {!isLoading && comments.length === 0 && (
+        {error && (
+          <div role="alert" style={{ color: "var(--status-error)" }}>
+            Comments could not be loaded. <button onClick={() => refetch()}>Retry</button>
+          </div>
+        )}
+        {!isLoading && !error && comments.length === 0 && (
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
             No comments yet. Be the first to add context.
           </div>
