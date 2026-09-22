@@ -247,6 +247,19 @@ shell (the pricing section in `src/components/landing/MarketingLanding.tsx`
 has no native gate at all), and downloads are dead in WKWebView. See
 [`docs/app-store/SUBMISSION.md`](docs/app-store/SUBMISSION.md).
 
+**New, found while reconciling these docs (2026-09-22):** the drift gate has a
+blind spot. `compareAssets` (`scripts/supabase-drift-check.mjs`) sorts manifest
+entries into four buckets — `required`, `staging-only`, `deprecated`,
+`unresolved` — and `hasDrift` is the OR of those. A slug marked
+`intentionally-frozen` lands in none of them, and it is in the `byValue` map so
+it is not reported as unknown either. `legacy-app-files-copy` is the one such
+function entry, so **redeploying that retired function to production would leave
+the check green**. Either reclassify it `deprecated` in
+`supabase/production-ownership-manifest.json` under the review procedure in
+`docs/runbooks/supabase-production-ownership.md`, or make `compareAssets` bucket
+frozen slugs that are present remotely. This is a manifest/config change, so it
+was deliberately left out of the docs-only PR that found it.
+
 **Owner-only, unverifiable from the repo:** PITR, backup restore rehearsal,
 Sentry alert rules, uptime monitoring, branch protection, the Netlify and
 Workers Builds connections, App Store Connect and Play Console accounts. Listed

@@ -331,9 +331,13 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
 
 **Going forward — keep filenames and `schema_migrations` in LOCKSTEP (do not re-drift):**
 
-- **Preferred (Docker available):** `npx supabase migration new <name>` → edit the file
-  → `npx supabase db push`. The CLI keeps the filename version == `schema_migrations`.
-- **Cloud/Linux sessions — by hand, and `apply_migration` is NOT the path.** The MCP
+- **There is no `db push` path, on any platform — not even with Docker.** An earlier
+  version of this list offered `npx supabase migration new` → `npx supabase db push`
+  as the preferred local workflow. That command **refuses against this project** (the
+  shared ledger carries a sibling app's versions), and its own suggested remedy,
+  `migration repair --status reverted`, would corrupt the ledger for both apps. Do not
+  reinstate it as a Docker exception.
+- **Every session applies and stamps by hand, and `apply_migration` is NOT the path.** The MCP
   `apply_migration` tool stamps its own apply-time version, which is how the ledger
   drifted from the repo in the first place, and `supabase db push` refuses outright
   because the ledger carries a sibling app's versions. Apply the SQL, read the
@@ -380,8 +384,13 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
 `stripe-billing`), the schedule-chat function, `sheets-api` (retired 2026-09-21)
 and `legacy-app-files-copy` are all gone from production. The `pg_cron` job that
 pinged `stripe-worker` every 60s was unscheduled 2026-07-01. Slug ownership and
-lifecycle are tracked in `supabase/production-ownership-manifest.json`; the drift
-gate fails if a retired slug reappears.
+lifecycle are tracked in `supabase/production-ownership-manifest.json`. A slug marked
+`deprecated` there fails the drift gate if it reappears. **One exception:**
+`legacy-app-files-copy` is marked `intentionally-frozen`, and `compareAssets`
+(`scripts/supabase-drift-check.mjs`) buckets only `required`, `staging-only`,
+`deprecated` and `unresolved` — a frozen slug falls through all four, so redeploying
+it would leave the check green. Reclassifying it needs the manifest review procedure
+in `docs/runbooks/supabase-production-ownership.md`.
 
 **Reviewed release path:** `.github/workflows/supabase-deploy-reviewed.yml` is a
 manual, reviewed deploy for `llm-proxy`, `project-export` and `stripe-billing`.

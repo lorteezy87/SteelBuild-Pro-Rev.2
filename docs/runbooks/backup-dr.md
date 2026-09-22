@@ -74,7 +74,10 @@ Use when the Supabase project itself is unrecoverable (deleted, region outage wi
    - Do **not** redeploy the retired slugs (`sheets-api`, `legacy-app-files-copy`,
      `sharepoint-proxy`, `bluebeam-proxy`, `stripe-setup`, `stripe-webhook`,
      `stripe-worker`) — `supabase/production-ownership-manifest.json` marks them
-     deprecated and the drift gate fails if one reappears.
+     deprecated. A `deprecated` slug fails the drift gate if it reappears;
+     `legacy-app-files-copy` is `intentionally-frozen` instead, which the check
+     buckets nowhere, so redeploying that one would pass silently — treat the
+     manifest as the record, not as a guarantee for that slug.
    - Re-set secrets: LLM keys, provider keys, `LLM_DAILY_COST_LIMIT_USD` / `LLM_DAILY_REQUEST_LIMIT`, `EMAIL_SEND_DAILY_LIMIT` / `EMAIL_CLASSIFY_DAILY_LIMIT`, `ALLOWED_ORIGINS`, Stripe keys + webhook secret.
    - Re-point the **Stripe webhook** endpoint (the `/webhook` route inside `stripe-billing`) at the new project URL in the Stripe dashboard.
 5. **Restore Storage** (both buckets) from a verified offsite snapshot into the new project's Storage. Follow `storage-backup-setup.md#restore-rehearsal`, restore both buckets, and preserve the same object keys/paths so signed URLs and DB `file_url` references resolve.
