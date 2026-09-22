@@ -12,6 +12,7 @@ import { Capacitor } from '@capacitor/core'
 import { Keyboard } from '@capacitor/keyboard'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { StatusBar, Style } from '@capacitor/status-bar'
+import { cssColorToHex } from './statusBarColor'
 
 function currentTheme(): 'light' | 'dark' {
   // index.html stamps data-theme on <html> before first paint (see the inline
@@ -19,13 +20,25 @@ function currentTheme(): 'light' | 'dark' {
   return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'
 }
 
+let appliedStatusBar = ''
+
 async function applyStatusBar(): Promise<void> {
   try {
     // Style.Dark = light (white) content for dark backgrounds; Style.Light =
     // dark content for light backgrounds. Match the active theme.
-    await StatusBar.setStyle({ style: currentTheme() === 'light' ? Style.Light : Style.Dark })
+    const style = currentTheme() === 'light' ? Style.Light : Style.Dark
+    // With the overlay off, the plugin paints its own native strip behind the
+    // status bar, black unless told otherwise, which left the light theme's
+    // dark clock and battery icons unreadable. Paint it what html/body paint
+    // (--bg-page, src/styles/base.css) rather than a second copy of the palette.
+    const color = cssColorToHex(getComputedStyle(document.body).backgroundColor)
+    const key = `${style}|${color ?? ''}`
+    if (key === appliedStatusBar) return
+    await StatusBar.setStyle({ style })
+    if (color) await StatusBar.setBackgroundColor({ color })
     // We do not draw behind the status bar — the OS insets the webview below it.
     await StatusBar.setOverlaysWebView({ overlay: false })
+    appliedStatusBar = key
   } catch { /* status bar unavailable — non-fatal */ }
 }
 
@@ -37,8 +50,12 @@ function markPlatformOnRoot(): void {
 
 function observeThemeForStatusBar(): void {
   try {
+    // The page colour follows the steelbuild-dark class as well as data-theme
+    // (tokens.css remaps --bg-page under it), so watch both. Unrelated class
+    // changes (keyboard-open) re-run this too; the applied-state check makes
+    // them free.
     const observer = new MutationObserver(() => { void applyStatusBar() })
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] })
   } catch { /* MutationObserver is always present on iOS WKWebView */ }
 }
 

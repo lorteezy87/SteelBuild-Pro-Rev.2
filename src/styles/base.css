@@ -357,11 +357,15 @@ a:focus-visible,
 
 /* The native shell insets the webview below the status bar automatically
    (StatusBar.overlaysWebView = false), so only the home-indicator area at the
-   bottom needs padding. Higher specificity than the standalone rule above, so
-   it wins inside the native app. */
+   bottom needs padding — plus the sides, which viewport-fit=cover leaves under
+   the camera housing when an iPhone is turned landscape (0 in portrait and on
+   iPad). Higher specificity than the standalone rule above, so it wins inside
+   the native app. */
 html.capacitor-native #root {
   padding-top: 0;
+  padding-right: var(--safe-area-inset-right);
   padding-bottom: var(--safe-area-inset-bottom);
+  padding-left: var(--safe-area-inset-left);
 }
 
 h1, h2, h3, h4 {
