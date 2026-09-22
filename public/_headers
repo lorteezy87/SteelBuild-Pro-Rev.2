@@ -18,14 +18,12 @@
 # worth knowing if you are debugging headers on a Netlify preview.
 
 # ── Security headers (every response) ────────────────────────────────────────
-# CSP stays Report-Only: it reports violations to Sentry without enforcing.
-# Promoting it to an enforcing Content-Security-Policy is a separate, reviewed
-# change — a missed source breaks Stripe, Supabase realtime or the 3D viewer at
-# runtime with no build-time signal.
+# CSP is enforcing. The reviewed allowlist below covers the runtime sources
+# required by Stripe, Supabase realtime, the 3D viewer, weather, Sentry, and
+# Cloudflare Analytics; adding a source requires a separate review.
 #
-# Two script-src entries exist because production was violating the policy on
-# every page load. Report-Only meant nobody noticed; enforcing it as written
-# would have broken both:
+# Two script-src entries exist because production previously violated the
+# policy on every page load. Enforcing it without both would break the app:
 #
 #   'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg='
 #     The anti-FOUC theme bootstrap inlined in index.html. It has to be inline —
@@ -48,7 +46,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: microphone=(), usb=(), serial=(), bluetooth=(), midi=()
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=' https://js.stripe.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://cloudflareinsights.com; worker-src 'self' blob:; frame-src 'self' https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4511458803253248.ingest.us.sentry.io/api/4511458819375104/security/?sentry_key=6709c2092ebda9743a803919a79c7b46
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=' https://js.stripe.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://cloudflareinsights.com; worker-src 'self' blob:; frame-src 'self' https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4511458803253248.ingest.us.sentry.io/api/4511458819375104/security/?sentry_key=6709c2092ebda9743a803919a79c7b46
 
 # ── Hashed build output ──────────────────────────────────────────────────────
 # Vite fingerprints everything under /assets/, so it is immutable by
