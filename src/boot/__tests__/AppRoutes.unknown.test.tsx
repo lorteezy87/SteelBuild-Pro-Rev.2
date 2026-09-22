@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Outlet, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+let native = false;
+vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => native }));
 const { authMe } = vi.hoisted(() => ({ authMe: vi.fn() }));
 
 vi.mock("@/api/supabaseClient", () => ({ auth: { me: authMe } }));
@@ -65,7 +67,7 @@ function LocationProbe() {
 }
 
 describe("AppRoutes unknown URL handling", () => {
-  beforeEach(() => authMe.mockClear());
+  beforeEach(() => { authMe.mockClear(); native = false; });
 
   it("keeps an unknown URL inside the authenticated shell without a second auth request", () => {
     render(
@@ -132,4 +134,9 @@ describe("AppRoutes unknown URL handling", () => {
     expect(screen.getByText(expectedPage)).toBeInTheDocument();
     expect(screen.queryByText("PAGE_NOT_FOUND")).not.toBeInTheDocument();
   });
+});
+
+it('redirects the marketing route out of the native app', async () => {
+ native = true; render(<MemoryRouter initialEntries={['/Landing']}><AppRoutes /><LocationProbe /></MemoryRouter>);
+ expect(await screen.findByTestId('location')).not.toHaveTextContent('/Landing');
 });

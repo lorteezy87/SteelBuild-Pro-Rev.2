@@ -10,6 +10,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 
+let native = false;
+vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => native }));
+vi.mock("@/pages/NativeSignIn", () => ({ default: () => <div>NATIVE_SIGNIN</div> }));
 let authState;
 let orgState;
 
@@ -44,6 +47,7 @@ const authed = {
 
 describe("AuthenticatedApp — auth + org gate precedence", () => {
   beforeEach(() => {
+    native = false;
     authState = { ...authed };
     orgState = { isLoadingOrgs: false, hasOrg: true };
     window.history.pushState({}, "", "/");
@@ -156,5 +160,27 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     render(<AuthenticatedApp />);
     expect(await screen.findByText("APP_ROUTES")).toBeInTheDocument();
     expect(screen.queryByText("ONBOARDING")).not.toBeInTheDocument();
+  });
+});
+
+ describe('native gates', () => {
+  beforeEach(() => { native = true; authState = { ...authed }; orgState = { isLoadingOrgs: false, hasOrg: true }; window.history.replaceState({}, '', '/'); });
+  it('shows native sign-in for an expired or absent session', async () => {
+    authState.isAuthenticated = false; render(<AuthenticatedApp />);
+    expect(await screen.findByText('NATIVE_SIGNIN')).toBeVisible();
+    expect(screen.queryByText('LANDING')).toBeNull();
+  });
+  it('does not offer workspace creation in the native app', async () => {
+    orgState.hasOrg = false; render(<AuthenticatedApp />);
+    expect(await screen.findByText('Workspace access needed')).toBeVisible();
+    expect(screen.queryByText('ONBOARDING')).toBeNull();
+  });
+  it('restores a valid session straight into the workspace', async () => {
+    render(<AuthenticatedApp />); expect(await screen.findByText('APP_ROUTES')).toBeVisible();
+  });
+  it('preserves password recovery and MFA precedence natively', async () => {
+    authState.isPasswordRecovery = true; authState.mfaRequired = true; render(<AuthenticatedApp />);
+    expect(await screen.findByText('UPDATE_PW')).toBeVisible();
+    expect(screen.queryByText('APP_ROUTES')).toBeNull();
   });
 });

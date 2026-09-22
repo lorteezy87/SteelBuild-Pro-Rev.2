@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { stripPrivilegeMeta } from '@/lib/authMeta';
 import { queryClientInstance } from '@/lib/query-client';
 import { clearPendingPhotos } from '@/lib/field/blobStore';
+import { isNativePlatform } from '@/lib/native/platform';
+import { passwordResetRedirect } from '@/lib/native/navigation';
 import { assertTermsAccepted, TERMS_VERSION } from '@/lib/signupClickwrap';
 
 // Clear every trace of the previous user's tenant data from the browser so it
@@ -350,7 +352,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const sendPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const redirectTo =
-        typeof window !== 'undefined' ? `${window.location.origin}/update-password` : undefined;
+        typeof window !== 'undefined' ? passwordResetRedirect(isNativePlatform(), window.location.origin) : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
       return { success: true };

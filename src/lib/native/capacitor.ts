@@ -7,7 +7,6 @@
  * runner. Every side effect is additionally wrapped so that a single failing
  * plugin can never prevent the React app from mounting.
  */
-import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard } from '@capacitor/keyboard'
 import { SplashScreen } from '@capacitor/splash-screen'
@@ -53,32 +52,6 @@ function wireKeyboardClasses(): void {
   } catch { /* keyboard events optional */ }
 }
 
-function extractInAppPath(url: string): string | null {
-  try {
-    const u = new URL(url)
-    // Only follow Universal Links to our own site. Custom-scheme URLs (e.g. auth
-    // callbacks) are handled by their own flows and must not be hijacked here.
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null
-    const path = `${u.pathname}${u.search}${u.hash}`
-    return path && path !== '/' ? path : null
-  } catch {
-    return null
-  }
-}
-
-function wireDeepLinks(): void {
-  try {
-    void App.addListener('appUrlOpen', (event) => {
-      const path = extractInAppPath(event?.url || '')
-      if (!path) return
-      // Hand the path to the SPA router via the History API + popstate;
-      // react-router's BrowserRouter listens for popstate.
-      window.history.pushState({}, '', path)
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
-  } catch { /* deep links optional */ }
-}
-
 /**
  * Idempotent entry point. Safe to call on any platform — returns immediately
  * unless running inside the native shell.
@@ -91,7 +64,7 @@ export async function initNativePlatform(): Promise<void> {
     void applyStatusBar()
     observeThemeForStatusBar()
     wireKeyboardClasses()
-    wireDeepLinks()
+    // Router-mounted NativeNavigation owns app links and Android Back.
   } catch { /* never let native setup break app boot */ }
 
   // Splash auto-hide is disabled in capacitor.config.ts so there is no flash of

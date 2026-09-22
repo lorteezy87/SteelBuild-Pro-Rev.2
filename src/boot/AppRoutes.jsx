@@ -1,3 +1,4 @@
+import { isNativePlatform } from "@/lib/native/platform";
 import { Suspense } from "react";
 import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
@@ -232,7 +233,7 @@ export default function AppRoutes() {
           path="Landing"
           element={
             <LazyRoute label="Landing">
-              <Landing />
+              {isNativePlatform() ? <Navigate to="/" replace /> : <Landing />}
             </LazyRoute>
           }
         />

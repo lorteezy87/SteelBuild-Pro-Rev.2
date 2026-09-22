@@ -1,9 +1,11 @@
+import { isNativePlatform } from "@/lib/native/platform";
 import { Suspense } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { OrgProvider, useOrg } from "@/components/shared/OrgContext";
 import AppLoader from "@/boot/AppLoader";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 
+const NativeSignIn = lazyWithRetry(() => import("@/pages/NativeSignIn"));
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
 const DesktopConnectSignIn = lazyWithRetry(() => import("@/pages/DesktopConnectSignIn"));
 const UpdatePassword = lazyWithRetry(() => import("@/pages/UpdatePassword"));
@@ -24,9 +26,9 @@ export function isDesktopConnectPath() {
  *
  * States, in order of precedence:
  *   1. Auth still resolving         → AppLoader
- *   2. Auth required (no session)   → Landing (marketing + inline sign-in)
+ *   2. Auth required (no session)   → NativeSignIn on mobile; Landing on web
  *   3. Authenticated, resolving org → AppLoader
- *   4. Authenticated, no workspace  → OrgOnboarding (create a workspace)
+ *   4. Authenticated, no workspace  → Invitation notice on mobile; onboarding on web
  *   5. Authenticated, has workspace → AppRoutes
  *
  * The org gate is fail-open (see OrgContext): an org-fetch error renders the app
@@ -34,9 +36,13 @@ export function isDesktopConnectPath() {
  */
 function OrgGate() {
   const { isLoadingOrgs, hasOrg } = useOrg();
+  const { logout } = useAuth();
 
   if (isLoadingOrgs) {
     return <AppLoader />;
+  }
+  if (!hasOrg && isNativePlatform()) {
+    return <main style={{ padding: 24, color: "var(--text-primary)", background: "var(--bg-page)", minHeight: "100dvh" }}><h1>Workspace access needed</h1><p>Ask your company administrator to invite this account, then sign in again.</p><button type="button" className="sbd-btn" onClick={() => { void logout(); }}>Sign out</button></main>;
   }
   if (!hasOrg) {
     return (
@@ -114,6 +120,10 @@ export default function AuthenticatedApp() {
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return <AppLoader />;
+  }
+
+  if (!isAuthenticated && isNativePlatform()) {
+    return <Suspense fallback={<AppLoader />}><NativeSignIn onLogin={loginWithPassword} onForgotPassword={sendPasswordReset} isSubmitting={isLoggingIn} loginError={loginError} /></Suspense>;
   }
 
   if (!isAuthenticated) {
