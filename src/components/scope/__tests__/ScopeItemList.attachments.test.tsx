@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ScopeItemList from "../ScopeItemList";
@@ -25,6 +24,14 @@ describe("ScopeItemList attachments", () => {
             file_name: "revision.pdf",
           },
         ]}
+        onCreateFirst={vi.fn()}
+        onClearFilters={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleComplete={vi.fn()}
+        onToggleInProgress={vi.fn()}
+        selectedIds={new Set()}
+        onToggleSelect={vi.fn()}
       />,
     );
 
