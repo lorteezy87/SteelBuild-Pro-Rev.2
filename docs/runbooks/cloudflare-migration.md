@@ -66,18 +66,36 @@ The IFC viewer renders zero geometry with no error on a bad WASM response, so th
 
 ## Owner steps
 
-### 1. Repo secrets and variables
+### 1. Protected GitHub Environments, secrets, and variables
 
-Secrets (Settings → Secrets and variables → Actions → **Secrets**):
+Create these GitHub Environments before enabling a deploy (Settings →
+Environments). Restrict the `production` environment to trusted production
+approvers. Require approval for `cloudflare-preview` unless its Cloudflare token
+is demonstrably unable to promote or modify the production Worker. The workflow
+does not fall back to repository secrets.
 
-| Name | Value |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Account API token, template **Edit Cloudflare Workers**, scoped to this account |
-| `CLOUDFLARE_ACCOUNT_ID` | From the Workers & Pages overview page |
-| `VITE_SUPABASE_URL` | `https://kjrwqagyeswwoxpjkcko.supabase.co` — the same value the Vercel project env holds |
-| `VITE_SUPABASE_ANON_KEY` | The publishable anon key from the same place |
+| Environment | Secret | Value / scope |
+|---|---|---|
+| `production` | `CLOUDFLARE_API_TOKEN` | Least-privilege Cloudflare token allowed to deploy only the production Worker. |
+| `production` | `CLOUDFLARE_ACCOUNT_ID` | Production Cloudflare account ID. |
+| `production` | `VITE_SUPABASE_URL` | `https://kjrwqagyeswwoxpjkcko.supabase.co`. |
+| `production` | `VITE_SUPABASE_ANON_KEY` | Production publishable anon key. |
+| `staging` | `CLOUDFLARE_API_TOKEN` | Separate token allowed to deploy only `steelbuild-pro-staging`. |
+| `staging` | `CLOUDFLARE_ACCOUNT_ID` | Staging Cloudflare account ID. |
+| `staging` | `STAGING_E2E_SUPABASE_URL` | `https://ndyfjffsulfbwpmwdmic.supabase.co`. |
+| `staging` | `STAGING_E2E_SUPABASE_ANON_KEY` | Staging publishable anon key. |
+| `cloudflare-preview` | `CLOUDFLARE_API_TOKEN` | Separate, least-privilege token for preview-version upload only. |
+| `cloudflare-preview` | `CLOUDFLARE_ACCOUNT_ID` | Account ID for the preview target. |
+| `cloudflare-preview` | `VITE_SUPABASE_URL` | Production Supabase URL, as previews are intentionally production-data clients. |
+| `cloudflare-preview` | `VITE_SUPABASE_ANON_KEY` | Production publishable anon key. |
 
-`VITE_SUPABASE_*` are browser-safe by design (they ship in the bundle — see `src/lib/env.ts`). No service key is ever a `VITE_*` var. They live in secrets only because Cloudflare has no `vercel pull` equivalent.
+After confirming the matching environment secrets work, delete the old
+repository-level `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets.
+Do not leave duplicate repository secrets: a workflow committed to another
+branch could otherwise read a deployment-capable credential without an
+environment approval. `VITE_SUPABASE_*` values are browser-safe by design (they
+ship in the bundle — see `src/lib/env.ts`), but they remain environment-scoped
+because Cloudflare has no `vercel pull` equivalent.
 
 Variables (same page → **Variables**):
 

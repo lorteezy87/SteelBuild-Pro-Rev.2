@@ -40,7 +40,7 @@ project-export is deployed with JWT verification. Its ALLOWED_ORIGINS setting ex
 
 ## CI deployment and browser checks
 
-deploy-staging-cloudflare runs after ci, secret-scan and edge-typecheck, only on a push to staging with STAGING_ENABLED=true. It builds from staging-only Supabase secrets, verifies the exact project URL and separate Worker name, deploys with wrangler.staging.jsonc, then checks the staging URL.
+deploy-staging-cloudflare runs after ci, secret-scan and edge-typecheck, only on a push to staging with STAGING_ENABLED=true. It is bound to GitHub's `staging` Environment, so its Cloudflare and browser-build secrets must be configured there rather than as repository secrets. It builds from staging-only Supabase secrets, verifies the exact project URL and separate Worker name, deploys with wrangler.staging.jsonc, then checks the staging URL.
 
 The read-only and disposable-mutation E2E jobs both depend on that deploy and retain explicit staging-branch/push gates. E2E rejects the production app host and production database even if the expected project ref is misconfigured.
 
