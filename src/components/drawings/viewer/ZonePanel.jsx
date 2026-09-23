@@ -582,19 +582,24 @@ export default function ZonePanel({
                 // existing RFIFormModal internal path so numbering
                 // stays consistent whether the RFI was created from
                 // the zone panel or the main RFIs page.
-                let rfiNumber;
-                try {
-                  rfiNumber = await getNextFormattedNumber({
-                    projectId: zone.project_id,
-                    recordType: "RFI",
-                    entityName: "RFI",
-                    fieldName: "rfi_number",
-                    prefix: "RFI #",
-                  });
-                } catch (err) {
-                  console.warn("[ZonePanel] rfi_number sequence failed:", err?.message);
-                  rfiNumber = `RFI #${String(Date.now()).slice(-6)}`;
-                }
+                //
+                // The number comes ONLY from the atomic RPC, and a failure to
+                // allocate must abort the create. getNextFormattedNumber
+                // already retries the server call and then throws; this used
+                // to catch that and mint `RFI #${Date.now().slice(-6)}`,
+                // which is an OFFICIAL RFI number the sequence never issued
+                // and will later issue to somebody else — so an RPC outage
+                // quietly produced two RFIs destined to collide, on a record
+                // the EOR answers and the GC tracks. Let it throw: the outer
+                // catch toasts and no RFI is created.
+                const rfiNumber = await getNextFormattedNumber({
+                  projectId: zone.project_id,
+                  recordType: "RFI",
+                  entityName: "RFI",
+                  fieldName: "rfi_number",
+                  prefix: "RFI #",
+                });
+                if (!rfiNumber) throw new Error("RFI number allocation failed. The RFI was not saved.");
 
                 // Coerce optional numeric fields the same way
                 // RFIFormModal's internal mutation does.
