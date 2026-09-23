@@ -4,6 +4,9 @@
 -- ARCHITECTURE.md → "Migrations" and CLAUDE.md → "Applying a migration"). Until
 -- then `Supabase drift check` correctly reports it as a missing migration, so do
 -- not merge it to main unapplied: main's drift check would block every deploy.
+-- For the same reason scripts/__tests__/migrationOverrides.test.ts ("leaves no
+-- local migration unclassified") fails until the stamped version is added to
+-- its LEDGER snapshot in the applying change.
 --
 -- RLS-4 (docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md): official-number
 -- counters are writable below the RPC.
