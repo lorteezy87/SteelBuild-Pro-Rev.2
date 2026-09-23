@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { SteelBuildMark } from "@/components/brand/SteelBuildMark";
 import MarketingLanding from "@/components/landing/MarketingLanding";
+import { isNativePlatform } from "@/lib/native/platform";
 
 const C = {
   // Dual-theme hex allowlist: public landing uses a fixed executive-light brand palette.
@@ -39,7 +40,10 @@ const monoLabel = (extra = {}) => ({
 });
 
 export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitting, loginError }) {
-  const [showLogin, setShowLogin] = useState(false);
+  // The native App Store shell is sign-in only. Account creation and billing
+  // remain on the web, so native users never enter the marketing/pricing flow.
+  const native = isNativePlatform();
+  const [showLogin, setShowLogin] = useState(native);
   const [authMode, setAuthMode] = useState("signin"); // "signin" | "signup" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -53,11 +57,11 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
   const [forgotNotice, setForgotNotice] = useState(null);
 
   useEffect(() => {
-    if (!showLogin) return undefined;
+    if (!showLogin || native) return undefined;
     const handler = (e) => { if (e.key === "Escape") setShowLogin(false); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [showLogin]);
+  }, [native, showLogin]);
 
   useEffect(() => {
     if (showLogin) {
@@ -139,11 +143,11 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
         .lp-input::placeholder { color: ${C.muted}; }
         .lp-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,23,42,.56); backdrop-filter: blur(10px); overflow-y: auto; }
           .lp-btn:hover { transform: none !important; }`}</style>
-      <MarketingLanding onStart={() => openAuth("signup")} onLogin={() => openAuth("signin")} />
+      {!native && <MarketingLanding onStart={() => openAuth("signup")} onLogin={() => openAuth("signin")} />}
       {showLogin && (
-        <div className="lp-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowLogin(false); }}>
+        <div className="lp-overlay" style={native ? { background: C.base, backdropFilter: "none", paddingTop: "calc(20px + env(safe-area-inset-top, 0px))", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" } : undefined} onClick={(e) => { if (!native && e.target === e.currentTarget) setShowLogin(false); }}>
           <div role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "Create account" : "Sign in"} className="lp-card" style={{ width: "100%", maxWidth: 438, padding: 32, borderRadius: 24, position: "relative", boxShadow: "0 34px 90px rgba(15,23,42,.28)" }}>
-            <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "var(--bg-surface-low)", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
+            {!native && <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "var(--bg-surface-low)", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
               <SteelBuildMark tile size={54} title="SteelBuild-Pro" style={{ borderRadius: 14, display: "block" }} />
               <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.045em" }}>SteelBuild-Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Built for people who build</div></div>
@@ -185,7 +189,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
                   <button type="submit" disabled={authMode === "signup" ? (signupBusy || !termsAccepted) : authMode === "forgot" ? forgotBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", opacity: (authMode === "signup" ? (signupBusy || !termsAccepted) : authMode === "forgot" ? forgotBusy : isSubmitting) ? .65 : 1, cursor: (authMode === "signup" ? (signupBusy || !termsAccepted) : authMode === "forgot" ? forgotBusy : isSubmitting) ? "not-allowed" : "pointer" }}>{authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : authMode === "forgot" ? (forgotBusy ? "Sending…" : "Send reset link") : (isSubmitting ? "Signing in…" : "Sign in")}</button>
                 </form>
                 <div style={{ marginTop: 18, textAlign: "center", fontSize: 13.5, color: C.body }}>
-                  {authMode === "signup" ? <>Already have an account? <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Sign in</button></> : authMode === "forgot" ? <>Remembered it? <button type="button" onClick={() => { setAuthMode("signin"); setForgotError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Back to sign in</button></> : <>New to SteelBuild Pro? <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Create an account</button></>}
+                  {authMode === "signup" ? <>Already have an account? <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Sign in</button></> : authMode === "forgot" ? <>Remembered it? <button type="button" onClick={() => { setAuthMode("signin"); setForgotError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Back to sign in</button></> : native ? null : <>New to SteelBuild Pro? <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Create an account</button></>}
                 </div>
               </>
             )}
