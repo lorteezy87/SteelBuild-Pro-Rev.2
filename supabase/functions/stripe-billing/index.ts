@@ -21,7 +21,7 @@ import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
-import { type BillingConfig, checkoutOrgUpdate, subscriptionOrgUpdate } from "./webhookLogic.ts";
+import { assertDbOk, type BillingConfig, checkoutOrgUpdate, subscriptionOrgUpdate } from "./webhookLogic.ts";
 import { billingReadiness } from "./configGuard.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -74,12 +74,15 @@ async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
     const sub = s.subscription ? await stripe.subscriptions.retrieve(s.subscription) : null;
     const res = checkoutOrgUpdate(s, sub, cfg);
     if (!res) return;
-    await admin.from("organizations").update(res.update).eq("id", res.orgId);
+    assertDbOk(await admin.from("organizations").update(res.update).eq("id", res.orgId), `checkout org update (${res.orgId})`);
   } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
     const evtSub = event.data.object;
     let orgId = evtSub.metadata?.org_id;
     if (!orgId) {
-      const { data: org } = await admin.from("organizations").select("id").eq("stripe_customer_id", evtSub.customer).maybeSingle();
+      const lookup = await admin.from("organizations").select("id").eq("stripe_customer_id", evtSub.customer).maybeSingle();
+      // A failed lookup is not "no such org": retry rather than drop the event.
+      assertDbOk(lookup, `org lookup by customer (${evtSub.customer})`);
+      const org = lookup.data;
       orgId = org?.id;
     }
     if (!orgId) return;
@@ -106,7 +109,7 @@ async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
     const TERMINAL = ["canceled", "incomplete_expired", "unpaid"];
     const deleted = event.type === "customer.subscription.deleted" || TERMINAL.includes(sub.status);
     const update = subscriptionOrgUpdate(sub, cfg, { deleted });
-    await admin.from("organizations").update(update).eq("id", orgId);
+    assertDbOk(await admin.from("organizations").update(update).eq("id", orgId), `subscription org update (${orgId})`);
   }
 }
 

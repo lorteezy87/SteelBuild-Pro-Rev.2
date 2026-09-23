@@ -102,3 +102,16 @@ export function subscriptionOrgUpdate(
     current_period_end: epochToIso(sub.current_period_end),
   };
 }
+
+/**
+ * A webhook's database read or write must succeed or fail the delivery. handleEvent
+ * throwing makes the webhook answer 500 WITHOUT marking the event processed,
+ * so Stripe retries it. An ignored write error used to mark the event
+ * processed anyway: a paid checkout never granted the plan, or a cancellation
+ * never revoked it, and no retry would ever come.
+ */
+export function assertDbOk(result: { error: unknown }, what: string): void {
+  if (!result.error) return;
+  const message = (result.error as { message?: string })?.message ?? String(result.error);
+  throw new Error(`${what} failed: ${message}`);
+}
