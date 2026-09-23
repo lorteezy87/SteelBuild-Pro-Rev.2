@@ -32,10 +32,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@^2.47";
 
+// supabase-js's functions.invoke() always sends X-Client-Info, and Sentry adds
+// sentry-trace/baggage to traced requests. A preflight that does not allow a
+// header the browser is about to send fails outright, so with the old
+// "authorization, apikey, content-type" list every Delete-my-account and
+// Delete-workspace call died in the browser before reaching this function.
+// Keep in step with ALLOW_HEADERS in ../_shared/cors.ts.
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
-  "access-control-allow-headers": "authorization, apikey, content-type",
+  "access-control-allow-headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-auth, sentry-trace, baggage",
 };
 
 function json(body: unknown, status = 200) {
