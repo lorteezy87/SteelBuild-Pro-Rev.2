@@ -8,6 +8,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toast } from "sonner";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { daysUntil, toLocalMidnight, startOfToday } from "@/lib/dateMath";
+import { RFI_OPEN_STATUSES } from "@/lib/entityPredicates";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 
 /**
@@ -65,7 +66,7 @@ export default function FieldPlan() {
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["field-plan-rfis", projectId],
-    queryFn: () => projectId ? entities.RFI.filter({ project_id: projectId, status: ["Open", "Submitted", "Under Review"] }) : [],
+    queryFn: () => projectId ? entities.RFI.filter({ project_id: projectId, status: [...RFI_OPEN_STATUSES] }) : [],
     enabled: !!projectId,
   });
 
