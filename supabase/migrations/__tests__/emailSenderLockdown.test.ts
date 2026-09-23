@@ -26,16 +26,17 @@ describe("email_accounts writes require a project admin", () => {
   it("has an admin floor on INSERT, UPDATE and DELETE that no later migration drops", () => {
     // Before this migration the strongest write rule was launch_field_* —
     // a field user could add an account with any address.
+    // Read and strip each file once: the baseline alone is ~11k lines.
+    const history = files.map((f) => code(readMigration(f)).toLowerCase());
     for (const op of ["insert", "update", "delete"]) {
       const name = `email_accounts_admin_${op}`;
-      const created = files.filter((f) =>
-        code(readMigration(f)).toLowerCase().includes(`create policy ${name} on public.email_accounts`),
-      );
+      const created = history
+        .map((text, i) => (text.includes(`create policy ${name} on public.email_accounts`) ? i : -1))
+        .filter((i) => i >= 0);
       expect(created, `${name} is never created`).not.toHaveLength(0);
       const last = created[created.length - 1];
-      const later = files.slice(files.indexOf(last) + 1);
-      for (const f of later) {
-        expect(code(readMigration(f)).toLowerCase()).not.toContain(`drop policy if exists ${name}`);
+      for (const text of history.slice(last + 1)) {
+        expect(text).not.toContain(`drop policy if exists ${name}`);
       }
     }
   });
