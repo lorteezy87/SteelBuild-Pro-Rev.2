@@ -47,6 +47,12 @@ import CalcKey from "@/components/calculators/CalcKey";
 import CalcTape from "@/components/calculators/CalcTape";
 import useCalcTape from "@/components/calculators/useCalcTape";
 import "@/components/calculators/calc.css";
+import { lookupRatedCapacity } from "@/lib/crane/loadChart";
+import { configurationSummary, craneDisplayName } from "@/lib/crane/craneLibrary";
+import useCraneLibrary from "@/components/calculators/useCraneLibrary";
+import CraneChartSource from "@/components/calculators/CraneChartSource";
+import CraneLibraryPanel from "@/components/calculators/CraneLibraryPanel";
+import GroundBearingPanel from "@/components/calculators/GroundBearingPanel";
 
 // Three.js is ~600 KB — keep it out of the calculator chunk until the 3D view renders.
 const CranePick3D = lazyWithRetry(() => import("@/components/calculators/CranePick3D"));
@@ -116,6 +122,10 @@ const CG_MODES = { CENTERED: "centered", OFFSET: "offset" };
 
 const LIFT_TYPES = { STANDARD: "standard", PERSONNEL: "personnel" };
 
+// Where the rated capacity comes from: read off a load chart in the crane
+// library, or typed by hand from the chart book (the original behaviour).
+const CAP_SOURCES = { CHART: "chart", MANUAL: "manual" };
+
 // Quick-pick angle buttons (nice-to-have from spec).
 const ANGLE_PRESETS = [30, 45, 60, 90];
 
@@ -163,6 +173,14 @@ export default function CranePickCalculator() {
   const [craneModel, setCraneModel]       = useState("");
   const [counterweight, setCounterweight] = useState("");
   const [show3d, setShow3d]               = useState(true);
+
+  // ── Crane library (fleet + load charts, persisted on this device) ──
+  const library = useCraneLibrary();
+  const [capSource, setCapSource] = useState(() => (library.cranes.length ? CAP_SOURCES.CHART : CAP_SOURCES.MANUAL));
+  const [craneId, setCraneId]     = useState(() => library.cranes[0]?.id ?? "");
+  const [configId, setConfigId]   = useState(() => library.cranes[0]?.configurations[0]?.id ?? "");
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [bearingOpen, setBearingOpen] = useState(false);
   // The summary modal renders a SNAPSHOT (`summaryData`) rather than reading
   // live state directly, so a Pick-History recall can re-open a past pick.
   const [summaryData, setSummaryData]     = useState(null);
@@ -196,7 +214,22 @@ export default function CranePickCalculator() {
   const rigging  = f.rigging.blank ? 0 : f.rigging.value;
   const hookWt   = f.hook.blank ? 0 : f.hook.value;
   const otherWt  = f.other.blank ? 0 : f.other.value;
-  const cap      = f.cap.value;
+  // Rated capacity: read off the selected load chart, or typed by hand.
+  const useChart = capSource === CAP_SOURCES.CHART;
+  const selectedCrane = library.cranes.find((c) => c.id === craneId) ?? null;
+  const selectedConfig = selectedCrane?.configurations.find((c) => c.id === configId) ?? null;
+  const chartLookup = useMemo(() => {
+    if (!useChart || !selectedConfig) return null;
+    if (f.boom.blank || f.radius.blank || f.boom.invalid || f.radius.invalid) return null;
+    return lookupRatedCapacity(selectedConfig.chart, f.boom.value, f.radius.value, selectedConfig.boomType);
+    // f is rebuilt each render; the raw strings are the real inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useChart, selectedConfig, boomLength, workingRadius]);
+  // A position the chart does not rate yields NaN, so utilization is NaN and no
+  // result renders; the refusal itself is reported through `errors` below.
+  const cap = useChart
+    ? (chartLookup && chartLookup.ok === true ? chartLookup.capacity : NaN)
+    : f.cap.value;
   const isOffset = numLegs === 2 && cgMode === CG_MODES.OFFSET;
 
   // ── Loads ───────────────────────────────────────────────────
@@ -258,14 +291,21 @@ export default function CranePickCalculator() {
     num(f.rigging, "rigging weight");
     num(f.hook, "hook block weight");
     num(f.other, "other chart deductions");
-    num(f.cap, "the crane's rated capacity at the planned radius", { required: true, strictlyPositive: true });
+    if (useChart) {
+      if (!selectedCrane) e.push("Choose a crane from the crane library, or switch capacity to manual entry.");
+      else if (!selectedConfig) e.push("Choose which configuration's load chart applies to this pick.");
+    } else {
+      num(f.cap, "the crane's rated capacity at the planned radius", { required: true, strictlyPositive: true });
+    }
     num(f.slWll, "sling WLL", { strictlyPositive: true });
     num(f.shWll, "shackle WLL", { strictlyPositive: true });
-    num(f.boom, "boom length", { strictlyPositive: true });
-    num(f.radius, "working radius", { strictlyPositive: true });
+    // Optional in manual mode (they only drive the 3D view); required to read a chart.
+    num(f.boom, "boom length", { required: useChart && !!selectedConfig, strictlyPositive: true });
+    num(f.radius, "working radius", { required: useChart && !!selectedConfig, strictlyPositive: true });
     if (boomEntered && !f.boom.invalid && !f.radius.invalid && f.boom.value > 0 && f.radius.value > 0 && !boomGeo) {
       e.push("Working radius must be less than the boom length.");
     }
+    if (chartLookup && chartLookup.ok === false) e.push(`Not rated — ${chartLookup.message}`);
 
     if (numLegs !== 1) {
       if (isOffset) {
@@ -293,7 +333,8 @@ export default function CranePickCalculator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pieceWeight, riggingWeight, hookBlock, otherDeduct, craneCapacity, slingWll, shackleWll,
       boomLength, workingRadius, numLegs, isOffset, angleMode, angleDeg, hspanH, hspanS, hspanW,
-      slingLen, slingH, offH, offD1, offD2, effectiveAngle, boomEntered, boomGeo]);
+      slingLen, slingH, offH, offD1, offD2, effectiveAngle, boomEntered, boomGeo,
+      useChart, selectedCrane, selectedConfig, chartLookup]);
 
   const hasValidResults = errors.length === 0
     && Number.isFinite(grossLoad)
@@ -430,7 +471,23 @@ export default function CranePickCalculator() {
     capacityStatus, angleStatus, warnings,
     boomAngle: boomGeo ? boomGeo.boomAngle : NaN,
     tipHeight: boomGeo ? boomGeo.tipHeightAboveFoot : NaN,
-    craneModel, boomLength, workingRadius, counterweight,
+    // Chart mode: crane and counterweight come from the library record, and
+    // the chart's provenance travels with the pick, so the summary names the
+    // exact chart and cell the capacity was read from.
+    craneModel: useChart && selectedCrane ? craneDisplayName(selectedCrane) : craneModel,
+    counterweight: useChart && selectedConfig ? selectedConfig.counterweight : counterweight,
+    boomLength, workingRadius,
+    capacitySource: useChart ? CAP_SOURCES.CHART : CAP_SOURCES.MANUAL,
+    chart: useChart && selectedCrane && selectedConfig && chartLookup && chartLookup.ok === true
+      ? {
+          serial: selectedCrane.serial,
+          configuration: selectedConfig.label,
+          summary: configurationSummary(selectedConfig),
+          source: selectedConfig.chartSource,
+          basis: chartLookup.basis,
+          exact: chartLookup.exact,
+        }
+      : null,
   });
 
   // Generate Pick Summary — open the modal AND record the pick on the
@@ -708,14 +765,35 @@ export default function CranePickCalculator() {
                       : "Standard: caution at 75%, critical above 90% (common contractor lift-planning thresholds)."}
                   </div>
                 </div>
-                {field("Rated Capacity at Radius (lb)", craneCapacity, setCraneCapacity, "e.g. 180,000",
-                  { hint: "From the crane's load chart at the planned working radius, boom configuration, and counterweight setup." })}
+                <div>
+                  <span style={labelStyle}>Rated Capacity Source</span>
+                  <div className="crane-pick-keyrow" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <CalcKey label="LOAD CHART" variant={useChart ? "accent" : "fn"}
+                      onPress={() => setCapSource(CAP_SOURCES.CHART)} ariaLabel="Read rated capacity from a load chart in the crane library" />
+                    <CalcKey label="MANUAL" variant={!useChart ? "accent" : "fn"}
+                      onPress={() => setCapSource(CAP_SOURCES.MANUAL)} ariaLabel="Type the rated capacity by hand" />
+                  </div>
+                </div>
+                {useChart ? (
+                  <CraneChartSource
+                    cranes={library.cranes}
+                    craneId={craneId}
+                    configId={configId}
+                    onSelect={(c, cfg) => { setCraneId(c); setConfigId(cfg); }}
+                    lookup={chartLookup}
+                    onManage={() => setLibraryOpen(true)}
+                  />
+                ) : (
+                  field("Rated Capacity at Radius (lb)", craneCapacity, setCraneCapacity, "e.g. 180,000",
+                    { hint: "From the crane's load chart at the planned working radius, boom configuration, and counterweight setup." })
+                )}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {field("Boom Length (ft)", boomLength, setBoomLength, "e.g. 110", { small: true })}
                   {field("Working Radius (ft)", workingRadius, setWorkingRadius, "e.g. 45", { small: true })}
                 </div>
                 <div style={{ ...hintStyle, marginTop: -4 }}>
-                  Optional — drives boom angle, tip height and the 3D view. Radius is measured from the centre of rotation; boom deflection increases it under load.
+                  {useChart ? "Required — these read the load chart. " : "Optional — drives boom angle, tip height and the 3D view. "}
+                  Radius is measured from the centre of rotation, and boom deflection increases it under load — plan to the LOADED radius.
                   {boomGeo && (
                     <span style={{ color: "var(--text-secondary)" }}>
                       {" "}Boom angle ≈ {boomGeo.boomAngle.toFixed(1)}° · tip ≈ {boomGeo.tipHeightAboveFoot.toFixed(1)} ft above boom foot.
@@ -723,7 +801,9 @@ export default function CranePickCalculator() {
                   )}
                 </div>
 
-                {/* Optional crane metadata — collapsible, not used in math */}
+                {/* Optional crane metadata — collapsible, not used in math. Manual
+                    mode only: in chart mode the library record supplies both. */}
+                {!useChart && (
                 <div>
                   <button
                     type="button"
@@ -739,6 +819,24 @@ export default function CranePickCalculator() {
                     </div>
                   )}
                 </div>
+                )}
+              </div>
+            </div>
+
+            {/* Ground bearing — outrigger mat check. Kept apart from the pick
+                math: the outrigger reaction comes from the manufacturer's
+                outrigger-load data, not from anything computed on this page. */}
+            <div style={cardStyle}>
+              <div style={{ padding: "12px 18px" }}>
+                <button
+                  type="button"
+                  onClick={() => setBearingOpen((v) => !v)}
+                  aria-expanded={bearingOpen}
+                  style={keycapButtonStyle(false, { fullWidth: false })}
+                >
+                  {bearingOpen ? "▾" : "▸"} Ground Bearing — Outrigger Mat Check
+                </button>
+                {bearingOpen && <div style={{ marginTop: 12 }}><GroundBearingPanel /></div>}
               </div>
             </div>
           </div>
@@ -913,6 +1011,15 @@ export default function CranePickCalculator() {
             .pick-summary-print-area * { color: #000 !important; }
           }
         `}</style>
+
+        <CraneLibraryPanel
+          open={libraryOpen}
+          cranes={library.cranes}
+          onChange={library.setCranes}
+          onClose={() => setLibraryOpen(false)}
+          onUse={(c, cfg) => { setCraneId(c); setConfigId(cfg); setCapSource(CAP_SOURCES.CHART); }}
+          saveFailed={library.saveFailed}
+        />
 
         {/* Pick Summary modal — renders the captured snapshot (live or recalled) */}
         {summaryOpen && (
@@ -1105,6 +1212,16 @@ function PickSummaryModal({ onClose, data }) {
           <SummarySection title="Capacity">
             {data.liftType && <SummaryRow k="Lift Type" v={personnel ? "Personnel platform (50% limit, 1926.1431)" : "Standard"} />}
             <SummaryRow k="Rated Crane Capacity" v={lbOrDash(data.craneCapacity)} />
+            {data.chart && (
+              <>
+                <SummaryRow k="Capacity Source" v={`Load chart — ${data.chart.configuration}`} />
+                <SummaryRow k="Chart" v={data.chart.summary} />
+                <SummaryRow k="Chart Reference" v={data.chart.source} />
+                {data.chart.serial && <SummaryRow k="Crane S/N" v={data.chart.serial} />}
+                <SummaryRow k="Chart Reading" v={data.chart.basis} />
+              </>
+            )}
+            {data.capacitySource === CAP_SOURCES.MANUAL && <SummaryRow k="Capacity Source" v="Entered by hand" />}
             <SummaryRow
               k="Utilization"
               v={`${data.utilization.toFixed(1)}% (${(STATUS_LABEL[data.capacityStatus] || "—")})`}
@@ -1204,6 +1321,15 @@ function buildSummaryText(d) {
   lines.push("CAPACITY");
   if (d.liftType) lines.push(`  Lift Type:           ${d.liftType === LIFT_TYPES.PERSONNEL ? "Personnel platform (50% limit, 29 CFR 1926.1431)" : "Standard"}`);
   lines.push(`  Rated Capacity:      ${lbOrDash(d.craneCapacity)}`);
+  if (d.chart) {
+    lines.push(`  Capacity Source:     Load chart — ${d.chart.configuration}`);
+    lines.push(`  Chart:               ${d.chart.summary}`);
+    lines.push(`  Chart Reference:     ${d.chart.source}`);
+    if (d.chart.serial) lines.push(`  Crane S/N:           ${d.chart.serial}`);
+    lines.push(`  Chart Reading:       ${d.chart.basis}`);
+  } else if (d.capacitySource === CAP_SOURCES.MANUAL) {
+    lines.push(`  Capacity Source:     Entered by hand`);
+  }
   lines.push(`  Utilization:         ${Number(d.utilization).toFixed(1)}%  (${STATUS_LABEL[d.capacityStatus] || "—"})`);
   if (d.craneModel || d.boomLength || d.workingRadius || d.counterweight) {
     lines.push("");
