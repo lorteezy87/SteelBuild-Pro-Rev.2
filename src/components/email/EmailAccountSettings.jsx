@@ -5,10 +5,15 @@
  * for adding new sources (manual forward or Power Automate) and toggling state.
  * Designed to be embedded on the Integrations page or rendered as a
  * standalone settings drawer.
+ *
+ * Writes are admin-only (SEC-N1): the email_accounts RLS write policies require
+ * user_has_project_role_at_least(project_id, 'admin'), and the controls here are
+ * gated on that same predicate. Everyone else sees the list read-only.
  */
 
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
+import { useProjectRoleAtLeast } from "@/hooks/useProjectRoleAtLeast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -38,6 +43,8 @@ export default function EmailAccountSettings({ projectId }) {
   const [newEmail, setNewEmail] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [copiedUrl, setCopiedUrl] = useState(false);
+  // Display gate only — RLS rejects a non-admin write regardless.
+  const { allowed: canManage, isLoading: roleLoading } = useProjectRoleAtLeast(projectId, "admin");
 
   // ── Data ─────────────────────────────────────────────────────────────
   const { data: accounts = [], isLoading } = useQuery({
@@ -143,35 +150,48 @@ export default function EmailAccountSettings({ projectId }) {
             Email Accounts
           </h3>
         </div>
-        <button
-          onClick={() => setShowAddForm((v) => !v)}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-            padding: "5px 10px",
-            background: "var(--accent-muted)",
-            border: "1px solid var(--accent-border)",
-            borderRadius: 6,
-            fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--accent)",
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={12} />
-          Add Email Source
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowAddForm((v) => !v)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "5px 10px",
+              background: "var(--accent-muted)",
+              border: "1px solid var(--accent-border)",
+              borderRadius: 6,
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              fontWeight: 600,
+              color: "var(--accent)",
+              cursor: "pointer",
+            }}
+          >
+            <Plus size={12} />
+            Add Email Source
+          </button>
+        )}
       </div>
 
+      {!canManage && !roleLoading && (
+        <p style={{ ...hintTextStyle, margin: 0, padding: "10px 18px", borderBottom: "1px solid var(--border-default)" }}>
+          Only project or workspace admins can add, change or remove email accounts.
+        </p>
+      )}
+
       {/* Add form */}
-      {showAddForm && (
+      {canManage && showAddForm && (
         <div style={{
           padding: "14px 18px",
           borderBottom: "1px solid var(--border-default)",
           background: "var(--bg-surface-low)",
         }}>
+          <p style={{ ...hintTextStyle, margin: "0 0 10px" }}>
+            Sending email from an address also requires it to be verified by SteelBuild Pro support.
+            Until then the address can receive forwarded mail but cannot send.
+          </p>
+
           {/* Connection type selector */}
           <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
             <TypeButton
@@ -235,7 +255,7 @@ export default function EmailAccountSettings({ projectId }) {
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="projects@shsteelaz.com"
+                  placeholder="projects@yourcompany.com"
                   style={inputStyle}
                 />
               </div>
@@ -245,7 +265,7 @@ export default function EmailAccountSettings({ projectId }) {
                   type="text"
                   value={newDisplayName}
                   onChange={(e) => setNewDisplayName(e.target.value)}
-                  placeholder="SHS Steel Projects"
+                  placeholder="Company Projects"
                   style={inputStyle}
                 />
               </div>
@@ -407,7 +427,7 @@ export default function EmailAccountSettings({ projectId }) {
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+              {canManage && <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                 <button
                   onClick={() => handleToggleActive(account)}
                   title={account.is_active ? "Deactivate" : "Activate"}
@@ -425,7 +445,7 @@ export default function EmailAccountSettings({ projectId }) {
                 >
                   <Trash2 size={14} strokeWidth={2} style={{ color: "var(--status-error)" }} />
                 </button>
-              </div>
+              </div>}
             </div>
           ))
         )}
