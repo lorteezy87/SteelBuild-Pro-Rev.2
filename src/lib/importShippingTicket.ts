@@ -9,13 +9,21 @@
  * lets the user review the match before committing.
  *
  * The shape returned here maps 1:1 to the 041 schema. A follow-on
- * `commitShippingTicket()` writes one deliveries row + N delivery_items
- * rows. Both live in this module so the Deliveries UI only imports one
- * helper.
+ * `commitShippingTicket()` records one delivery + its N delivery_items
+ * through create_delivery(). Both live in this module so the Deliveries UI
+ * only imports one helper.
  */
 
 import { supabase } from "@/lib/supabase";
 import { integrations } from "@/api/supabaseClient";
+import {
+  createDeliveryWithItems,
+  importedDeliveryTitle,
+  loadTotalsFollowUp,
+  parseLbs,
+  toDeliveryItemPayload,
+  wholeOrNull,
+} from "@/lib/deliveries/createDeliveryWithItems";
 
 /** Ticket header as the model returns it — every field optional, loosely typed. */
 export interface ShippingTicketHeader {
@@ -315,20 +323,20 @@ export async function resolveProjectForTicket(jobNumber: unknown): Promise<Ticke
 }
 
 /**
- * Insert the delivery + delivery_items after the user confirms the preview.
- * Returns the created delivery row.
+ * Record the ticket as one delivery + its delivery_items after the user
+ * confirms the preview. Returns the created delivery row.
+ *
+ * Goes through create_delivery() (createDeliveryWithItems), which mints the
+ * DEL number and inserts the delivery and its lines in one transaction —
+ * production refuses a direct `deliveries` insert and any hard delete, so the
+ * old insert-then-insert-then-delete-on-failure sequence could not import a
+ * ticket at all.
  */
 export async function commitShippingTicket({
-  header, items, projectId, projectName,
+  header, items, projectId,
   file_url, storage_path, file_name,
 }: CommitShippingTicketArgs) {
   if (!projectId) throw new Error("Select a project before importing.");
-
-  // Parse weights so the columns are numeric, not "48,000#" strings.
-  const capLbs = parseLbs(header.capacity_lbs);
-  const weightLbs = parseLbs(header.weight_loaded_lbs);
-  const qty = Number.isFinite(Number(header.assembly_quantity)) ? Number(header.assembly_quantity) : null;
-  const weightTons = weightLbs != null ? +(weightLbs / 2000).toFixed(3) : null;
 
   // Figure out which date field to use. If date_shipped is in the past (or
   // today), store as actual_date. If it's in the future, store as
@@ -338,79 +346,36 @@ export async function commitShippingTicket({
   const shippedDate = dateShipped ? new Date(dateShipped) : null;
   const isHistorical = shippedDate && shippedDate.getTime() <= today.getTime();
 
-  const deliveryPayload = {
-    project_id:     projectId,
-    project_name:   projectName || null,
-    load_number:    header.load_number || null,
-    load_category:  header.load_category || null,
-    capacity_lbs:   capLbs,
-    carrier:        header.trailer || header.carrier || null,
-    pieces:         qty,
-    weight_tons:    weightTons,
-    description:    header.job_name ? `${header.job_name} — Load ${header.load_number ?? "?"}` : null,
-    status:         isHistorical ? "Delivered" : "Scheduled",
-    scheduled_date: isHistorical ? null : dateShipped,
-    actual_date:    isHistorical ? dateShipped : null,
-    shipping_ticket_url:  file_url || null,
-    shipping_ticket_path: storage_path || null,
-    shipping_ticket_name: file_name || null,
-  };
+  const lines = items.map(toDeliveryItemPayload);
+  const description = header.job_name ? `${header.job_name} — Load ${header.load_number ?? "?"}` : null;
 
-  const { data: delivery, error: delErr } = await supabase
-    .from("deliveries")
-    .insert(deliveryPayload)
-    .select()
-    .single();
-  if (delErr) throw new Error(`Delivery insert failed: ${delErr.message}`);
-
-  if (items.length > 0) {
-    const rows = items.map((it, i) => ({
-      delivery_id:   delivery.id,
-      line_no:       i + 1,
-      qty:           toInt(it.qty, 1),
-      assembly_mark: str(it.assembly_mark),
-      sequence:      str(it.sequence),
-      profile:       str(it.profile),
-      length_text:   str(it.length_text),
-      length_inches: toNum(it.length_inches),
-      grade:         str(it.grade),
-      finish:        str(it.finish),
-      weight_lbs:    parseLbs(it.weight_lbs),
-    }));
-    const { error: itErr } = await supabase.from("delivery_items").insert(rows);
-    if (itErr) {
-      // Roll back the parent so we don't leave an orphan delivery pointing at
-      // nothing. CASCADE on delivery_items FK means any rows that did insert
-      // get cleaned up by the delete.
-      await supabase.from("deliveries").delete().eq("id", delivery.id);
-      throw new Error(`delivery_items insert failed (rolled back): ${itErr.message}`);
-    }
-  }
-
-  return delivery;
+  // project_name is looked up by the RPC itself; the caller's copy is not sent.
+  return createDeliveryWithItems({
+    projectId,
+    delivery: {
+      delivery_title: importedDeliveryTitle(header.load_number, description, file_name && `Shipping ticket ${file_name}`),
+      load_number:    header.load_number || null,
+      load_category:  header.load_category || null,
+      carrier:        header.trailer || header.carrier || null,
+      description,
+      status:         isHistorical ? "Delivered" : "Scheduled",
+      scheduled_date: isHistorical ? null : dateShipped,
+    },
+    items: lines,
+    followUp: {
+      actual_date:          isHistorical ? dateShipped : undefined,
+      // Parse weights so the columns are numeric, not "48,000#" strings.
+      capacity_lbs:         wholeOrNull(parseLbs(header.capacity_lbs)) ?? undefined,
+      shipping_ticket_url:  file_url || undefined,
+      shipping_ticket_path: storage_path || undefined,
+      shipping_ticket_name: file_name || undefined,
+      ...loadTotalsFollowUp(header.assembly_quantity, header.weight_loaded_lbs, lines),
+    },
+  });
 }
 
 // ─── helpers ────────────────────────────────────────────────────────
 
-function str(v: unknown): string | null {
-  if (v == null) return null;
-  const s = String(v).trim();
-  return s === "" ? null : s;
-}
-function toInt(v: unknown, fallback: number | null = null): number | null {
-  const n = parseInt(String(v), 10);
-  return Number.isFinite(n) ? n : fallback;
-}
-function toNum(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-function parseLbs(v: unknown): number | null {
-  if (v == null) return null;
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  const n = Number(String(v).replace(/[^\d.-]/g, ""));
-  return Number.isFinite(n) ? n : null;
-}
 function normalizeDate(v: unknown): string | null {
   if (!v) return null;
   const s = String(v).trim();

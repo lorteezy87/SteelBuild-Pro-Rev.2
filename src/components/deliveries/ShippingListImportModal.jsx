@@ -6,9 +6,11 @@
  * bulk path for the multi-load master report. §30 staged review: parse the
  * .xls/.xlsx (SheetJS) → parseShippingList → classify each load create vs
  * already-imported (by load# + ship date) → the user approves → commit. Each
- * load becomes a delivery + its pieces become delivery_items, mirroring
- * commitShippingTicket's mapping (delivery insert → items insert, with the
- * parent rolled back if the items fail so no orphan delivery is left). RLS: field+.
+ * load becomes a delivery + its pieces become delivery_items in ONE
+ * create_delivery() call (createDeliveryWithItems, shared with
+ * commitShippingTicket), so a refused load leaves nothing behind. Loads are
+ * committed one at a time in list order, and only loads whose delivery was
+ * recorded go on to mark pieces Shipped / ship canonical lots. RLS: field+.
  */
 
 import React, { useRef, useState } from "react";
@@ -26,6 +28,12 @@ import { resolveCanonicalShipTargets } from "@/lib/pieceControl/shippingCanonica
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
 import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
 import { summarizeShippingListCommit } from "@/lib/deliveries/summarizeShippingListCommit";
+import {
+  createDeliveryWithItems,
+  importedDeliveryTitle,
+  loadTotalsFollowUp,
+  toDeliveryItemPayload,
+} from "@/lib/deliveries/createDeliveryWithItems";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -98,7 +106,6 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
   };
 
   const commitLoad = async (load) => {
-    const weightLbs = load.total_weight_lbs;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     // Parse the date-only ship_date as a LOCAL date (not UTC): new Date("YYYY-MM-DD")
     // parses as UTC midnight, so behind UTC a load shipping on the local "today"
@@ -106,50 +113,46 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
     const sp = load.ship_date ? String(load.ship_date).slice(0, 10).split("-") : null;
     const shipLocalMs = sp && sp.length === 3 ? new Date(Number(sp[0]), Number(sp[1]) - 1, Number(sp[2])).getTime() : null;
     const isHistorical = shipLocalMs != null && shipLocalMs <= today.getTime();
-    const deliveryPayload = {
-      project_id: projectId,
-      project_name: projectName || null,
-      load_number: load.load_number || null,
-      load_category: load.destination || null,
-      receiving_location: load.destination || null,
-      carrier: load.carrier || load.trailer || null,
-      pieces: load.total_qty ?? null,
-      weight_tons: weightLbs != null ? Number((weightLbs / 2000).toFixed(3)) : null,
-      description: `${load.job_number ? `${load.job_number} — ` : ""}Load ${load.load_number ?? "?"}`,
-      status: isHistorical ? "Delivered" : "Scheduled",
-      scheduled_date: isHistorical ? null : load.ship_date,
-      actual_date: isHistorical ? load.ship_date : null,
-      metadata: {
-        source: "shipping_list",
-        job_number: load.job_number || null,
-        trailer: load.trailer || null,
-        tbr: load.tbr || null,
-        ready_date: load.ready_date || null,
-        destination: load.destination || null,
+    const lines = load.pieces.map((p) => toDeliveryItemPayload({
+      qty: p.quantity,
+      assembly_mark: p.mark,
+      sequence: p.sequence,
+      profile: p.dimensions,
+      length_text: p.length,
+      grade: p.grade,
+      finish: p.finish,
+    }));
+    const description = `${load.job_number ? `${load.job_number} — ` : ""}Load ${load.load_number ?? "?"}`;
+    // One create_delivery() call records the load and its pieces atomically
+    // (production refuses a direct deliveries insert and any hard delete, so
+    // there is no hand-rolled rollback). project_name is looked up by the RPC.
+    return createDeliveryWithItems({
+      projectId,
+      delivery: {
+        delivery_title: importedDeliveryTitle(load.load_number, description),
+        load_number: load.load_number || null,
+        load_category: load.destination || null,
+        receiving_location: load.destination || null,
+        carrier: load.carrier || load.trailer || null,
+        description,
+        status: isHistorical ? "Delivered" : "Scheduled",
+        scheduled_date: isHistorical ? null : load.ship_date,
+        metadata: {
+          source: "shipping_list",
+          job_number: load.job_number || null,
+          trailer: load.trailer || null,
+          tbr: load.tbr || null,
+          ready_date: load.ready_date || null,
+          destination: load.destination || null,
+        },
       },
-    };
-    const { data: delivery, error: delErr } = await supabase.from("deliveries").insert(deliveryPayload).select().single();
-    if (delErr) throw new Error(delErr.message);
-
-    if (load.pieces.length > 0) {
-      const itemRows = load.pieces.map((p, i) => ({
-        delivery_id: delivery.id,
-        line_no: i + 1,
-        qty: p.quantity ?? 1,
-        assembly_mark: p.mark || null,
-        sequence: p.sequence || null,
-        profile: p.dimensions || null,
-        length_text: p.length || null,
-        grade: p.grade || null,
-        finish: p.finish || null,
-      }));
-      const { error: itErr } = await supabase.from("delivery_items").insert(itemRows);
-      if (itErr) {
-        await supabase.from("deliveries").delete().eq("id", delivery.id); // no orphan
-        throw new Error(itErr.message);
-      }
-    }
-    return delivery;
+      items: lines,
+      followUp: {
+        actual_date: isHistorical ? load.ship_date : undefined,
+        // The list's load totals; piece rows carry no weight of their own.
+        ...loadTotalsFollowUp(load.total_qty, load.total_weight_lbs, lines),
+      },
+    });
   };
 
   const runCommit = async () => {
@@ -159,17 +162,26 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
 
     setStep("committing"); setErr(null);
     try {
-      let created = 0;
       let items = 0;
       let failed = 0;
-      for (let i = 0; i < kept.length; i += 5) {
-        const chunk = kept.slice(i, i + 5);
-        const results = await Promise.allSettled(chunk.map((l) => commitLoad(l)));
-        results.forEach((res, j) => {
-          if (res.status === "fulfilled") { created += 1; items += chunk[j].pieces.length; }
-          else failed += 1;
-        });
+      // Loads whose delivery was actually recorded. Only these ship pieces —
+      // advancing lots for a load whose delivery was refused would claim a
+      // shipment the Deliveries log never received.
+      const committed = [];
+      // One at a time, in list order: each create_delivery() call mints the
+      // next DEL number, so parallel calls would scramble official numbers
+      // against the order of the loads on the list (same rule as bulkCreate).
+      for (const load of kept) {
+        try {
+          await commitLoad(load);
+          committed.push(load);
+          items += load.pieces.length;
+        } catch (e) {
+          failed += 1;
+          console.error(`[ShippingListImportModal] load ${load.load_number ?? "?"} not imported:`, e);
+        }
       }
+      const created = committed.length;
       // Mark every shipped piece "Shipped" on Production Status (terminal stage).
       // When Piece Control is pilot/live, also advance matching canonical lots.
       let shipped = 0;
@@ -177,15 +189,15 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
       let canonicalSkipped = 0;
       let productionShipFailed = false;
       let canonicalShipFailed = false;
-      if (markShipped) {
+      if (markShipped && committed.length > 0) {
         try {
-          shipped = await markPiecesShipped(kept, existingProduction, projectId);
+          shipped = await markPiecesShipped(committed, existingProduction, projectId);
         } catch (e) {
           productionShipFailed = true;
           console.error("[ShippingListImportModal] mark-shipped failed:", e);
         }
         try {
-          const bridge = await markCanonicalPiecesShipped(kept, projectId);
+          const bridge = await markCanonicalPiecesShipped(committed, projectId);
           canonicalShipped = bridge.shipped;
           canonicalSkipped = bridge.skipped;
         } catch (e) {
