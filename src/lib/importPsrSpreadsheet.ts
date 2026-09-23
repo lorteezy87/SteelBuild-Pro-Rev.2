@@ -1,3 +1,130 @@
+/**
+ * importPsrSpreadsheet.ts — parse a detailer's Job Status Report (PSR)
+ * workbook into a structured snapshot, match it to a project, and build the
+ * projects.metadata.psr patch that stores it.
+ */
+
+/** A worksheet row after normalizeRow: every cell trimmed text. */
+type PsrRow = string[];
+
+export type PsrHealthStatus = "At Risk" | "Watch" | "On Track";
+export type PsrConfidence = "high" | "needs-review";
+
+export interface PsrSchedulePackage {
+  package_name: string;
+  area: string | null;
+  dates: Record<string, string>;
+  notes: string[];
+}
+
+export interface PsrDesignRevision {
+  title: string;
+  received_date: string;
+  detailer_cor_number: string;
+  sent_date: string;
+  approved_date: string;
+  comments: string;
+}
+
+export interface PsrCoordinationDoc {
+  title: string;
+  requested_date: string;
+  received_date: string;
+  comments: string;
+  is_pending: boolean;
+  is_past_due: boolean;
+}
+
+export interface PsrIssue {
+  source_text: string;
+  number: string;
+  description: string;
+  client_reference: string;
+  sent_date: string;
+  received_date: string;
+  status: string;
+  comments: string;
+  is_open: boolean;
+}
+
+export interface PsrCounts {
+  schedule_packages: number;
+  design_revisions: number;
+  coordination_docs: number;
+  pending_coordination_docs: number;
+  past_due_coordination_docs: number;
+  rfis: number;
+  open_rfis: number;
+  queries: number;
+  open_queries: number;
+  comments: number;
+}
+
+export interface ParsedPsr {
+  source_type: "sol_psr_spreadsheet";
+  file_name: string;
+  sheet_name: string;
+  job_number: string;
+  job_number_source: "worksheet" | "filename" | "missing";
+  customer: string;
+  job_name: string;
+  project_manager: string;
+  detailer: string;
+  date_received: string;
+  last_updated: string;
+  schedule: PsrSchedulePackage[];
+  design_revisions: PsrDesignRevision[];
+  coordination_docs: PsrCoordinationDoc[];
+  rfis: PsrIssue[];
+  queries: PsrIssue[];
+  comments: string[];
+  counts: PsrCounts;
+  proposed_health_status: PsrHealthStatus;
+  confidence: PsrConfidence;
+  warnings: string[];
+}
+
+export type ParsedPsrWorkbook = ParsedPsr & {
+  workbook_sheet_count: number;
+  parsed_sheet_candidates: number;
+};
+
+/** The project columns PSR matching and patching read. */
+export interface PsrProjectRef {
+  id?: string;
+  name?: string | null;
+  project_number?: string | null;
+  metadata?: unknown;
+  last_report_date?: string | null;
+  lastReportDate?: string | null;
+}
+
+export interface PsrProjectMatch<P extends PsrProjectRef = PsrProjectRef> {
+  project: P | null;
+  score: number;
+  confidence: "high" | "needs-review" | "none";
+  reasons: string[];
+}
+
+export interface PsrProjectPatch {
+  metadata: Record<string, unknown>;
+  health_status?: PsrHealthStatus;
+}
+
+interface PsrCandidate {
+  index: number;
+  sheetName: string;
+  parsed: ParsedPsr;
+}
+
+interface IssueColumnMap {
+  client?: number;
+  sent?: number;
+  received?: number;
+  status?: number;
+  comments?: number;
+}
+
 const MAX_PSR_FILE_BYTES = 16 * 1024 * 1024;
 const PSR_HISTORY_LIMIT = 10;
 
@@ -9,40 +136,40 @@ const SECTION_MARKERS = [
   "COMMENTS",
 ];
 
-const normalizeText = (value) =>
+const normalizeText = (value: unknown): string =>
   String(value ?? "")
     .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-const normalizeKey = (value) =>
+const normalizeKey = (value: unknown): string =>
   normalizeText(value)
     .toLowerCase()
     .replace(/[._/#:-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-const digitsOnly = (value) => normalizeText(value).replace(/\D+/g, "");
+const digitsOnly = (value: unknown): string => normalizeText(value).replace(/\D+/g, "");
 
-function extractJobNumberFromFileName(fileName) {
+function extractJobNumberFromFileName(fileName: unknown): string {
   const baseName = normalizeText(fileName).split(/[\\/]/).pop() || "";
   const parenthetical = baseName.match(/\((\d{4,6})\)/);
   return parenthetical?.[1] || "";
 }
 
-const isPlainObject = (value) =>
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-const asObject = (value) => (isPlainObject(value) ? value : {});
+const asObject = (value: unknown): Record<string, unknown> => (isPlainObject(value) ? value : {});
 
-function normalizeRow(row) {
-  return Array.from(row || [], (cell) => {
+function normalizeRow(row: ArrayLike<unknown> | null | undefined): PsrRow {
+  return Array.from(row || [], (cell: unknown) => {
     if (cell == null) return "";
     return normalizeText(cell);
   });
 }
 
-function getFirstNonEmptyAfter(row, startIndex = 1) {
+function getFirstNonEmptyAfter(row: PsrRow, startIndex = 1): string {
   for (let i = startIndex; i < row.length; i += 1) {
     const value = normalizeText(row[i]);
     if (value) return value;
@@ -50,12 +177,12 @@ function getFirstNonEmptyAfter(row, startIndex = 1) {
   return "";
 }
 
-function findRowIndex(rows, label) {
+function findRowIndex(rows: PsrRow[], label: string): number {
   const wanted = normalizeKey(label);
   return rows.findIndex((row) => normalizeKey(row[0]) === wanted);
 }
 
-function findHeaderValue(rows, label) {
+function findHeaderValue(rows: PsrRow[], label: string): string {
   const wanted = normalizeKey(label);
   for (const row of rows) {
     for (let i = 0; i < row.length; i += 1) {
@@ -67,7 +194,7 @@ function findHeaderValue(rows, label) {
   return "";
 }
 
-function findNextSectionIndex(rows, startIndex, markerLabels) {
+function findNextSectionIndex(rows: PsrRow[], startIndex: number, markerLabels: string[]): number {
   const markers = new Set(markerLabels.map(normalizeKey));
   for (let i = Math.max(0, startIndex); i < rows.length; i += 1) {
     if (markers.has(normalizeKey(rows[i]?.[0]))) return i;
@@ -75,11 +202,11 @@ function findNextSectionIndex(rows, startIndex, markerLabels) {
   return rows.length;
 }
 
-function hasMeaningfulData(row, startIndex = 1) {
+function hasMeaningfulData(row: PsrRow, startIndex = 1): boolean {
   return row.slice(startIndex).some((cell) => normalizeText(cell));
 }
 
-function isAreaRow(row) {
+function isAreaRow(row: PsrRow): boolean {
   const title = normalizeText(row[0]);
   if (!title || hasMeaningfulData(row)) return false;
   return (
@@ -90,7 +217,7 @@ function isAreaRow(row) {
   );
 }
 
-function normalizeDateDisplay(value) {
+function normalizeDateDisplay(value: unknown): string {
   const raw = normalizeText(value);
   if (!raw) return "";
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -101,14 +228,14 @@ function normalizeDateDisplay(value) {
   return raw;
 }
 
-function parseDateForRisk(value) {
+function parseDateForRisk(value: unknown): Date | null {
   const raw = normalizeDateDisplay(value);
   if (!raw) return null;
 
   const clean = raw.split(",")[0].trim();
   let match = /^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{2,4})$/.exec(clean);
   if (match) {
-    const months = {
+    const months: Record<string, number> = {
       jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
       apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
       aug: 7, august: 7, sep: 8, sept: 8, september: 8,
@@ -138,16 +265,16 @@ function parseDateForRisk(value) {
   return Number.isFinite(parsed) ? new Date(parsed) : null;
 }
 
-function isPastDue(dateValue, now = new Date()) {
+function isPastDue(dateValue: unknown, now: Date = new Date()): boolean {
   const date = parseDateForRisk(dateValue);
   if (!date) return false;
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   return date.getTime() < today.getTime();
 }
 
-function buildSchedule(rows, startIndex, endIndex) {
+function buildSchedule(rows: PsrRow[], startIndex: number, endIndex: number): PsrSchedulePackage[] {
   const header = rows[startIndex] || [];
-  const schedule = [];
+  const schedule: PsrSchedulePackage[] = [];
   let currentArea = "";
 
   for (let i = startIndex + 1; i < endIndex; i += 1) {
@@ -160,7 +287,7 @@ function buildSchedule(rows, startIndex, endIndex) {
     }
     if (!hasMeaningfulData(row)) continue;
 
-    const item = {
+    const item: PsrSchedulePackage = {
       package_name: packageName,
       area: currentArea || null,
       dates: {},
@@ -186,8 +313,8 @@ function buildSchedule(rows, startIndex, endIndex) {
   return schedule;
 }
 
-function buildDesignRevisions(rows, startIndex, endIndex) {
-  const revisions = [];
+function buildDesignRevisions(rows: PsrRow[], startIndex: number, endIndex: number): PsrDesignRevision[] {
+  const revisions: PsrDesignRevision[] = [];
   for (let i = startIndex + 1; i < endIndex; i += 1) {
     const row = rows[i] || [];
     const title = normalizeText(row[0]);
@@ -204,8 +331,8 @@ function buildDesignRevisions(rows, startIndex, endIndex) {
   return revisions;
 }
 
-function buildCoordinationDocs(rows, startIndex, endIndex, now) {
-  const docs = [];
+function buildCoordinationDocs(rows: PsrRow[], startIndex: number, endIndex: number, now: Date): PsrCoordinationDoc[] {
+  const docs: PsrCoordinationDoc[] = [];
   for (let i = startIndex + 1; i < endIndex; i += 1) {
     const row = rows[i] || [];
     const title = normalizeText(row[0]);
@@ -225,8 +352,8 @@ function buildCoordinationDocs(rows, startIndex, endIndex, now) {
   return docs;
 }
 
-function buildHeaderMap(row) {
-  const map = {};
+function buildHeaderMap(row: PsrRow): IssueColumnMap {
+  const map: IssueColumnMap = {};
   row.forEach((cell, index) => {
     const key = normalizeKey(cell);
     if (!key) return;
@@ -239,7 +366,7 @@ function buildHeaderMap(row) {
   return map;
 }
 
-function extractNumberAndDescription(value, token) {
+function extractNumberAndDescription(value: unknown, token: string): { source_text: string; number: string; description: string } {
   const raw = normalizeText(value);
   const numberMatch = new RegExp(`${token}\\s*#?\\s*([\\w.-]+)`, "i").exec(raw);
   const descMatch = /\((.*)\)/.exec(raw);
@@ -250,15 +377,15 @@ function extractNumberAndDescription(value, token) {
   };
 }
 
-function isClosedStatus(status) {
+function isClosedStatus(status: unknown): boolean {
   const key = normalizeKey(status);
   return key.includes("closed") && !key.includes("partially");
 }
 
-function buildIssueRows(rows, startIndex, endIndex, token) {
+function buildIssueRows(rows: PsrRow[], startIndex: number, endIndex: number, token: "RFI" | "Query"): PsrIssue[] {
   const headerMap = buildHeaderMap(rows[startIndex] || []);
-  const issues = [];
-  const fallback = token === "RFI"
+  const issues: PsrIssue[] = [];
+  const fallback: Required<IssueColumnMap> = token === "RFI"
     ? { client: 1, sent: 3, received: 4, status: 5, comments: 8 }
     : { client: 1, sent: 3, received: 4, status: 5, comments: 5 };
 
@@ -287,7 +414,7 @@ function buildIssueRows(rows, startIndex, endIndex, token) {
   return issues;
 }
 
-function buildComments(rows, startIndex) {
+function buildComments(rows: PsrRow[], startIndex: number): string[] {
   if (startIndex < 0) return [];
   return rows
     .slice(startIndex + 1)
@@ -295,7 +422,17 @@ function buildComments(rows, startIndex) {
     .filter(Boolean);
 }
 
-function recommendHealthStatus({ coordinationDocs, coordination_docs, rfis, queries }) {
+function recommendHealthStatus({
+  coordinationDocs,
+  coordination_docs,
+  rfis,
+  queries,
+}: {
+  coordinationDocs?: PsrCoordinationDoc[];
+  coordination_docs?: PsrCoordinationDoc[];
+  rfis?: PsrIssue[];
+  queries?: PsrIssue[];
+}): PsrHealthStatus {
   const docs = coordinationDocs || coordination_docs || [];
   const rfiRows = rfis || [];
   const queryRows = queries || [];
@@ -309,7 +446,10 @@ function recommendHealthStatus({ coordinationDocs, coordination_docs, rfis, quer
   return "On Track";
 }
 
-export function parsePsrRows(rawRows, { fileName = "", sheetName = "", now = new Date() } = {}) {
+export function parsePsrRows(
+  rawRows: ReadonlyArray<ArrayLike<unknown> | null | undefined>,
+  { fileName = "", sheetName = "", now = new Date() }: { fileName?: string; sheetName?: string; now?: Date } = {},
+): ParsedPsr {
   const rows = rawRows.map(normalizeRow).filter((row) => row.some(Boolean));
   const scheduleMarker = findRowIndex(rows, "SCHEDULE");
   const scheduleHeaderIndex = rows.findIndex((row, index) =>
@@ -339,12 +479,14 @@ export function parsePsrRows(rawRows, { fileName = "", sheetName = "", now = new
   const headerJobNumber = findHeaderValue(rows, "S & H #");
   const fileJobNumber = extractJobNumberFromFileName(fileName);
   const jobNumber = headerJobNumber || fileJobNumber;
-  const parsed = {
-    source_type: "sol_psr_spreadsheet",
+  const jobNumberSource: ParsedPsr["job_number_source"] =
+    headerJobNumber ? "worksheet" : jobNumber ? "filename" : "missing";
+  const sections = {
+    source_type: "sol_psr_spreadsheet" as const,
     file_name: fileName,
     sheet_name: sheetName,
     job_number: jobNumber,
-    job_number_source: headerJobNumber ? "worksheet" : jobNumber ? "filename" : "missing",
+    job_number_source: jobNumberSource,
     customer: findHeaderValue(rows, "CUSTOMER"),
     job_name: findHeaderValue(rows, "JOB NAME"),
     project_manager: findHeaderValue(rows, "PROJECT MANAGER/TEAM") || findHeaderValue(rows, "PROJECT MANAGER"),
@@ -359,7 +501,7 @@ export function parsePsrRows(rawRows, { fileName = "", sheetName = "", now = new
     comments,
   };
 
-  parsed.counts = {
+  const counts: PsrCounts = {
     schedule_packages: schedule.length,
     design_revisions: designRevisions.length,
     coordination_docs: coordinationDocs.length,
@@ -371,11 +513,15 @@ export function parsePsrRows(rawRows, { fileName = "", sheetName = "", now = new
     open_queries: queries.filter((query) => query.is_open).length,
     comments: comments.length,
   };
-  parsed.proposed_health_status = recommendHealthStatus(parsed);
-  parsed.confidence = jobNumber && parsed.job_name && (schedule.length || rfis.length || coordinationDocs.length)
-    ? "high"
-    : "needs-review";
-  parsed.warnings = [];
+  const parsed: ParsedPsr = {
+    ...sections,
+    counts,
+    proposed_health_status: recommendHealthStatus(sections),
+    confidence: jobNumber && sections.job_name && (schedule.length || rfis.length || coordinationDocs.length)
+      ? "high"
+      : "needs-review",
+    warnings: [],
+  };
   if (!jobNumber) parsed.warnings.push("No S & H project number was found.");
   if (!headerJobNumber && jobNumber) {
     parsed.warnings.push("No S & H project number was found on the worksheet; using the file name.");
@@ -388,7 +534,7 @@ export function parsePsrRows(rawRows, { fileName = "", sheetName = "", now = new
   return parsed;
 }
 
-function selectPsrCandidate(candidates, fileName) {
+function selectPsrCandidate(candidates: PsrCandidate[], fileName: string): PsrCandidate {
   const fileDigits = digitsOnly(fileName);
   return [...candidates].sort((a, b) => {
     const aScore = candidateScore(a, fileDigits);
@@ -397,7 +543,7 @@ function selectPsrCandidate(candidates, fileName) {
   })[0];
 }
 
-function candidateScore(candidate, fileDigits) {
+function candidateScore(candidate: PsrCandidate, fileDigits: string): number {
   let score = candidate.index;
   const parsed = candidate.parsed;
   const jobDigits = digitsOnly(parsed.job_number);
@@ -416,7 +562,7 @@ function candidateScore(candidate, fileDigits) {
   return score;
 }
 
-export async function readPsrSpreadsheetFile(file) {
+export async function readPsrSpreadsheetFile(file: File | null | undefined): Promise<ParsedPsrWorkbook> {
   if (!file) throw new Error("No file provided.");
   if (!/\.(xls|xlsx|xlsm)$/i.test(file.name)) {
     throw new Error("PSR import expects a .xls, .xlsx, or .xlsm spreadsheet.");
@@ -428,11 +574,11 @@ export async function readPsrSpreadsheetFile(file) {
   const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: false, cellStyles: false });
-  const candidates = [];
+  const candidates: PsrCandidate[] = [];
 
   workbook.SheetNames.forEach((sheetName, index) => {
     const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
       header: 1,
       defval: "",
       raw: false,
@@ -459,7 +605,10 @@ export async function readPsrSpreadsheetFile(file) {
   };
 }
 
-export function matchPsrToProject(parsed, projects = []) {
+export function matchPsrToProject<P extends PsrProjectRef>(
+  parsed: Pick<ParsedPsr, "job_number" | "job_name"> | null | undefined,
+  projects: ReadonlyArray<P> = [],
+): PsrProjectMatch<P> {
   const jobDigits = digitsOnly(parsed?.job_number);
   const nameKey = normalizeKey(parsed?.job_name);
 
@@ -467,7 +616,7 @@ export function matchPsrToProject(parsed, projects = []) {
     const projectDigits = digitsOnly(project.project_number);
     const projectNameKey = normalizeKey(project.name);
     let score = 0;
-    const reasons = [];
+    const reasons: string[] = [];
 
     if (jobDigits && projectDigits && jobDigits === projectDigits) {
       score += 100;
@@ -502,7 +651,14 @@ export function matchPsrToProject(parsed, projects = []) {
   };
 }
 
-export function buildPsrProjectPatch(project, parsed, { applyHealthStatus = false, importedAt = new Date().toISOString() } = {}) {
+export function buildPsrProjectPatch(
+  project: PsrProjectRef | null | undefined,
+  parsed: ParsedPsr,
+  {
+    applyHealthStatus = false,
+    importedAt = new Date().toISOString(),
+  }: { applyHealthStatus?: boolean; importedAt?: string } = {},
+): PsrProjectPatch {
   const existingMetadata = asObject(project?.metadata);
   const existingPsr = asObject(existingMetadata.psr);
   const history = Array.isArray(existingPsr.import_history) ? existingPsr.import_history : [];
@@ -552,7 +708,7 @@ export function buildPsrProjectPatch(project, parsed, { applyHealthStatus = fals
     ].slice(0, PSR_HISTORY_LIMIT),
   };
 
-  const patch = {
+  const patch: PsrProjectPatch = {
     metadata: {
       ...existingMetadata,
       psr: nextPsr,
@@ -566,21 +722,21 @@ export function buildPsrProjectPatch(project, parsed, { applyHealthStatus = fals
   return patch;
 }
 
-export function getPsrReportDate(project) {
+export function getPsrReportDate(project: PsrProjectRef | null | undefined): unknown {
   const metadata = asObject(project?.metadata);
   const psr = asObject(metadata.psr);
   return (
     project?.last_report_date ||
     project?.lastReportDate ||
     psr.last_imported_at ||
-    psr.latest?.imported_at ||
+    asObject(psr.latest).imported_at ||
     psr.last_source_updated ||
     null
   );
 }
 
-export function formatPsrSummary(parsed) {
+export function formatPsrSummary(parsed: Pick<ParsedPsr, "counts"> | null | undefined): string {
   if (!parsed) return "";
-  const counts = parsed.counts || {};
+  const counts: Partial<PsrCounts> = parsed.counts || {};
   return `${counts.open_rfis || 0} open RFIs, ${counts.pending_coordination_docs || 0} pending docs`;
 }

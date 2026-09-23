@@ -906,7 +906,7 @@ The four areas the pass above deferred. Live counts taken the same day:
   perf-hardening line (PDF view/export chunk splits). Audited every `xlsx`
   reference: the only real consumers are `src/pages/SOV.jsx`,
   `src/pages/Onboarding.jsx`, `src/pages/DataExchange.jsx`, and
-  `src/lib/importPsrSpreadsheet.js` (used by `JobStatusReport` via
+  `src/lib/importPsrSpreadsheet.ts` (used by `JobStatusReport` via
   `PsrSpreadsheetImportModal`) — all four load the library with
   `await import("xlsx")` inside explicit import handlers (`handleImportFile` /
   `handleImportClick`), never at module top-level or on mount. The remaining

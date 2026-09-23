@@ -1,6 +1,19 @@
 import { entities } from "@/api/supabaseClient";
 import { logActivity } from "@/services/auditLogger";
-import { wouldCreateCycle, computeSiblingSortOrder } from "./hierarchy";
+import { wouldCreateCycle, computeSiblingSortOrder, type HierarchyTask } from "./hierarchy";
+
+/** A schedule_tasks row as far as a reparent reads it. */
+export interface ReparentTask extends HierarchyTask {
+  project_id?: string | null;
+  task_name?: string | null;
+}
+
+export interface ReparentOptions {
+  tasks?: ReparentTask[];
+  dropIndex?: number | null;
+  projectId?: string | null;
+  projectName?: string | null;
+}
 
 /**
  * Reparent one or many tasks under `newParentId` (null = root), writing
@@ -11,14 +24,14 @@ import { wouldCreateCycle, computeSiblingSortOrder } from "./hierarchy";
  *    rejected (no partial structural change).
  *  - Writes SEQUENTIALLY (avoids the parallel sort_order race the old
  *    swapOrder had) and logs each change via auditLogger.
- *
- * @param {string[]} taskIds
- * @param {string|null} newParentId
- * @param {{ tasks: any[], dropIndex?: number|null, projectId?: string, projectName?: string }} opts
  */
-export async function reparentTasks(taskIds, newParentId, opts = {}) {
+export async function reparentTasks(
+  taskIds: ReadonlyArray<string | null | undefined> | null | undefined,
+  newParentId: string | null,
+  opts: ReparentOptions = {},
+): Promise<void> {
   const { tasks = [], dropIndex = null, projectId = null, projectName = null } = opts;
-  const ids = (Array.isArray(taskIds) ? taskIds : []).filter(Boolean);
+  const ids = (Array.isArray(taskIds) ? taskIds : []).filter((id): id is string => !!id);
   if (!ids.length) return;
 
   const byId = new Map(tasks.map((t) => [t.id, t]));

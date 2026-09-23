@@ -450,7 +450,7 @@ work unchanged.
 | `revision-compare`        | openai    | gpt-4o-mini        | `src/lib/compareRevisions.js`                     |
 | `sheet-extraction`        | openai    | gpt-4o-mini        | `src/lib/pdfSheetExtractor.js` (via `InvokeLLM`)  |
 | `drawing-link-suggest`    | openai    | gpt-4o-mini        | `src/lib/drawingHub/aiSuggest.js`                 |
-| `shipping-ticket-import`  | openai    | gpt-4o-mini        | `src/lib/importShippingTicket.js`                 |
+| `shipping-ticket-import`  | openai    | gpt-4o-mini        | `src/lib/importShippingTicket.ts`                 |
 | `rfi-log-import`          | openai    | gpt-4o-mini        | `src/lib/importRfiLog.js`                         |
 | `photo-ocr`               | openai    | gpt-4o-mini        | `src/components/ocr/FileUploadWithOCR.jsx`        |
 
