@@ -36,7 +36,7 @@ vi.mock("@/lib/supabase", () => {
   const profileQuery = {
     select: () => profileQuery,
     eq: () => profileQuery,
-    maybeSingle: async () => ({ data: { role: "user" }, error: null }),
+    maybeSingle: async () => ({ data: { role: "user" }, error: null as null }),
   };
   return { supabase: { auth, from: () => profileQuery } };
 });
@@ -50,7 +50,7 @@ type Snapshot = { loading: boolean; authenticated: boolean; mfaRequired: boolean
 
 function renderRecording() {
   const seen: Snapshot[] = [];
-  function Probe() {
+  function Probe(): null {
     const a = useAuth();
     seen.push({
       loading: a.isLoadingAuth,
