@@ -14,9 +14,12 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { CommandBar } from "@/components/design-system";
-import { ChevronLeft, Download, Printer } from "lucide-react";
+import { ChevronLeft, Download, Printer, Share2 } from "lucide-react";
+import { toast } from "sonner";
 import { mono } from "./constants";
 import { printReport } from "./utils";
+import { isNativePlatform } from "@/lib/native/platform";
+import { isNativeActionCancelled, shareCurrentReport } from "@/lib/native/capabilities";
 
 export default function ReportShell({
   eyebrow = "REPORTS",
@@ -31,6 +34,15 @@ export default function ReportShell({
   children,
 }) {
   const navigate = useNavigate();
+  const native = isNativePlatform();
+
+  const shareReport = async () => {
+    try {
+      await shareCurrentReport({ title, url: window.location.href });
+    } catch (error) {
+      if (!isNativeActionCancelled(error)) toast.error("Could not open the share sheet.");
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -67,6 +79,30 @@ export default function ReportShell({
         subtitle={subtitle}
       >
         {headerActions}
+        {native && (
+          <button
+            aria-label="Share"
+            onClick={() => { void shareReport(); }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: "var(--bg-surface)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 12px",
+              ...mono,
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+            }}
+          >
+            <Share2 size={12} /> Share
+          </button>
+        )}
         {onExportCSV && (
           <button
             onClick={onExportCSV}
