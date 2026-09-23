@@ -12,6 +12,8 @@ import { Capacitor } from '@capacitor/core'
 import { Keyboard } from '@capacitor/keyboard'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { StatusBar, Style } from '@capacitor/status-bar'
+import { trustedSteelBuildPath } from '@/lib/native/links'
+import { androidBackAction } from '@/lib/native/backNavigation'
 
 function currentTheme(): 'light' | 'dark' {
   // index.html stamps data-theme on <html> before first paint (see the inline
@@ -53,23 +55,10 @@ function wireKeyboardClasses(): void {
   } catch { /* keyboard events optional */ }
 }
 
-function extractInAppPath(url: string): string | null {
-  try {
-    const u = new URL(url)
-    // Only follow Universal Links to our own site. Custom-scheme URLs (e.g. auth
-    // callbacks) are handled by their own flows and must not be hijacked here.
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null
-    const path = `${u.pathname}${u.search}${u.hash}`
-    return path && path !== '/' ? path : null
-  } catch {
-    return null
-  }
-}
-
 function wireDeepLinks(): void {
   try {
     void App.addListener('appUrlOpen', (event) => {
-      const path = extractInAppPath(event?.url || '')
+      const path = trustedSteelBuildPath(event?.url || '')
       if (!path) return
       // Hand the path to the SPA router via the History API + popstate;
       // react-router's BrowserRouter listens for popstate.
@@ -77,6 +66,28 @@ function wireDeepLinks(): void {
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
   } catch { /* deep links optional */ }
+}
+
+function wireAndroidBackButton(): void {
+  if (Capacitor.getPlatform() !== 'android') return
+
+  try {
+    void App.addListener('backButton', (event) => {
+      const hasOpenOverlay = !!document.querySelector(
+        'dialog[open], [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
+      )
+      const action = androidBackAction({ hasOpenOverlay, canGoBack: event.canGoBack })
+
+      if (action === 'dismiss-overlay') {
+        const target = document.activeElement instanceof HTMLElement ? document.activeElement : document
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      } else if (action === 'history-back') {
+        window.history.back()
+      } else {
+        void App.exitApp()
+      }
+    })
+  } catch { /* Android Back support is optional outside Android */ }
 }
 
 /**
@@ -92,6 +103,7 @@ export async function initNativePlatform(): Promise<void> {
     observeThemeForStatusBar()
     wireKeyboardClasses()
     wireDeepLinks()
+    wireAndroidBackButton()
   } catch { /* never let native setup break app boot */ }
 
   // Splash auto-hide is disabled in capacitor.config.ts so there is no flash of

@@ -23,11 +23,12 @@ const config: CapacitorConfig = {
     // Content sits below the status bar / above the home indicator; the app
     // handles safe-area insets in CSS (see src/styles/base.css). A dark shell
     // matches the default theme so there is no white flash on rotation/keyboard.
-    backgroundColor: '#0B0E11',
+    backgroundColor: '#0D1117',
     contentInset: 'never',
-    // Links to http(s) URLs open in the system browser rather than navigating
-    // the app's webview away from the SPA.
-    limitsNavigationsToAppBoundDomains: true,
+    // Keep App-Bound Domains off until the target ships a matching
+    // WKAppBoundDomains allowlist. Enabling it without that Info.plist entry can
+    // leave the Capacitor webview unable to load its own content.
+    limitsNavigationsToAppBoundDomains: false,
   },
   plugins: {
     SplashScreen: {
@@ -35,7 +36,7 @@ const config: CapacitorConfig = {
       // (see src/lib/native/capacitor.ts), so disable auto-hide to avoid a
       // flash of an empty webview before hydration.
       launchAutoHide: false,
-      backgroundColor: '#0B0E11',
+      backgroundColor: '#0D1117',
       showSpinner: false,
     },
     Keyboard: {

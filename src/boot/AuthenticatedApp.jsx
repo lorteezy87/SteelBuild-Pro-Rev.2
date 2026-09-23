@@ -3,8 +3,10 @@ import { useAuth } from "@/lib/AuthContext";
 import { OrgProvider, useOrg } from "@/components/shared/OrgContext";
 import AppLoader from "@/boot/AppLoader";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { isNativePlatform } from "@/lib/native/platform";
 
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
+const NativeSignIn = lazyWithRetry(() => import("@/pages/NativeSignIn"));
 const DesktopConnectSignIn = lazyWithRetry(() => import("@/pages/DesktopConnectSignIn"));
 const UpdatePassword = lazyWithRetry(() => import("@/pages/UpdatePassword"));
 const MfaChallenge = lazyWithRetry(() => import("@/pages/MfaChallenge"));
@@ -117,6 +119,19 @@ export default function AuthenticatedApp() {
   }
 
   if (!isAuthenticated) {
+    if (isNativePlatform()) {
+      return (
+        <Suspense fallback={<AppLoader />}>
+          <NativeSignIn
+            onLogin={loginWithPassword}
+            onForgotPassword={sendPasswordReset}
+            isSubmitting={isLoggingIn}
+            loginError={loginError}
+          />
+        </Suspense>
+      );
+    }
+
     // Desktop Connect opens the system browser, which often has no session even
     // when the user is signed in elsewhere. Show a focused gate instead of the
     // marketing Landing page so the handoff query string stays obvious.
