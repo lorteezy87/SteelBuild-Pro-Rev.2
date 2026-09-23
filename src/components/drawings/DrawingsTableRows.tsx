@@ -11,6 +11,7 @@ import { hasTitleblockTemplate } from "@/lib/titleblock";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { ActionButton } from "./DrawingsTablePrimitives";
 import type { DrawingGroup } from "./drawingsTableDerive";
+import { safeHref } from "@/lib/safeHref";
 
 // ─── AI extraction / upload status badge ───────────────────────────────────
 //
@@ -160,6 +161,7 @@ export function GroupRow({
   // colour cue on the row.
   const hasTemplate = group.parent ? hasTitleblockTemplate(group.parent) : false;
   const a = group.aggregates;
+  const driveHref = safeHref(a.driveUrl);
   const accent = group.isUngrouped ? "var(--text-muted)" : "var(--accent)";
   // Overdue sets get a red-tinted gradient + a red left-border strip so the
   // row reads as "needs attention" at a glance, even before the user parses
@@ -319,11 +321,11 @@ export function GroupRow({
                       </span>
                     </>
                   )}
-                  {a.driveUrl && (
+                  {driveHref && (
                     <>
                       <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
                       <a
-                        href={a.driveUrl}
+                        href={driveHref}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
@@ -544,7 +546,7 @@ export function SetOnlyInfoRow({ group }: { group: DrawingGroup }) {
   const parent = group.parent;
   if (!parent) return null;
   const history = parent.revision_history || "";
-  const driveUrl = parent.file_url || null;
+  const driveUrl = safeHref(parent.file_url);
   const stageCounts = readStageCounts(parent.metadata);
   return (
     <tr style={{ background: "color-mix(in srgb, var(--status-info) 3%, transparent)" }}>

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
+import { safeHref } from "@/lib/safeHref";
 
 function asArray(v) {
   if (Array.isArray(v)) return v;
@@ -234,7 +235,7 @@ export default function PunchlistList({
                       return (
                         <a
                           key={idx}
-                          href={url || undefined}
+                          href={safeHref(url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           title={p.name || `photo-${idx}`}

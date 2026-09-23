@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { formatLocalDate } from "@/utils/dates";
+import { safeHref } from "@/lib/safeHref";
 
 function asArray(v) {
   if (Array.isArray(v)) return v;
@@ -364,7 +365,7 @@ export default function DailyLogsList({ logs = [] }) {
                       return (
                         <a
                           key={idx}
-                          href={url || undefined}
+                          href={safeHref(url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           title={p.name || `photo-${idx}`}
