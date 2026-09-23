@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20260923120000",
+        "lifecycle": "required",
+        "evidence": "SEC-N1 email sender lockdown candidate under a PLACEHOLDER authoring version. Not applied to staging or production. Preserve the normal drift gate: after explicit approval apply the reviewed SQL by hand in one transaction, then rename the file AND this entry to the stamped ledger version and record the payload hash here."
+      },
+      {
         "version": "20260921080604",
         "lifecycle": "required",
         "evidence": "Launch-security candidate. Verified in a rolled-back staging transaction with authenticated role checks; not yet applied to production. Preserve the normal drift gate until the reviewed SQL is explicitly approved, applied and stamped with matching payload."
