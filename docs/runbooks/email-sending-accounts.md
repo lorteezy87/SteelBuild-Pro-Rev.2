@@ -36,10 +36,12 @@ migration is applied. They keep read access.
 ## Release order
 
 1. Apply the migration to staging, then production, stamping it by hand
-   (`CLAUDE.md`, "Applying a migration"), then rename the file to the ledger
-   version. Until then the `Supabase drift check` reports it as missing. That is
-   expected: do not add a manifest override. The old function keeps working
-   against the new schema.
+   (`CLAUDE.md`, "Applying a migration"). Then rename the file **and** its
+   `required` entry in `supabase/production-ownership-manifest.json` to the
+   ledger version, and record the payload hash in that entry. Until then the
+   `Supabase drift check` reports the version as missing. That is expected:
+   do not change the entry's lifecycle to silence it. The old function keeps
+   working against the new schema.
 2. Set the secrets below on the target project.
 3. Seed `email_verified_senders` for the accounts you intend to keep (below).
 4. Deploy `email-send`. If you deploy it before step 1, sending fails closed
