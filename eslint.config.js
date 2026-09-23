@@ -278,6 +278,7 @@ export default [
       "src/components/drawings/viewer/zonePanel/AddDependencyModal.jsx", // .limit(500)
       "src/lib/fabRelease/releaseStatus.ts",      // insert, not a read
       "src/lib/rfiFromDelta.js",                  // update, not a read
+      "src/lib/importShippingTicket.ts",          // .limit(1) read; insert/delete otherwise
       // ── Genuinely unbounded. REAL FINDINGS, not false positives ───────────
       // Listed so this rule can land green; each still needs paging or a cap.
       // Two of the original seven are FIXED and off this list, so the rule now
@@ -298,7 +299,6 @@ export default [
       // paged, or reads a single row, then remove it.
       "src/lib/drawingHub/**",
       "src/lib/revisionSnapshotDiff.js",
-      "src/lib/importShippingTicket.js",
       "src/lib/importRfiLog.js",
       "src/components/deliveries/ShippingListImportModal.jsx",
       "src/components/drawings/viewer/useMarkup.js",

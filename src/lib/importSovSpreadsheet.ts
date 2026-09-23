@@ -10,6 +10,54 @@
  * (with validity + an auto-suggested cost code) for the pre-import review.
  */
 
+/** A canonical-keyed spreadsheet row: header → trimmed cell text. */
+export type SovRow = Record<string, string>;
+
+/** The project cost-code columns the auto-mapper reads. */
+export interface SovCostCode {
+  cost_code_number: string;
+  description: string;
+}
+
+export interface SovCostCodeSuggestion {
+  cost_code: string;
+  cost_code_name: string;
+}
+
+export type SovStatus = "Draft" | "Submitted" | "Certified" | "Paid";
+
+/** DB fields for one sov_items insert. */
+export interface SovRecord {
+  sov_id: string;
+  project_id: string | undefined;
+  project_name: string;
+  line_item_number: number;
+  description: string;
+  scheduled_value: number;
+  cost_code: string | null;
+  cost_code_name: string | null;
+  application_number: number;
+  period_from: string | null;
+  period_to: string | null;
+  previous_percent_complete: number;
+  current_percent_complete: number;
+  retainage_percent: number;
+  status: SovStatus;
+}
+
+export interface SovStagedRow {
+  record: SovRecord;
+  valid: boolean;
+  reason: string | null;
+  autoMapped: boolean;
+}
+
+export interface BuildSovStagedOptions {
+  project?: { id?: string; name?: string | null } | null;
+  existingCount?: number;
+  costCodes?: SovCostCode[];
+}
+
 /** Canonical SOV import columns (also the downloadable template header order). */
 export const SOV_TEMPLATE_COLUMNS = [
   "line_item_number",
@@ -38,7 +86,7 @@ export const SOV_TEMPLATE_SAMPLE = [
  * ("Scheduled Value", "Line #", "% Complete", "Cost Code") map onto the
  * fields the importer understands. Keys are matched after `normalizeHeader`.
  */
-const HEADER_ALIASES = {
+const HEADER_ALIASES: Record<string, string[]> = {
   line_item_number: ["line item number", "line", "line #", "line no", "item", "item #", "item number", "no", "#"],
   description: ["desc", "scope", "item description", "work description"],
   scheduled_value: ["scheduled value", "value", "amount", "contract value", "scheduled amount", "sov value"],
@@ -55,7 +103,7 @@ const HEADER_ALIASES = {
 
 // Reverse lookup: normalized header string → canonical field.
 const ALIAS_LOOKUP = (() => {
-  const out = {};
+  const out: Record<string, string> = {};
   for (const canonical of Object.keys(HEADER_ALIASES)) {
     out[canonical] = canonical; // canonical name maps to itself
     out[canonical.replace(/_/g, " ")] = canonical;
@@ -65,7 +113,7 @@ const ALIAS_LOOKUP = (() => {
 })();
 
 /** Lowercase, trim, collapse whitespace, strip a trailing/leading BOM. */
-export function normalizeHeader(h) {
+export function normalizeHeader(h: unknown): string {
   return String(h ?? "")
     .replace(/^\uFEFF/, "")
     .trim()
@@ -74,7 +122,7 @@ export function normalizeHeader(h) {
 }
 
 /** Map a raw header to its canonical field, or the normalized header if unknown. */
-export function canonicalizeHeader(h) {
+export function canonicalizeHeader(h: unknown): string {
   const norm = normalizeHeader(h);
   return ALIAS_LOOKUP[norm] || norm;
 }
@@ -84,11 +132,11 @@ export function canonicalizeHeader(h) {
  * inside quotes, and CRLF/LF line endings. Strips a leading UTF-8 BOM so an
  * Excel-exported CSV doesn't corrupt the first header.
  */
-export function parseCsvToAoa(text) {
+export function parseCsvToAoa(text: unknown): string[][] {
   const src = String(text ?? "").replace(/^\uFEFF/, "");
-  const rows = [];
+  const rows: string[][] = [];
   let field = "";
-  let row = [];
+  let row: string[] = [];
   let inQuotes = false;
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
@@ -120,14 +168,14 @@ export function parseCsvToAoa(text) {
  * non-empty row is the header. Blank data rows are dropped. Used by both the
  * CSV path (via parseCsvToAoa) and the XLSX path (via sheet_to_json header:1).
  */
-export function aoaToRows(aoa) {
+export function aoaToRows(aoa: unknown): SovRow[] {
   const grid = (Array.isArray(aoa) ? aoa : []).filter(
-    (r) => Array.isArray(r) && r.some((c) => String(c ?? "").trim() !== "")
+    (r): r is unknown[] => Array.isArray(r) && r.some((c) => String(c ?? "").trim() !== "")
   );
   if (grid.length === 0) return [];
   const headers = grid[0].map(canonicalizeHeader);
   return grid.slice(1).map((r) => {
-    const obj = {};
+    const obj: SovRow = {};
     headers.forEach((h, idx) => { obj[h] = String(r[idx] ?? "").trim(); });
     return obj;
   });
@@ -139,7 +187,7 @@ export function aoaToRows(aoa) {
  * ones (Deck, Misc). The standard names mirror the 14 default steel cost codes
  * seeded into every project (migration 086).
  */
-const COST_CODE_RULES = [
+const COST_CODE_RULES: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bdetail/i, "Detailing"],
   [/anchor|embed/i, "Anchor Bolts/Embeds"],
   [/joist/i, "Joist"],
@@ -162,11 +210,11 @@ const COST_CODE_RULES = [
  * name, matching CostCodeSelect's code/name pair) or `null` when no keyword
  * rule fires or the project has no code with the matched standard name — never
  * forces a fallback, so unmapped rows surface for human review.
- *
- * @param {string} description
- * @param {Array<{cost_code_number: string, description: string}>} costCodes
  */
-export function suggestCostCode(description, costCodes = []) {
+export function suggestCostCode(
+  description: unknown,
+  costCodes: ReadonlyArray<SovCostCode> | null | undefined = [],
+): SovCostCodeSuggestion | null {
   const text = String(description || "");
   if (!text.trim() || !Array.isArray(costCodes) || costCodes.length === 0) return null;
   for (const [pattern, standardName] of COST_CODE_RULES) {
@@ -180,7 +228,7 @@ export function suggestCostCode(description, costCodes = []) {
   return null;
 }
 
-const num = (v, fallback = 0) => {
+const num = (v: unknown, fallback = 0): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 };
@@ -190,7 +238,7 @@ const num = (v, fallback = 0) => {
  * commas, surrounding whitespace, and a trailing % ("$25,000.50", "50%").
  * Returns the fallback when nothing parseable remains.
  */
-const numLoose = (v, fallback = 0) => {
+const numLoose = (v: unknown, fallback = 0): number => {
   if (typeof v === "number") return Number.isFinite(v) ? v : fallback;
   const cleaned = String(v ?? "").trim().replace(/^\$/, "").replace(/,/g, "").replace(/%$/, "");
   if (cleaned === "") return fallback;
@@ -205,9 +253,9 @@ const numLoose = (v, fallback = 0) => {
  * revenue reports. Normalize case-insensitively; unknown values fall back
  * to Draft so nothing is counted as billed without review.
  */
-const SOV_STATUSES = ["Draft", "Submitted", "Certified", "Paid"];
+const SOV_STATUSES: readonly SovStatus[] = ["Draft", "Submitted", "Certified", "Paid"];
 
-export function normalizeSovStatus(raw) {
+export function normalizeSovStatus(raw: unknown): { status: SovStatus; recognized: boolean } {
   const cleaned = String(raw ?? "").trim().toLowerCase();
   if (!cleaned) return { status: "Draft", recognized: true };
   const match = SOV_STATUSES.find((s) => s.toLowerCase() === cleaned);
@@ -222,7 +270,10 @@ export function normalizeSovStatus(raw) {
  * Cost code: an explicit `cost_code` column wins (its name resolved from the
  * project codes); otherwise it's auto-suggested from the description.
  */
-export function buildSovStaged(rows, { project, existingCount = 0, costCodes = [] } = {}) {
+export function buildSovStaged(
+  rows: ReadonlyArray<SovRow> | null | undefined,
+  { project, existingCount = 0, costCodes = [] }: BuildSovStagedOptions = {},
+): SovStagedRow[] {
   const baseApp = num(rows?.[0]?.application_number, 1) || 1;
   return (rows || []).map((row, idx) => {
     const description = (row.description || "").trim();
@@ -241,8 +292,8 @@ export function buildSovStaged(rows, { project, existingCount = 0, costCodes = [
       (String(currPctRaw ?? "").trim() !== "" && !Number.isFinite(currPct));
 
     // Cost code: explicit column first, else auto-map from description.
-    let cost_code = (row.cost_code || "").trim() || null;
-    let cost_code_name = (row.cost_code_name || "").trim() || null;
+    let cost_code: string | null = (row.cost_code || "").trim() || null;
+    let cost_code_name: string | null = (row.cost_code_name || "").trim() || null;
     let autoMapped = false;
     if (cost_code && !cost_code_name) {
       const found = costCodes.find((c) => String(c.cost_code_number) === cost_code);
@@ -257,7 +308,7 @@ export function buildSovStaged(rows, { project, existingCount = 0, costCodes = [
       }
     }
 
-    const record = {
+    const record: SovRecord = {
       sov_id: `SOV-${String(existingCount + idx + 1).padStart(3, "0")}`,
       project_id: project?.id,
       project_name: project?.name || "",

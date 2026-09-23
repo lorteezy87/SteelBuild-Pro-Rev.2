@@ -1,5 +1,5 @@
 /**
- * importRfiCsv.js
+ * importRfiCsv.ts
  *
  * Plain-CSV importer for RFI logs. No AI, no credits, no external
  * service — parses the file client-side and returns the same
@@ -17,6 +17,44 @@
 
 import { readFileText } from "@/lib/textDecoding";
 
+/** Logical columns the RFI CSV importer recognises. */
+type RfiColumnKey =
+  | "rfi_number"
+  | "title"
+  | "assigned_to"
+  | "date_submitted"
+  | "date_required"
+  | "date_answered"
+  | "status";
+
+/** Column position per logical field; -1 when the header has no match. */
+type RfiColumnIndex = Record<RfiColumnKey | "job_number", number>;
+
+/** One parsed RFI row — the shape commitRfiLog consumes. */
+export interface ParsedCsvRfi {
+  rfi_number: string;
+  title: string;
+  assigned_to: string | null;
+  date_submitted: string | null;
+  iso_submitted: string | null;
+  date_required: string | null;
+  iso_required: string | null;
+  date_answered: string | null;
+  iso_answered: string | null;
+}
+
+export interface RfiCsvHeader {
+  job_name?: string;
+  job_number?: string;
+}
+
+export interface RfiCsvParseResult {
+  header: RfiCsvHeader;
+  rfis: ParsedCsvRfi[];
+  warnings: string[];
+  skippedBlankRows: number;
+}
+
 // ── CSV parser ──────────────────────────────────────────────────────
 //
 // Small handwritten parser that handles the 4 real-world gotchas:
@@ -30,11 +68,11 @@ import { readFileText } from "@/lib/textDecoding";
 //
 // Perf: field text is accumulated in a char array then joined once per
 // field (avoids quadratic string reallocation on large production CSVs).
-function firstNonEmptyLine(value) {
+function firstNonEmptyLine(value: unknown): string {
   return String(value || "").split(/\r?\n/).find((line) => line.trim()) || "";
 }
 
-function countDelimiter(line, delimiter) {
+function countDelimiter(line: string, delimiter: string): number {
   let count = 0;
   let inQuotes = false;
   for (let i = 0; i < line.length; i += 1) {
@@ -52,7 +90,7 @@ function countDelimiter(line, delimiter) {
   return count;
 }
 
-function chooseDelimiter(src) {
+function chooseDelimiter(src: string): string {
   const line = firstNonEmptyLine(src);
   const candidates = [",", "\t", ";"];
   return candidates
@@ -60,14 +98,14 @@ function chooseDelimiter(src) {
     .sort((a, b) => b.count - a.count)[0].delimiter;
 }
 
-export function parseCsv(raw) {
+export function parseCsv(raw: unknown): string[][] {
   if (typeof raw !== "string") return [];
   // Strip UTF-8 BOM if present.
-  let src = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+  const src = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
   const delimiter = chooseDelimiter(src);
-  const rows = [];
-  let row = [];
-  let fieldChars = [];
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let fieldChars: string[] = [];
   let inQuotes = false;
   let i = 0;
   const n = src.length;
@@ -119,7 +157,7 @@ export function parseCsv(raw) {
 // real exports. Match is case-insensitive, trimmed, and ignores
 // punctuation — so "RFI #", "rfi_number", and "RFI Number" all resolve
 // to the same slot.
-const COLUMN_ALIASES = {
+const COLUMN_ALIASES: Record<RfiColumnKey, string[]> = {
   rfi_number: ["rfi #", "rfi number", "rfi no", "number", "no", "no.", "#", "rfi id", "id", "rfi"],
   title:      ["subject", "title", "description", "question", "summary"],
   assigned_to: [
@@ -148,11 +186,13 @@ const COLUMN_ALIASES = {
 // the preview step.
 const JOB_NUMBER_ALIASES = ["job number", "job #", "job no", "project number", "project #", "project no", "job", "project"];
 
-const normalize = (s) => String(s ?? "").toLowerCase().trim().replace(/[._-]+/g, " ").replace(/\s+/g, " ");
+const normalize = (s: unknown): string => String(s ?? "").toLowerCase().trim().replace(/[._-]+/g, " ").replace(/\s+/g, " ");
 
-function buildColumnIndex(headerRow) {
-  const idx = { job_number: -1 };
-  for (const key of Object.keys(COLUMN_ALIASES)) idx[key] = -1;
+const COLUMN_KEYS = Object.keys(COLUMN_ALIASES) as RfiColumnKey[];
+
+function buildColumnIndex(headerRow: readonly unknown[]): RfiColumnIndex {
+  const idx = { job_number: -1 } as RfiColumnIndex;
+  for (const key of COLUMN_KEYS) idx[key] = -1;
 
   const normalized = headerRow.map((h) => normalize(h));
   for (let i = 0; i < normalized.length; i++) {
@@ -162,9 +202,9 @@ function buildColumnIndex(headerRow) {
       idx.job_number = i;
       continue;
     }
-    for (const [key, aliases] of Object.entries(COLUMN_ALIASES)) {
+    for (const key of COLUMN_KEYS) {
       if (idx[key] !== -1) continue;
-      if (aliases.includes(cell)) { idx[key] = i; break; }
+      if (COLUMN_ALIASES[key].includes(cell)) { idx[key] = i; break; }
     }
   }
   return idx;
@@ -174,13 +214,13 @@ function buildColumnIndex(headerRow) {
 //
 // Accepts MM/DD/YYYY, M/D/YYYY, YYYY-MM-DD, "Jan 5, 2026", "5-Jan-26",
 // and Excel's m/d/yy quirks. Returns YYYY-MM-DD or null.
-const MONTHS = {
+const MONTHS: Record<string, number> = {
   jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
   apr: 4, april: 4, may: 5, jun: 6, june: 6,
   jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9,
   oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
 };
-function normalizeCsvDate(raw) {
+function normalizeCsvDate(raw: unknown): string | null {
   if (raw === null || raw === undefined) return null;
   const s = String(raw).trim();
   if (!s) return null;
@@ -242,7 +282,10 @@ function normalizeCsvDate(raw) {
  * - The parser returns a `warnings` array so the UI can tell the user
  *   "we couldn't identify a 'Subject' column" etc.
  */
-export function parseRfiCsv(csvText, { fileName = "" } = {}) {
+export function parseRfiCsv(
+  csvText: unknown,
+  { fileName = "" }: { fileName?: string } = {},
+): RfiCsvParseResult {
   const rows = parseCsv(csvText);
   if (rows.length === 0) {
     return { header: {}, rfis: [], warnings: ["File is empty."], skippedBlankRows: 0 };
@@ -253,7 +296,7 @@ export function parseRfiCsv(csvText, { fileName = "" } = {}) {
   // scan the first ~10 rows and pick the one that yields the most column
   // matches when treated as a header.
   let bestIdx = 0;
-  let bestIdxObj = null;
+  let bestIdxObj: RfiColumnIndex | null = null;
   let bestScore = -1;
   const SCAN_LIMIT = Math.min(10, rows.length);
   for (let r = 0; r < SCAN_LIMIT; r++) {
@@ -262,7 +305,7 @@ export function parseRfiCsv(csvText, { fileName = "" } = {}) {
     if (score > bestScore) { bestScore = score; bestIdx = r; bestIdxObj = candidate; }
   }
 
-  const warnings = [];
+  const warnings: string[] = [];
   if (bestScore < 2) {
     warnings.push(
       `Couldn't confidently identify RFI columns from the header row. ` +
@@ -275,17 +318,17 @@ export function parseRfiCsv(csvText, { fileName = "" } = {}) {
 
   // Header-level metadata we can infer. Project name isn't usually in
   // the CSV; filename is the best fallback the user will see.
-  const header = { job_name: fileName ? fileName.replace(/\.csv$/i, "") : undefined };
+  const header: RfiCsvHeader = { job_name: fileName ? fileName.replace(/\.csv$/i, "") : undefined };
 
-  const rfis = [];
-  const jobNumbers = new Set();
+  const rfis: ParsedCsvRfi[] = [];
+  const jobNumbers = new Set<string>();
   let skippedBlankRows = 0;
 
   for (let r = bestIdx + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row || row.every((v) => !v || !String(v).trim())) continue;
 
-    const pick = (key) => (idx[key] >= 0 ? String(row[idx[key]] ?? "").trim() : "");
+    const pick = (key: keyof RfiColumnIndex): string => (idx[key] >= 0 ? String(row[idx[key]] ?? "").trim() : "");
 
     const rawNum = pick("rfi_number");
     const num = rawNum.replace(/^RFI\s*#?\s*/i, "").replace(/^#/, "").trim();
@@ -334,7 +377,7 @@ export function parseRfiCsv(csvText, { fileName = "" } = {}) {
  * TextDecodingError for UTF-32 and binary files (.xlsx, .xls, PDF); the
  * import modal shows its re-save message.
  */
-export async function readRfiCsvFile(file) {
+export async function readRfiCsvFile(file: File | null | undefined): Promise<RfiCsvParseResult> {
   if (!file) throw new Error("No file provided.");
   const looksCsv =
     /\.(csv|tsv|txt)$/i.test(file.name) ||

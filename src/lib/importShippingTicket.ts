@@ -1,5 +1,5 @@
 /**
- * importShippingTicket.js
+ * importShippingTicket.ts
  *
  * Extract-and-persist pipeline for a Tekla / fab-shop shipping ticket PDF.
  * Uploads the PDF, asks gpt-4o-mini to pull the header + line items via
@@ -17,6 +17,79 @@
 import { supabase } from "@/lib/supabase";
 import { integrations } from "@/api/supabaseClient";
 
+/** Ticket header as the model returns it — every field optional, loosely typed. */
+export interface ShippingTicketHeader {
+  job_number?: string | null;
+  job_name?: string | null;
+  load_number?: string | null;
+  load_category?: string | null;
+  trailer?: string | null;
+  carrier?: string | null;
+  capacity_lbs?: number | string | null;
+  weight_loaded_lbs?: number | string | null;
+  assembly_quantity?: number | string | null;
+  date_shipped?: string | null;
+  sold_to?: string | null;
+  ship_to?: string | null;
+}
+
+/** One ticket line as the model returns it. */
+export interface ShippingTicketItem {
+  qty?: number | string | null;
+  assembly_mark?: string | null;
+  sequence?: string | null;
+  profile?: string | null;
+  length_text?: string | null;
+  length_inches?: number | string | null;
+  grade?: string | null;
+  finish?: string | null;
+  weight_lbs?: number | string | null;
+}
+
+export interface ShippingTicketExtraction {
+  header: ShippingTicketHeader;
+  items: ShippingTicketItem[];
+  raw: unknown;
+}
+
+export interface UploadedShippingTicket {
+  file_url: string;
+  storage_path: string;
+  file_name: string;
+}
+
+export interface ExtractShippingTicketArgs {
+  storage_path?: string | null;
+  file_url?: string | null;
+  model?: string;
+  provider?: string;
+  project_id?: string | null;
+}
+
+export interface TicketProjectMatch {
+  id: string;
+  name: string | null;
+  project_number: string | null;
+}
+
+export interface CommitShippingTicketArgs {
+  header: ShippingTicketHeader;
+  items: ShippingTicketItem[];
+  projectId: string | null | undefined;
+  projectName?: string | null;
+  file_url?: string | null;
+  storage_path?: string | null;
+  file_name?: string | null;
+}
+
+/** llm-proxy response fields this module reads. */
+interface LlmProxyResponse {
+  error?: string;
+  text?: string;
+  raw?: unknown;
+  tool_use?: { input?: { header?: ShippingTicketHeader; items?: unknown } | null } | null;
+}
+
 /**
  * Call llm-proxy with proper error detail extraction. supabase-js returns
  * a generic "Edge Function returned a non-2xx status code" on any upstream
@@ -24,8 +97,8 @@ import { integrations } from "@/api/supabaseClient";
  * status + body from error.context so the UI sees the actual reason
  * (missing OPENAI_API_KEY, rate limit, payload too large, etc.).
  */
-async function invokeProxyWithDetail(body) {
-  const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
+async function invokeProxyWithDetail(body: Record<string, unknown>): Promise<{ data: LlmProxyResponse | null }> {
+  const { data, error } = await supabase.functions.invoke<LlmProxyResponse>("llm-proxy", { body });
   if (!error && !data?.error) return { data };
 
   let status = 0;
@@ -121,12 +194,12 @@ const TICKET_TOOL = {
   },
 };
 
-async function arrayBufferToBase64(buf) {
+async function arrayBufferToBase64(buf: ArrayBuffer): Promise<string> {
   const bytes = new Uint8Array(buf);
   let binary = "";
   const CHUNK = 0x8000;
   for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
   }
   return btoa(binary);
 }
@@ -134,7 +207,7 @@ async function arrayBufferToBase64(buf) {
 /**
  * Upload the PDF to storage and return { file_url, storage_path, file_name }.
  */
-export async function uploadShippingTicket(file) {
+export async function uploadShippingTicket(file: File | null | undefined): Promise<UploadedShippingTicket> {
   if (!file) throw new Error("No file provided.");
   if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
     throw new Error("Shipping ticket must be a PDF.");
@@ -158,11 +231,11 @@ export async function extractShippingTicket({
   // Optional, for telemetry only — when the caller knows the project,
   // pass it through so per-project AI spend rolls up correctly.
   project_id,
-}) {
+}: ExtractShippingTicketArgs): Promise<ShippingTicketExtraction> {
   // Download the file from storage, base64 it.
   const path = storage_path || file_url;
   if (!path) throw new Error("Missing storage path.");
-  let buf;
+  let buf: ArrayBuffer;
   if (/^https?:\/\//i.test(path)) {
     const resp = await fetch(path);
     if (!resp.ok) throw new Error(`PDF fetch failed (${resp.status}).`);
@@ -222,7 +295,7 @@ export async function extractShippingTicket({
  * Resolve a ticket's job_number → projects.id. Tries exact match first,
  * then fuzzy on project_number. Returns null if no match.
  */
-export async function resolveProjectForTicket(jobNumber) {
+export async function resolveProjectForTicket(jobNumber: unknown): Promise<TicketProjectMatch | null> {
   if (!jobNumber) return null;
   // Strip to digits before interpolating into the PostgREST .or() filter.
   // jobNumber is AI-extracted (untrusted); raw values could carry commas /
@@ -248,7 +321,7 @@ export async function resolveProjectForTicket(jobNumber) {
 export async function commitShippingTicket({
   header, items, projectId, projectName,
   file_url, storage_path, file_name,
-}) {
+}: CommitShippingTicketArgs) {
   if (!projectId) throw new Error("Select a project before importing.");
 
   // Parse weights so the columns are numeric, not "48,000#" strings.
@@ -319,26 +392,26 @@ export async function commitShippingTicket({
 
 // ─── helpers ────────────────────────────────────────────────────────
 
-function str(v) {
+function str(v: unknown): string | null {
   if (v == null) return null;
   const s = String(v).trim();
   return s === "" ? null : s;
 }
-function toInt(v, fallback = null) {
-  const n = parseInt(v, 10);
+function toInt(v: unknown, fallback: number | null = null): number | null {
+  const n = parseInt(String(v), 10);
   return Number.isFinite(n) ? n : fallback;
 }
-function toNum(v) {
+function toNum(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
-function parseLbs(v) {
+function parseLbs(v: unknown): number | null {
   if (v == null) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   const n = Number(String(v).replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) ? n : null;
 }
-function normalizeDate(v) {
+function normalizeDate(v: unknown): string | null {
   if (!v) return null;
   const s = String(v).trim();
   // Pass through YYYY-MM-DD, parse MM/DD/YYYY.

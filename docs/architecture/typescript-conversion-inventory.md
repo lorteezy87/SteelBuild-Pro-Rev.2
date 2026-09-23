@@ -16,6 +16,9 @@ Snapshot for Phase 2/3 planning. Convert with **real types** when touching these
 | `src/lib/entityPredicates.ts` | Shared entity predicates |
 | `src/lib/exports/fabRelease.ts` | Fab-release export |
 | `src/components/shared/useAppSecurity.ts` | Auth identity + project_id write shaping (no localStorage identity) |
+| `src/lib/dateOnly.ts`, `src/lib/dateMath.ts`, `src/utils/dates.ts`, `src/lib/workweek.ts` | Shared local-day date helpers |
+| `src/lib/schedule/hierarchy.ts`, `reparentTasks.ts`, `summaryTasks.ts` | Schedule WBS parent/child helpers |
+| `src/lib/importRfiCsv.ts`, `importChangeOrderCsv.ts`, `importSovSpreadsheet.ts`, `importPsrSpreadsheet.ts`, `importFabSuiteXml.ts`, `importShippingTicket.ts` | File-import parsers (CSV / XLSX / Tekla EPM XML / shipping-ticket PDF) |
 
 ## Still JS — convert next when actively repaired
 
@@ -24,7 +27,7 @@ Snapshot for Phase 2/3 planning. Convert with **real types** when touching these
 | Drawing set ordering | `src/lib/drawingSetOrdering.js` |
 | Drawing hub engines | `src/lib/drawingHub.js`, `src/lib/drawingHub/*.js` |
 | Submittal engines | `src/lib/submittalReviewEngine.js`, `submittalAnalytics.js`, `submittalSmartTriggers.js` |
-| Import / reconciliation | `importDrawingLog.js`, `importFabSuiteXml.js`, `importModelElements.js`, `importChangeOrderCsv.js`, `importSovSpreadsheet.js`, `importPsrSpreadsheet.js`, `importShippingTicket.js`, `importRfiCsv.js`, `importRfiLog.js`, `rfiImportUtils.js`, `dataExchange.js` |
+| Import / reconciliation | `importDrawingLog.js`, `importModelElements.js`, `importRfiLog.js`, `rfiImportUtils.js`, `dataExchange.js` |
 | IFC roster | `src/services/ifcRosterImport.js` |
 | PDF exports | `src/lib/exports/markupPDF.js`, `revisionImpactPDF.js` |
 

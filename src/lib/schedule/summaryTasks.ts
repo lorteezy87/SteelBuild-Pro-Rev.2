@@ -23,6 +23,15 @@
 // Keeping the parent-id OR-branch means the exclusion is correct regardless of
 // whether is_summary has been backfilled yet — belt and suspenders.
 
+/** The row-level flags and linkage the summary predicate reads. */
+export interface SummaryTaskFlags {
+  id?: string | null;
+  parent_task_id?: string | null;
+  is_summary?: boolean | null;
+  _hasChildren?: boolean | null;
+  _isRolledUpSummary?: boolean | null;
+}
+
 /**
  * Collect every non-null parent_task_id in a task list into a Set. Any task
  * whose id is in this set is a parent (has at least one child), even if its
@@ -30,13 +39,12 @@
  *
  * Accepts any array of record-shaped rows (callers pass entity rows,
  * TS `ScheduleTaskSource`, enriched Gantt rows, etc.) — we only read
- * `parent_task_id`, coercing to a string key.
- *
- * @param {ReadonlyArray<Record<string, any>>} tasks
- * @returns {Set<string>}
+ * `parent_task_id`.
  */
-export function buildParentIdSet(tasks) {
-  const set = new Set();
+export function buildParentIdSet(
+  tasks: ReadonlyArray<SummaryTaskFlags | null | undefined> | null | undefined,
+): Set<string> {
+  const set = new Set<string>();
   if (!Array.isArray(tasks)) return set;
   for (const t of tasks) {
     const pid = t?.parent_task_id;
@@ -49,13 +57,14 @@ export function buildParentIdSet(tasks) {
  * True when `task` is a summary/parent row that should be excluded from
  * overdue / at-risk / hit-list computations.
  *
- * @param {Record<string, any> | null | undefined} task
- * @param {Set<string>} [parentIds] pass buildParentIdSet(tasks) to also catch
- *   not-yet-refreshed parents by parent_task_id linkage. Optional — when
- *   omitted, only the row-level flags are consulted.
- * @returns {boolean}
+ * Pass `parentIds` = buildParentIdSet(tasks) to also catch not-yet-refreshed
+ * parents by parent_task_id linkage. Optional — when omitted, only the
+ * row-level flags are consulted.
  */
-export function isSummaryTask(task, parentIds) {
+export function isSummaryTask(
+  task: SummaryTaskFlags | null | undefined,
+  parentIds?: ReadonlySet<string>,
+): boolean {
   if (!task) return false;
   if (task.is_summary || task._hasChildren || task._isRolledUpSummary) return true;
   if (parentIds && task.id && parentIds.has(task.id)) return true;
@@ -64,12 +73,11 @@ export function isSummaryTask(task, parentIds) {
 
 /**
  * Negation of isSummaryTask — the actionable leaf rows.
- *
- * @param {Record<string, any> | null | undefined} task
- * @param {Set<string>} [parentIds]
- * @returns {boolean}
  */
-export function isWorkTask(task, parentIds) {
+export function isWorkTask(
+  task: SummaryTaskFlags | null | undefined,
+  parentIds?: ReadonlySet<string>,
+): boolean {
   return !isSummaryTask(task, parentIds);
 }
 
@@ -77,12 +85,10 @@ export function isWorkTask(task, parentIds) {
  * Convenience: filter a task list down to actionable (non-summary) rows,
  * detecting parents via parent_task_id linkage across the whole list. Use this
  * when a surface has the full list and wants a one-shot "leaf rows only".
- *
- * @template T
- * @param {T[]} tasks
- * @returns {T[]}
  */
-export function excludeSummaryTasks(tasks) {
+export function excludeSummaryTasks<T extends SummaryTaskFlags | null | undefined>(
+  tasks: T[] | null | undefined,
+): T[] {
   if (!Array.isArray(tasks)) return [];
   const parentIds = buildParentIdSet(tasks);
   return tasks.filter((t) => isWorkTask(t, parentIds));

@@ -1,8 +1,8 @@
 /**
- * importChangeOrderCsv.js
+ * importChangeOrderCsv.ts
  *
  * Plain-CSV bulk import for change orders. Mirrors the RFI-log
- * importer (src/lib/importRfiCsv.js) — no AI, no credits, no
+ * importer (src/lib/importRfiCsv.ts) — no AI, no credits, no
  * network; parses client-side and returns a `{ header, cos }` shape
  * the modal's commit step can feed into
  * entities.ChangeOrder.create().
@@ -39,13 +39,67 @@
 
 import { readFileText } from "@/lib/textDecoding";
 
+/** Logical columns the change-order CSV importer recognises. */
+type CoColumnKey =
+  | "co_number"
+  | "title"
+  | "description"
+  | "reason_code"
+  | "status"
+  | "co_amount"
+  | "submitted_date"
+  | "approved_date"
+  | "approved_by"
+  | "notes"
+  | "schedule_impact_days"
+  | "margin_percent"
+  | "project_name"
+  | "project_number";
+
+/** Column position per logical field; -1 when the header has no match. */
+type CoColumnIndex = Record<CoColumnKey, number>;
+
+/** The chk_change_orders_status vocabulary. */
+export type ChangeOrderStatus = "Draft" | "Submitted" | "Under Review" | "Approved" | "Rejected" | "Void";
+
+/** One parsed change order — change_orders columns plus two review-only hints. */
+export interface ParsedChangeOrder {
+  co_number: string;
+  title: string;
+  description: string | null;
+  reason_code: string | null;
+  status: ChangeOrderStatus;
+  co_amount: number | null;
+  submitted_date: string | null;
+  approved_date: string | null;
+  approved_by: string | null;
+  notes: string | null;
+  schedule_impact_days: number | null;
+  margin_percent: number | null;
+  project_name: string | null;
+  _project_number_hint: string | null;
+  _raw: { amount_raw: string; submitted_raw: string; approved_raw: string };
+}
+
+export interface ChangeOrderCsvHeader {
+  job_name?: string;
+  job_number?: string;
+}
+
+export interface ChangeOrderCsvParseResult {
+  header: ChangeOrderCsvHeader;
+  cos: ParsedChangeOrder[];
+  warnings: string[];
+  skippedBlankRows: number;
+}
+
 // ── Shared CSV tokenizer ────────────────────────────────────────────
-export function parseCsv(raw) {
+export function parseCsv(raw: unknown): string[][] {
   if (typeof raw !== "string") return [];
   // UTF-8 BOM stripper — Excel writes one on every CSV save.
-  let src = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
-  const rows = [];
-  let row = [];
+  const src = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+  const rows: string[][] = [];
+  let row: string[] = [];
   let field = "";
   let inQuotes = false;
   let i = 0;
@@ -87,7 +141,7 @@ export function parseCsv(raw) {
 // normalized (lowercase, punctuation-collapsed) header text against
 // broad alias sets. First column that maps wins; unmatched columns
 // are ignored.
-const COLUMN_ALIASES = {
+const COLUMN_ALIASES: Record<CoColumnKey, string[]> = {
   co_number: [
     "co #", "co no", "co number", "number", "no", "no.", "#",
     "change order #", "change order no", "change order number",
@@ -146,22 +200,24 @@ const COLUMN_ALIASES = {
   ],
 };
 
-const normalize = (s) => String(s ?? "")
+const normalize = (s: unknown): string => String(s ?? "")
   .toLowerCase()
   .trim()
   .replace(/[._\-#]+/g, " ")
   .replace(/\s+/g, " ");
 
-function buildColumnIndex(headerRow) {
-  const idx = {};
-  for (const key of Object.keys(COLUMN_ALIASES)) idx[key] = -1;
+const COLUMN_KEYS = Object.keys(COLUMN_ALIASES) as CoColumnKey[];
+
+function buildColumnIndex(headerRow: readonly unknown[]): CoColumnIndex {
+  const idx = {} as CoColumnIndex;
+  for (const key of COLUMN_KEYS) idx[key] = -1;
   const normalized = headerRow.map((h) => normalize(h));
   for (let i = 0; i < normalized.length; i++) {
     const cell = normalized[i];
     if (!cell) continue;
-    for (const [key, aliases] of Object.entries(COLUMN_ALIASES)) {
+    for (const key of COLUMN_KEYS) {
       if (idx[key] !== -1) continue;
-      if (aliases.includes(cell)) { idx[key] = i; break; }
+      if (COLUMN_ALIASES[key].includes(cell)) { idx[key] = i; break; }
     }
   }
   return idx;
@@ -172,13 +228,13 @@ function buildColumnIndex(headerRow) {
 // Dates: accept MM/DD/YYYY, M/D/YY, ISO YYYY-MM-DD, "Jan 5, 2026",
 // "5-Jan-26". Sane-year gate [1980, 2200] guards Date.parse's weird
 // two-digit-year fallback.
-const MONTHS = {
+const MONTHS: Record<string, number> = {
   jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
   apr: 4, april: 4, may: 5, jun: 6, june: 6,
   jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9,
   oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
 };
-function normalizeDate(raw) {
+function normalizeDate(raw: unknown): string | null {
   if (raw === null || raw === undefined) return null;
   const s = String(raw).trim();
   if (!s) return null;
@@ -224,21 +280,21 @@ function normalizeDate(raw) {
 // "$12,345.67" → 12345.67. Strips $ sign, commas, whitespace,
 // and trailing text like "USD". Returns null when unparsable so
 // the DB sees a real number or nothing at all (no NaN coercion).
-function normalizeMoney(raw) {
+function normalizeMoney(raw: unknown): number | null {
   if (raw === null || raw === undefined) return null;
   const s = String(raw).replace(/[$,\s]/g, "").replace(/[^\d.-]/g, "");
   if (!s) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
-function normalizeInt(raw) {
+function normalizeInt(raw: unknown): number | null {
   if (raw === null || raw === undefined) return null;
   const s = String(raw).replace(/[,\s]/g, "");
   if (!s) return null;
   const n = parseInt(s, 10);
   return Number.isFinite(n) ? n : null;
 }
-function normalizePercent(raw) {
+function normalizePercent(raw: unknown): number | null {
   if (raw === null || raw === undefined) return null;
   const s = String(raw).replace(/%/g, "").trim();
   if (!s) return null;
@@ -251,7 +307,7 @@ function normalizePercent(raw) {
  * — see chk_change_orders_status in the baseline schema. Emitting anything else
  * makes the INSERT fail with a check violation.
  */
-export const CO_STATUSES = new Set([
+export const CO_STATUSES: ReadonlySet<ChangeOrderStatus> = new Set<ChangeOrderStatus>([
   "Draft",
   "Submitted",
   "Under Review",
@@ -270,7 +326,7 @@ export const CO_STATUSES = new Set([
  * "closed"/"completed" to a "Closed" that does not exist in the constraint.
  * Either one aborts the import at that row.
  */
-export function normalizeStatus(raw) {
+export function normalizeStatus(raw: unknown): ChangeOrderStatus | null {
   if (raw === null || raw === undefined) return null;
   const s = String(raw).trim().toLowerCase();
   if (!s) return null;
@@ -302,7 +358,10 @@ export function normalizeStatus(raw) {
  *   no title/description) so the UI can surface "we couldn't find a
  *   title column — every CO will be imported with empty title".
  */
-export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
+export function parseChangeOrderCsv(
+  csvText: unknown,
+  { fileName = "" }: { fileName?: string } = {},
+): ChangeOrderCsvParseResult {
   const rows = parseCsv(csvText);
   if (rows.length === 0) {
     return { header: {}, cos: [], warnings: ["File is empty."], skippedBlankRows: 0 };
@@ -312,7 +371,7 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
   // with the most recognized columns.
   let bestIdx = 0;
   let bestScore = -1;
-  let bestIdxObj = null;
+  let bestIdxObj: CoColumnIndex | null = null;
   const SCAN_LIMIT = Math.min(10, rows.length);
   for (let r = 0; r < SCAN_LIMIT; r++) {
     const candidate = buildColumnIndex(rows[r]);
@@ -320,7 +379,7 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
     if (score > bestScore) { bestScore = score; bestIdx = r; bestIdxObj = candidate; }
   }
 
-  const warnings = [];
+  const warnings: string[] = [];
   if (bestScore < 2) {
     warnings.push(
       `Couldn't confidently identify change-order columns from the header. ` +
@@ -331,8 +390,8 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
   // Statuses we couldn't map onto CO_STATUSES. They import as Draft; the
   // reviewer needs to see which ones so they can reclassify after import
   // (notably "Closed", which is ambiguous and must not become "Approved").
-  const unmappedStatuses = new Set();
-  const resolveStatus = (raw) => {
+  const unmappedStatuses = new Set<string>();
+  const resolveStatus = (raw: unknown): ChangeOrderStatus => {
     const mapped = normalizeStatus(raw);
     if (mapped) return mapped;
     const trimmed = String(raw ?? "").trim();
@@ -343,19 +402,19 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
   if (idx.co_number < 0)  warnings.push(`No CO-number column found (looked for "CO #", "Number", "CCO", etc.).`);
   if (idx.title < 0 && idx.description < 0) warnings.push(`No title or description column found — CO names will be blank.`);
 
-  const header = {
+  const header: ChangeOrderCsvHeader = {
     job_name: fileName ? fileName.replace(/\.csv$/i, "") : undefined,
   };
 
-  const cos = [];
-  const projectNumbers = new Set();
+  const cos: ParsedChangeOrder[] = [];
+  const projectNumbers = new Set<string>();
   let skippedBlankRows = 0;
 
   for (let r = bestIdx + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row || row.every((v) => !v || !String(v).trim())) continue;
 
-    const pick = (key) => (idx[key] >= 0 ? String(row[idx[key]] ?? "").trim() : "");
+    const pick = (key: CoColumnKey): string => (idx[key] >= 0 ? String(row[idx[key]] ?? "").trim() : "");
 
     const rawNum = pick("co_number");
     const num = rawNum.replace(/^CO\s*#?\s*/i, "").replace(/^CCO\s*#?\s*/i, "").replace(/^#/, "").trim();
@@ -427,7 +486,7 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
  * binary file (xlsx, xls, pdf) throws a TextDecodingError whose message
  * the import modal shows as-is.
  */
-export async function readChangeOrderCsvFile(file) {
+export async function readChangeOrderCsvFile(file: File | null | undefined): Promise<ChangeOrderCsvParseResult> {
   if (!file) throw new Error("No file provided.");
   const looksCsv =
     /\.(csv|tsv|txt)$/i.test(file.name) ||

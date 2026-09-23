@@ -1,5 +1,5 @@
 /**
- * importFabSuiteXml.js — parse a Tekla EPM / FabSuite Data Exchange XML
+ * importFabSuiteXml.ts — parse a Tekla EPM / FabSuite Data Exchange XML
  * (schema TeklaPowerFabDataFile*.xsd, the Tekla Structures → Tekla EPM handoff)
  * into staged drawings + pieces.
  *
@@ -17,15 +17,80 @@
  * this file; that comes from a separate EPM production-control export.
  */
 
-const norm = (v) => String(v || "").trim();
+export interface FabSuiteDrawing {
+  drawing_number: string;
+  title: string | null;
+  category: string | null;
+  date_detailed: string | null;
+  revision_number: string | null;
+  revision_description: string | null;
+  date_revised: string | null;
+  model_ref: string | null;
+}
 
-function toNumber(value) {
+export interface FabSuitePiece {
+  piece_mark: string;
+  assembly_mark: string | null;
+  profile: string | null;
+  material_grade: string | null;
+  quantity: number;
+  weight_kg: number | null;
+  sequence_number: string | null;
+  erection_area: string | null;
+  drawing_no: string | null;
+  element_guid: string | null;
+}
+
+export type FabSuiteStage = "IFC" | "IFA";
+
+export interface FabSuiteStats {
+  drawings: number;
+  pieces: number;
+  skippedDrawings: number;
+  skippedPieces: number;
+}
+
+export interface FabSuiteParseResult {
+  ok: boolean;
+  error?: string;
+  project: { number: string | null; name: string | null };
+  source: { app: string | null; version: string | null; date: string | null; stage: FabSuiteStage | null };
+  drawings: FabSuiteDrawing[];
+  pieces: FabSuitePiece[];
+  stats: FabSuiteStats;
+}
+
+/** The existing model_elements columns staging reads. */
+export interface ExistingModelElementRef {
+  id?: string | null;
+  element_guid?: string | null;
+  is_deleted?: boolean | null;
+}
+
+export type StagedFabSuitePiece = FabSuitePiece & {
+  action: "create" | "update";
+  existing_id: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+/** A staged row mapped to a model_elements insert/update payload. */
+export type TeklaModelElementPayload = Omit<StagedFabSuitePiece, "action" | "existing_id" | "metadata"> & {
+  project_id: string;
+  source: "csv";
+  metadata: Record<string, unknown>;
+};
+
+type ElementScope = Document | Element | null | undefined;
+
+const norm = (v: unknown): string => String(v || "").trim();
+
+function toNumber(value: unknown): number | null {
   if (value === null || value === undefined || String(value).trim() === "") return null;
   const n = Number(String(value).replace(/[, ]+/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 
-function parseDoc(xmlString) {
+function parseDoc(xmlString: unknown): Document | null {
   if (typeof DOMParser === "undefined") return null;
   const doc = new DOMParser().parseFromString(String(xmlString || ""), "application/xml");
   // A parse failure yields a <parsererror> node (HTML namespace) in every engine.
@@ -34,13 +99,13 @@ function parseDoc(xmlString) {
 }
 
 // Namespace-agnostic descendant lookups (the file uses a default xmlns).
-const els = (parent, tag) => (parent ? Array.from(parent.getElementsByTagNameNS("*", tag)) : []);
-const firstText = (parent, tag) => {
+const els = (parent: ElementScope, tag: string): Element[] => (parent ? Array.from(parent.getElementsByTagNameNS("*", tag)) : []);
+const firstText = (parent: ElementScope, tag: string): string => {
   const el = parent && parent.getElementsByTagNameNS("*", tag)[0];
   return el ? norm(el.textContent) : "";
 };
 
-function parseDrawing(el) {
+function parseDrawing(el: Element): FabSuiteDrawing {
   const rev = el.getElementsByTagNameNS("*", "DrawingRevision")[0] || null;
   return {
     drawing_number: firstText(el, "DrawingNumber"),
@@ -54,7 +119,7 @@ function parseDrawing(el) {
   };
 }
 
-function parseAssembly(el) {
+function parseAssembly(el: Element): FabSuitePiece {
   const parts = els(el, "AssemblyPart");
   const mainPart =
     parts.find((p) => firstText(p, "MainMember").toLowerCase() === "true") || parts[0] || null;
@@ -72,7 +137,7 @@ function parseAssembly(el) {
   }
 
   // Phase Name → a coarse erection grouping (the file has no explicit area).
-  let phase = null;
+  let phase: string | null = null;
   for (const other of els(el, "OtherField")) {
     if ((other.getAttribute("FieldName") || "").toLowerCase() === "phase name") {
       phase = norm(other.textContent) || null;
@@ -95,24 +160,15 @@ function parseAssembly(el) {
   };
 }
 
-function zeroStats() {
+function zeroStats(): FabSuiteStats {
   return { drawings: 0, pieces: 0, skippedDrawings: 0, skippedPieces: 0 };
 }
 
 /**
  * Parse a FabSuite/Tekla EPM XML string.
- *
- * @returns {{
- *   ok: boolean, error?: string,
- *   project: { number: string|null, name: string|null },
- *   source: { app: string|null, version: string|null, date: string|null, stage: string|null },
- *   drawings: Array<object>,
- *   pieces: Array<object>,
- *   stats: { drawings, pieces, skippedDrawings, skippedPieces },
- * }}
  */
-export function parseFabSuiteXml(xmlString) {
-  const empty = { project: { number: null, name: null }, source: { app: null, version: null, date: null, stage: null }, drawings: [], pieces: [], stats: zeroStats() };
+export function parseFabSuiteXml(xmlString: unknown): FabSuiteParseResult {
+  const empty: Omit<FabSuiteParseResult, "ok" | "error"> = { project: { number: null, name: null }, source: { app: null, version: null, date: null, stage: null }, drawings: [], pieces: [], stats: zeroStats() };
   const doc = parseDoc(xmlString);
   if (!doc || !doc.documentElement) {
     return { ok: false, error: "Could not parse the XML file.", ...empty };
@@ -126,7 +182,7 @@ export function parseFabSuiteXml(xmlString) {
 
   // Drawings — <Drawing> (sheets + GA) and <AssemblyDrawing>, de-duped by number.
   const stats = zeroStats();
-  const byNumber = new Map();
+  const byNumber = new Map<string, FabSuiteDrawing>();
   for (const el of [...els(doc, "Drawing"), ...els(doc, "AssemblyDrawing")]) {
     const d = parseDrawing(el);
     if (!d.drawing_number) { stats.skippedDrawings += 1; continue; }
@@ -146,8 +202,8 @@ export function parseFabSuiteXml(xmlString) {
   // each with its own model GUID, and model_elements is GUID-keyed. So we de-dupe
   // by GUID (falling back to mark only when an assembly has none), NOT by mark —
   // collapsing on mark would drop most of the steel.
-  const pieces = [];
-  const seen = new Set();
+  const pieces: FabSuitePiece[] = [];
+  const seen = new Set<string>();
   for (const el of els(doc, "Assembly")) {
     const piece = parseAssembly(el);
     if (!piece.piece_mark) { stats.skippedPieces += 1; continue; }
@@ -180,20 +236,23 @@ export function parseFabSuiteXml(xmlString) {
  * existing mark is a different physical instance and must be a create, not an
  * update that would overwrite the other instance. Pure; returns staged rows.
  */
-export function stageModelElements(pieces, existingElements = []) {
-  const byGuid = new Map();
+export function stageModelElements(
+  pieces: ReadonlyArray<FabSuitePiece> | null | undefined,
+  existingElements: ReadonlyArray<ExistingModelElementRef | null | undefined> = [],
+): { rows: StagedFabSuitePiece[]; stats: { create: number; update: number } } {
+  const byGuid = new Map<string, ExistingModelElementRef>();
   for (const el of existingElements) {
     if (!el || el.is_deleted || !el.element_guid) continue;
     byGuid.set(String(el.element_guid).toUpperCase(), el);
   }
-  const rows = [];
+  const rows: StagedFabSuitePiece[] = [];
   let create = 0;
   let update = 0;
   for (const piece of pieces || []) {
     const existing = piece.element_guid ? byGuid.get(String(piece.element_guid).toUpperCase()) : null;
-    const action = existing ? "update" : "create";
+    const action: StagedFabSuitePiece["action"] = existing ? "update" : "create";
     if (existing) update += 1; else create += 1;
-    rows.push({ ...piece, action, existing_id: existing ? existing.id : null });
+    rows.push({ ...piece, action, existing_id: existing ? existing.id ?? null : null });
   }
   return { rows, stats: { create, update } };
 }
@@ -206,11 +265,10 @@ export function stageModelElements(pieces, existingElements = []) {
  * The Tekla-specific origin is preserved in metadata.import_format so
  * provenance is never lost.
  *
- * @param {object} row  — a staged row from stageModelElements (has action + existing_id)
- * @param {string} projectId
- * @returns {object} ready for ModelElement.bulkCreate / ModelElement.update
+ * `row` is a staged row from stageModelElements (has action + existing_id);
+ * the result is ready for ModelElement.bulkCreate / ModelElement.update.
  */
-export function teklaRowToModelElement(row, projectId) {
+export function teklaRowToModelElement(row: StagedFabSuitePiece, projectId: string): TeklaModelElementPayload {
   const { action: _action, existing_id: _existingId, ...fields } = row;
   return {
     ...fields,
@@ -221,7 +279,7 @@ export function teklaRowToModelElement(row, projectId) {
 }
 
 /** "FOR APPROVAL ONLY" → IFA, "FOR FABRICATION" → IFC, else null. */
-function inferStage(drawings) {
+function inferStage(drawings: ReadonlyArray<FabSuiteDrawing>): FabSuiteStage | null {
   for (const d of drawings) {
     const desc = (d.revision_description || "").toUpperCase();
     if (desc.includes("FABRICATION")) return "IFC";

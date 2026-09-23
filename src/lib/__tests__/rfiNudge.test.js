@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildRfiNudge, parseEmails } from "../rfiNudge";
 
 // LOCAL-date helpers (YYYY-MM-DD) to match buildRfiNudge's daysSince/daysUntil,
-// which anchor on local midnight (see src/lib/dateMath.js). The previous
+// which anchor on local midnight (see src/lib/dateMath.ts). The previous
 // `new Date(...).toISOString().slice(0,10)` form computed a UTC date, so after
 // ~5pm in a negative-UTC tz (e.g. Arizona) it drifted one day off the engine
 // and the day-count assertions flaked. Build the date in local time instead.

@@ -1,5 +1,5 @@
 /**
- * dates.js — Shared date helpers.
+ * dates.ts — Shared date helpers.
  *
  * Arizona does not observe DST, so local time is always UTC-7 (MST).
  * Using `new Date().toISOString().slice(0,10)` returns the UTC date,
@@ -7,10 +7,12 @@
  * the local clock instead.
  */
 
+export type DateInput = string | number | Date | null | undefined;
+
 /**
  * Return today's date as a YYYY-MM-DD string in the browser's local timezone.
  */
-export function localToday() {
+export function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -25,10 +27,9 @@ export function localToday() {
  * Use this for any `date` column (due_date, required_date, scheduled_start_date,
  * etc.) so display and day-math agree.
  *
- * @param {string|number|Date|null|undefined} input
- * @returns {Date|null} local-midnight Date, or null if unparseable
+ * Returns a local-midnight Date, or null if unparseable.
  */
-export function toLocalDay(input) {
+export function toLocalDay(input: DateInput): Date | null {
   if (input === null || input === undefined || input === "") return null;
   if (input instanceof Date) {
     if (!Number.isFinite(input.getTime())) return null;
@@ -48,13 +49,10 @@ export function toLocalDay(input) {
 /**
  * Format a date-only value as a short, timezone-safe label (e.g. "Jun 10, 26").
  * Routes through {@link toLocalDay} so a `date` column never renders a day early.
- * Returns the em dash for empty / invalid input.
- *
- * @param {string|number|Date|null|undefined} input
- * @param {{ withYear?: boolean }} [opts] include a 2-digit year (default true)
- * @returns {string}
+ * Returns the em dash for empty / invalid input. `withYear` (default true)
+ * includes a 2-digit year.
  */
-export function formatShortDate(input, { withYear = true } = {}) {
+export function formatShortDate(input: DateInput, { withYear = true }: { withYear?: boolean } = {}): string {
   const local = toLocalDay(input);
   if (!local) return "—";
   return local.toLocaleDateString("en-US", {
@@ -71,14 +69,14 @@ export function formatShortDate(input, { withYear = true } = {}) {
  * LOCAL calendar day, not UTC midnight — the Arizona one-day-early bug) and then
  * applies the SAME locale + Intl options the caller would have passed to
  * toLocaleDateString, so the displayed FORMAT is preserved exactly while the
- * parse is fixed. Returns the em dash for empty / invalid input.
- *
- * @param {string|number|Date|null|undefined} input
- * @param {string} [locale] e.g. "en-US" (omit for the runtime default)
- * @param {Intl.DateTimeFormatOptions} [options]
- * @returns {string}
+ * parse is fixed. Returns the em dash for empty / invalid input. Omit
+ * `locale` (e.g. "en-US") for the runtime default.
  */
-export function formatLocalDate(input, locale, options) {
+export function formatLocalDate(
+  input: DateInput,
+  locale?: string | string[],
+  options?: Intl.DateTimeFormatOptions,
+): string {
   const local = toLocalDay(input);
   if (!local) return "—";
   return local.toLocaleDateString(locale, options);
