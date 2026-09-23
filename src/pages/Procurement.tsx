@@ -39,6 +39,7 @@ import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
 import { toUserErrorMessage, withProjectId } from '@/lib/mutations/standardMutation';
 import { exportToCSV } from '@/lib/csv';
+import { deliveryTitle } from '@/lib/deliveries/deliveryTitle';
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES, addWeeks } from './procurement/format';
 import ProcurementControlCenter from './procurement/ProcurementControlCenter';
 import { ProcurementFormModal } from './procurement/components';
@@ -118,7 +119,16 @@ export default function Procurement() {
 
   const createMut = useMutation({
     mutationFn: (data: any) => entities.Delivery.create(
-      withProjectId({ ...data, delivery_type: 'PROCUREMENT' }, projectId),
+      withProjectId({
+        ...data,
+        delivery_type: 'PROCUREMENT',
+        // create_delivery() refuses a blank delivery_title, and the form has no
+        // title field — its required Item Description is the item's name.
+        delivery_title: deliveryTitle(
+          [data.delivery_title, data.description, data.po_number, data.procurement_category],
+          'Procurement item',
+        ),
+      }, projectId),
     ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement'] });

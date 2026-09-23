@@ -1,4 +1,5 @@
 import { normalizeRfiNumber } from "@/lib/rfiImportUtils";
+import { deliveryTitle } from "@/lib/deliveries/deliveryTitle";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -155,8 +156,12 @@ export const IMPORT_TARGETS = {
       status: ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"],
       priority: ["Critical", "High", "Normal", "Low"],
     },
-    fields: ["vendor", "po_number", "description", "scheduled_date", "required_date", "status", "pieces", "weight_tons", "receiving_location", "carrier", "notes"],
+    fields: ["delivery_title", "vendor", "po_number", "description", "scheduled_date", "required_date", "status", "pieces", "weight_tons", "receiving_location", "carrier", "notes"],
+    // create_delivery() refuses a blank delivery_title. A file without a
+    // title column is titled from its (required) description.
+    fallbacks: { delivery_title: ["description", "po_number"] },
     aliases: {
+      delivery_title: ["delivery title", "title", "load title", "load name"],
       po_number: ["po", "po number", "purchase order"],
       description: ["description", "material", "load", "item"],
       scheduled_date: ["scheduled", "scheduled date", "delivery date"],
@@ -414,7 +419,13 @@ export function buildSeedPayloads(project, templateKey = "fabrication_erection")
     { vendor: "ABC Steel Supply", po_number: "PO-1001", scheduled_date: addDaysIso(start, 58), required_date: addDaysIso(start, 60), status: "Scheduled", pieces: 86, weight_tons: 42, description: "Sequence 1 beams and columns", receiving_location: "North laydown yard", carrier: "Demo Trucking" },
     { vendor: "BoltCo", po_number: "PO-1002", scheduled_date: addDaysIso(start, 18), required_date: addDaysIso(start, 20), status: isDemo ? "In Transit" : "Scheduled", pieces: 12, weight_tons: 1.2, description: "Anchor bolt cages and loose hardware", receiving_location: "Shop dock" },
     { vendor: "Coatings Partner", po_number: "PO-1003", scheduled_date: addDaysIso(start, 43), required_date: addDaysIso(start, 45), status: "Scheduled", pieces: 24, weight_tons: 6.5, description: "Primer touch-up material", receiving_location: "Field trailer" },
-  ].slice(0, template.key === "fabrication_erection" ? 2 : 3).map((row) => ({ ...ctx, ...row, metadata: { onboarding_seed: true, template_key: template.key } })) : [];
+  ].slice(0, template.key === "fabrication_erection" ? 2 : 3).map((row) => ({
+    ...ctx,
+    ...row,
+    // create_delivery() refuses a blank delivery_title; the seed's description names the load.
+    delivery_title: deliveryTitle([row.delivery_title, row.description, row.po_number], "Delivery"),
+    metadata: { onboarding_seed: true, template_key: template.key },
+  })) : [];
 
   const fieldPayloads = includeField ? buildFieldSeedPayloads(ctx, start, template.key, isDemo) : emptyFieldSeedPayloads();
 
@@ -609,6 +620,12 @@ export function stageImportText({ targetKey, text, project }) {
       const value = cleanImportValue(field, row.values[index]);
       if (value !== null) record[field] = value;
     });
+    // A field the file left blank takes the first filled source column.
+    for (const [field, sources] of Object.entries(target.fallbacks || {})) {
+      if (record[field]) continue;
+      const source = sources.find((name) => record[name]);
+      if (source) record[field] = record[source];
+    }
 
     const missing = target.required.filter((field) => !record[field]);
     const invalidValues = Object.entries(target.allowedValues || {}).flatMap(([field, allowed]) => {

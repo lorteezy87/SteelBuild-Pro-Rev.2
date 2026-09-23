@@ -207,7 +207,8 @@ function createDb(): ProductionDeliveryDb {
         writes.push({ table, op, value, error: result.error });
         return result;
       }
-      if (table === "projects") return { data: { ...projectMode }, error: null };
+      // A list read gets one row; .single()/.maybeSingle() below take it.
+      if (table === "projects") return { data: [{ id: "proj-1", name: "Mesa MOB", ...projectMode }], error: null };
       return { data: [], error: null };
     };
 

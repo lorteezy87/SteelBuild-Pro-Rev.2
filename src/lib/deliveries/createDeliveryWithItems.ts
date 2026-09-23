@@ -33,6 +33,7 @@
  * advance for them.
  */
 import { entities } from "@/api/supabaseClient";
+import { deliveryTitle } from "./deliveryTitle";
 
 /** One line as create_delivery() reads it from `p_payload.items`. */
 export interface DeliveryItemPayload {
@@ -143,15 +144,10 @@ export function toDeliveryItemPayload(line: ImportedDeliveryLine): DeliveryItemP
   };
 }
 
-/** First non-blank candidate. create_delivery() refuses a blank delivery_title. */
+/** "Load <n>", else the first non-blank fallback. create_delivery() refuses a blank delivery_title. */
 export function importedDeliveryTitle(loadNumber: unknown, ...fallbacks: unknown[]): string {
   const load = textOrNull(loadNumber);
-  if (load) return `Load ${load}`;
-  for (const candidate of fallbacks) {
-    const text = textOrNull(candidate);
-    if (text) return text;
-  }
-  return "Imported load";
+  return deliveryTitle([load ? `Load ${load}` : null, ...fallbacks], "Imported load");
 }
 
 /**
