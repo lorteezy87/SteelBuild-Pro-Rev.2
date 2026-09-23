@@ -7,10 +7,12 @@ import {
   craneDisplayName,
   exportLibrary,
   importLibrary,
+  libraryKey,
   loadLibrary,
   removeCrane,
   saveLibrary,
   upsertCrane,
+  validateConfiguration,
   validateCrane,
   type CraneRecord,
 } from "../craneLibrary";
@@ -84,32 +86,58 @@ describe("validateCrane", () => {
 });
 
 describe("loadLibrary / saveLibrary", () => {
+  const ORG = "org-a";
+  const KEY = libraryKey(ORG);
+
   it("round-trips a fleet", () => {
     const s = fakeStorage();
-    expect(saveLibrary([crane()], s)).toBe(true);
-    expect(loadLibrary(s)).toEqual([crane()]);
+    expect(saveLibrary([crane()], ORG, s)).toBe(true);
+    expect(loadLibrary(ORG, s)).toEqual([crane()]);
+  });
+
+  it("keeps each organization's fleet apart in one browser", () => {
+    const s = fakeStorage();
+    saveLibrary([crane("c1", "A's crane")], "org-a", s);
+    saveLibrary([crane("c9", "B's crane")], "org-b", s);
+    expect(loadLibrary("org-a", s).map((c) => c.unit)).toEqual(["A's crane"]);
+    expect(loadLibrary("org-b", s).map((c) => c.unit)).toEqual(["B's crane"]);
+    expect(loadLibrary("org-c", s)).toEqual([]);
+  });
+
+  it("reads and writes nothing without an active organization", () => {
+    const s = fakeStorage({ [CRANE_LIBRARY_KEY]: JSON.stringify([crane()]) });
+    expect(loadLibrary(null, s)).toEqual([]);
+    expect(saveLibrary([crane()], null, s)).toBe(false);
+    expect(s.length).toBe(1);
   });
 
   it("returns an empty fleet for nothing stored, corrupt JSON, or a non-array", () => {
-    expect(loadLibrary(fakeStorage())).toEqual([]);
-    expect(loadLibrary(fakeStorage({ [CRANE_LIBRARY_KEY]: "{not json" }))).toEqual([]);
-    expect(loadLibrary(fakeStorage({ [CRANE_LIBRARY_KEY]: '{"a":1}' }))).toEqual([]);
+    expect(loadLibrary(ORG, fakeStorage())).toEqual([]);
+    expect(loadLibrary(ORG, fakeStorage({ [KEY]: "{not json" }))).toEqual([]);
+    expect(loadLibrary(ORG, fakeStorage({ [KEY]: '{"a":1}' }))).toEqual([]);
   });
 
   it("DROPS a stored crane whose chart no longer validates, keeping the rest", () => {
     const bad = crane("c2", "Crane 9");
     bad.configurations[0].chart.capacities = [[0, 0], [0, 0]];
-    const s = fakeStorage({ [CRANE_LIBRARY_KEY]: JSON.stringify([crane(), bad]) });
-    expect(loadLibrary(s).map((c) => c.unit)).toEqual(["Crane 14"]);
+    const s = fakeStorage({ [KEY]: JSON.stringify([crane(), bad]) });
+    expect(loadLibrary(ORG, s).map((c) => c.unit)).toEqual(["Crane 14"]);
+  });
+
+  it("DROPS a stored crane whose chart reference is blank", () => {
+    const blank = crane("c2", "Crane 9");
+    blank.configurations[0].chartSource = "   ";
+    const s = fakeStorage({ [KEY]: JSON.stringify([crane(), blank]) });
+    expect(loadLibrary(ORG, s).map((c) => c.unit)).toEqual(["Crane 14"]);
   });
 
   it("reports a refused write instead of throwing", () => {
-    expect(saveLibrary([crane()], fakeStorage({}, true))).toBe(false);
+    expect(saveLibrary([crane()], ORG, fakeStorage({}, true))).toBe(false);
   });
 
   it("is a no-op with no storage at all", () => {
-    expect(loadLibrary(null)).toEqual([]);
-    expect(saveLibrary([crane()], null)).toBe(false);
+    expect(loadLibrary(ORG, null)).toEqual([]);
+    expect(saveLibrary([crane()], ORG, null)).toBe(false);
   });
 });
 
@@ -176,5 +204,20 @@ describe("display helpers", () => {
     expect(configurationSummary(crane().configurations[0])).toBe(
       "Outriggers fully extended · 360° · 40,000 lb CWT · telescopic boom",
     );
+  });
+});
+
+describe("chart source is required provenance", () => {
+  it.each(["", "   "])("refuses a configuration whose chart source is %j", (src) => {
+    const cfg = { ...crane().configurations[0], chartSource: src };
+    expect(validateConfiguration(cfg).join(" ")).toMatch(/needs a chart source/);
+  });
+
+  it("refuses to import a crane with a blank chart source", () => {
+    const blank = crane("c2", "Crane 9");
+    blank.configurations[0].chartSource = "";
+    const res = importLibrary(exportLibrary([crane(), blank]), []);
+    expect(res.cranes.map((c) => c.unit)).toEqual(["Crane 14"]);
+    expect(res.rejected.join(" ")).toMatch(/needs a chart source/);
   });
 });

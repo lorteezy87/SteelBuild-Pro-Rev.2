@@ -13,10 +13,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
 import CranePickCalculator from "../CranePickCalculator";
-import { CRANE_LIBRARY_KEY, type CraneRecord } from "@/lib/crane/craneLibrary";
+import { libraryKey, type CraneRecord } from "@/lib/crane/craneLibrary";
 
 vi.mock("sonner", () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/calculators/CranePick3D", () => ({ default: (): null => null }));
+
+/** The active organization, switchable mid-test like the app's org switcher. */
+let activeOrgId: string | null = "org-a";
+vi.mock("@/components/shared/OrgContext", () => ({
+  useOptionalOrg: () => (activeOrgId ? { currentOrg: { id: activeOrgId } } : { currentOrg: null }),
+}));
 
 /** SYNTHETIC crane — round numbers, not any real machine's chart. */
 const CRANE: CraneRecord = {
@@ -48,11 +54,11 @@ const set = (placeholder: RegExp, value: string) =>
   fireEvent.change(screen.getByPlaceholderText(placeholder), { target: { value } });
 
 function renderWithLibrary() {
-  localStorage.setItem(CRANE_LIBRARY_KEY, JSON.stringify([CRANE]));
+  localStorage.setItem(libraryKey("org-a"), JSON.stringify([CRANE]));
   return render(<CranePickCalculator />);
 }
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => { localStorage.clear(); activeOrgId = "org-a"; });
 afterEach(() => localStorage.clear());
 
 describe("capacity source", () => {
@@ -136,5 +142,24 @@ describe("provenance in the Pick Summary", () => {
     expect(dialog).toHaveTextContent("SN-0007");
     expect(dialog).toHaveTextContent(/25,000 lb from 80 ft boom \/ 40 ft radius/);
     expect(dialog).toHaveTextContent("Crane 7 — Test Hydraulic 60T");
+  });
+});
+
+describe("organization boundary", () => {
+  it("drops another organization's crane when the workspace switches", () => {
+    const { rerender } = renderWithLibrary();
+    expect(screen.getByDisplayValue("Crane 7 — Test Hydraulic 60T")).toBeInTheDocument();
+
+    activeOrgId = "org-b";
+    rerender(<CranePickCalculator />);
+    expect(screen.queryByDisplayValue("Crane 7 — Test Hydraulic 60T")).toBeNull();
+    expect(screen.queryByTestId("chart-capacity")).toBeNull();
+  });
+
+  it("offers no library without an active organization", () => {
+    activeOrgId = null;
+    renderWithLibrary();
+    expect(screen.queryByDisplayValue("Crane 7 — Test Hydraulic 60T")).toBeNull();
+    expect(screen.getByPlaceholderText(/180,000/)).toBeInTheDocument();
   });
 });

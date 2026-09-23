@@ -7,12 +7,22 @@
  * importing it on each device. Every read validates, so a hand-edited or
  * truncated file is refused with a reason rather than loaded half-broken.
  *
+ * Stored PER ORGANIZATION. A fleet is one company's, and a browser can hold
+ * several workspaces (org switcher, shared shop PC): an unscoped key would put
+ * company A's charts in front of company B and the calculator would select one.
+ * No active org means no library — nothing is read or written.
+ *
  * Storage-touching functions take an optional `storage` so tests inject a fake
  * (same convention as components/calculators/tapeStore).
  */
 import { validateLoadChart, type BoomType, type LoadChart } from "./loadChart";
 
 export const CRANE_LIBRARY_KEY = "crane-library-v1";
+
+/** The storage key for one organization's fleet. */
+export function libraryKey(orgId: string): string {
+  return `${CRANE_LIBRARY_KEY}:${orgId}`;
+}
 export const EXPORT_FORMAT = "steelbuild-crane-library";
 export const EXPORT_VERSION = 1;
 
@@ -92,7 +102,8 @@ export function validateConfiguration(cfg: unknown): string[] {
   if (!OUTRIGGERS.includes(c.outriggers as OutriggerSetup)) problems.push(`${name}: unknown outrigger setup.`);
   if (!AREAS.includes(c.areaOfOperation as AreaOfOperation)) problems.push(`${name}: unknown area of operation.`);
   if (!isStr(c.counterweight)) problems.push(`${name}: counterweight must be text.`);
-  if (!isStr(c.chartSource)) problems.push(`${name}: chart source must be text.`);
+  // Printed on every pick summary as the chart reference — blank is not provenance.
+  if (!isStr(c.chartSource) || !c.chartSource.trim()) problems.push(`${name} needs a chart source (chart book, page, revision).`);
   const v = validateLoadChart(c.chart as LoadChart);
   v.errors.forEach((e) => problems.push(`${name}: ${e.message}`));
   return problems;
@@ -127,11 +138,11 @@ export function validateCrane(crane: unknown): string[] {
  * Load the fleet. Never throws. A record that fails validation is DROPPED,
  * not repaired — a chart that cannot be trusted must not be selectable.
  */
-export function loadLibrary(storage?: Storage | null): CraneRecord[] {
+export function loadLibrary(orgId: string | null, storage?: Storage | null): CraneRecord[] {
   const store = getStorage(storage);
-  if (!store) return [];
+  if (!store || !orgId) return [];
   try {
-    const raw = store.getItem(CRANE_LIBRARY_KEY);
+    const raw = store.getItem(libraryKey(orgId));
     if (raw == null) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -141,12 +152,12 @@ export function loadLibrary(storage?: Storage | null): CraneRecord[] {
   }
 }
 
-/** Persist the fleet. Returns false if the browser refused (quota, private mode). */
-export function saveLibrary(cranes: CraneRecord[], storage?: Storage | null): boolean {
+/** Persist the fleet. Returns false if the browser refused (quota, private mode) or there is no org. */
+export function saveLibrary(cranes: CraneRecord[], orgId: string | null, storage?: Storage | null): boolean {
   const store = getStorage(storage);
-  if (!store) return false;
+  if (!store || !orgId) return false;
   try {
-    store.setItem(CRANE_LIBRARY_KEY, JSON.stringify(cranes));
+    store.setItem(libraryKey(orgId), JSON.stringify(cranes));
     return true;
   } catch {
     return false;

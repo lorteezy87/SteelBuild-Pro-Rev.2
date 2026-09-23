@@ -40,6 +40,8 @@ interface Props {
   onUse?: (craneId: string, configId: string) => void;
   /** True when the browser refused the last save. */
   saveFailed?: boolean;
+  /** False with no active organization — the library is kept per company workspace. */
+  hasOrg?: boolean;
 }
 
 type View = { kind: "list" } | { kind: "crane" } | { kind: "config"; configId: string };
@@ -70,7 +72,7 @@ function emptyCrane(): CraneRecord {
   return { id: newId(), unit: "", makeModel: "", serial: "", configurations: [], updatedAt: "" };
 }
 
-export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onUse, saveFailed }: Props) {
+export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onUse, saveFailed, hasOrg = true }: Props) {
   const [view, setView] = useState<View>({ kind: "list" });
   const [draft, setDraft] = useState<CraneRecord | null>(null);
   const [cfgDraft, setCfgDraft] = useState<CraneConfiguration | null>(null);
@@ -198,7 +200,12 @@ export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onU
         </div>
 
         <div style={{ padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          {saveFailed && (
+          {!hasOrg && (
+            <div role="alert" style={noticeStyle("red")}>
+              No company workspace is active. The crane library is kept per workspace, so nothing here can be saved until one is selected.
+            </div>
+          )}
+          {hasOrg && saveFailed && (
             <div role="alert" style={noticeStyle("red")}>
               This browser refused to save the library (storage full or private mode). Changes will be lost when the page closes — export them now.
             </div>

@@ -50,6 +50,7 @@ import "@/components/calculators/calc.css";
 import { lookupRatedCapacity } from "@/lib/crane/loadChart";
 import { configurationSummary, craneDisplayName } from "@/lib/crane/craneLibrary";
 import useCraneLibrary from "@/components/calculators/useCraneLibrary";
+import { useOptionalOrg } from "@/components/shared/OrgContext";
 import CraneChartSource from "@/components/calculators/CraneChartSource";
 import CraneLibraryPanel from "@/components/calculators/CraneLibraryPanel";
 import GroundBearingPanel from "@/components/calculators/GroundBearingPanel";
@@ -175,7 +176,9 @@ export default function CranePickCalculator() {
   const [show3d, setShow3d]               = useState(true);
 
   // ── Crane library (fleet + load charts, persisted on this device) ──
-  const library = useCraneLibrary();
+  // Per organization: another workspace's fleet in this browser is never offered.
+  const orgId = useOptionalOrg()?.currentOrg?.id ?? null;
+  const library = useCraneLibrary(orgId);
   const [capSource, setCapSource] = useState(() => (library.cranes.length ? CAP_SOURCES.CHART : CAP_SOURCES.MANUAL));
   const [craneId, setCraneId]     = useState(() => library.cranes[0]?.id ?? "");
   const [configId, setConfigId]   = useState(() => library.cranes[0]?.configurations[0]?.id ?? "");
@@ -1019,6 +1022,7 @@ export default function CranePickCalculator() {
           onClose={() => setLibraryOpen(false)}
           onUse={(c, cfg) => { setCraneId(c); setConfigId(cfg); setCapSource(CAP_SOURCES.CHART); }}
           saveFailed={library.saveFailed}
+          hasOrg={library.hasOrg}
         />
 
         {/* Pick Summary modal — renders the captured snapshot (live or recalled) */}
