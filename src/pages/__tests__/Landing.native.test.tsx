@@ -71,4 +71,17 @@ describe("Landing native sign-in-only flow", () => {
     expect(screen.getByRole("button", { name: "Close sign in" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create an account" })).toBeInTheDocument();
   });
+
+  it("submits password recovery from the native sign-in surface", async () => {
+    const user = userEvent.setup();
+    landingProps.onForgotPassword.mockResolvedValueOnce({ success: true });
+    render(<Landing {...landingProps} />);
+
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await user.type(screen.getByLabelText("Email"), "field@example.com");
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+
+    expect(landingProps.onForgotPassword).toHaveBeenCalledWith("field@example.com");
+    expect(await screen.findByRole("heading", { name: "Check your email" })).toBeInTheDocument();
+  });
 });

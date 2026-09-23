@@ -24,6 +24,14 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>SteelBuild Pro uses the camera to capture jobsite and delivery photos and attach them to your projects.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SteelBuild Pro lets you attach photos from your library to RFIs, deliveries, and field reports.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>SteelBuild Pro saves exported reports and photos to your photo library when you choose to download them.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Apple Privacy Manifest for the SteelBuild Pro iOS app.
+
+  Apple requires this file (and the "required reason API" declarations below) for
+  App Store submission. After running `npm run cap:add:ios` on a Mac, copy this
+  file to `ios/App/App/PrivacyInfo.xcprivacy` and add it to the App target in
+  Xcode (File ▸ Add Files to "App"…, ensure "Add to target: App" is checked).
+
+  IMPORTANT — verify before submitting:
+   • NSPrivacyCollectedDataTypes must match the privacy "nutrition labels" you
+     declare in App Store Connect (this app collects account info + user content
+     — see docs/app-store/SUBMISSION.md).
+   • Capacitor 6+ and its plugins ship their own PrivacyInfo.xcprivacy files;
+     Xcode aggregates all of them. The required-reason entries below cover APIs
+     the app shell itself may trigger. Reconcile with Apple's current list:
+     https://developer.apple.com/documentation/bundleresources/privacy_manifest_files
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- This app does NOT track users across apps/websites for advertising. -->
+  <key>NSPrivacyTracking</key>
+  <false/>
+  <key>NSPrivacyTrackingDomains</key>
+  <array/>
+
+  <!-- Declare data types collected here to mirror your App Store Connect
+       nutrition labels. Left empty as a starting point — fill in per
+       docs/app-store/SUBMISSION.md (typically: Contact Info, User Content,
+       Identifiers, Diagnostics). -->
+  <key>NSPrivacyCollectedDataTypes</key>
+  <array/>
+
+  <!-- Required-reason API declarations. -->
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <dict>
+      <!-- UserDefaults — used by Capacitor core + @capacitor/preferences. -->
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>CA92.1</string>
+      </array>
+    </dict>
+    <dict>
+      <!-- File timestamps — WKWebView cache + file handling. -->
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>C617.1</string>
+      </array>
+    </dict>
+    <dict>
+      <!-- System boot time — elapsed-time measurement (analytics/telemetry). -->
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>35F9.1</string>
+      </array>
+    </dict>
+    <dict>
+      <!-- Available disk space — checked before writing cached/exported files. -->
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>E174.1</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>
