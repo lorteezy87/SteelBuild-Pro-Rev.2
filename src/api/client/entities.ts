@@ -16,6 +16,7 @@ import {
   parseDependencies as parseScheduleDependencies,
   serializeDependencies as serializeScheduleDependencies,
 } from '@/services/scheduleCascade';
+import { withReconciledPercent } from '@/lib/schedule/taskStatus';
 import { SupabaseOperationError } from './errors';
 import {
   addAliases,
@@ -233,21 +234,36 @@ export const entities = {
   // full placed/released audit trail. See migration 20260908045525.
   DrawingHold:           createEntityClient('drawing_holds'),
   ScheduleTask:          (() => {
-    // Schedule audit fix (bug class 3): keep status and percent_complete in
-    // lock-step on every create/update so no future code path can land a row
-    // where status='Complete' & percent_complete<100, or status='Not Started'
-    // & percent_complete>0. The DB also has a CHECK constraint enforcing this
-    // (migration: schedule_status_pct_consistency), but normalising here gives
-    // friendlier UX (a slider drag to 100% silently flips status to Complete)
-    // and avoids round-trip 400 errors. Existing bad rows are NOT auto-fixed.
+    // status / percent_complete are governed by src/lib/schedule/taskStatus.ts
+    // and reconciled by the callers that know the STORED row — buildTaskUpdate
+    // for every update, withReconciledPercent(…, null) on the create paths.
+    // This wrapper used to re-implement those rules and contradicted them: it
+    // listed "Cancelled" as a status (chk_schedule_tasks_status rejects it),
+    // clamped In Progress at 100 to an invented 99, derived a status from a
+    // percent sent alone, and ran Number() over a NULL percent —
+    // Number(null) is 0 — so every reopened task, and every save of a task with
+    // unknown progress, was written as 0%.
+    //
+    // What is left is what this layer can do without the stored row:
+    //   - coerce a supplied percent to a number in 0–100, keeping null / blank
+    //     as NULL (unknown);
+    //   - when a payload carries BOTH a status and a percent, reconcile that
+    //     pair with withReconciledPercent — the payload is its own proposal.
+    //     Importers depend on this: an onboarding / data-exchange CSV row that
+    //     says "Complete" arrives with the template's default percent of 0.
+    // A payload carrying only one side goes out as sent. Settling it needs the
+    // stored percent (a reopen of a stored 100 needs NULL, of a stored 40
+    // nothing), and guessing it here is how this layer came to disagree.
     const base = createEntityClient('schedule_tasks');
-    const STATUS_VALUES = new Set([
-      'Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold', 'Cancelled',
-    ]);
+    const normalizePercent = (value: unknown): unknown => {
+      // Checked before Number(): Number(null) and Number('') are both 0.
+      if (value === null || value === undefined) return value;
+      if (value === '') return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : value;
+    };
     const normalizeFields = (fields: Record<string, unknown> = {}): Record<string, unknown> => {
-      const out: Record<string, unknown> = { ...fields };
-      const hasStatus = Object.prototype.hasOwnProperty.call(out, 'status');
-      const hasPct    = Object.prototype.hasOwnProperty.call(out, 'percent_complete');
+      let out: Record<string, unknown> = { ...fields };
 
       // DateOrTbdInput emits '' when a date is cleared, and Postgres rejects ''
       // for a `date` column. The actuals columns go through the same input, so
@@ -259,36 +275,13 @@ export const entities = {
         }
       }
 
-      if (hasPct) {
-        const n = Number(out.percent_complete);
-        if (Number.isFinite(n)) out.percent_complete = Math.max(0, Math.min(100, n));
+      if (Object.prototype.hasOwnProperty.call(out, 'percent_complete')) {
+        out.percent_complete = normalizePercent(out.percent_complete);
       }
-      if (hasStatus && !STATUS_VALUES.has(out.status as string)) {
-        // Unrecognised status — leave it alone, server CHECK will reject.
-      }
-
-      // Reconciliation rules — explicit caller intent wins; we only fill
-      // gaps where the caller set ONE side of the pair without the other.
-      if (hasStatus && !hasPct) {
-        if (out.status === 'Complete')    out.percent_complete = 100;
-        if (out.status === 'Not Started') out.percent_complete = 0;
-        // 'In Progress' / 'Delayed' / 'On Hold' don't pin a value — keep DB current
-      } else if (hasPct && !hasStatus) {
-        const pct = out.percent_complete as number;
-        if (pct >= 100)      out.status = 'Complete';
-        else if (pct > 0)    out.status = 'In Progress';
-        else                 out.status = 'Not Started';
-      } else if (hasStatus && hasPct) {
-        // Both supplied — coerce contradictions into the canonical pair so
-        // bad inputs land cleanly instead of failing the CHECK constraint.
-        const pct = out.percent_complete as number;
-        if (out.status === 'Complete' && pct < 100) {
-          out.percent_complete = 100;
-        } else if (out.status === 'Not Started' && pct > 0) {
-          out.percent_complete = 0;
-        } else if (out.status === 'In Progress' && pct >= 100) {
-          out.percent_complete = 99;
-        }
+      // Both sides present: settle the pair the canonical way. An unrecognised
+      // status passes through untouched for the CHECK to reject.
+      if (Object.prototype.hasOwnProperty.call(out, 'status') && out.percent_complete !== undefined) {
+        out = withReconciledPercent(out);
       }
 
       // Cross-module link arrays (migration 055). Each is an optional
