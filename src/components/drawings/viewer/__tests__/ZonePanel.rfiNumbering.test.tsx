@@ -39,11 +39,11 @@ vi.mock("@/lib/drawingHub", () => ({
   removeLink: vi.fn(),
   LINKABLE_TYPE_LABELS: { rfi: "RFIs" },
   ALL_STATUSES: ["neutral"],
-  computeZoneStatus: () => ({ status: "neutral", reason: null }),
+  computeZoneStatus: (): { status: string; reason: string | null } => ({ status: "neutral", reason: null }),
   computeZoneReadiness: () => ({}),
-  recomputeAndPersistZoneStatus: async () => undefined,
-  listZoneDependencies: async () => ({ rows: [], total: 0 }),
-  computeDependencyImpact: () => ({ drag: 0, contributors: [] }),
+  recomputeAndPersistZoneStatus: async (): Promise<void> => undefined,
+  listZoneDependencies: async (): Promise<{ rows: unknown[]; total: number }> => ({ rows: [], total: 0 }),
+  computeDependencyImpact: (): { drag: number; contributors: unknown[] } => ({ drag: 0, contributors: [] }),
   _buildDependencyIndex: () => new Map(),
 }));
 

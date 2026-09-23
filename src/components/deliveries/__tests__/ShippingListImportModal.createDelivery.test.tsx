@@ -105,7 +105,18 @@ const LOAD_8: ParsedLoad = {
   pieces: [{ mark: "B2", quantity: 1, sequence: "2", dimensions: "W8x18", length: "9'-6", grade: "A992", finish: null }],
 };
 
-const lot = (id: string, mark: string) => ({
+interface CanonicalLot {
+  id: string;
+  piece_mark: string;
+  lifecycle_status: string;
+  on_hold: boolean;
+  is_container: boolean;
+  is_deleted: boolean;
+  deleted_at: string | null;
+  parent_piece_id: string | null;
+}
+
+const lot = (id: string, mark: string): CanonicalLot => ({
   id, piece_mark: mark, lifecycle_status: "fabricated", on_hold: false,
   is_container: false, is_deleted: false, deleted_at: null, parent_piece_id: null,
 });

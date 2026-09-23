@@ -224,7 +224,7 @@ function createDb(): ProductionDeliveryDb {
         if (prop === "delete") return () => { op = "delete"; return proxy; };
         if (prop === "eq") return (c: string, v: unknown) => { filters.push([c, v]); return proxy; };
         if (prop === "single" || prop === "maybeSingle") {
-          return async () => {
+          return async (): Promise<PgResult> => {
             const result = run();
             if (result.error) return result;
             const data = Array.isArray(result.data) ? (result.data[0] ?? null) : result.data;
