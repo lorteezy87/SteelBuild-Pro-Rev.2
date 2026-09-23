@@ -12,13 +12,23 @@
 // Stores every sent message in email_messages with direction='outbound'
 // so the Email Inbox shows a complete conversation history.
 //
-// Auth: JWT-verified. User must have project access.
+// Auth: JWT-verified. User must have project access and an owner/admin/pm role.
+//
+// Sending identity (SEC-N1): the server decides which address a request may
+// send as. It must be (a) an active email_accounts row on the project — admin-
+// managed, (b) listed in email_verified_senders for the project's org —
+// service-role only, written by the platform operator, and (c) on a domain in
+// EMAIL_SEND_ALLOWED_DOMAINS. See docs/runbooks/email-sending-accounts.md.
+// The hourly cap is reserved atomically in email_send_events (service-role
+// only) via email_send_reserve(), so a sender cannot reset it.
 //
 // Secrets required:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+//   EMAIL_SEND_ALLOWED_DOMAINS (comma-separated; unset = sending disabled)
 //   RESEND_API_KEY (for Resend provider)
 //   — OR —
 //   MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_TENANT_ID (for Graph)
+//   Optional: EMAIL_SEND_HOURLY_LIMIT (default 100, "0" disables the cap)
 //
 // Deploy:
 //   supabase functions deploy email-send
@@ -33,6 +43,15 @@ import {
   sanitizeAttachmentName,
 } from "../_shared/attachments.ts";
 import { normalizeRecipients } from "./recipients.ts";
+import {
+  formatFromHeader,
+  interpretReservation,
+  parseAllowedDomains,
+  parseHourlyLimit,
+  resolveSender,
+  type ReservationDecision,
+  type SenderAccount,
+} from "./senderPolicy.ts";
 
 // Max combined raw (decoded) size of outbound attachments. base64 inflates
 // the payload ~33%, so the actual request body stays well under typical
@@ -50,9 +69,9 @@ const MAX_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024;
 // correspondence and deliberately far below "mailing list".
 const MAX_RECIPIENTS_PER_MESSAGE = 50;
 
-/** Rolling-window send cap per user. 0 disables (set via EMAIL_SEND_HOURLY_LIMIT). */
-const DEFAULT_SEND_HOURLY_LIMIT = 100;
-const SEND_WINDOW_MS = 60 * 60 * 1000;
+// Rolling-hour send cap per user: EMAIL_SEND_HOURLY_LIMIT, parsed by
+// parseHourlyLimit() (default 100, "0" disables). The window itself lives in
+// email_send_reserve() in the database.
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -140,10 +159,21 @@ function isUuid(value: unknown): value is string {
 
 // ── Send Rate Limit ───────────────────────────────────────────────────────────
 
+const LIMIT_UNAVAILABLE: ReservationDecision = {
+  ok: false,
+  status: 503,
+  error: "Send limits can't be verified right now. Please retry shortly.",
+  retryAfterSeconds: 30,
+};
+
 /**
- * Rolling-hour outbound cap per user, counted off the `email_messages` rows
- * this function already writes (`sent_by`, `sent_at`, `direction='outbound'`)
- * — no new table.
+ * Reserve one slot of the per-user rolling-hour cap BEFORE the provider call.
+ *
+ * The count used to be read off email_messages, which the sender can delete or
+ * edit through RLS — deleting your own outbound rows reset the cap — and it was
+ * a read-then-send race. email_send_reserve() counts and inserts into the
+ * service-role-only email_send_events ledger under a per-user advisory lock, in
+ * one transaction.
  *
  * Fails CLOSED. That is the opposite of the llm-proxy quota default, and
  * deliberately so: there, an unverifiable cheap call costs fractions of a cent
@@ -151,62 +181,126 @@ function isUuid(value: unknown): value is string {
  * unbounded failure mode is a spam run from our verified domain, which costs
  * every customer's deliverability for weeks. A short outage that delays a few
  * emails with a clear retry message is the cheaper failure.
- *
- * Set EMAIL_SEND_HOURLY_LIMIT=0 to disable.
  */
-async function checkSendRateLimit(
+async function reserveSendSlot(
   userId: string,
+  projectId: string,
+  fromAddress: string,
+  provider: "resend" | "msgraph",
+  recipientCount: number,
   supabaseUrl: string,
   serviceKey: string,
-): Promise<{ ok: true } | { ok: false; status: 429 | 503; error: string; retryAfterSeconds: number }> {
-  const raw = Deno.env.get("EMAIL_SEND_HOURLY_LIMIT");
-  const limit = raw === undefined || raw === ""
-    ? DEFAULT_SEND_HOURLY_LIMIT
-    : Number(raw);
-  if (!Number.isFinite(limit) || limit <= 0) return { ok: true }; // explicitly disabled
-
-  if (!isUuid(userId)) {
-    return { ok: false, status: 503, error: "Send limits can't be verified right now.", retryAfterSeconds: 30 };
-  }
-
-  const sinceIso = new Date(Date.now() - SEND_WINDOW_MS).toISOString();
+): Promise<ReservationDecision> {
+  if (!isUuid(userId) || !isUuid(projectId)) return LIMIT_UNAVAILABLE;
+  const limit = parseHourlyLimit(Deno.env.get("EMAIL_SEND_HOURLY_LIMIT"));
   try {
-    const resp = await fetch(
-      `${supabaseUrl}/rest/v1/email_messages` +
-      `?sent_by=eq.${userId}&direction=eq.outbound&sent_at=gte.${encodeURIComponent(sinceIso)}` +
-      `&select=id&limit=1`,
-      {
-        headers: {
-          "apikey": serviceKey,
-          "Authorization": `Bearer ${serviceKey}`,
-          // Exact count in Content-Range without transferring the rows.
-          "Prefer": "count=exact",
-        },
-        // Bound the pre-send read so a stalled PostgREST can't hang the send.
-        signal: AbortSignal.timeout(2000),
+    const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/email_send_reserve`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
       },
-    );
+      body: JSON.stringify({
+        p_user_id: userId,
+        p_project_id: projectId,
+        p_from_address: fromAddress,
+        p_provider: provider,
+        p_recipient_count: recipientCount,
+        p_hourly_limit: limit,
+      }),
+      // Bound the pre-send call so a stalled PostgREST can't hang the send.
+      signal: AbortSignal.timeout(3000),
+    });
     if (!resp.ok) {
-      console.error(`[email-send] rate-limit read ${resp.status}`);
-      return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
+      console.error(`[email-send] rate-limit reserve ${resp.status}`);
+      return LIMIT_UNAVAILABLE;
     }
-    // Content-Range: "0-0/123" — the total is after the slash.
-    const total = Number(resp.headers.get("content-range")?.split("/")[1]);
-    if (!Number.isFinite(total)) {
-      console.error("[email-send] rate-limit read returned no usable count");
-      return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
-    }
-    if (total >= limit) {
+    const decision = interpretReservation(await resp.json());
+    if (!decision.ok && decision.status === 429) {
       // Keep the configured cap in the SERVER log only, so a caller can't read
       // the threshold off the response and pace just under it.
-      console.warn(`[email-send] rate limit BLOCK user=${userId} sent=${total} >= cap=${limit}`);
-      return { ok: false, status: 429, error: "Hourly send limit reached. Please try again later.", retryAfterSeconds: 900 };
+      console.warn(`[email-send] rate limit BLOCK user=${userId} cap=${limit}`);
     }
-    return { ok: true };
+    return decision;
   } catch (err) {
-    console.error(`[email-send] rate-limit check threw: ${err instanceof Error ? err.message : err}`);
-    return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
+    console.error(`[email-send] rate-limit reserve threw: ${err instanceof Error ? err.message : err}`);
+    return LIMIT_UNAVAILABLE;
   }
+}
+
+/** Best-effort outcome stamp on the ledger row; the reservation already counted. */
+async function markSendOutcome(
+  eventId: string,
+  outcome: "sent" | "failed",
+  supabaseUrl: string,
+  serviceKey: string,
+): Promise<void> {
+  if (!isUuid(eventId)) return;
+  try {
+    const resp = await fetch(`${supabaseUrl}/rest/v1/email_send_events?id=eq.${eventId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+        "Prefer": "return=minimal",
+      },
+      body: JSON.stringify({ outcome }),
+    });
+    if (!resp.ok) console.error(`[email-send] outcome stamp ${resp.status}`);
+  } catch (err) {
+    console.error(`[email-send] outcome stamp threw: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+// ── Sending identity (SEC-N1) ─────────────────────────────────────────────────
+
+/**
+ * Everything the sender decision needs, read with the service role. Throws on
+ * any failed read so the handler fails CLOSED — a partial answer here must
+ * never be mistaken for "no verified senders" or "no accounts".
+ */
+async function loadSenderContext(
+  projectId: string,
+  supabaseUrl: string,
+  serviceKey: string,
+): Promise<{ activeAccounts: SenderAccount[]; verifiedAddresses: string[] }> {
+  if (!isUuid(projectId)) throw new Error("invalid project id");
+  const headers = { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` };
+
+  const projResp = await fetch(
+    `${supabaseUrl}/rest/v1/projects?id=eq.${projectId}&select=org_id&limit=1`,
+    { headers },
+  );
+  if (!projResp.ok) throw new Error(`project read ${projResp.status}`);
+  const projRows = await projResp.json();
+  const orgId = Array.isArray(projRows) && projRows.length ? projRows[0]?.org_id : null;
+  if (!isUuid(orgId)) throw new Error("project has no org");
+
+  const [acctResp, verifiedResp] = await Promise.all([
+    fetch(
+      `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${projectId}&is_active=eq.true` +
+      `&select=email_address,display_name&order=created_at.asc`,
+      { headers },
+    ),
+    fetch(
+      `${supabaseUrl}/rest/v1/email_verified_senders?org_id=eq.${orgId}&revoked_at=is.null&select=email_address`,
+      { headers },
+    ),
+  ]);
+  if (!acctResp.ok) throw new Error(`email_accounts read ${acctResp.status}`);
+  if (!verifiedResp.ok) throw new Error(`email_verified_senders read ${verifiedResp.status}`);
+
+  const accts = await acctResp.json();
+  const verified = await verifiedResp.json();
+  if (!Array.isArray(accts) || !Array.isArray(verified)) throw new Error("unexpected sender payload");
+  return {
+    activeAccounts: accts as SenderAccount[],
+    verifiedAddresses: verified
+      .map((row: { email_address?: unknown }) => row?.email_address)
+      .filter((a: unknown): a is string => typeof a === "string"),
+  };
 }
 
 // ── Project Access Check ──────────────────────────────────────────────────────
@@ -535,6 +629,7 @@ async function storeSentMessage(
   projectId: string,
   userId: string,
   req: SendEmailRequest,
+  sender: { email: string; name: string },
   result: SendResult,
 ): Promise<string | null> {
   const now = new Date().toISOString();
@@ -547,8 +642,10 @@ async function storeSentMessage(
     external_id: externalId,
     direction: "outbound",
     subject: req.subject,
-    sender_email: req.from_email || "",
-    sender_name: req.from_name || "",
+    // The identity the server actually sent as — every real caller omits
+    // from_email, which used to leave the stored sender blank.
+    sender_email: sender.email,
+    sender_name: sender.name,
     recipients: JSON.stringify(req.to),
     cc: JSON.stringify(req.cc || []),
     body_text: req.body_text,
@@ -708,54 +805,59 @@ async function handle(req: Request): Promise<Response> {
     return errorResponse(403, "Your project role does not permit sending email", req);
   }
 
-  // Per-user hourly cap. Checked AFTER authorization (so an unauthorized caller
-  // can't probe it) and BEFORE the provider call (so a throttled user never
-  // reaches Resend / Graph and never burns domain reputation).
-  const rate = await checkSendRateLimit(user.userId, supabaseUrl, serviceKey);
-  if (!rate.ok) {
-    const res = errorResponse(rate.status, rate.error, req);
-    res.headers.set("Retry-After", String(rate.retryAfterSeconds));
+  // Provider configuration. Resolved first so the ledger records which provider
+  // a reservation was made for; Graph is preferred when fully configured.
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  const msClientId = Deno.env.get("MS_GRAPH_CLIENT_ID");
+  const msClientSecret = Deno.env.get("MS_GRAPH_CLIENT_SECRET");
+  const msTenantId = Deno.env.get("MS_GRAPH_TENANT_ID");
+  const useGraph = !!(msClientId && msClientSecret && msTenantId);
+  if (!useGraph && !resendKey) {
+    return errorResponse(503, "No email send provider configured. Set RESEND_API_KEY or MS_GRAPH_* secrets.", req);
+  }
+  const provider: "msgraph" | "resend" = useGraph ? "msgraph" : "resend";
+
+  // Determine the from address (SEC-N1). The server decides: the address must
+  // be an ACTIVE account on this project (admin-managed), verified for this
+  // org in email_verified_senders (service-role only — no tenant can write it,
+  // including the owner of a self-signed-up org), and on a domain the platform
+  // has enabled in EMAIL_SEND_ALLOWED_DOMAINS. Every read fails CLOSED.
+  let senderContext: { activeAccounts: SenderAccount[]; verifiedAddresses: string[] };
+  try {
+    senderContext = await loadSenderContext(body.project_id, supabaseUrl, serviceKey);
+  } catch (err) {
+    console.error(`[email-send] sender lookup failed: ${err instanceof Error ? err.message : err}`);
+    return errorResponse(503, "Sending accounts can't be verified right now. Please retry shortly.", req);
+  }
+  const senderDecision = resolveSender({
+    requestedFrom: body.from_email,
+    requestedName: body.from_name,
+    activeAccounts: senderContext.activeAccounts,
+    verifiedAddresses: senderContext.verifiedAddresses,
+    allowedDomains: parseAllowedDomains(Deno.env.get("EMAIL_SEND_ALLOWED_DOMAINS")),
+  });
+  if (!senderDecision.ok) {
+    if (senderDecision.status === 403) {
+      console.warn(`[email-send] sender REFUSED user=${user.userId} project=${body.project_id}: ${senderDecision.error}`);
+    }
+    return errorResponse(senderDecision.status, senderDecision.error, req);
+  }
+  const sender = { email: senderDecision.email, name: senderDecision.name };
+  const fromEmail = sender.email;
+
+  // Per-user hourly cap, reserved atomically in the service-role-only ledger.
+  // AFTER authorization and sender verification (so neither an unauthorized
+  // caller nor an unverified sender can probe or consume it) and BEFORE the
+  // provider call (so a throttled user never reaches Resend / Graph).
+  const recipientCount = body.to.length + (body.cc?.length ?? 0) + (body.bcc?.length ?? 0);
+  const reservation = await reserveSendSlot(
+    user.userId, body.project_id, fromEmail, provider, recipientCount, supabaseUrl, serviceKey,
+  );
+  if (!reservation.ok) {
+    const res = errorResponse(reservation.status, reservation.error, req);
+    res.headers.set("Retry-After", String(reservation.retryAfterSeconds));
     return res;
   }
-
-  // Determine the from address. A caller-supplied from_email must be one of the
-  // project's ACTIVE email accounts — otherwise a member could send as any
-  // address (spoofing) and the spoofed message would be persisted as legitimate
-  // project correspondence. When none is supplied we fall back to the first
-  // active account. Always fetch the active accounts so we can validate.
-  let fromEmail = body.from_email || "";
-  let fromName = body.from_name || "";
-
-  let activeAccounts: Array<{ email_address?: string; display_name?: string }> = [];
-  try {
-    const acctResp = await fetch(
-      `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${body.project_id}&is_active=eq.true&select=email_address,display_name`,
-      { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
-    );
-    if (acctResp.ok) {
-      const accts = await acctResp.json();
-      if (Array.isArray(accts)) activeAccounts = accts;
-    }
-  } catch { /* best effort */ }
-
-  if (fromEmail) {
-    const match = activeAccounts.find(
-      (a) => (a.email_address || "").toLowerCase() === fromEmail.toLowerCase(),
-    );
-    if (!match) {
-      return errorResponse(403, "from_email is not an active sending account for this project", req);
-    }
-    fromName = fromName || match.display_name || "";
-  } else if (activeAccounts.length > 0) {
-    fromEmail = activeAccounts[0].email_address || "";
-    fromName = fromName || activeAccounts[0].display_name || "";
-  }
-
-  if (!fromEmail) {
-    return errorResponse(400, "No from_email provided and no active email account configured for this project", req);
-  }
-
-  const fromFormatted = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
 
   // Build threading headers
   const threadingHeaders: Record<string, string> = {};
@@ -767,30 +869,30 @@ async function handle(req: Request): Promise<Response> {
   // Route to provider
   let result: SendResult;
 
-  const resendKey = Deno.env.get("RESEND_API_KEY");
-  const msClientId = Deno.env.get("MS_GRAPH_CLIENT_ID");
-  const msClientSecret = Deno.env.get("MS_GRAPH_CLIENT_SECRET");
-  const msTenantId = Deno.env.get("MS_GRAPH_TENANT_ID");
-
-  if (msClientId && msClientSecret && msTenantId) {
-    // Prefer Microsoft Graph when configured — sends as the actual shared mailbox
-    const token = await getMsGraphToken(msTenantId, msClientId, msClientSecret);
-    if (!token) return errorResponse(502, "Failed to obtain Microsoft Graph token", req);
+  if (useGraph) {
+    // App-only Graph can reach any mailbox the app registration is allowed to.
+    // The address was verified above; the tenant-side Exchange application
+    // access policy (runbook) is what bounds the app itself.
+    const token = await getMsGraphToken(msTenantId as string, msClientId as string, msClientSecret as string);
+    if (!token) {
+      await markSendOutcome(reservation.eventId, "failed", supabaseUrl, serviceKey);
+      return errorResponse(502, "Failed to obtain Microsoft Graph token", req);
+    }
 
     result = await sendViaMsGraph(
       token, fromEmail, body.to, body.cc || [], body.bcc || [],
       body.subject, body.body_text, body.body_html || null,
       body.in_reply_to_external_id || null, attachments,
     );
-  } else if (resendKey) {
+  } else {
     result = await sendViaResend(
-      resendKey, fromFormatted, body.to, body.cc || [], body.bcc || [],
+      resendKey as string, formatFromHeader(sender.name, fromEmail), body.to, body.cc || [], body.bcc || [],
       body.subject, body.body_text, body.body_html || null,
       threadingHeaders, attachments,
     );
-  } else {
-    return errorResponse(503, "No email send provider configured. Set RESEND_API_KEY or MS_GRAPH_* secrets.", req);
   }
+
+  await markSendOutcome(reservation.eventId, result.success ? "sent" : "failed", supabaseUrl, serviceKey);
 
   if (!result.success) {
     console.error(`[email-send] Send failed via ${result.provider}: ${result.error}`);
@@ -802,7 +904,7 @@ async function handle(req: Request): Promise<Response> {
   }
 
   // Store the sent message
-  const storedId = await storeSentMessage(supabaseUrl, serviceKey, body.project_id, user.userId, body, result);
+  const storedId = await storeSentMessage(supabaseUrl, serviceKey, body.project_id, user.userId, body, sender, result);
 
   // Persist attachments now that we have the stored message id
   let attachmentsStored = 0;
