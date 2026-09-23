@@ -578,22 +578,22 @@ export default function ZonePanel({
             onSave={async (formData) => {
               setRfiSaving(true);
               try {
-                // Mint a project-scoped RFI number — mirrors the
-                // existing RFIFormModal internal path so numbering
-                // stays consistent whether the RFI was created from
-                // the zone panel or the main RFIs page.
-                let rfiNumber;
-                try {
-                  rfiNumber = await getNextFormattedNumber({
-                    projectId: zone.project_id,
-                    recordType: "RFI",
-                    entityName: "RFI",
-                    fieldName: "rfi_number",
-                    prefix: "RFI #",
-                  });
-                } catch (err) {
-                  console.warn("[ZonePanel] rfi_number sequence failed:", err?.message);
-                  rfiNumber = `RFI #${String(Date.now()).slice(-6)}`;
+                // Official RFI numbers come ONLY from the atomic
+                // get_next_sequence_number RPC (CLAUDE.md, "Number-sequence
+                // integrity"). Same allocator and same fail-closed rule as
+                // RFIFormModal / the RFIs page: if it throws or hands back
+                // nothing, let the error reach the catch below — no number,
+                // no RFI. Never invent one here (a Date.now()-derived
+                // fallback once minted numbers the sequence later re-issued).
+                const rfiNumber = await getNextFormattedNumber({
+                  projectId: zone.project_id,
+                  recordType: "RFI",
+                  entityName: "RFI",
+                  fieldName: "rfi_number",
+                  prefix: "RFI #",
+                });
+                if (!rfiNumber) {
+                  throw new Error("RFI number allocation failed. The RFI was not saved.");
                 }
 
                 // Coerce optional numeric fields the same way
