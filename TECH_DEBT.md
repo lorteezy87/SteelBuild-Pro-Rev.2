@@ -229,7 +229,10 @@ RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
 
 **P1 — before another tenant or a store submission:** RLS-3, RLS-4
 (`number_sequences` is writable below the RPC — the same surface the
-number-sequence rule protects), RLS-5, RLS-7, RLS-9, AUTH-7, AUTH-8, EDGE-5
+number-sequence rule protects; fix written as
+`20260923130000_lock_number_sequences_writes.sql`, placeholder version, NOT
+applied — rename to the ledger version at apply time; confirm first that the
+sibling app does not write the table from a client), RLS-5, RLS-7, RLS-9, AUTH-7, AUTH-8, EDGE-5
 (self-deletion fails for a sole owner with live projects), EDGE-7, DB-9,
 LOGIC-2/3/4/12, WEB-1…WEB-4, SEC-1…SEC-4, CI-5, and the App Store code-level
 list (§6.1).
