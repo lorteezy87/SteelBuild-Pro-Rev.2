@@ -12,7 +12,7 @@ import {
   stripPredecessorLinks,
   describePredecessorCleanup,
 } from "@/lib/schedule/predecessorCleanup";
-import { deriveActualsPatch, hasActualsPatch } from "@/lib/schedule/actuals";
+import { deriveActualsPatch, hasActualsPatch, type ActualsPatch } from "@/lib/schedule/actuals";
 import { taskDurationDays, finishFromDuration } from "@/lib/schedule/duration";
 import { withReconciledPercent } from "@/lib/schedule/taskStatus";
 import { withMilestoneFlags } from "@/lib/schedule/taskFields";
@@ -118,12 +118,18 @@ export function useScheduleMutations({
     // unrelated save of an already-Complete task.
     const previous = data?.id ? scheduleTasks.find((t) => t.id === data.id) : undefined;
     const merged: Record<string, any> = { ...data };
+    // The actual dates this save writes that the caller did not supply — what
+    // the bulk toolbar counts when it tells the user it recorded dates.
+    const stamped: ActualsPatch = {};
     if (previous && data?.status && data.status !== previous.status) {
       const actuals = deriveActualsPatch({ task: previous, nextStatus: data.status });
-      for (const [key, value] of Object.entries(actuals)) {
+      for (const [key, value] of Object.entries(actuals) as Array<[keyof ActualsPatch, string]>) {
         // A date the user typed in the drawer wins, including an explicit
         // null — clearing a wrong actual must not be undone by the stamp.
-        if (!(key in merged) || merged[key] === undefined) merged[key] = value;
+        if (!(key in merged) || merged[key] === undefined) {
+          merged[key] = value;
+          stamped[key] = value;
+        }
       }
     }
     // Sanitize AFTER merging so assertScheduleDateRange validates the payload
@@ -131,15 +137,16 @@ export function useScheduleMutations({
     const { id, fields } = sanitizeScheduleTaskUpdatePayload(merged as ScheduleTask);
 
     // Then the three couplings no caller should have to remember:
-    //   1. status <-> percent_complete, which the database enforces and which
-    //      every path except the bulk toolbar violated (see taskStatus.ts).
+    //   1. status <-> percent_complete, which the database enforces against
+    //      the stored row (see taskStatus.ts) — reconciled here against
+    //      `previous`, because only this layer knows it.
     //   2. the milestone columns, so a task cannot be half a milestone.
     //   3. the assignment pair, so editing one field is not invisible because
     //      a reader prefers the other.
     const reconciled = withAssignmentPair(
       withMilestoneFlags(withReconciledPercent(fields, previous)),
     );
-    return { id, fields: reconciled, previous };
+    return { id, fields: reconciled, previous, stamped };
   };
 
   /**
@@ -322,21 +329,21 @@ export function useScheduleMutations({
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      // Stamp actuals per task, not once for the batch: the patch depends on
-      // what each task has already recorded. A task already carrying a finish
-      // date keeps it — re-marking a batch Complete must not overwrite the day
-      // work actually finished with the day someone tidied up the board.
-      const byId = new Map(scheduleTasks.map((t) => [t.id, t]));
+      // Each task goes through buildTaskUpdate — the same payload a drawer
+      // save of `{ id, status }` would write. This path used to hand-write
+      // `percent_complete` (100 / 0 / undefined), and `undefined` is dropped
+      // from the request, so a bulk reopen sent `status` alone and the CHECK
+      // rejected it against the stored 100. buildTaskUpdate reconciles against
+      // each task's stored row, and stamps actuals per task, only on a real
+      // transition, never over a date already recorded.
       let stamped = 0;
 
-      const results = await batchProcess(ids, (id: any) => {
-        const actuals = deriveActualsPatch({ task: byId.get(id), nextStatus: status });
-        if (hasActualsPatch(actuals)) stamped += 1;
-        return entities.ScheduleTask.update(id, {
-          status,
-          percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
-          ...actuals,
-        });
+      // async so a validation throw from buildTaskUpdate fails that one task
+      // rather than escaping batchProcess's map and aborting the batch.
+      const results = await batchProcess(ids, async (id: any) => {
+        const patch = buildTaskUpdate({ id, status } as ScheduleTask);
+        if (hasActualsPatch(patch.stamped)) stamped += 1;
+        return entities.ScheduleTask.update(id, patch.fields);
       });
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);

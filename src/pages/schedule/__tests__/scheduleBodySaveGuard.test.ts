@@ -26,7 +26,6 @@ import { sanitizeScheduleTaskUpdatePayload } from "../wbs";
  */
 
 const BODY_SRC = readFileSync(new URL("../ScheduleBody.tsx", import.meta.url), "utf8");
-const MUT_SRC = readFileSync(new URL("../useScheduleMutations.ts", import.meta.url), "utf8");
 
 /** Every `onSave={...}` prop value in ScheduleBody, whatever its shape. */
 function onSaveHandlers(src: string): string[] {
@@ -79,31 +78,9 @@ describe("sanitize throws are caught and surfaced", () => {
     }
   });
 
-  it("the canonical mutation is the one place a failed save is reported", () => {
-    const upd = MUT_SRC.slice(MUT_SRC.indexOf("const updateTaskMut"));
-    const body = upd.slice(0, upd.indexOf("const reparentMut"));
-    expect(body).toContain("onError:");
-    expect(body).toContain("Update failed: ");
-  });
-
-  it("a rejected save rolls the optimistic paint back before reporting", () => {
-    // Without this the Gantt keeps showing dates the database refused — worse
-    // than the silent failure it replaced, because the row looks saved.
-    const upd = MUT_SRC.slice(MUT_SRC.indexOf("const updateTaskMut"));
-    const body = upd.slice(0, upd.indexOf("const reparentMut"));
-    const rollback = body.indexOf("qc.setQueryData(scheduleTasksKey, ctx.snapshot)");
-    const report = body.indexOf("Update failed: ");
-    expect(rollback, "onError restores the snapshot").toBeGreaterThan(-1);
-    expect(rollback).toBeLessThan(report);
-  });
-
-  it("the optimistic paint cannot swallow a validation throw", () => {
-    // onMutate wraps buildTaskUpdate in try/catch so an inverted window skips
-    // the paint rather than crashing it. mutationFn must therefore call it
-    // WITHOUT a catch, so the same throw still reaches onError and the user.
-    const upd = MUT_SRC.slice(MUT_SRC.indexOf("const updateTaskMut"));
-    const fn = upd.slice(upd.indexOf("mutationFn:"), upd.indexOf("onMutate:"));
-    expect(fn).toContain("buildTaskUpdate(data)");
-    expect(fn).not.toContain("try {");
-  });
+  // What updateTaskMut does with a failed save — reports it once as "Update
+  // failed: …", rolls the optimistic paint back first, and lets a validation
+  // throw reach the user rather than the paint swallowing it — is covered by
+  // running the hook in scheduleWritePath.behaviour.test.ts. Those used to be
+  // regexes over useScheduleMutations.ts here.
 });
