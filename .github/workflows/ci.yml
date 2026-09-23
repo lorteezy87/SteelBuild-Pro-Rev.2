@@ -50,9 +50,17 @@
 #
 # NOTE ON ENFORCEMENT: deploy dependencies block a failed build from publishing.
 # Branch protection must ALSO require these checks to prevent unchecked merges
-# or direct changes to the workflow itself. Repository credentials still need
-# migration into restricted environments; YAML alone does not isolate secrets.
-# See TECH_DEBT.md B41-P1-005.
+# or direct changes to the workflow itself. See TECH_DEBT.md B41-P1-005.
+#
+# SECRET SCOPE (SEC-N2 / CI-2): a push to ANY branch runs THIS FILE AS THAT
+# BRANCH WROTE IT, so an `if:` or a comment here cannot keep a repository-level
+# secret away from branch code. Only a GitHub Environment whose deployment-branch
+# policy is `main` can. So every job that needs a production credential names
+# one (`production`, `preview`, `staging`), and the secrets have to MOVE into
+# those environments before the scoping is real — until the owner does that
+# (docs/runbooks/owner-checklist.md §7) they are still repository-level and
+# reachable from any branch. The one production-token job that still runs off
+# main, `supabase-drift-branch`, executes main's checker, never the branch's.
 
 name: CI
 
@@ -297,23 +305,48 @@ jobs:
   # manifest plus active Rev.2 assets. Unknown/unresolved assets, missing
   # required assets, and deployed deprecated/staging-only functions fail closed.
   # Inventory green does not prove SQL or deployed-source equivalence.
+  #
+  # Two jobs, because SUPABASE_ACCESS_TOKEN is a Supabase MANAGEMENT token (it
+  # can run SQL and deploy functions, not just list them) and used to be handed
+  # to `npm ci` + the branch's own script on every claude/** and codex/** push.
+  #
+  #   supabase-drift         main only, in the `production` environment. Fails
+  #                          closed. This is the one deploy-cloudflare needs and
+  #                          the "Supabase drift check" supabase-deploy-reviewed
+  #                          .yml requires for a production release.
+  #   supabase-drift-branch  every other ref and every PR. Runs MAIN's checker
+  #                          against the branch's supabase/ tree copied in as
+  #                          data, so the token never executes branch code.
+  #
+  # Neither job runs `npm ci`: the checker imports only node builtins, and an
+  # install script could otherwise plant NODE_OPTIONS in $GITHUB_ENV for the
+  # step that holds the token.
+  #
+  # TRADE-OFF once the owner moves the token into the main-only `production`
+  # environment: branches and PRs can no longer read the live ledger, so
+  # supabase-drift-branch falls back to validating the manifest against the
+  # branch's files and says so in a warning. The ARCHITECTURE.md signal ("an
+  # unmerged file behind a live stamp turns main red") survives on main — on
+  # every push and every few hours from supabase-drift-scheduled.yml — but a PR
+  # no longer turns red for a stamp it did not make, nor for its own unapplied
+  # migration until it merges. Supplying a READ-ONLY token repo-wide under the
+  # same name restores the branch signal without restoring the exposure.
   supabase-drift:
     name: Supabase drift check
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: ${{ github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2' }}
+    if: ${{ github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2' && github.ref == 'refs/heads/main' }}
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "24"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Check migration + edge-function drift
         env:
@@ -322,7 +355,7 @@ jobs:
         run: |
           if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
             echo "SUPABASE_ACCESS_TOKEN is empty."
-            echo "Configure the secret to keep production drift checks enforced."
+            echo "Configure it in the production environment to keep production drift checks enforced."
             exit 1
           fi
           if [ -z "$SUPABASE_PROJECT_REF" ]; then
@@ -330,7 +363,67 @@ jobs:
             echo "Configure the repository variable to keep production drift checks enforced."
             exit 1
           fi
-          npm run supabase:drift
+          node scripts/supabase-drift-check.mjs
+
+  supabase-drift-branch:
+    name: Supabase drift check (branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2' && github.ref != 'refs/heads/main' }}
+    steps:
+      - name: Checkout the branch (data only — nothing from it is executed)
+        uses: actions/checkout@v7
+        with:
+          path: candidate
+          persist-credentials: false
+
+      - name: Checkout main (the checker that holds the token)
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Stage the branch's supabase/ inventory into main's tree
+        # Exactly what scripts/supabase-drift-check.mjs reads: migration and
+        # quarantine FILENAMES, function directory names, and the manifest
+        # JSON. A committed symlink is refused — the manifest is the one file
+        # the checker opens, and it must not be able to point at /proc.
+        run: |
+          set -euo pipefail
+          for p in supabase/migrations supabase/migrations_quarantine supabase/functions supabase/production-ownership-manifest.json; do
+            if [ -e "candidate/$p" ] || [ -L "candidate/$p" ]; then
+              if [ -n "$(find "candidate/$p" -type l -print -quit)" ]; then
+                echo "::error::candidate/$p contains a symlink; refusing to stage it beside the token"
+                exit 1
+              fi
+            fi
+            rm -rf "trusted/$p"
+            if [ -e "candidate/$p" ]; then cp -R "candidate/$p" "trusted/$p"; fi
+          done
+
+      - name: Check migration + edge-function drift
+        working-directory: trusted
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::warning::Live drift NOT checked on this ref: SUPABASE_ACCESS_TOKEN is not released to it (main-only). Validating the manifest against this branch's files; main enforces the live ledger."
+            node --input-type=module -e "import { localInventory, readManifest, validateManifest } from './scripts/supabase-drift-check.mjs'; validateManifest(readManifest(), localInventory()); console.log('Manifest is consistent with this branch. Production ledger was NOT compared.');" || exit 1
+            exit 0
+          fi
+          if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "SUPABASE_PROJECT_REF is empty."
+            echo "Configure the repository variable to keep production drift checks enforced."
+            exit 1
+          fi
+          node scripts/supabase-drift-check.mjs
 
   # ── Gated PRODUCTION deploy → Cloudflare Workers ─────────────────────────
   # THE production deploy path. The Vercel `deploy` / `deploy-staging` jobs
@@ -362,6 +455,12 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The `if:` above is written by whichever branch pushed this file; the
+    # environment's main-only deployment-branch policy is what actually keeps
+    # CLOUDFLARE_* and SENTRY_AUTH_TOKEN away from other branches.
+    environment:
+      name: production
+      url: https://steelbuild-pro.com
     # Serialize production deploys and never cancel one mid-flight — an
     # interrupted deploy wastes minutes and can leave a half-published Worker.
     concurrency:
@@ -504,7 +603,9 @@ jobs:
   # public/_headers marks them noindex, and Cloudflare Access is the real fix.
   preview-cloudflare:
     name: Cloudflare preview (PR)
-    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
+    # supabase-drift-branch, not supabase-drift: the production drift job runs
+    # on main only, and a skipped `needs` would skip every preview.
+    needs: [ci, secret-scan, supabase-drift-branch, edge-typecheck]
     # Same-repo PRs only. Secrets are not exposed to forked-PR workflows, so a
     # fork would trip the config check below instead of building something
     # broken; skipping outright is clearer.
@@ -514,6 +615,13 @@ jobs:
       vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # This job builds and uploads the PR's OWN code, so whatever Cloudflare
+    # token it holds is reachable by that code. It must therefore never be the
+    # production token: the `preview` environment carries its own. `versions
+    # upload` and `versions deploy` need the same Workers permission, so only a
+    # token that cannot reach the production Worker at all (a separate account)
+    # makes a preview incapable of publishing. See owner-checklist.md §7.
+    environment: preview
     # One preview per PR; a new push supersedes the old upload.
     concurrency:
       group: cloudflare-preview-${{ github.ref }}
@@ -550,6 +658,10 @@ jobs:
               exit 1
               ;;
           esac
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID are not set for the preview environment"
+            exit 1
+          fi
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
@@ -582,6 +694,10 @@ jobs:
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # CLOUDFLARE_API_TOKEN here used to be the production repo secret. Once it
+    # moves into `production`, staging deploys with the token in `staging`
+    # (deployment branch: staging), or not at all.
+    environment: staging
     concurrency:
       group: cloudflare-staging-deploy
       cancel-in-progress: false
@@ -653,6 +769,8 @@ jobs:
       vars.STAGING_BASE_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # STAGING_E2E_* belong in the staging-only environment, not repo-wide.
+    environment: staging
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -704,6 +822,7 @@ jobs:
       vars.STAGING_BASE_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: staging
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -775,6 +894,8 @@ jobs:
     if: ${{ vars.E2E_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # E2E_* sign in to PRODUCTION as a real account; main-only like the deploy.
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v7

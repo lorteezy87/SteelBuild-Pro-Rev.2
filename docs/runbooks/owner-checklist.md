@@ -156,7 +156,7 @@ integrations no longer invoked by the client.
     - The `stripe-sync-worker` pg_cron job that pinged `stripe-worker` every ~60s **is already unscheduled** — deleting `stripe-worker` removes the dangling 404 target.
   - Why: dead attack surface + noise in edge logs; every deployed function is something to secure and reason about.
   - Verify (by runtime outcome): after deletion, `npx supabase functions list --project-ref kjrwqagyeswwoxpjkcko` no longer lists them; edge logs no longer show `stripe-worker` 404s; billing checkout/portal + webhook still work (do a test-mode checkout).
-  - Mandatory CI: keep repo secret `SUPABASE_ACCESS_TOKEN` and variable `SUPABASE_PROJECT_REF` configured; the `supabase-drift` job fails closed when either is absent and fails while these remain deployed.
+  - Mandatory CI: keep secret `SUPABASE_ACCESS_TOKEN` (in the `production` environment once §7 is done) and variable `SUPABASE_PROJECT_REF` configured; the `supabase-drift` job fails closed when either is absent and fails while these remain deployed.
   - Shared-project ownership and lifecycle are reviewed in [`supabase-production-ownership.md`](./supabase-production-ownership.md); inventory green does not prove SQL or deployed-source equivalence.
 
 ---
@@ -262,10 +262,41 @@ These have **ready patches** but touch files currently under active claims by ot
 
 ---
 
+## 7. CI secret scope — [SEC-N2 / CI-2]
+
+**Code half shipped (2026-09-23):** every job that holds a credential now names a GitHub Environment — `production` (Cloudflare deploy, E2E smoke, Supabase drift on `main`, scheduled drift, function retirement), `preview` (PR previews), `staging` (staging deploy + staging E2E) — and the drift check off `main` runs main's checker, never the branch's. **None of that protects anything yet.** A push runs the workflow file as the branch wrote it, so while the secrets are repository-level any branch can read them. These steps are what close the finding. Do them in order.
+
+- [ ] **Restrict `production` to `main` before putting anything in it**
+  - `Settings → Environments → production` (it exists once a job has referenced it; create it if not) → **Deployment branches and tags** → *Selected branches and tags* → add `main` only.
+  - Optional required reviewer: it applies to **every** job that uses `production` (drift check, deploy, E2E smoke, scheduled drift, retirement), and each prompts separately. The branch rule is what closes the finding; a reviewer is extra.
+- [ ] **Move the production credentials into `production`, then delete the repository copies**
+  - Add as `production` environment secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SENTRY_AUTH_TOKEN`, `SUPABASE_ACCESS_TOKEN`, `E2E_USER`, `E2E_PASS`, `E2E_SUPABASE_URL`, `E2E_SUPABASE_ANON_KEY`, `E2E_VIEWER_USER`, `E2E_VIEWER_PASS`, `E2E_FAB_PROJECT_ID`, `E2E_BLOCKED_DRAWING_ID`, `E2E_CLEAN_DRAWING_ID`.
+  - Then **delete each one from** `Settings → Secrets and variables → Actions → Repository secrets`. An environment secret only *overrides* a repository secret of the same name for jobs in that environment; a repository copy left behind stays readable by every branch.
+  - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` ship in the browser bundle and may stay repository-level. `SUPABASE_PROJECT_REF` is a variable, not a secret.
+  - While here, confirm `storage-backup-production` holds its `SUPABASE_S3_*` / `OFFSITE_*` secrets as environment secrets, not repository ones.
+- [ ] **Give staging its own environment and token**
+  - `staging` → deployment branch `staging` only. Move every `STAGING_E2E_*` secret into it and delete the repository copies.
+  - Add `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` for the staging Worker. Staging used the production token until now; once that moves, `Deploy to Cloudflare Workers (staging)` fails its own config check until this exists.
+- [ ] **Decide what previews may hold**
+  - `preview` cannot be branch-restricted (every PR branch uses it), and the job builds the PR's own code, so its token is exposed to that code by design. Cloudflare's Workers permission covers both `versions upload` and `deploy`, so **a token on the production account can publish production from a PR**.
+  - Pick one: (a) a separate Cloudflare account for previews, with its token in `preview` — needs a follow-up change so previews do not use `wrangler.jsonc`'s production Worker and routes; (b) keep the production account but add a required reviewer on `preview`, so PR code runs only after someone has read the diff; (c) add no preview token: `Cloudflare preview (PR)` then fails with "not set for the preview environment" on every PR until (a) or (b).
+  - Never copy the production token into `preview`.
+- [ ] **Rotate everything that was repository-level**
+  - Every `claude/**` and `codex/**` push ran with these in reach, so treat them as exposed. Rotate and store only the new values in the environments: `CLOUDFLARE_API_TOKEN` (Cloudflare → My Profile → API Tokens → Roll), `SUPABASE_ACCESS_TOKEN` (Supabase → Account → Access Tokens → create new, revoke old), `SENTRY_AUTH_TOKEN`, and the passwords behind `E2E_PASS`, `E2E_VIEWER_PASS`, `STAGING_E2E_PASS`, `STAGING_E2E_VIEWER_PASS`.
+  - Account IDs, URLs, the anon key and fixture IDs are identifiers, not credentials — no rotation needed.
+  - `SUPABASE_ACCESS_TOKEN` is an account-wide personal access token (it can run SQL and delete functions); the drift check only reads. If Supabase lets you mint a read-only token, you may put *that* at repository level under the same name — branches get the live drift signal back through main's checker, while the full token stays in `production` for the retirement workflow.
+- [ ] **Enable branch protection on `main` requiring the gating checks** (plan-blocked — see §1 and B41-P1-005)
+  - The `production` environment trusts *whatever is on `main`*. Without protection, anyone — or any agent session — that can push to `main` directly can still put arbitrary workflow code in front of the production secrets. Require a pull request, and require: **Lint + Typecheck + Test + Build**, **Secret scan (gitleaks)**, **Release Edge Function typecheck**, **Supabase drift check (branch)**.
+  - Not **Supabase drift check** itself: it runs only on `main` after the merge, where it gates the deploy; on a PR it is skipped, which a required check reads as passing.
+- **Verify:** a feature-branch run of `Supabase drift check (branch)` logs "Live drift NOT checked on this ref" (the token is no longer released to branches); the next `main` run shows `Supabase drift check` green and `deploy-cloudflare` as a `production` deployment; a push to `staging` deploys; a manual `Supabase drift (scheduled)` run on `main` is green.
+
+---
+
 ## Quick reference — finding → item
 
 | Finding | Item |
 |---|---|
+| CI-2, SEC-N2 | CI secret scope: environments, move + rotate secrets (§7) |
 | H3 | Staging Supabase + Vercel |
 | H4, H5 | `SUPABASE_ACCESS_TOKEN`; delete orphan edge fns |
 | H6 | Branch protection; `VERCEL_TOKEN` scope/expiry |

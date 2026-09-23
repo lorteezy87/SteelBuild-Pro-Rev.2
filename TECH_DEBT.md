@@ -215,8 +215,13 @@ RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
   contract query is permanently broken by the global `['projects']` select
   default), DATA-4 (two shipping importers write `deliveries` in a shape
   production rejects), DATA-5, LOGIC-5, LOGIC-6.
-- **Release pipeline.** CI-2 — the deploy jobs declare no `environment:`, so the
-  production Cloudflare token is reachable from any branch's workflow. Branch
+- **Release pipeline.** CI-2 / SEC-N2 — the YAML half is done: every
+  credential-holding job names a `production`, `preview` or `staging`
+  environment, and the drift check off `main` runs main's checker instead of
+  the branch's (`scripts/__tests__/ciSecretScope.test.ts`). The secrets are
+  still repository-level, so the Cloudflare and Supabase management tokens stay
+  reachable from any branch's workflow until the owner moves them
+  (`docs/runbooks/owner-checklist.md` §7). Branch
   protection remains blocked by the repository plan (B41-P1-005). **CI-10 (new):**
   the Netlify site is still connected and builds every PR — confirm it cannot
   publish to the production hostnames, then disconnect it. An ungated publisher

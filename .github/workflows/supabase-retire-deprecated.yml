@@ -23,6 +23,10 @@ jobs:
     if: github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # A dispatch runs the workflow file from the chosen ref, so the `if:` above
+    # can be edited away on a branch. The main-only `production` environment is
+    # what keeps SUPABASE_ACCESS_TOKEN (which can DELETE functions) off it.
+    environment: production
     env:
       CONFIRM_PROJECT_REF: kjrwqagyeswwoxpjkcko
     steps:

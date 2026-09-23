@@ -22,7 +22,8 @@ been fabricated or copied by this PR, and the workflow stops if one is missing.
 This is not yet a complete fix for CI-2: the existing repository-wide Supabase
 and Cloudflare credentials remain accessible to branch workflows until the
 owner migrates/rotates them and supplies separate preview credentials. Merely
-adding an `environment:` line would not remove that access.
+adding an `environment:` line would not remove that access. The CI jobs now
+name their environments; the owner steps are in `owner-checklist.md` §7.
 
 ## Release sequence
 
