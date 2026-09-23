@@ -113,10 +113,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // Recompute whether the session needs an MFA step-up. Fail closed on AAL
   // lookup errors: block app entry until the MFA state can be confirmed.
+  // Callers must AWAIT this before marking the user authenticated — a pending
+  // check reads as "no step-up" and lets an aal1 session into the app.
   const refreshMfaRequired = async (): Promise<void> => {
     try {
-      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      setMfaRequired(!!data && data.currentLevel === 'aal1' && data.nextLevel === 'aal2');
+      // supabase-js reports a failed lookup in `error`, it doesn't throw.
+      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (error || !data) throw error ?? new Error('No assurance level returned');
+      setMfaRequired(data.currentLevel === 'aal1' && data.nextLevel === 'aal2');
       setMfaStatusDegraded(false);
       setMfaStatusMessage(null);
     } catch {
@@ -190,9 +194,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (session?.user) {
           syncIdentity(session.user.id);
           setUser(await mapSupabaseUser(session.user));
+          await refreshMfaRequired();
           setIsAuthenticated(true);
           setAuthError(null);
-          void refreshMfaRequired();
         } else {
           // Session is null/expired — try refreshing before giving up
           try {
@@ -200,9 +204,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             if (refreshData?.session?.user) {
               syncIdentity(refreshData.session.user.id);
               setUser(await mapSupabaseUser(refreshData.session.user));
+              await refreshMfaRequired();
               setIsAuthenticated(true);
               setAuthError(null);
-              void refreshMfaRequired();
               return;
             }
           } catch {
@@ -259,11 +263,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (error) throw error;
       syncIdentity(data.user?.id ?? null);
       setUser(await mapSupabaseUser(data.user));
-      setIsAuthenticated(true);
-      setAuthError(null);
       // If this account has a verified TOTP factor, the session is still aal1
       // here — flag the required step-up so the app shows the MFA screen (H23).
-      void refreshMfaRequired();
+      await refreshMfaRequired();
+      setIsAuthenticated(true);
+      setAuthError(null);
       return { success: true };
     } catch (error: unknown) {
       setIsAuthenticated(false);
@@ -462,6 +466,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (session?.user) {
       syncIdentity(session.user.id);
       setUser(await mapSupabaseUser(session.user));
+      await refreshMfaRequired();
       setIsAuthenticated(true);
       setAuthError(null);
     } else {
@@ -471,6 +476,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (refreshData?.session?.user) {
           syncIdentity(refreshData.session.user.id);
           setUser(await mapSupabaseUser(refreshData.session.user));
+          await refreshMfaRequired();
           setIsAuthenticated(true);
           setAuthError(null);
           setIsLoadingAuth(false);
