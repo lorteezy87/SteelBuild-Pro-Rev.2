@@ -235,7 +235,7 @@ export default function EmailAccountSettings({ projectId }) {
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="projects@shsteelaz.com"
+                  placeholder="projects@yourcompany.com"
                   style={inputStyle}
                 />
               </div>
@@ -245,7 +245,7 @@ export default function EmailAccountSettings({ projectId }) {
                   type="text"
                   value={newDisplayName}
                   onChange={(e) => setNewDisplayName(e.target.value)}
-                  placeholder="SHS Steel Projects"
+                  placeholder="Project Mailbox"
                   style={inputStyle}
                 />
               </div>
