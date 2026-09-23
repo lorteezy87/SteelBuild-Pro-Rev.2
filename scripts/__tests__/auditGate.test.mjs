@@ -103,8 +103,11 @@ describe("audit gate classification", () => {
 });
 
 describe("the shipped allowlist", () => {
+  it("has no active waivers after the React Router security upgrade", () => {
+    expect(ALLOWLIST.size).toBe(0);
+  });
+
   it("gives every waiver a reason and a review date", () => {
-    expect(ALLOWLIST.size).toBeGreaterThan(0);
     for (const [ghsa, waiver] of ALLOWLIST) {
       expect(ghsa, `${ghsa} must be a GHSA id`).toMatch(/^GHSA-/);
       expect(waiver.reason?.length ?? 0, `${ghsa} needs a reason`).toBeGreaterThan(40);
