@@ -4,6 +4,8 @@
  * projects.metadata.psr patch that stores it.
  */
 
+import { todayUtcMidnightFromLocal } from "@/lib/dateMath";
+
 /** A worksheet row after normalizeRow: every cell trimmed text. */
 type PsrRow = string[];
 
@@ -136,7 +138,20 @@ const SECTION_MARKERS = [
   "COMMENTS",
 ];
 
-const normalizeText = (value: unknown): string =>
+// Labels a PSR worksheet may print beside the job number, in priority order.
+// "S & H #" is the label on the detailer's existing template — we read it
+// because it is in their file, not as a name of our own. The rest are
+// neutral aliases so other templates are recognised too.
+const JOB_NUMBER_LABELS = [
+  "S & H #",
+  "JOB #",
+  "JOB NUMBER",
+  "JOB NO",
+  "PROJECT #",
+  "PROJECT NUMBER",
+];
+
+const normalizeText =(value: unknown): string =>
   String(value ?? "")
     .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
@@ -190,6 +205,14 @@ function findHeaderValue(rows: PsrRow[], label: string): string {
         return getFirstNonEmptyAfter(row, i + 1);
       }
     }
+  }
+  return "";
+}
+
+function findFirstHeaderValue(rows: PsrRow[], labels: string[]): string {
+  for (const label of labels) {
+    const value = findHeaderValue(rows, label);
+    if (value) return value;
   }
   return "";
 }
@@ -268,7 +291,9 @@ function parseDateForRisk(value: unknown): Date | null {
 function isPastDue(dateValue: unknown, now: Date = new Date()): boolean {
   const date = parseDateForRisk(dateValue);
   if (!date) return false;
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // parseDateForRisk anchors at UTC midnight; today must be the user's local
+  // calendar day on that same anchor, or an Arizona evening reads as tomorrow.
+  const today = todayUtcMidnightFromLocal(now);
   return date.getTime() < today.getTime();
 }
 
@@ -476,7 +501,7 @@ export function parsePsrRows(
   const designRevisions = designIndex >= 0 ? buildDesignRevisions(rows, designIndex, designEnd) : [];
   const comments = buildComments(rows, commentsIndex);
 
-  const headerJobNumber = findHeaderValue(rows, "S & H #");
+  const headerJobNumber = findFirstHeaderValue(rows, JOB_NUMBER_LABELS);
   const fileJobNumber = extractJobNumberFromFileName(fileName);
   const jobNumber = headerJobNumber || fileJobNumber;
   const jobNumberSource: ParsedPsr["job_number_source"] =
@@ -522,9 +547,9 @@ export function parsePsrRows(
       : "needs-review",
     warnings: [],
   };
-  if (!jobNumber) parsed.warnings.push("No S & H project number was found.");
+  if (!jobNumber) parsed.warnings.push("No job number was found.");
   if (!headerJobNumber && jobNumber) {
-    parsed.warnings.push("No S & H project number was found on the worksheet; using the file name.");
+    parsed.warnings.push("No job number was found on the worksheet; using the file name.");
   }
   if (!parsed.job_name) parsed.warnings.push("No job name was found.");
   if (!schedule.length && !rfis.length && !coordinationDocs.length) {
@@ -620,10 +645,10 @@ export function matchPsrToProject<P extends PsrProjectRef>(
 
     if (jobDigits && projectDigits && jobDigits === projectDigits) {
       score += 100;
-      reasons.push("S & H number matches project number");
+      reasons.push("Job number matches project number");
     } else if (jobDigits && projectDigits && (projectDigits.includes(jobDigits) || jobDigits.includes(projectDigits))) {
       score += 70;
-      reasons.push("Project number partially matches S & H number");
+      reasons.push("Project number partially matches job number");
     }
 
     if (nameKey && projectNameKey) {

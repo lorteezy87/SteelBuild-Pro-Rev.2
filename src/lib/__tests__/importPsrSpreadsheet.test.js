@@ -9,6 +9,9 @@ import {
 } from "../importPsrSpreadsheet";
 
 const now = new Date("2026-05-16T12:00:00Z");
+// Our own messages must never name a company; the worksheet label "S & H #"
+// in the fixtures below is the detailer's file format, which we only read.
+const COMPANY_NAME = /S\s*&\s*H/i;
 
 describe("importPsrSpreadsheet", () => {
   it("parses the SOL PSR layout into staged schedule, docs, and RFI data", () => {
@@ -49,7 +52,7 @@ describe("importPsrSpreadsheet", () => {
     expect(parsed.proposed_health_status).toBe("At Risk");
   });
 
-  it("matches parsed PSRs to projects by S&H number before fuzzy name", () => {
+  it("matches parsed PSRs to projects by job number before fuzzy name", () => {
     const parsed = { job_number: "25645", job_name: "ALA Buckeye" };
     const match = matchPsrToProject(parsed, [
       { id: "p1", project_number: "90001", name: "Rivergate Logistics Center" },
@@ -58,6 +61,51 @@ describe("importPsrSpreadsheet", () => {
 
     expect(match.project.id).toBe("p2");
     expect(match.confidence).toBe("high");
+    expect(match.reasons).toContain("Job number matches project number");
+    match.reasons.forEach((reason) => expect(reason).not.toMatch(COMPANY_NAME));
+  });
+
+  it("words a partial job-number match without naming a company", () => {
+    const match = matchPsrToProject({ job_number: "25645" }, [
+      { id: "p1", project_number: "25645-01", name: "Other" },
+    ]);
+
+    expect(match.reasons).toEqual(["Project number partially matches job number"]);
+    match.reasons.forEach((reason) => expect(reason).not.toMatch(COMPANY_NAME));
+  });
+
+  it("warns neutrally when no job number is on the worksheet or file name", () => {
+    const parsed = parsePsrRows([
+      ["JOB STATUS REPORT"],
+      ["JOB NAME", "Rivergate Logistics Center"],
+    ], { fileName: "psr.xls", now });
+
+    expect(parsed.job_number_source).toBe("missing");
+    expect(parsed.warnings).toContain("No job number was found.");
+    parsed.warnings.forEach((warning) => expect(warning).not.toMatch(COMPANY_NAME));
+  });
+
+  it("warns neutrally when the job number comes from the file name", () => {
+    const parsed = parsePsrRows([
+      ["JOB STATUS REPORT"],
+      ["JOB NAME", "Rivergate Logistics Center"],
+    ], { fileName: "051126=Rivergate (90001).xls", now });
+
+    expect(parsed.job_number).toBe("90001");
+    expect(parsed.job_number_source).toBe("filename");
+    expect(parsed.warnings).toContain("No job number was found on the worksheet; using the file name.");
+    parsed.warnings.forEach((warning) => expect(warning).not.toMatch(COMPANY_NAME));
+  });
+
+  it("reads the job number from a neutral worksheet label", () => {
+    const parsed = parsePsrRows([
+      ["JOB STATUS REPORT"],
+      ["DATE RECEIVED", "Friday, November 28, 2025", "", "", "JOB #", "", "90001"],
+      ["JOB NAME", "Rivergate Logistics Center"],
+    ], { fileName: "psr.xls", now });
+
+    expect(parsed.job_number).toBe("90001");
+    expect(parsed.job_number_source).toBe("worksheet");
   });
 
   it("builds a review-approved metadata patch and keeps health opt-in", () => {
@@ -96,6 +144,26 @@ describe("importPsrSpreadsheet", () => {
       importedAt: "2026-05-16T00:00:00.000Z",
     });
     expect(withHealth.health_status).toBe("At Risk");
+  });
+
+  it("judges past-due against the local calendar day, not the UTC one", () => {
+    // 5:30 PM Sep 22 in Arizona (UTC-7) is already Sep 23 in UTC. The suite
+    // runs with TZ=UTC, so stub the local getters to make the zones disagree.
+    const eveningInArizona = new Date("2026-09-23T00:30:00Z");
+    eveningInArizona.getFullYear = () => 2026;
+    eveningInArizona.getMonth = () => 8;
+    eveningInArizona.getDate = () => 22;
+
+    const parsed = parsePsrRows([
+      ["JOB STATUS REPORT"],
+      ["JOB NAME", "Rivergate Logistics Center"],
+      ["COORDINATION DOCS.", "Requested Date", "RECEIVED", "COMMENTS"],
+      ["1. Structure Drawing", "2026-09-22", ""],
+      ["COMMENTS"],
+    ], { now: eveningInArizona });
+
+    expect(parsed.coordination_docs[0]).toMatchObject({ is_pending: true, is_past_due: false });
+    expect(parsed.counts.past_due_coordination_docs).toBe(0);
   });
 
   it("selects the current PSR sheet over legacy workbook tabs with date-only filenames", async () => {
