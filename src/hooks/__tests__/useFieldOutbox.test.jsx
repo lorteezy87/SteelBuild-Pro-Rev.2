@@ -51,7 +51,13 @@ describe("useFieldOutbox", () => {
     });
 
     await waitFor(() => expect(result.current.pending).toBe(0));
-    expect(handler).toHaveBeenCalledWith({ id: "t1", pct: 75 }, expect.anything());
+    expect(handler).toHaveBeenCalledWith(
+      { id: "t1", pct: 75, captureDay: null },
+      expect.objectContaining({
+        type: OP_SCHEDULE_PROGRESS,
+        payload: { id: "t1", pct: 75, captureDay: null },
+      }),
+    );
     expect(loadQueue()).toHaveLength(0);
   });
 
