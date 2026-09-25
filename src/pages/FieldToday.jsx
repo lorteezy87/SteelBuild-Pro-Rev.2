@@ -33,7 +33,7 @@ import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import { compressImage } from "@/utils/compressImage";
 import { localToday } from "@/utils/dates";
-import { clampPercent, progressPatch } from "@/lib/field/fieldToday";
+import { clampPercent, progressPatch, progressUpdatePatch } from "@/lib/field/fieldToday";
 import { useOutbox } from "@/lib/field/OutboxContext";
 import {
   makeProgressOp,
@@ -98,13 +98,14 @@ export default function FieldToday() {
 
   // ── Task progress: optimistic write back to the schedule (offline-safe) ──
   const progressMut = useMutation({
-    mutationFn: ({ id, pct }) => entities.ScheduleTask.update(id, progressPatch(pct)),
-    onMutate: async ({ id, pct }) => {
+    mutationFn: ({ task, pct }) =>
+      entities.ScheduleTask.update(task.id, progressUpdatePatch(task, pct)),
+    onMutate: async ({ task, pct }) => {
       await queryClient.cancelQueries({ queryKey: ["schedule-tasks", projectId] });
       const prev = queryClient.getQueryData(["schedule-tasks", projectId]);
       const patch = progressPatch(pct);
       queryClient.setQueryData(["schedule-tasks", projectId], (old) =>
-        Array.isArray(old) ? old.map((t) => (t.id === id ? { ...t, ...patch } : t)) : old,
+        Array.isArray(old) ? old.map((t) => (t.id === task.id ? { ...t, ...patch } : t)) : old,
       );
       return { prev };
     },
@@ -112,7 +113,7 @@ export default function FieldToday() {
       // No signal? Keep the optimistic value and queue the write for replay —
       // don't roll back (that would silently discard the foreman's tap).
       if (isLikelyOfflineError(err)) {
-        enqueueOutbox(makeProgressOp(vars.id, vars.pct, Date.now()));
+        enqueueOutbox(makeProgressOp(vars.task.id, vars.pct, Date.now()));
         toast.message("Saved offline — will sync when you're back online");
         return;
       }
@@ -132,7 +133,7 @@ export default function FieldToday() {
   const setProgress = (task, pct) => {
     const next = clampPercent(pct);
     if (next === clampPercent(task.percent_complete)) return;
-    progressMut.mutate({ id: task.id, pct: next });
+    progressMut.mutate({ task, pct: next });
   };
 
   // ── Quick punch add (reuses the production PunchlistFormModal + create path) ──
@@ -312,7 +313,7 @@ export default function FieldToday() {
           onAddPhoto={() => photoInputRef.current?.click()}
           onDailyLog={() => navigate("/DailyLogs?new=1")}
           onFlushOutbox={flushOutbox}
-          savingTaskId={progressMut.isPending ? progressMut.variables?.id : null}
+          savingTaskId={progressMut.isPending ? progressMut.variables?.task?.id : null}
           uploadingPhoto={uploadingPhoto}
         />
         {modals}
