@@ -328,19 +328,22 @@ function DetailingControlCenter() {
   // instead of triggering an eager query or a false clear.
   const comparisonQuery = useQuery({
     queryKey: ["drawing-revision-comparisons", projectId],
-    queryFn: () => fetchAllRows<RevisionComparisonEvidenceRow>(
-      // fetchAllRows advances this range through every page; the raw builder is
-      // deliberately local to its pagination callback rather than a capped UI read.
-      // eslint-disable-next-line no-restricted-syntax
-      (start, end) => supabase
-        .from("drawing_revision_comparisons")
-        .select("id, to_revision_id, compare_status")
-        .eq("project_id", projectId)
-        .eq("source", "revision")
-        .order("id")
-        .range(start, end),
-      "drawing revision comparisons",
-    ),
+    queryFn: async () => {
+      if (!projectId) return [];
+      return fetchAllRows<RevisionComparisonEvidenceRow>(
+        // fetchAllRows advances this range through every page; the raw builder is
+        // deliberately local to its pagination callback rather than a capped UI read.
+        // eslint-disable-next-line no-restricted-syntax
+        (start, end) => supabase
+          .from("drawing_revision_comparisons")
+          .select("id, to_revision_id, compare_status")
+          .eq("project_id", projectId)
+          .eq("source", "revision")
+          .order("id")
+          .range(start, end),
+        "drawing revision comparisons",
+      );
+    },
     enabled: !!projectId && activeTab === "revimpact",
     staleTime: 60_000,
   });
