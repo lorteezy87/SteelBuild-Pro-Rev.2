@@ -23,6 +23,8 @@ import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
+import { fetchAllRows } from "@/lib/pagedQuery";
 import { toast } from "sonner";
 import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
@@ -115,6 +117,11 @@ const ModelElementImportModal = ModelElementImportModalRaw as unknown as Compone
 // Tabs whose count is a warning, not a row tally (header badge's twin).
 const ALERT_TABS = ["holds"] as const;
 const NO_HOLDS: DrawingHoldRow[] = [];
+type RevisionComparisonEvidenceRow = {
+  id: string;
+  to_revision_id: string | null;
+  compare_status: string | null;
+};
 // The flag-gated 3D tab. Listed while viewer_3d is on, or while it's the open
 // tab (see the tabs memo), so a 3D link always opens it.
 const MODEL3D_TAB = { key: "model3d", label: "3D Model", icon: Box };
@@ -316,6 +323,42 @@ function DetailingControlCenter() {
     staleTime: 60_000,
   });
   const { data: drawingRevisions = [], isPending: revisionsLoading } = revisionsQuery;
+  // Comparison records are project-scoped evidence for the Revision Impact
+  // board. When the board is not open, absence is rendered as review-required
+  // instead of triggering an eager query or a false clear.
+  const comparisonQuery = useQuery({
+    queryKey: ["drawing-revision-comparisons", projectId],
+    queryFn: async () => {
+      if (!projectId) return [];
+      return fetchAllRows<RevisionComparisonEvidenceRow>(
+        // fetchAllRows advances this range through every page; the raw builder is
+        // deliberately local to its pagination callback rather than a capped UI read.
+        // eslint-disable-next-line no-restricted-syntax
+        (start, end) => supabase
+          .from("drawing_revision_comparisons")
+          .select("id, to_revision_id, compare_status")
+          .eq("project_id", projectId)
+          .eq("source", "revision")
+          .order("id")
+          .range(start, end),
+        "drawing revision comparisons",
+      );
+    },
+    enabled: !!projectId && activeTab === "revimpact",
+    staleTime: 60_000,
+  });
+  const comparisonByRevisionId = useMemo(() => {
+    const byRevisionId: Record<string, { status?: string | null }> = {};
+    for (const comparison of comparisonQuery.data || []) {
+      const revisionId = comparison?.to_revision_id ? String(comparison.to_revision_id) : "";
+      if (!revisionId) continue;
+      const prior = byRevisionId[revisionId];
+      if (!prior || comparison.compare_status === "complete") {
+        byRevisionId[revisionId] = { status: comparison.compare_status };
+      }
+    }
+    return byRevisionId;
+  }, [comparisonQuery.data]);
   // Latest persisted Revision Summary per set → the "revised · N" badge + re-open.
   const { data: summariesBySet = new Map() } = useQuery({
     queryKey: ["revision-summaries", projectId],
@@ -346,12 +389,25 @@ function DetailingControlCenter() {
   // The 3D tab counts only with the flag ON: its gate (flag off, or flags still
   // loading) renders no viewer, so it must never page the roster.
   const [mappingRosterRequested, setMappingRosterRequested] = useState(false);
-  const { data: modelElements = [], isFetching: modelElementsLoading, error: modelElementsError } = useQuery({
+  const {
+    data: modelElements = [],
+    isFetching: modelElementsLoading,
+    error: modelElementsError,
+    dataUpdatedAt: modelElementsDataUpdatedAt,
+  } = useQuery({
     queryKey: ["model-elements", projectId],
     queryFn: () => fetchAllModelElements(projectId),
     enabled: !!projectId && ((show3d && activeTab === "model3d") || mappingRosterRequested),
     staleTime: 60_000,
   });
+  const modelRosterState = modelElementsError
+    ? "load_error" as const
+    : modelElementsDataUpdatedAt > 0
+      ? "loaded" as const
+      : "not_loaded" as const;
+  const modelRosterLoadedAt = modelRosterState === "loaded"
+    ? new Date(modelElementsDataUpdatedAt).toLocaleString()
+    : null;
 
   const setPackages = useMemo(
     // The hub-local Drawing/Submittal interfaces and the hooks' DB-row types
@@ -598,8 +654,11 @@ function DetailingControlCenter() {
       workPackages: workPackages as any[],
       rfis: rfis as any[],
       modelElements: modelElements as any[],
+      modelRosterCount: modelElementCount,
+      modelRosterLoaded: modelRosterState === "loaded",
+      comparisonByRevisionId,
     }),
-    [revisionImpact, drawings, drawingSets, workPackages, rfis, modelElements],
+    [revisionImpact, drawings, drawingSets, workPackages, rfis, modelElements, modelElementCount, modelRosterState, comparisonByRevisionId],
   );
 
   // Sheet selected for the revision overlay compare (Revision Impact rows).
@@ -871,9 +930,9 @@ function DetailingControlCenter() {
             onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
             // Rows derive from drawingRevisions, which loads separately.
             isLoading={isLoading || revisionsLoading}
-            // Lets the "Pieces ≈" column distinguish "nothing affected" from
-            // "the roster wasn't loaded, so we didn't count".
-            rosterLoaded={modelElements.length > 0}
+            rosterState={modelRosterState}
+            rosterLoadedAt={modelRosterLoadedAt}
+            onLoadMappingEvidence={() => setMappingRosterRequested(true)}
           />
         )}
         {activeTab === "holds" && <HoldsPanel key={projectId} projectId={projectId || null} />}

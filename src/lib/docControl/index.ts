@@ -23,3 +23,5 @@ export { buildDocControlRecord } from "./record";
 export type { BuildRecordInput } from "./record";
 export { buildIntakeRecords, registerFromMatch } from "./intakeFromUpload";
 export type { IntakeInput, UploadMatch, UploadNewSheet, UploadOldSheet } from "./intakeFromUpload";
+export { nextActionForRecord } from "./nextAction";
+export type { DocControlNextAction, DocControlNextActionKind } from "./nextAction";

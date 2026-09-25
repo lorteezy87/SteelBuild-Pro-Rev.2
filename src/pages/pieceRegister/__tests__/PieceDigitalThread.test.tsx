@@ -43,6 +43,14 @@ function thread(
 }
 
 describe("PieceDigitalThread", () => {
+  it("exposes the selected piece as a named, bounded detail panel", () => {
+    render(<PieceDigitalThread thread={thread()} onClose={vi.fn()} />);
+
+    const panel = screen.getByRole("dialog", { name: "Piece digital thread: B12 · L2" });
+    expect(panel).toHaveAttribute("aria-modal", "false");
+    expect(panel).toHaveClass("piece-digital-thread");
+  });
+
   it("renders the five ordered sections and unlinked change-order truth", () => {
     render(<PieceDigitalThread thread={thread()} onClose={vi.fn()} />);
 
