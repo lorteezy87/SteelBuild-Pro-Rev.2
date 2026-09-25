@@ -175,7 +175,7 @@ it("keeps cached field task progress available with a stale disclosure after an 
     payload: expect.objectContaining({
       id: "task-1",
       pct: 75,
-      captureDay: expect.stringMatching(/^\\d{4}-\\d{2}-\\d{2}$/),
+      captureDay: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     }),
   })));
   expect(screen.getByRole("button", { name: "Add Punch" })).toBeEnabled();
