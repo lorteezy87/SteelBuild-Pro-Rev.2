@@ -12,6 +12,7 @@ import { render, screen } from "@testing-library/react";
 
 let authState;
 let orgState;
+let nativePlatform = false;
 
 vi.mock("@/lib/AuthContext", () => ({ useAuth: () => authState }));
 vi.mock("@/components/shared/OrgContext", () => ({
@@ -20,6 +21,8 @@ vi.mock("@/components/shared/OrgContext", () => ({
 }));
 vi.mock("@/boot/AppLoader", () => ({ default: () => <div>LOADER</div> }));
 vi.mock("@/pages/Landing", () => ({ default: () => <div>LANDING</div> }));
+vi.mock("@/pages/NativeSignIn", () => ({ default: () => <div>NATIVE_SIGN_IN</div> }));
+vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => nativePlatform }));
 vi.mock("@/pages/DesktopConnectSignIn", () => ({ default: () => <div>DESKTOP_CONNECT_SIGNIN</div> }));
 vi.mock("@/pages/UpdatePassword", () => ({ default: () => <div>UPDATE_PW</div> }));
 vi.mock("@/pages/MfaChallenge", () => ({ default: () => <div>MFA_CHALLENGE</div> }));
@@ -46,6 +49,7 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
   beforeEach(() => {
     authState = { ...authed };
     orgState = { isLoadingOrgs: false, hasOrg: true };
+    nativePlatform = false;
     window.history.pushState({}, "", "/");
   });
 
@@ -63,6 +67,20 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     };
     render(<AuthenticatedApp />);
     expect(await screen.findByText("LANDING")).toBeInTheDocument();
+  });
+
+  it("shows sign-in without marketing or signup when the native app has no session", async () => {
+    nativePlatform = true;
+    authState = {
+      ...authed,
+      isAuthenticated: false,
+      authError: { type: "auth_required", message: "Authentication required" },
+    };
+
+    render(<AuthenticatedApp />);
+
+    expect(await screen.findByText("NATIVE_SIGN_IN")).toBeInTheDocument();
+    expect(screen.queryByText("LANDING")).not.toBeInTheDocument();
   });
 
   it("shows a focused desktop connect sign-in on /DesktopConnect when there is no session", async () => {

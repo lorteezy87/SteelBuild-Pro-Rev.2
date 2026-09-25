@@ -6,8 +6,9 @@ document is the end-to-end runbook: what is already wired up in this repo, and
 the remaining steps — most of which **require a Mac with Xcode** and cannot be
 done in CI/Linux.
 
-> **Status (2026-09-22): not submittable yet.** The items marked **Action** and
-> **Not handled** below are blocking. See MOB-1 … MOB-10 in
+> **Status (2026-09-22): native project and unsigned release build complete.**
+> Signing, real-device checks, reviewer credentials, screenshots, App Store
+> Connect metadata and the upload are still required. See MOB-1 … MOB-10 in
 > [`../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md).
 >
 > There is no legal hold or conflict blocking store, marketing, signup or
@@ -19,14 +20,14 @@ done in CI/Linux.
 
 - **Capacitor iOS wrapper** — `capacitor.config.ts` (appId `com.steelbuildpro.app`,
   `webDir: dist`), plugins **installed** (`app`, `status-bar`, `splash-screen`,
-  `keyboard`, `haptics`, `camera`, `share`, `preferences`), npm scripts
+  `keyboard`, `haptics`, `camera`, `share`), npm scripts
   (`cap:add:ios`, `cap:sync`, `cap:open`, `ios`).
-  - ⚠️ Installed is not wired. Only `app`, `keyboard`, `splash-screen` and
-    `status-bar` have call sites; `camera`, `haptics`, `share` and `preferences`
-    have none — see guideline 4.2 below.
-  - ⚠️ **No `ios/` directory is committed.** The Xcode project does not exist
-    yet; it is generated on a Mac with `npm run cap:add:ios`. Nothing native has
-    been built or run.
+  - Camera capture is wired into `PhotoStripUploader`, the native share sheet is
+    wired into report headers, and both flows use haptic confirmation. See
+    guideline 4.2 below.
+  - ✅ The CocoaPods `ios/` workspace is committed. Debug simulator and unsigned
+    Release iphoneos builds pass with Xcode 27 beta; Release store validation
+    also passes before signing.
   - ⚠️ **No Android platform exists at all** — `@capacitor/android` is not a
     dependency and there is no `android/` directory. Google Play is a
     from-scratch effort (MOB-1), not covered by this runbook.
@@ -41,9 +42,9 @@ done in CI/Linux.
 - **Info.plist usage strings** — `mobile/ios/Info.plist.snippet.xml` (camera /
   photo library — required by `@capacitor/camera`).
 
-## Requires a Mac (cannot run here)
+## Remaining Mac work
 
-Generating the Xcode project, `pod install`, code signing, building the `.ipa`,
+Code signing, real-device permission checks, building the signed archive,
 capturing screenshots, and uploading to App Store Connect.
 
 ---
@@ -56,7 +57,7 @@ capturing screenshots, and uploading to App Store Connect.
 - **CocoaPods**: `brew install cocoapods` (or `sudo gem install cocoapods`).
 - Repo installed: `npm ci`.
 
-## 1. One-time native project setup (Mac)
+## 1. One-time native project setup (Mac) — ✅ complete
 
 ```bash
 npm run cap:add:ios        # generates ios/ (commit it, or keep local — see .gitignore)
@@ -77,7 +78,7 @@ Then, in the generated project:
    `Info.plist` (standard HTTPS only; skips the export-compliance prompt each
    upload).
 
-## 2. App icon, splash & launch screen
+## 2. App icon, splash & launch screen — ✅ complete
 
 Fastest path — generate every size from one source image:
 
@@ -88,7 +89,7 @@ npm i -D @capacitor/assets
 npx capacitor-assets generate --ios
 ```
 
-Set the launch-screen background to `#0B0E11` (matches the web loading shell and
+Set the launch-screen background to `#0D1117` (matches the web loading shell and
 `SplashScreen.backgroundColor`) so there is no white flash on cold start.
 
 ## 3. Build & run loop
@@ -134,9 +135,9 @@ must serve the bundled offline assets, not a dev URL.
 | Guideline | What it requires | Status / action |
 |---|---|---|
 | **2.1 Completeness** | Reviewer can actually use the app | **Action:** create a demo login with seeded data; put it in App Review Information. |
-| **4.2 Minimum functionality** | Not "just a repackaged website" | **NOT handled — highest rejection risk (MOB-2).** `@capacitor/camera`, `@capacitor/haptics`, `@capacitor/share` and `@capacitor/preferences` are installed but have **zero call sites in `src/`** (verified 2026-09-22). Only `app`, `keyboard`, `splash-screen` and `status-bar` are wired, in `src/lib/native/capacitor.ts` — that is chrome, not capability. As it stands this is a wrapped website. **Action:** actually ship camera capture (field photos, punchlist), the share sheet (transmittals, reports) and haptics on the gated actions before submitting. |
+| **4.2 Minimum functionality** | Not "just a repackaged website" | ✅ **Implemented.** Native camera capture feeds the existing field-photo workflow in `PhotoStripUploader`; report headers open the native share sheet; successful capture/share actions provide haptic feedback. The unused Preferences plugin was removed. Real-device checks remain. |
 | **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ✅ **Implemented — see §6.1** (self-service "Delete my account" in Settings → Profile). Needs staging deploy + test before submission. |
-| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ⚠️ **Partly — see §6.2 (MOB-4).** Billing, checkout, portal and upsells are hidden natively, but the marketing landing page is **not gated at all**: `src/components/landing/MarketingLanding.tsx` (rendered by `src/pages/Landing.jsx`) shows a full pricing section — plan cards with `$99` / `$299`, a plan-comparison table, "Start free" buttons and an FAQ that quotes the prices — with **no `isNativePlatform()` check anywhere in that path** (re-verified 2026-09-22 after the landing-page rewrite in #467). A signed-out user sees subscription pricing inside the native shell. **Action:** gate the pricing section, the comparison table and the pricing FAQ natively before submitting. |
+| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ✅ **Sign-in only — see §6.2 (MOB-4).** Native signed-out users see `NativeSignIn`; marketing, signup and pricing are never rendered. Billing, checkout, portal and upgrade actions are hidden natively. |
 | **5.1.1 / 5.1.2 Data & privacy** | Privacy policy linked; data use disclosed | **Handled:** legal pages exist; link them and complete nutrition labels. |
 | **4.8 / 5.1.1 Sign in with Apple** | If you offer a third-party social login (e.g. Google), you must also offer Sign in with Apple (with narrow exceptions) | **Check:** if only email/password is offered, this does not apply. Confirm the auth methods enabled in Supabase. |
 | **2.3 Accurate metadata** | Store listing matches the app | Keep marketing copy truthful; no hidden/unfinished features. |
@@ -182,10 +183,9 @@ carries no in-app purchase surface, so Apple IAP is not required and there's no
 - Plan-limit **"Upgrade"** upsells are hidden natively (the limit messages still
   show): `OrgMembers.jsx`, `team/TeamControlCenter.tsx`. (`Projects.jsx` no
   longer carries an upgrade upsell, so there is nothing to gate there.)
-- ⚠️ **Gap:** the marketing landing page is not gated —
-  `src/components/landing/MarketingLanding.tsx` renders plan prices, a plan
-  comparison table and "Start free" to signed-out users inside the native shell
-  (MOB-4).
+- Signed-out native users render `NativeSignIn` directly from
+  `AuthenticatedApp`; the marketing landing page, signup, pricing, comparison
+  table and pricing FAQ are not present in the native shell (MOB-4).
 
 **Adding IAP later** is a clean, additive change (see the discussion on
 migration direction): you'd add StoreKit as an option without stranding anyone.

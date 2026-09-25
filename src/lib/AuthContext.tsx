@@ -6,6 +6,8 @@ import { stripPrivilegeMeta } from '@/lib/authMeta';
 import { queryClientInstance } from '@/lib/query-client';
 import { clearPendingPhotos } from '@/lib/field/blobStore';
 import { assertTermsAccepted, TERMS_VERSION } from '@/lib/signupClickwrap';
+import { isNativePlatform } from '@/lib/native/platform';
+import { passwordResetRedirectUrl } from '@/lib/native/links';
 
 // Clear every trace of the previous user's tenant data from the browser so it
 // can never render for the next user on a shared device (M38): the React Query
@@ -350,7 +352,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const sendPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const redirectTo =
-        typeof window !== 'undefined' ? `${window.location.origin}/update-password` : undefined;
+        typeof window !== 'undefined'
+          ? passwordResetRedirectUrl(window.location.origin, isNativePlatform())
+          : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
       return { success: true };
