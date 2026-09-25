@@ -349,7 +349,7 @@ export default function DocumentControl() {
                       <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{action.detail}</div>
                     </div>
                     {action.href ? (
-                      <button type="button" style={secondaryButtonStyle} onClick={() => navigate(action.href)}>
+                      <button type="button" style={secondaryButtonStyle} onClick={() => { if (action.href) navigate(action.href); }}>
                         {action.label}
                       </button>
                     ) : (
