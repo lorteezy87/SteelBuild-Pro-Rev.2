@@ -13,6 +13,7 @@
  */
 
 import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
+import { deriveActualsPatch } from "@/lib/schedule/actuals";
 
 /** Quick-set progress buttons offered on each task card. */
 export const PROGRESS_STEPS = [0, 25, 50, 75, 100];
@@ -39,6 +40,23 @@ export function statusForPercent(pct) {
 export function progressPatch(pct) {
   const percent_complete = clampPercent(pct);
   return { percent_complete, status: statusForPercent(percent_complete) };
+}
+
+/**
+ * Full canonical write patch for a field progress change.
+ *
+ * Field Today used to update only percent/status, bypassing the schedule
+ * mutation builder that stamps actual_start_date / actual_finish_date. That
+ * made a task completed from the field materially different from the same task
+ * completed from the schedule. Keep the small progressPatch helper for
+ * optimistic UI, but use this helper for persistence.
+ */
+export function progressUpdatePatch(task, pct, today) {
+  const progress = progressPatch(pct);
+  return {
+    ...progress,
+    ...deriveActualsPatch({ task, nextStatus: progress.status, today }),
+  };
 }
 
 /** Human-readable task label, tolerant of column drift. */
