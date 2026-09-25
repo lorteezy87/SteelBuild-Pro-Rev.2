@@ -99,12 +99,12 @@ export default function FieldToday() {
 
   // ── Task progress: optimistic write back to the schedule (offline-safe) ──
   const progressMut = useMutation({
-    mutationFn: ({ task, pct }) =>
+    mutationFn: ({ task, pct, capturedDay }) =>
       persistScheduleProgress({
         gateway: entities.ScheduleTask,
         id: task.id,
         pct,
-        capturedDay: localToday(),
+        capturedDay,
       }),
     onMutate: async ({ task, pct }) => {
       await queryClient.cancelQueries({ queryKey: ["schedule-tasks", projectId] });
@@ -119,7 +119,7 @@ export default function FieldToday() {
       // No signal? Keep the optimistic value and queue the write for replay —
       // don't roll back (that would silently discard the foreman's tap).
       if (isLikelyOfflineError(err)) {
-        enqueueOutbox(makeProgressOp(vars.task.id, vars.pct, Date.now(), localToday()));
+        enqueueOutbox(makeProgressOp(vars.task.id, vars.pct, Date.now(), vars.capturedDay));
         toast.message("Saved offline — will sync when you're back online");
         return;
       }
@@ -139,7 +139,11 @@ export default function FieldToday() {
   const setProgress = (task, pct) => {
     const next = clampPercent(pct);
     if (next === clampPercent(task.percent_complete)) return;
-    progressMut.mutate({ task, pct: next });
+    // Read the local day ONCE, here, where the foreman actually tapped. The
+    // online attempt and the offline fallback both reuse it: reading the clock
+    // again in onError would record the next calendar day for a tap made just
+    // before midnight whose request rejected just after it.
+    progressMut.mutate({ task, pct: next, capturedDay: localToday() });
   };
 
   // ── Quick punch add (reuses the production PunchlistFormModal + create path) ──
