@@ -33,7 +33,8 @@ import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import { compressImage } from "@/utils/compressImage";
 import { localToday } from "@/utils/dates";
-import { clampPercent, progressPatch, progressUpdatePatch } from "@/lib/field/fieldToday";
+import { clampPercent, progressPatch } from "@/lib/field/fieldToday";
+import { persistScheduleProgress } from "@/lib/field/progressSync";
 import { useOutbox } from "@/lib/field/OutboxContext";
 import {
   makeProgressOp,
@@ -99,7 +100,12 @@ export default function FieldToday() {
   // ── Task progress: optimistic write back to the schedule (offline-safe) ──
   const progressMut = useMutation({
     mutationFn: ({ task, pct }) =>
-      entities.ScheduleTask.update(task.id, progressUpdatePatch(task, pct)),
+      persistScheduleProgress({
+        gateway: entities.ScheduleTask,
+        id: task.id,
+        pct,
+        capturedDay: localToday(),
+      }),
     onMutate: async ({ task, pct }) => {
       await queryClient.cancelQueries({ queryKey: ["schedule-tasks", projectId] });
       const prev = queryClient.getQueryData(["schedule-tasks", projectId]);
@@ -113,7 +119,7 @@ export default function FieldToday() {
       // No signal? Keep the optimistic value and queue the write for replay —
       // don't roll back (that would silently discard the foreman's tap).
       if (isLikelyOfflineError(err)) {
-        enqueueOutbox(makeProgressOp(vars.task.id, vars.pct, Date.now()));
+        enqueueOutbox(makeProgressOp(vars.task.id, vars.pct, Date.now(), localToday()));
         toast.message("Saved offline — will sync when you're back online");
         return;
       }
