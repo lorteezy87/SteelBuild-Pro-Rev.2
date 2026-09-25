@@ -4,8 +4,9 @@
  * The page is a thumb-first capture lane for a superintendent/foreman on a
  * phone: see the work that matters *today* and update progress in one tap.
  * All the date/percent/selection logic lives here as pure functions so it is
- * deterministic and unit-testable (callers pass `todayIso` explicitly — these
- * helpers never read the clock).
+ * deterministic and unit-testable. Selection/urgency callers pass `todayIso`
+ * explicitly; the persistence helper accepts an optional day override for tests
+ * and otherwise uses the canonical local-day helper when stamping actuals.
  *
  * Progress→status mapping mirrors the canonical rule in Schedule.tsx
  * (`pct >= 100 ? "Complete" : pct > 0 ? "In Progress" : "Not Started"`) so a
