@@ -82,16 +82,12 @@ describe("public/_headers", () => {
     expect(h["Permissions-Policy"]).toContain("microphone=()");
   });
 
-  it("keeps the CSP in Report-Only until someone deliberately enforces it", () => {
+  it("enforces the reviewed CSP without changing its required source allowances", () => {
     const h = cloudflare["/*"];
-    // Promoting this to an enforcing `Content-Security-Policy` is a real
-    // change with a real blast radius — a missed source breaks Stripe, Supabase
-    // realtime, or the 3D viewer at runtime with no build-time signal. It
-    // should be its own reviewed change, not a side effect of a header edit.
-    expect(h).toHaveProperty("Content-Security-Policy-Report-Only");
-    expect(h).not.toHaveProperty("Content-Security-Policy");
+    expect(h).toHaveProperty("Content-Security-Policy");
+    expect(h).not.toHaveProperty("Content-Security-Policy-Report-Only");
 
-    const csp = h["Content-Security-Policy-Report-Only"];
+    const csp = h["Content-Security-Policy"];
     // Sources the app genuinely needs; dropping any of these breaks a feature.
     expect(csp, "Supabase REST/auth/storage").toContain("https://*.supabase.co");
     expect(csp, "Supabase realtime websockets").toContain("wss://*.supabase.co");
@@ -110,7 +106,7 @@ describe("public/_headers", () => {
     //
     // Recomputed from index.html rather than hard-coded, so editing that script
     // fails HERE with the new hash rather than in production months later.
-    const csp = cloudflare["/*"]["Content-Security-Policy-Report-Only"];
+    const csp = cloudflare["/*"]["Content-Security-Policy"];
     const hashes = inlineScriptHashes(indexHtml);
 
     expect(hashes.length, "index.html has no inline <script> — is the hash still needed?").toBeGreaterThan(0);
@@ -131,7 +127,7 @@ describe("public/_headers", () => {
     // Nothing in this repo requests this script; Cloudflare adds it at the edge
     // when the feature is enabled for the zone. It was the second violation
     // reported on every page load.
-    const csp = cloudflare["/*"]["Content-Security-Policy-Report-Only"];
+    const csp = cloudflare["/*"]["Content-Security-Policy"];
     expect(csp, "beacon script origin").toContain("https://static.cloudflareinsights.com");
     // Allowing the script without its reporting endpoint just moves the
     // violation from script-src to connect-src.

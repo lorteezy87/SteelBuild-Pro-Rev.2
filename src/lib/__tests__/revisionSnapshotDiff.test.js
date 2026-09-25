@@ -13,6 +13,7 @@ import {
   buildDiffMessages,
   sortDeltasBySeverity,
   generateRevisionDiff,
+  recordVisualRevisionReview,
 } from "@/lib/revisionSnapshotDiff";
 
 // ── pure helpers ──────────────────────────────────────────────────────────
@@ -242,5 +243,27 @@ describe("generateRevisionDiff", () => {
     await expect(generateRevisionDiff({ drawingId: "dw1", fromRevisionId: "r1", toRevisionId: "r1" }))
       .rejects.toThrow(/different revisions/i);
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("recordVisualRevisionReview", () => {
+  beforeEach(() => {
+    env.supabase.from = null;
+    env.supabase.rpc = null;
+    env.supabase.functions.invoke = null;
+  });
+
+  it("records visual review without invoking the LLM", async () => {
+    const invoke = vi.fn();
+    const rpc = makeRpc();
+    wireSupabase({ comparisons: { maybeSingle: null }, deltas: {}, invoke, rpc });
+
+    await recordVisualRevisionReview({ drawingId: "d1", fromRevisionId: "r1", toRevisionId: "r2" });
+
+    expect(invoke).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "record_revision_comparison",
+      expect.objectContaining({ p_comparison_id: "c1", p_status: "complete", p_model: "visual-review" }),
+    );
   });
 });

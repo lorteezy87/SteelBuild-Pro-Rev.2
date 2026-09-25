@@ -38,6 +38,16 @@ const ROW = {
   affectedPieces: null as number | null,
 };
 
+const UNLOADED_ROW = {
+  ...ROW,
+  revisionControl: {
+    status: "review_required",
+    reasons: [{ code: "MODEL_ROSTER_NOT_LOADED", message: "Model roster is not loaded.", severity: "review_required" }],
+    model: { state: "not_loaded", affectedPieces: null, reasonCode: "MODEL_ROSTER_NOT_LOADED" },
+  },
+  modelScope: { state: "not_loaded", affectedPieces: null, reasonCode: "MODEL_ROSTER_NOT_LOADED" },
+};
+
 function LocationProbe() {
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -57,7 +67,7 @@ function mount({ entries = [HUB] }: { entries?: string[] } = {}) {
   render(
     <MemoryRouter initialEntries={entries}>
       <QueryClientProvider client={new QueryClient()}>
-        <RevisionImpactViews projectId="p1" rows={[ROW]} onCompareRevision={onCompareRevision} rosterLoaded={false} />
+        <RevisionImpactViews projectId="p1" rows={[ROW]} onCompareRevision={onCompareRevision} rosterState="not_loaded" />
         <LocationProbe />
       </QueryClientProvider>
     </MemoryRouter>,
@@ -120,5 +130,18 @@ describe("Revision Impact views (?hub_view=)", () => {
     await user.click(await screen.findByRole("button", { name: "Impact log" }));
     expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=revimpact&hub_view=log");
+  });
+
+  it("renders Review required instead of a binary clear state when model evidence is unloaded", () => {
+    render(
+      <MemoryRouter initialEntries={[HUB]}>
+        <QueryClientProvider client={new QueryClient()}>
+          <RevisionImpactViews projectId="p1" rows={[UNLOADED_ROW]} rosterState="not_loaded" />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Review required")).toBeInTheDocument();
+    expect(screen.queryByText("Fab Blocked?")).not.toBeInTheDocument();
   });
 });

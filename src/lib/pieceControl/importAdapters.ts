@@ -1,6 +1,6 @@
 import type { ImportPayload, PieceImportSourceType } from "./reconciliation";
 import { aggregatePieceRowsByMark } from "./aggregateImportRows";
-import { readFileText, stripNulDeep } from "@/lib/textDecoding";
+import { TextDecodingError, readFileText, stripNulDeep } from "@/lib/textDecoding";
 
 type ReadText = () => Promise<string>;
 
@@ -258,7 +258,22 @@ export async function readPieceImportFile(
     nulsRemoved += decoded.nulsRemoved;
     return decoded.text;
   };
-  const parsed = await parsePieceImportRows(file, sourceType, readText);
+  let parsed: ImportPayload[];
+  try {
+    parsed = await parsePieceImportRows(file, sourceType, readText);
+  } catch (error) {
+    const isXmlSource = sourceType === "powerfab_xml" || sourceType === "fabsuite_xml";
+    if (
+      isXmlSource &&
+      error instanceof TextDecodingError &&
+      /doesn't look like a text export/i.test(error.message)
+    ) {
+      throw new Error(
+        "This appears to be a ZIP or other binary package, not an XML text export. Extract the *-EPM.xml file from the Tekla/PowerFab package, then select PowerFab XML or FabSuite XML and import that extracted file.",
+      );
+    }
+    throw error;
+  }
   // JSON-escaped NULs and IFC property values bypass the text-level strip.
   const { value: rows, removed } = stripNulDeep(parsed);
   return { rows, nulsRemoved: nulsRemoved + removed };

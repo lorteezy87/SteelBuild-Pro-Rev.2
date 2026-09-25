@@ -296,6 +296,38 @@ export async function loadComparisonWithDeltas({ drawingId, fromRevisionId, toRe
   return { comparison, deltas: await fetchDeltas(comparison.id) };
 }
 
+/**
+ * Persist a human visual review once the caller has rendered both source pages.
+ * It deliberately does not call the LLM and will not replace a completed AI
+ * comparison, which is final under the database RPC contract.
+ */
+export async function recordVisualRevisionReview({ drawingId, fromRevisionId, toRevisionId }) {
+  if (!drawingId || !fromRevisionId || !toRevisionId) {
+    throw new Error("recordVisualRevisionReview: drawingId + fromRevisionId + toRevisionId are required.");
+  }
+  if (fromRevisionId === toRevisionId) {
+    throw new Error("Pick two different revisions to compare.");
+  }
+
+  const comparison = await findOrCreateComparison({ drawingId, fromRevisionId, toRevisionId });
+  if (comparison.compare_status === "complete") return comparison;
+
+  const { data, error } = await supabase.rpc("record_revision_comparison", {
+    p_comparison_id: comparison.id,
+    p_status: "complete",
+    p_summary: "Visual revision comparison reviewed.",
+    p_model: "visual-review",
+    p_deltas: [],
+    p_raw: { review_type: "visual" },
+  });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) || {
+    ...comparison,
+    compare_status: "complete",
+    ai_summary: "Visual revision comparison reviewed.",
+  };
+}
+
 /** Toggle the dismissed flag on one delta (keep/dismiss in the report UI). */
 export async function setDeltaDismissed({ deltaId, dismissed, userId }) {
   const patch = dismissed
