@@ -42,9 +42,22 @@ const SRC = join(__dirname, "..", "..", "..");
  *   `RFI #${String(Date.now()).slice(-6)}`   <- the real defect
  *   "CO #" + Math.random()
  */
+const CLOCK_OR_RANDOM = String.raw\`(?:Date\\.now|Math\\.random|performance\\.now)\`;
+const OFFICIAL_NUMBER_LHS = String.raw\`\\b(?:rfi|co|cr|cor|pco|submittal|transmittal|delivery|expense|change(?:_?order|_?request))[_A-Za-z]*number\\b\`;
+
 const INVENTED_NUMBER: ReadonlyArray<readonly [string, RegExp]> = [
-  ["template literal", /`[^`]*#\$\{[^}]*(?:Date\.now|Math\.random|performance\.now)[^}]*\}/],
-  ["string concatenation", /["'][^"']*#\s*["']\s*\+\s*[^;\n]{0,40}(?:Date\.now|Math\.random|performance\.now)/],
+  [
+    "official-number assignment",
+    new RegExp(\`\${OFFICIAL_NUMBER_LHS}\\s*[:=]\\s*[^;\\n]{0,180}\${CLOCK_OR_RANDOM}\`, "i"),
+  ],
+  [
+    "prefixed template literal",
+    /\`[^\`]*(?:RFI|CO|CR|COR|PCO|SUB(?:MITTAL)?|TR(?:ANSMITTAL)?|DEL(?:IVERY)?|EXP(?:ENSE)?)[ #_-]*\\$\\{[^}]*(?:Date\\.now|Math\\.random|performance\\.now)[^}]*\\}/i,
+  ],
+  [
+    "prefixed string concatenation",
+    /["'][^"']*(?:RFI|CO|CR|COR|PCO|SUB(?:MITTAL)?|TR(?:ANSMITTAL)?|DEL(?:IVERY)?|EXP(?:ENSE)?)[ #_-]*["']\\s*\\+\\s*[^;\\n]{0,80}(?:Date\\.now|Math\\.random|performance\\.now)/i,
+  ],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -87,20 +100,23 @@ describe("no caller invents an official record number", () => {
   });
 
   it("the guard actually bites", () => {
-    // A guard that matches nothing passes forever after a typo. This is the
-    // ZonePanel line verbatim, as it shipped.
-    const [tpl, concat] = INVENTED_NUMBER.map(([, p]) => p);
-    expect(tpl.test("rfiNumber = `RFI #${String(Date.now()).slice(-6)}`;")).toBe(true);
-    expect(tpl.test("rfi_number: `RFI #${Date.now()}`,")).toBe(true);
-    expect(tpl.test("co_number: `CO #${Math.random()}`,")).toBe(true);
-    expect(concat.test('coNumber = "CO #" + Math.random();')).toBe(true);
+    // A guard that matches nothing passes forever after a typo. Exercise the
+    // shipped ZonePanel defect plus number formats that do not contain "#".
+    const [assignment, tpl, concat] = INVENTED_NUMBER.map(([, p]) => p);
+    expect(assignment.test("rfiNumber = \`RFI #\${String(Date.now()).slice(-6)}\`;")).toBe(true);
+    expect(assignment.test("submittal_number: \`SUB-\${Date.now()}\`,")).toBe(true);
+    expect(assignment.test("delivery_number = String(performance.now());")).toBe(true);
+    expect(tpl.test("rfi_number: \`RFI #\${Date.now()}\`,")).toBe(true);
+    expect(tpl.test("co_number: \`CO-\${Math.random()}\`,")).toBe(true);
+    expect(concat.test('coNumber = "CO-" + Math.random();')).toBe(true);
   });
 
   it("does not flag the legitimate clock and random use it must leave alone", () => {
-    const [tpl, concat] = INVENTED_NUMBER.map(([, p]) => p);
+    const [assignment, tpl, concat] = INVENTED_NUMBER.map(([, p]) => p);
 
     // A React list key that READS a record number and writes nothing.
     const key = "id: rfi.id || rfi.rfi_number || rfi.title || String(Math.random()),";
+    expect(assignment.test(key)).toBe(false);
     expect(tpl.test(key)).toBe(false);
     expect(concat.test(key)).toBe(false);
 
@@ -112,6 +128,7 @@ describe("no caller invents an official record number", () => {
       "const elapsedMs = Date.now() - startedAt;",
       "return `${prefix}${String(allocated).padStart(padLength, \"0\")}`;",
     ]) {
+      expect(assignment.test(line), line).toBe(false);
       expect(tpl.test(line), line).toBe(false);
       expect(concat.test(line), line).toBe(false);
     }
