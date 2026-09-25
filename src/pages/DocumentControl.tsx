@@ -20,6 +20,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { FileUp, Loader2, RefreshCw } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -27,7 +28,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { isPdfFile } from "@/lib/drawingUploadUtils";
 import { extractSheetsFromPdf, type PdfExtractionStatus } from "@/lib/pdfSheetExtractor";
 import { readPdfPageTexts } from "@/lib/pdfPageText";
-import { buildDocControlRecord, normalizeCallouts, toMdrEntry, type MdrEntry } from "@/lib/docControl";
+import { buildDocControlRecord, nextActionForRecord, normalizeCallouts, toMdrEntry, type MdrEntry } from "@/lib/docControl";
 import DocControlReviewPanel, {
   useDocControlAttestations,
 } from "@/components/drawings/DocControlReviewPanel";
@@ -75,6 +76,7 @@ type ExtractionState = {
 };
 
 export default function DocumentControl() {
+  const navigate = useNavigate();
   const projectId = useProjectId();
   const { user } = useAuth();
   const reviewerName = user?.full_name || user?.email || "";
@@ -210,6 +212,13 @@ export default function DocumentControl() {
   };
 
   const blockers = records.filter((r) => r.disposition === "hold").length;
+  const nextActions = useMemo(
+    () => records.map((record) => ({
+      sheetNumber: record.titleBlock.sheetNumber.value || "Unidentified sheet",
+      action: nextActionForRecord(record, registerComplete),
+    })),
+    [records, registerComplete],
+  );
 
   return (
     <div style={pageStyle}>
@@ -329,7 +338,27 @@ export default function DocumentControl() {
               keyed in by hand.
             </div>
           ) : (
-            <DocControlReviewPanel records={records} onAttest={attest} />
+            <>
+              <DocControlReviewPanel records={records} onAttest={attest} />
+              <section aria-label="Document Control next actions" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                <div style={{ ...monoStyle, color: "var(--text-muted)" }}>Next actions — read-only handoff</div>
+                {nextActions.map(({ sheetNumber, action }, index) => (
+                  <div key={`${sheetNumber}-${index}`} aria-label={`Next action for ${sheetNumber}`} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--divider)", background: "var(--hover-bg)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 180, flex: 1 }}>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>{action.label}</div>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{action.detail}</div>
+                    </div>
+                    {action.href ? (
+                      <button type="button" style={secondaryButtonStyle} onClick={() => navigate(action.href)}>
+                        {action.label}
+                      </button>
+                    ) : (
+                      <span style={{ ...monoStyle, color: "var(--status-warning-bright)" }}>Human review required</span>
+                    )}
+                  </div>
+                ))}
+              </section>
+            </>
           )}
         </>
       )}

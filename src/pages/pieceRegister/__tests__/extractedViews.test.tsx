@@ -242,5 +242,23 @@ describe("PieceRegisterImportView", () => {
       }),
     );
     expect(onAssignImport).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Source"), {
+      target: { value: "fabsuite_xml" },
+    });
+    expect(baseProps.setSourceType).toHaveBeenCalledWith("fabsuite_xml");
+    expect(baseProps.handleFile).toHaveBeenCalledWith(null);
+
+    rerender(<PieceRegisterImportView {...baseProps} sourceType="fabsuite_xml" />);
+    expect(screen.getByLabelText("File")).toHaveAttribute(
+      "accept",
+      ".xml,text/xml,application/xml",
+    );
+
+    rerender(<PieceRegisterImportView {...baseProps} sourceType="powerfab_xml" />);
+    expect(screen.getByLabelText("File")).toHaveAttribute(
+      "accept",
+      ".xml,text/xml,application/xml",
+    );
   });
 });
