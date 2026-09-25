@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { useQueryClient } from "@tanstack/react-query";
 import { entities, integrations } from "@/api/supabaseClient";
 import { useFieldOutbox } from "@/hooks/useFieldOutbox";
-import { progressPatch } from "@/lib/field/fieldToday";
+import { progressUpdatePatch } from "@/lib/field/fieldToday";
 import {
   OP_SCHEDULE_PROGRESS,
   OP_PUNCH_CREATE,
@@ -44,7 +44,11 @@ function makeGlobalHandlers(queryClient) {
   const invalidate = (queryKey) => queryClient.invalidateQueries({ queryKey });
   return {
     [OP_SCHEDULE_PROGRESS]: async ({ id, pct }) => {
-      await entities.ScheduleTask.update(id, progressPatch(pct));
+      // Re-read the task at replay time. An offline op can sit for hours; using
+      // a stale enqueue-time snapshot would risk overwriting actual dates or
+      // deciding whether to stamp them from obsolete state.
+      const task = await entities.ScheduleTask.get(id);
+      await entities.ScheduleTask.update(id, progressUpdatePatch(task, pct));
       invalidate(["schedule-tasks"]);
       invalidate(["field-plan-tasks"]);
     },
