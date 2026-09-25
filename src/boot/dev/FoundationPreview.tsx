@@ -72,7 +72,7 @@ if (import.meta.env.DEV) {
   const root = document.getElementById('root');
   if (root) createRoot(root).render(
     <ThemeProvider>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <BrowserRouter useTransitions>
         <FoundationPreview />
       </BrowserRouter>
     </ThemeProvider>,
