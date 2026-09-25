@@ -101,26 +101,21 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
   reopening a finished one fail with a raw Postgres constraint name. Take the
   vocabulary from `SCHEDULE_STATUSES` and let `withReconciledPercent` set the
   percent — never hand-write either (`src/lib/schedule/taskStatus.ts`).
-  - **Open regression (audit 2026-09-21): the bulk toolbar is the one path
-    still violating it.** `bulkUpdateMut` in `useScheduleMutations.ts` calls
-    `entities.ScheduleTask.update` directly with `percent_complete:` set to
-    `100` for Complete, `0` for Not Started and **`undefined` for everything
-    else**, so a bulk move to In Progress / On Hold / Delayed sends `status`
-    alone and is validated against the percent already stored — bulk-reopening
-    a Complete task (stored 100) fails the CHECK. Route it through
-    `buildTaskUpdate` like every other path. An earlier version of this file
-    named the bulk toolbar as the one path that got this *right*; that was
-    backwards.
+  - **Closed 2026-09-24 (PR #480): bulk and field progress now use the
+    canonical reconciliation.** The bulk toolbar passes each row's stored
+    percent to `reconcileStatusPercent`, so reopening Complete → In Progress
+    writes NULL rather than sending `status` alone. Field Today and its offline
+    replay also use a task-aware canonical patch that stamps actual start/finish
+    dates instead of maintaining a second schedule-write semantic.
 - **Reopening clears the percent to NULL on purpose.** Complete → 100 and
   Not Started → 0 are definitional; In Progress is not. The transition says the
   task is no longer done but not how much remains, so the percent becomes
   *unknown*. Don't "fix" that by inventing 0 or 99.
-  - **Open regression (audit 2026-09-21): the client layer inflicts exactly that
-    0.** `normalizeFields` in `src/api/client/entities.ts` runs
-    `Number(out.percent_complete)` on a key that is present, and `Number(null)`
-    is `0`, which `Number.isFinite` accepts — so the deliberate NULL is clamped
-    to `0` before it reaches Postgres and the reopened task reads as 0% and
-    lands in the stalled filter. Guard the null before coercing.
+  - **Closed 2026-09-24 (PR #480): NULL remains unknown end to end.**
+    `normalizeFields` now distinguishes a present numeric percent from an
+    explicit NULL before coercion and delegates contradictory status/percent
+    pairs to `reconcileStatusPercent`; it no longer turns NULL into 0, invents
+    a status for a null-only write, or fabricates 99% for a reopen.
 - **Two percent readers, and they are not interchangeable.**
   `percentCompleteOrNull` returns null when unknown — use it for any **claim**
   (a printed figure, an average, a stalled test). `displayPct` flattens unknown
