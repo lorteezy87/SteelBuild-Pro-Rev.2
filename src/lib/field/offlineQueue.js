@@ -108,13 +108,19 @@ export function enqueueOp(queue, op) {
   return base;
 }
 
-/** Build an idempotent schedule-progress op (caller supplies `now`). */
-export function makeProgressOp(taskId, pct, now) {
+/**
+ * Build an idempotent schedule-progress op.
+ *
+ * captureDay is the user's LOCAL YYYY-MM-DD at the moment of capture. Keep it
+ * alongside createdAt because an epoch timestamp alone cannot recover the
+ * original local day if the device changes timezone before replay.
+ */
+export function makeProgressOp(taskId, pct, now, captureDay = null) {
   return {
     id: `${OP_SCHEDULE_PROGRESS}:${taskId}:${now}`,
     type: OP_SCHEDULE_PROGRESS,
     coalesceKey: `${OP_SCHEDULE_PROGRESS}:${taskId}`,
-    payload: { id: taskId, pct },
+    payload: { id: taskId, pct, captureDay },
     createdAt: now,
   };
 }

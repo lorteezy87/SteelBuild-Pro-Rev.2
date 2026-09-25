@@ -72,10 +72,24 @@ describe("the write paths that stamp actuals", () => {
     // The patch depends on what each row has already recorded; hoisting it out
     // of the loop would stamp every task with one shared answer and overwrite
     // real finish dates on the rows that already had one.
+    //
+    // Asserted against the INSIDE of the batchProcess callback rather than the
+    // spelling of the argument. This used to require the literal
+    // `deriveActualsPatch({ task: byId.get(id)`, which broke when the lookup
+    // was bound to a local so reconcileStatusPercent could read the same row's
+    // stored percent — a change that kept the per-task derivation intact. What
+    // makes hoisting detectable is that both the lookup and the derivation
+    // happen after `batchProcess(ids`, not how they are written.
     const bulk = MUT_SRC.slice(MUT_SRC.indexOf("const bulkUpdateMut"));
     const body = bulk.slice(0, bulk.indexOf("const bulkDeleteMut"));
     expect(body).toContain("batchProcess(ids");
-    expect(body).toMatch(/deriveActualsPatch\(\{\s*task: byId\.get\(id\)/);
+
+    const inCallback = body.slice(body.indexOf("batchProcess(ids"));
+    // The row is looked up per id, with the loop variable.
+    expect(inCallback).toMatch(/byId\.get\(id\)/);
+    // And the patch is derived there, from that row — not read off a variable
+    // computed once above the loop.
+    expect(inCallback).toMatch(/deriveActualsPatch\(\{\s*task[,:]/);
   });
 
   it("bulk status change tells the user it wrote dates", () => {
