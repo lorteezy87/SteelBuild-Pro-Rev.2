@@ -44,7 +44,7 @@ export default function TransmittalModal({
       // producing an unattributed record.
       issuer: { name: issuerName },
     });
-    if (presentation === "failed") return;
+    if (presentation !== "downloaded" && presentation !== "shared") return;
     onGenerated();
   };
 

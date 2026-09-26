@@ -171,7 +171,7 @@ export default function PayApplications() {
         filename,
         title: "Pay application",
       });
-      if (presentation === "failed") return;
+      if (presentation !== "downloaded" && presentation !== "shared") return;
       toast.success("Pay application PDF exported");
     } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };

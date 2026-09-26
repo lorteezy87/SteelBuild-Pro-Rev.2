@@ -6,7 +6,7 @@ document is the end-to-end runbook: what is already wired up in this repo, and
 the remaining steps — most of which **require a Mac with Xcode** and cannot be
 done in CI/Linux.
 
-> **Status (2026-09-23): not submittable yet.** The items marked **Action** and
+> **Status (2026-09-26): not submittable yet.** The items marked **Action** and
 > **Not handled** below are blocking. See MOB-1 … MOB-10 in
 > [`../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md).
 >
@@ -19,14 +19,16 @@ done in CI/Linux.
 
 - **Capacitor iOS wrapper** — `capacitor.config.ts` (appId `com.steelbuildpro.app`,
   `webDir: dist`), plugins **installed** (`app`, `status-bar`, `splash-screen`,
-  `keyboard`, `haptics`, `camera`, `share`, `preferences`), npm scripts
+  `keyboard`, `haptics`, `camera`, `share`, `filesystem`, `file-transfer`,
+  `preferences`), npm scripts
   (`cap:add:ios`, `cap:sync`, `cap:open`, `ios`).
   - ✅ `camera`, `haptics`, and `share` are wired to field-photo uploads and
     project-aware report-link sharing. `preferences` is installed but remains
     unused.
-  - ✅ **The `ios/` Xcode project is committed.** `npm run cap:sync` and an
-    unsigned generic-device Xcode build passed on 2026-09-23. Simulator and
-    real-device UI checks are still required before submission.
+  - ✅ **The `ios/` Xcode project is committed.** `npm run cap:sync` and a
+    signed generic-device Debug build passed on 2026-09-26 with all ten native
+    plugins. The build installed and launched on a physical iPhone 17 Pro.
+    Signed-in workflow checks are still required before submission.
   - ⚠️ **No Android platform exists at all** — `@capacitor/android` is not a
     dependency and there is no `android/` directory. Google Play is a
     from-scratch effort (MOB-1), not covered by this runbook.
@@ -53,8 +55,8 @@ capturing screenshots, and uploading to App Store Connect.
 
 ## 0. Prerequisites
 
-- **Apple Developer Program** membership ($99/yr) — enroll as the S&H Steel org
-  or as an individual, per the legal decision.
+- **Apple Developer Program** membership for the individual or business that
+  owns SteelBuild Pro.
 - **Mac + Xcode 16.1 or newer** (required by Capacitor 8).
 - **CocoaPods**: `brew install cocoapods` (or `sudo gem install cocoapods`).
 - Repo installed: `npm ci`.
@@ -138,7 +140,7 @@ must serve the bundled offline assets, not a dev URL.
 |---|---|---|
 | **2.1 Completeness** | Reviewer can actually use the app | **Action:** create a demo login with seeded data; put it in App Review Information. |
 | **4.2 Minimum functionality** | Not "just a repackaged website" | ✅ **Implemented in code (MOB-2); signed-in real-device verification remains.** Native users can take a camera photo through the existing Daily Log/Punchlist photo uploader, share a project-aware link to any report through the iOS share sheet, and receive haptic confirmation after successful photo uploads and report-link sharing. These workflows use `src/lib/native/capabilities.ts` and remain hidden or inert in a regular web browser. **Before submission:** verify camera permission, upload completion, share-sheet presentation, and haptics on a signed-in physical iPhone. |
-| **2.1 Export completeness** | Advertised actions work in the submitted build | ✅ **Implemented in code (MOB-5); signed-in real-device verification remains.** Generated CSV/PDF/calendar/JSON/PNG exports and existing drawing/document/photo downloads now use `src/lib/native/fileExport.ts`: web builds retain normal downloads, while Capacitor writes temporary cache files with `@capacitor/filesystem` and opens `Share.share({ files })`. Multi-file Fab Release and backcharge packages open one share sheet. **Before submission:** verify representative CSV, PDF, grouped package, and remote-document exports on a signed-in physical iPhone. |
+| **2.1 Export completeness** | Advertised actions work in the submitted build | ✅ **Implemented in code (MOB-5); signed-in real-device verification remains.** Generated CSV/PDF/calendar/JSON/PNG exports and existing drawing/document/photo downloads use `src/lib/native/fileExport.ts`: web builds retain browser downloads, while Capacitor writes generated files with `@capacitor/filesystem`, downloads remote files directly to native cache with `@capacitor/file-transfer`, and opens `Share.share({ files })`. Fab Release, backcharge packages, and selected documents each open one grouped share sheet. Cache files are cleaned after sharing, failure, or cancellation; closing the sheet produces no success or error message. **Before submission:** verify representative CSV, PDF, grouped package, and a large remote-document export on a signed-in physical iPhone. |
 | **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ✅ **Implemented — see §6.1** (self-service "Delete my account" in Settings → Profile). Needs staging deploy + test before submission. |
 | **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ✅ **Handled — see §6.2 (MOB-4).** Native signed-out users go directly to a non-dismissible sign-in surface; marketing, pricing, signup, Billing navigation, checkout, portal and upgrade prompts remain web-only. |
 | **5.1.1 / 5.1.2 Data & privacy** | Privacy policy linked; data use disclosed | **Handled:** legal pages exist; link them and complete nutrition labels. |

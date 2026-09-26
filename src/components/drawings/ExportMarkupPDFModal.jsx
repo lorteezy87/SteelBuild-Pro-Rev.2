@@ -119,7 +119,7 @@ export default function ExportMarkupPDFModal({
         filename,
         title: "Markup summary",
       });
-      if (presentation === "failed") return;
+      if (presentation !== "downloaded" && presentation !== "shared") return;
       toast.success("Markup PDF exported");
       onClose?.();
     } catch (err) {

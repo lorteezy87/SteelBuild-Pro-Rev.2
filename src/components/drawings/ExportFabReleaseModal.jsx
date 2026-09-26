@@ -442,7 +442,7 @@ export default function ExportFabReleaseModal({
         });
       }
       const presentation = await presentGeneratedFiles({ title: cfg.title, files });
-      if (presentation === "failed") return;
+      if (presentation !== "downloaded" && presentation !== "shared") return;
 
       // (The release + any override are recorded server-side via recordFabRelease
       // above — the old best-effort fab_release_overrides insert is superseded.)

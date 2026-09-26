@@ -613,7 +613,7 @@ export function useScheduleMutations({
     }
   };
 
-  const handleExportIcs = () => {
+  const handleExportIcs = async () => {
     if (!projectId || scheduleTasks.length === 0) return;
     // Use the effective-date overlay so calendar entries match where the
     // Gantt actually places each task. Stored dates would put cascaded tasks
@@ -625,11 +625,12 @@ export function useScheduleMutations({
       toast.info("No tasks with dates to export.");
       return;
     }
-    downloadIcs({
+    const presentation = await downloadIcs({
       filename: `schedule-${selectedProject?.project_number || "project"}.ics`,
       calendarName: `${selectedProject?.name || "Project"} — Schedule`,
       events,
     });
+    if (presentation !== "downloaded" && presentation !== "shared") return;
     toast.success(`Exported ${events.length} tasks to calendar`);
   };
 
@@ -643,7 +644,7 @@ export function useScheduleMutations({
         project: selectedProject,
         tasks: tasksWithEffective.length ? tasksWithEffective : scheduleTasks,
       });
-      if (presentation === "failed") {
+      if (presentation !== "downloaded" && presentation !== "shared") {
         toast.dismiss(t);
         return;
       }

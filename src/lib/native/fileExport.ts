@@ -1,10 +1,11 @@
+import { FileTransfer } from "@capacitor/file-transfer";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { toast } from "sonner";
-import { nativeImpact } from "@/lib/native/capabilities";
+import { isNativeActionCancelled, nativeImpact } from "@/lib/native/capabilities";
 import { isNativePlatform } from "@/lib/native/platform";
 
-export type GeneratedFilePresentation = "downloaded" | "shared" | "failed";
+export type GeneratedFilePresentation = "downloaded" | "shared" | "cancelled" | "failed";
 
 export interface GeneratedFileOptions {
   blob: Blob;
@@ -22,6 +23,17 @@ export interface RemoteFileOptions {
   url: string;
   filename: string;
   title?: string;
+}
+
+export interface RemoteFilesOptions {
+  files: Array<Pick<RemoteFileOptions, "url" | "filename">>;
+  title: string;
+  errorLabel?: string;
+}
+
+interface CachedFile {
+  path: string;
+  uri?: string;
 }
 
 const EXPORT_DIRECTORY = "steelbuild-exports";
@@ -59,16 +71,47 @@ function downloadInBrowser(blob: Blob, filename: string): void {
   anchor.href = url;
   anchor.download = filename;
   anchor.rel = "noopener";
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-/**
- * Present an app-generated file through the platform-native action:
- * a regular browser download on the web, or a temporary cache file plus the
- * iOS/Android share sheet inside Capacitor. Failures are surfaced here so
- * existing click handlers can safely fire-and-forget this asynchronous action.
- */
+async function cleanupCachedFiles(files: CachedFile[]): Promise<void> {
+  for (const { path } of files) {
+    try {
+      await Filesystem.deleteFile({ path, directory: Directory.Cache });
+    } catch {
+      // Cache cleanup is best-effort and must not change the action result.
+    }
+  }
+}
+
+async function shareCachedFiles({
+  files,
+  title,
+  failureLabel,
+}: {
+  files: CachedFile[];
+  title: string;
+  failureLabel: string;
+}): Promise<GeneratedFilePresentation> {
+  try {
+    await Share.share({
+      title,
+      dialogTitle: `Share ${title}`,
+      files: files.flatMap(({ uri }) => uri ? [uri] : []),
+    });
+    await nativeImpact("light");
+    return "shared";
+  } catch (error) {
+    if (isNativeActionCancelled(error)) return "cancelled";
+    toast.error(`Could not share ${failureLabel}.`);
+    return "failed";
+  }
+}
+
+/** Present one app-generated file as a browser download or native share. */
 export async function presentGeneratedFile({
   blob,
   filename,
@@ -81,15 +124,16 @@ export async function presentGeneratedFile({
   });
 }
 
-/** Present several related files in one native share sheet. */
+/** Present several related generated files in one native share sheet. */
 export async function presentGeneratedFiles({
   files,
   title,
   errorLabel,
 }: GeneratedFilesOptions): Promise<GeneratedFilePresentation> {
-  const normalizedFiles = files.map(({ blob, filename }) => ({
+  const preparedFiles = files.map(({ blob, filename }) => ({
     blob,
-    filename: safeFilename(filename),
+    browserFilename: filename.trim() || "steelbuild-export",
+    nativeFilename: safeFilename(filename),
   }));
   const failureLabel = errorLabel || title.trim() || "export files";
 
@@ -98,7 +142,7 @@ export async function presentGeneratedFiles({
       if (typeof document === "undefined" || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
         throw new Error("Browser downloads are unavailable.");
       }
-      normalizedFiles.forEach(({ blob, filename }) => downloadInBrowser(blob, filename));
+      preparedFiles.forEach(({ blob, browserFilename }) => downloadInBrowser(blob, browserFilename));
       return "downloaded";
     } catch {
       toast.error(`Could not download ${failureLabel}.`);
@@ -107,11 +151,13 @@ export async function presentGeneratedFiles({
   }
 
   const stamp = Date.now();
-  const writtenFiles: Array<{ path: string; uri: string }> = [];
+  const cachedFiles: CachedFile[] = [];
   try {
-    for (let index = 0; index < normalizedFiles.length; index += 1) {
-      const { blob, filename } = normalizedFiles[index];
-      const path = `${EXPORT_DIRECTORY}/${stamp}-${index === 0 ? "" : `${index}-`}${filename}`;
+    for (let index = 0; index < preparedFiles.length; index += 1) {
+      const { blob, nativeFilename } = preparedFiles[index];
+      const path = `${EXPORT_DIRECTORY}/${stamp}-${index === 0 ? "" : `${index}-`}${nativeFilename}`;
+      const cachedFile: CachedFile = { path };
+      cachedFiles.push(cachedFile);
       const data = await blobToBase64(blob);
       const { uri } = await Filesystem.writeFile({
         path,
@@ -119,68 +165,98 @@ export async function presentGeneratedFiles({
         directory: Directory.Cache,
         recursive: true,
       });
-      writtenFiles.push({ path, uri });
+      cachedFile.uri = uri;
     }
-    const shareTitle = title.trim() || failureLabel;
-    await Share.share({
-      title: shareTitle,
-      dialogTitle: `Share ${shareTitle}`,
-      files: writtenFiles.map(({ uri }) => uri),
+    return await shareCachedFiles({
+      files: cachedFiles,
+      title: title.trim() || failureLabel,
+      failureLabel,
     });
-    await nativeImpact("light");
-    return "shared";
-  } catch {
+  } catch (error) {
+    if (isNativeActionCancelled(error)) return "cancelled";
     toast.error(`Could not share ${failureLabel}.`);
     return "failed";
   } finally {
-    for (const { path } of writtenFiles) {
-      try {
-        await Filesystem.deleteFile({ path, directory: Directory.Cache });
-      } catch {
-        // Cache cleanup is best-effort and must not turn a successful share into an error.
-      }
-    }
+    await cleanupCachedFiles(cachedFiles);
   }
 }
 
-/**
- * Preserve direct downloads in browsers. In the native shell, fetch the signed
- * file URL into the same temporary-file share path used by generated exports.
- */
+/** Preserve direct browser downloads and use one native sheet for one remote file. */
 export async function presentRemoteFile({
   url,
   filename,
   title,
 }: RemoteFileOptions): Promise<GeneratedFilePresentation> {
-  const normalizedFilename = safeFilename(filename);
+  return presentRemoteFiles({
+    files: [{ url, filename }],
+    title: title?.trim() || safeFilename(filename),
+    errorLabel: safeFilename(filename),
+  });
+}
+
+/**
+ * Download remote files straight to native cache without copying them through
+ * the WebView heap, then present the complete group in one share sheet.
+ */
+export async function presentRemoteFiles({
+  files,
+  title,
+  errorLabel,
+}: RemoteFilesOptions): Promise<GeneratedFilePresentation> {
+  const preparedFiles = files.map(({ url, filename }) => ({
+    url,
+    browserFilename: filename.trim() || "download",
+    nativeFilename: safeFilename(filename),
+  }));
+  const failureLabel = errorLabel || title.trim() || "files";
 
   if (!isNativePlatform()) {
     try {
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = normalizedFilename;
-      anchor.target = "_blank";
-      anchor.rel = "noopener";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
+      for (const { url, browserFilename } of preparedFiles) {
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = browserFilename;
+        anchor.target = "_blank";
+        anchor.rel = "noopener";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
       return "downloaded";
     } catch {
-      toast.error(`Could not download ${normalizedFilename}.`);
+      toast.error(`Could not download ${failureLabel}.`);
       return "failed";
     }
   }
 
+  const batchDirectory = `${EXPORT_DIRECTORY}/${Date.now()}`;
+  const cachedFiles: CachedFile[] = [];
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`File request failed (${response.status}).`);
-    return presentGeneratedFile({
-      blob: await response.blob(),
-      filename: normalizedFilename,
-      title,
+    await Filesystem.mkdir({ path: batchDirectory, directory: Directory.Cache, recursive: true });
+    for (let index = 0; index < preparedFiles.length; index += 1) {
+      const { url, nativeFilename } = preparedFiles[index];
+      const path = `${batchDirectory}/${index}-${nativeFilename}`;
+      const cachedFile: CachedFile = { path };
+      cachedFiles.push(cachedFile);
+      const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
+      await FileTransfer.downloadFile({ url, path: uri });
+      cachedFile.uri = uri;
+    }
+    return await shareCachedFiles({
+      files: cachedFiles,
+      title: title.trim() || failureLabel,
+      failureLabel,
     });
-  } catch {
-    toast.error(`Could not share ${normalizedFilename}.`);
+  } catch (error) {
+    if (isNativeActionCancelled(error)) return "cancelled";
+    toast.error(`Could not share ${failureLabel}.`);
     return "failed";
+  } finally {
+    await cleanupCachedFiles(cachedFiles);
+    try {
+      await Filesystem.rmdir({ path: batchDirectory, directory: Directory.Cache });
+    } catch {
+      // Leave an empty or partially cleaned cache directory for the OS to reclaim.
+    }
   }
 }

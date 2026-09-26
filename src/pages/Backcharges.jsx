@@ -337,7 +337,7 @@ export default function Backcharges() {
           },
         ],
       });
-      if (presentation === "failed") return;
+      if (presentation !== "downloaded" && presentation !== "shared") return;
       toast.success("Defense package exported (PDF + CSV)");
     } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };

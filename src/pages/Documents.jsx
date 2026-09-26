@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { presentRemoteFile } from "@/lib/native/fileExport";
+import { presentRemoteFile, presentRemoteFiles } from "@/lib/native/fileExport";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DocumentCard from "@/components/dms/DocumentCard";
 import DocumentFilters from "@/components/dms/DocumentFilters";
@@ -416,7 +416,7 @@ export default function Documents() {
     try {
       const url = await resolveFileUrl(doc.fileUrl || doc.file_url);
       if (!url) { toast.error("No file URL available"); return; }
-      await presentRemoteFile({
+      return await presentRemoteFile({
         url,
         filename: doc.fileName || doc.file_name || "download",
         title: doc.displayName || doc.title || "Document",
@@ -444,15 +444,36 @@ export default function Documents() {
 
   const handleBulkDownload = async () => {
     const docs = allDocuments.filter((d) => selectedIds.has(d.id));
-    toast.info(`Downloading ${docs.length} file(s)...`);
-    const { failed } = await batchProcess(docs, (doc) => handleDownloadDoc(doc), 3);
-    if (failed.length > 0) {
-      toast.warning(`${docs.length - failed.length} downloaded, ${failed.length} failed`);
+    if (docs.length === 0) return;
+    toast.info(`Preparing ${docs.length} file(s)...`);
+    const { succeeded, failed } = await batchProcess(docs, async (doc) => {
+      const url = await resolveFileUrl(doc.fileUrl || doc.file_url);
+      if (!url) throw new Error("No file URL available");
+      return {
+        url,
+        filename: doc.fileName || doc.file_name || "download",
+      };
+    }, 3);
+    if (succeeded.length === 0) {
+      toast.error(`Could not prepare ${failed.length} file(s).`);
+      return;
     }
+    const presentation = await presentRemoteFiles({
+      files: succeeded.map(({ value }) => value),
+      title: "Selected documents",
+      errorLabel: "selected documents",
+    });
+    if (presentation !== "downloaded" && presentation !== "shared") return;
+    if (failed.length > 0) {
+      toast.warning(`${succeeded.length} ${presentation}, ${failed.length} failed`);
+      return;
+    }
+    toast.success(`${succeeded.length} document(s) ${presentation}`);
   };
 
-  const handleExportCsv = () => {
-    exportDocsCsv(filteredDocs, activeProject?.name);
+  const handleExportCsv = async () => {
+    const presentation = await exportDocsCsv(filteredDocs, activeProject?.name);
+    if (presentation !== "downloaded" && presentation !== "shared") return;
     toast.success(`Exported ${filteredDocs.length} documents to CSV`);
   };
 

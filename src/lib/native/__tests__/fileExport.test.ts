@@ -1,17 +1,27 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   deleteFile,
+  downloadFile,
+  getUri,
   impact,
+  isNativeActionCancelled,
   isNativePlatform,
+  mkdir,
+  rmdir,
   share,
   toastError,
   writeFile,
 } = vi.hoisted(() => ({
   deleteFile: vi.fn(),
+  downloadFile: vi.fn(),
+  getUri: vi.fn(),
   impact: vi.fn(),
+  isNativeActionCancelled: vi.fn(),
   isNativePlatform: vi.fn(),
+  mkdir: vi.fn(),
+  rmdir: vi.fn(),
   share: vi.fn(),
   toastError: vi.fn(),
   writeFile: vi.fn(),
@@ -19,29 +29,49 @@ const {
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Cache: "CACHE" },
-  Filesystem: { deleteFile, writeFile },
+  Filesystem: { deleteFile, getUri, mkdir, rmdir, writeFile },
 }));
+vi.mock("@capacitor/file-transfer", () => ({ FileTransfer: { downloadFile } }));
 vi.mock("@capacitor/share", () => ({ Share: { share } }));
-vi.mock("@/lib/native/capabilities", () => ({ nativeImpact: impact }));
+vi.mock("@/lib/native/capabilities", () => ({ isNativeActionCancelled, nativeImpact: impact }));
 vi.mock("@/lib/native/platform", () => ({ isNativePlatform }));
 vi.mock("sonner", () => ({ toast: { error: toastError } }));
 
-import { presentGeneratedFile, presentGeneratedFiles, presentRemoteFile } from "@/lib/native/fileExport";
+import {
+  presentGeneratedFile,
+  presentGeneratedFiles,
+  presentRemoteFile,
+  presentRemoteFiles,
+} from "@/lib/native/fileExport";
 
-describe("presentGeneratedFile", () => {
+describe("native file presentation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isNativePlatform.mockReturnValue(false);
     writeFile.mockResolvedValue({ uri: "file:///cache/steelbuild-exports/report.csv" });
+    getUri.mockImplementation(({ path }) => Promise.resolve({ uri: `file:///cache/${path}` }));
+    mkdir.mockResolvedValue(undefined);
+    rmdir.mockResolvedValue(undefined);
+    downloadFile.mockResolvedValue({ path: "file:///cache/download" });
     deleteFile.mockResolvedValue(undefined);
     share.mockResolvedValue({ activityType: "com.apple.UIKit.activity.Mail" });
     impact.mockResolvedValue(undefined);
+    isNativeActionCancelled.mockImplementation((error) => /cancel/i.test(String(error?.message || error)));
   });
 
-  it("preserves a normal browser download outside the native shell", async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("preserves a Safari-compatible browser download outside the native shell", async () => {
+    vi.useFakeTimers();
     const click = vi.fn();
-    const anchor = { click, download: "", href: "", rel: "" };
+    const remove = vi.fn();
+    const anchor = { click, remove, download: "", href: "", rel: "" };
     vi.spyOn(document, "createElement").mockReturnValue(anchor as unknown as HTMLAnchorElement);
+    vi.spyOn(document.body, "appendChild").mockImplementation((node) => node);
     const createObjectURL = vi.fn().mockReturnValue("blob:report");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
@@ -54,7 +84,11 @@ describe("presentGeneratedFile", () => {
     expect(result).toBe("downloaded");
     expect(anchor.download).toBe("report.csv");
     expect(anchor.href).toBe("blob:report");
+    expect(document.body.appendChild).toHaveBeenCalledWith(anchor);
     expect(click).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1_000);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:report");
     expect(writeFile).not.toHaveBeenCalled();
     expect(share).not.toHaveBeenCalled();
@@ -102,6 +136,20 @@ describe("presentGeneratedFile", () => {
     expect(toastError).toHaveBeenCalledWith("Could not share pay-app.pdf.");
   });
 
+  it("treats closing the native share sheet as a neutral cancellation", async () => {
+    isNativePlatform.mockReturnValue(true);
+    share.mockRejectedValue(new Error("Share canceled"));
+
+    const result = await presentGeneratedFile({
+      blob: new Blob(["abc"], { type: "application/pdf" }),
+      filename: "pay-app.pdf",
+    });
+
+    expect(result).toBe("cancelled");
+    expect(deleteFile).toHaveBeenCalledOnce();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it("shares a related group of generated files in one native sheet", async () => {
     isNativePlatform.mockReturnValue(true);
     writeFile
@@ -124,12 +172,10 @@ describe("presentGeneratedFile", () => {
     expect(deleteFile).toHaveBeenCalledTimes(2);
   });
 
-  it("fetches a remote document before sharing it from the native shell", async () => {
+  it("downloads a remote document directly to native cache before sharing", async () => {
     isNativePlatform.mockReturnValue(true);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      blob: async () => new Blob(["drawing"], { type: "application/pdf" }),
-    }));
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
 
     const result = await presentRemoteFile({
       url: "https://files.example.com/signed/drawing.pdf",
@@ -138,10 +184,58 @@ describe("presentGeneratedFile", () => {
     });
 
     expect(result).toBe("shared");
-    expect(writeFile).toHaveBeenCalledOnce();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(downloadFile).toHaveBeenCalledWith({
+      path: expect.stringMatching(/^file:\/\/\/cache\/steelbuild-exports\/\d+\/0-S1.1_drawing\.pdf$/),
+      url: "https://files.example.com/signed/drawing.pdf",
+    });
     expect(share).toHaveBeenCalledWith(expect.objectContaining({
-      files: ["file:///cache/steelbuild-exports/report.csv"],
+      files: [expect.stringMatching(/^file:\/\/\/cache\/steelbuild-exports\/\d+\/0-S1.1_drawing\.pdf$/)],
       title: "Drawing S1.1",
     }));
+  });
+
+  it("downloads a remote document group and opens one native share sheet", async () => {
+    isNativePlatform.mockReturnValue(true);
+
+    const result = await presentRemoteFiles({
+      title: "Selected documents",
+      files: [
+        { url: "https://files.example.com/a.pdf", filename: "A.pdf" },
+        { url: "https://files.example.com/b.pdf", filename: "B.pdf" },
+      ],
+    });
+
+    expect(result).toBe("shared");
+    expect(downloadFile).toHaveBeenCalledTimes(2);
+    expect(share).toHaveBeenCalledOnce();
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({
+      files: [
+        expect.stringMatching(/\/0-A\.pdf$/),
+        expect.stringMatching(/\/1-B\.pdf$/),
+      ],
+    }));
+    expect(deleteFile).toHaveBeenCalledTimes(2);
+    expect(rmdir).toHaveBeenCalledOnce();
+  });
+
+  it("cleans up the batch after a remote download fails without sharing a partial group", async () => {
+    isNativePlatform.mockReturnValue(true);
+    downloadFile.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("HTTP 404"));
+
+    const result = await presentRemoteFiles({
+      title: "Selected documents",
+      files: [
+        { url: "https://files.example.com/a.pdf", filename: "A.pdf" },
+        { url: "https://files.example.com/b.pdf", filename: "B.pdf" },
+      ],
+    });
+
+    expect(result).toBe("failed");
+    expect(share).not.toHaveBeenCalled();
+    expect(deleteFile).toHaveBeenCalledTimes(2);
+    expect(rmdir).toHaveBeenCalledOnce();
+    expect(toastError).toHaveBeenCalledOnce();
   });
 });

@@ -85,7 +85,7 @@ export function exportDocsCsv(docs, projectName) {
   ]);
   const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  void presentGeneratedFile({
+  return presentGeneratedFile({
     blob,
     filename: `${(projectName || "project").replace(/\s+/g, "_")}_documents_${new Date().toISOString().split("T")[0]}.csv`,
     title: "Document register",

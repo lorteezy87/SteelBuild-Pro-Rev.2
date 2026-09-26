@@ -1,4 +1,4 @@
-import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { presentGeneratedFile, type GeneratedFilePresentation } from "@/lib/native/fileExport";
 
 /**
  * exportToCSV — render a header row + data rows into a downloaded CSV file.
@@ -38,11 +38,11 @@ const escapeCell = (cell: CsvCell): string => {
   return `"${raw.replace(/"/g, '""')}"`;
 };
 
-export function exportToCSV({ filename, headers, rows }: ExportToCSVArgs): void {
+export function exportToCSV({ filename, headers, rows }: ExportToCSVArgs): Promise<GeneratedFilePresentation> {
   const csv = [headers, ...rows]
     .map((row) => row.map(escapeCell).join(","))
     .join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  void presentGeneratedFile({ blob, filename, title: "CSV export" });
+  return presentGeneratedFile({ blob, filename, title: "CSV export" });
 }

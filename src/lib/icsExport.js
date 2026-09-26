@@ -183,7 +183,7 @@ export function downloadIcs({ filename = "schedule.ics", ...rest } = {}) {
   const ics = buildIcs(rest);
   const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
   const exportFilename = filename.endsWith(".ics") ? filename : `${filename}.ics`;
-  void presentGeneratedFile({ blob, filename: exportFilename, title: "Calendar export" });
+  return presentGeneratedFile({ blob, filename: exportFilename, title: "Calendar export" });
 }
 
 // ── Entity → event shape helpers ────────────────────────────────────────

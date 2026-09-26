@@ -456,7 +456,7 @@ function filenameFor(project, now = new Date()) {
  * @param {object} [opts.project]
  * @param {Array}  [opts.tasks]
  * @param {Date}   [opts.now]
- * @returns {Promise<{pageCount:number, filename:string, presentation:"downloaded"|"shared"|"failed"}>}
+ * @returns {Promise<{pageCount:number, filename:string, presentation:"downloaded"|"shared"|"cancelled"|"failed"}>}
  */
 export async function exportGanttToPdf({ project = {}, tasks = [], now = new Date() } = {}) {
   const pdf = buildGanttPdf({ project, tasks, now });
