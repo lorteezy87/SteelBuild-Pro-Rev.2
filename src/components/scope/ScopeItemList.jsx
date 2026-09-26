@@ -1,6 +1,7 @@
 import React from "react";
 import { Check, X, Info, FileText, Plus, Filter, Paperclip, Clock } from "lucide-react";
 import { formatLocalDate } from "@/utils/dates";
+import ScopeAttachmentLink from "./ScopeAttachmentLink";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -348,11 +349,10 @@ export default function ScopeItemList({
                   </div>
                 )}
 
-                {/* PDF attachment indicator (links directly to the file) */}
+                {/* PDF attachment indicator */}
                 {item.file_url && (
-                  <a
-                    href={item.file_url}
-                    target="_blank" rel="noreferrer"
+                  <ScopeAttachmentLink
+                    fileUrl={item.file_url}
                     onClick={(e) => e.stopPropagation()}
                     title={item.file_name || "Open attachment"}
                     style={{
@@ -368,7 +368,7 @@ export default function ScopeItemList({
                   >
                     <Paperclip size={10} strokeWidth={2.5} />
                     PDF
-                  </a>
+                  </ScopeAttachmentLink>
                 )}
 
                 {/* In-Progress toggle — active when the flag is set, ghost when not */}

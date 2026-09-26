@@ -22,6 +22,9 @@ export function useResolvedFileUrl(fileUrl) {
       return;
     }
     let cancelled = false;
+    // A component can remain mounted while an attachment is replaced. Never
+    // leave the old signed URL actionable while the new object path resolves.
+    setUrl(null);
     setLoading(true);
     setError(null);
     resolveFileUrl(fileUrl)
