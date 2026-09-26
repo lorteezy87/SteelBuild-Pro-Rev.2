@@ -35,6 +35,10 @@ const labelStyle = {
   marginBottom: "4px",
 };
 
+/**
+ * @typedef {{ file_url?: string, path?: string, url?: string, name?: string, uploaded_at?: string }} UploadedPhoto
+ * @param {{ value?: UploadedPhoto[], onChange?: (photos: UploadedPhoto[]) => void, disabled?: boolean, max?: number, label?: string }} props
+ */
 export default function PhotoStripUploader({
   value = [],
   onChange,
