@@ -14,7 +14,7 @@ import {
 } from "@/lib/schedule/predecessorCleanup";
 import { deriveActualsPatch, hasActualsPatch } from "@/lib/schedule/actuals";
 import { taskDurationDays, finishFromDuration } from "@/lib/schedule/duration";
-import { withReconciledPercent } from "@/lib/schedule/taskStatus";
+import { reconcileStatusPercent, withReconciledPercent } from "@/lib/schedule/taskStatus";
 import { withMilestoneFlags } from "@/lib/schedule/taskFields";
 import { readFileText } from "@/lib/textDecoding";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./wbs";
@@ -132,7 +132,9 @@ export function useScheduleMutations({
 
     // Then the three couplings no caller should have to remember:
     //   1. status <-> percent_complete, which the database enforces and which
-    //      every path except the bulk toolbar violated (see taskStatus.ts).
+    //      every write path has to respect (see taskStatus.ts). The bulk
+    //      toolbar did its own version of this and got In Progress wrong; it
+    //      now goes through reconcileStatusPercent too.
     //   2. the milestone columns, so a task cannot be half a milestone.
     //   3. the assignment pair, so editing one field is not invisible because
     //      a reader prefers the other.
@@ -330,11 +332,25 @@ export function useScheduleMutations({
       let stamped = 0;
 
       const results = await batchProcess(ids, (id: any) => {
-        const actuals = deriveActualsPatch({ task: byId.get(id), nextStatus: status });
+        const task = byId.get(id);
+        const actuals = deriveActualsPatch({ task, nextStatus: status });
         if (hasActualsPatch(actuals)) stamped += 1;
+        // The status/percent CHECK is evaluated against the WHOLE resulting
+        // row, so sending `status` alone validates it against the percent
+        // already stored. The old `: undefined` did exactly that for
+        // In Progress / Delayed / On Hold, because the payload builder omits
+        // undefined keys. Delayed and On Hold are unconstrained so that was
+        // harmless; In Progress is not, and it is the reopen case — bulk
+        // moving a Complete task back to In Progress was validated against
+        // the stored 100 and failed, since In Progress requires < 100.
+        //
+        // reconcileStatusPercent answers from the row this task actually
+        // carries, and returns null for a reopen: progress is unknown again,
+        // not zero. Never hand-write this pair (see taskStatus.ts).
+        const reconciled = reconcileStatusPercent(status, task?.percent_complete);
         return entities.ScheduleTask.update(id, {
           status,
-          percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
+          ...(reconciled === undefined ? {} : { percent_complete: reconciled }),
           ...actuals,
         });
       });

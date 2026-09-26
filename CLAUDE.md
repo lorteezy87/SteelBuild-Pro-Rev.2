@@ -54,9 +54,9 @@ So migrations here are applied and stamped by hand, and *that* is what makes the
 - If a drift failure names a version another branch already carries, **port that file alone** (byte-identical, so neither branch conflicts) instead of waiting for that PR to merge.
 
 ## Number-sequence integrity — DO NOT regress
-Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC `get_next_sequence_number` — never derive the next number client-side. `src/components/shared/numberSequencing.jsx` once floored the RPC with a client-side `Math.max()`, which could mint duplicate numbers under concurrency; that was removed (fixed c5612168) — `getNextFormattedNumber` now re-allocates from the RPC until it clears any existing records, and fails closed if the RPC is unavailable. Keep it RPC-only. Gated by a hook (see `.claude/hooks/`).
-- **Open regression (audit 2026-09-21): `src/components/drawings/viewer/ZonePanel.jsx` mints its own number.** When the RPC throws it falls back to `` `RFI #${String(Date.now()).slice(-6)}` `` and creates the RFI anyway, so an outage produces an official RFI number the sequence never issued and will later issue to somebody else. Fail closed like `getNextFormattedNumber` does.
-- **The hook only guards files whose path matches `numberSequencing`** (`.claude/hooks/numbersequencing-guard.sh`), so any other caller inventing a number is unguarded. Treat the rule as the gate, not the hook.
+Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC `get_next_sequence_number` — never derive the next number client-side. `src/components/shared/numberSequencing.jsx` once floored the RPC with a client-side `Math.max()`, which could mint duplicate numbers under concurrency; that was removed (fixed c5612168) — `getNextFormattedNumber` now re-allocates from the RPC until it clears any existing records, and fails closed if the RPC is unavailable. Keep it RPC-only.
+- **LOGIC-1 closed by PR #477:** `ZonePanel.jsx` now lets sequence-allocation failure abort the create instead of inventing an RFI number from the clock.
+- The legacy hook still only guards files whose path matches `numberSequencing`, so CI also runs `src/components/shared/__tests__/noInventedRecordNumbers.test.ts`. That test scans non-test application source and rejects clock/random-derived official-number assignments and prefixed record numbers. Treat the test as the application-wide gate; do not replace it with a narrower hook-only check.
 
 ## Linked-RFI id spaces — two columns, same name, different types
 `drawings.linked_rfi_ids` is **text**: a comma-separated list of RFI *numbers* ("RFI #001, RFI #002" — what SheetFormModal asks detailers to type). `submittals.linked_rfi_ids` is **uuid[]**: FKs to `rfis.id`. `drawing_sets` has no such column at all. Never pool them into one set. Match numbers with the canonical `normNum` + `linkedRfiNumbers` from `src/lib/fabReleaseGate.ts` — comma-only split, `toUpperCase().replace(/[^A-Z0-9]/g,"")`. Hand-rolled variants have shipped twice that split on whitespace or kept the `#`, so "RFI #001" never matched and packages reported "Fab ready" with an open RFI against them (fixed e40711b8, df1d885e).
@@ -101,26 +101,21 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
   reopening a finished one fail with a raw Postgres constraint name. Take the
   vocabulary from `SCHEDULE_STATUSES` and let `withReconciledPercent` set the
   percent — never hand-write either (`src/lib/schedule/taskStatus.ts`).
-  - **Open regression (audit 2026-09-21): the bulk toolbar is the one path
-    still violating it.** `bulkUpdateMut` in `useScheduleMutations.ts` calls
-    `entities.ScheduleTask.update` directly with `percent_complete:` set to
-    `100` for Complete, `0` for Not Started and **`undefined` for everything
-    else**, so a bulk move to In Progress / On Hold / Delayed sends `status`
-    alone and is validated against the percent already stored — bulk-reopening
-    a Complete task (stored 100) fails the CHECK. Route it through
-    `buildTaskUpdate` like every other path. An earlier version of this file
-    named the bulk toolbar as the one path that got this *right*; that was
-    backwards.
+  - **Closed 2026-09-24 (PR #480): bulk and field progress now use the
+    canonical reconciliation.** The bulk toolbar passes each row's stored
+    percent to `reconcileStatusPercent`, so reopening Complete → In Progress
+    writes NULL rather than sending `status` alone. Field Today and its offline
+    replay also use a task-aware canonical patch that stamps actual start/finish
+    dates instead of maintaining a second schedule-write semantic.
 - **Reopening clears the percent to NULL on purpose.** Complete → 100 and
   Not Started → 0 are definitional; In Progress is not. The transition says the
   task is no longer done but not how much remains, so the percent becomes
   *unknown*. Don't "fix" that by inventing 0 or 99.
-  - **Open regression (audit 2026-09-21): the client layer inflicts exactly that
-    0.** `normalizeFields` in `src/api/client/entities.ts` runs
-    `Number(out.percent_complete)` on a key that is present, and `Number(null)`
-    is `0`, which `Number.isFinite` accepts — so the deliberate NULL is clamped
-    to `0` before it reaches Postgres and the reopened task reads as 0% and
-    lands in the stalled filter. Guard the null before coercing.
+  - **Closed 2026-09-24 (PR #480): NULL remains unknown end to end.**
+    `normalizeFields` now distinguishes a present numeric percent from an
+    explicit NULL before coercion and delegates contradictory status/percent
+    pairs to `reconcileStatusPercent`; it no longer turns NULL into 0, invents
+    a status for a null-only write, or fabricates 99% for a reopen.
 - **Two percent readers, and they are not interchangeable.**
   `percentCompleteOrNull` returns null when unknown — use it for any **claim**
   (a printed figure, an average, a stalled test). `displayPct` flattens unknown
