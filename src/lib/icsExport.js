@@ -21,6 +21,8 @@
  *   });
  */
 
+import { presentGeneratedFile } from "@/lib/native/fileExport";
+
 // ── RFC 5545 helpers ────────────────────────────────────────────────────
 
 const HOST = (typeof window !== "undefined" && window.location?.hostname) || "steelbuildpro.app";
@@ -180,15 +182,8 @@ export function buildIcs({ events = [], calendarName = "SteelBuild Pro" } = {}) 
 export function downloadIcs({ filename = "schedule.ics", ...rest } = {}) {
   const ics = buildIcs(rest);
   const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.endsWith(".ics") ? filename : `${filename}.ics`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Revoke on a tick delay so Safari has time to read the blob.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const exportFilename = filename.endsWith(".ics") ? filename : `${filename}.ics`;
+  void presentGeneratedFile({ blob, filename: exportFilename, title: "Calendar export" });
 }
 
 // ── Entity → event shape helpers ────────────────────────────────────────

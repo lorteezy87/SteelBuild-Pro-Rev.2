@@ -9,6 +9,7 @@
  */
 import { supabase } from "@/lib/supabase";
 import { fetchAllRows } from "@/lib/pagedQuery";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import type { ProjectExportEnvelope } from "@/services/projectExportService";
 
 export interface WorkspaceExportFailure {
@@ -212,10 +213,9 @@ export function workspaceExportFileName(bundle: WorkspaceExport): string {
 /** Trigger a browser download of the workspace backup as JSON. */
 export function downloadWorkspaceExport(bundle: WorkspaceExport): void {
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = workspaceExportFileName(bundle);
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: workspaceExportFileName(bundle),
+    title: "Workspace data export",
+  });
 }

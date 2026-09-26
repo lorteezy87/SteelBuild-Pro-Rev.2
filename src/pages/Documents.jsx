@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { presentRemoteFile } from "@/lib/native/fileExport";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DocumentCard from "@/components/dms/DocumentCard";
 import DocumentFilters from "@/components/dms/DocumentFilters";
@@ -415,12 +416,11 @@ export default function Documents() {
     try {
       const url = await resolveFileUrl(doc.fileUrl || doc.file_url);
       if (!url) { toast.error("No file URL available"); return; }
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = doc.fileName || doc.file_name || "download";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      await presentRemoteFile({
+        url,
+        filename: doc.fileName || doc.file_name || "download",
+        title: doc.displayName || doc.title || "Document",
+      });
     } catch (err) {
       toast.error(`Download failed: ${toUserErrorMessage(err, "Unknown error")}`);
     }

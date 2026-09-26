@@ -639,10 +639,14 @@ export function useScheduleMutations({
     const t = toast.loading("Generating PDF…");
     try {
       const { exportGanttToPdf } = await import("@/lib/exportGanttPdf");
-      const { pageCount, filename } = await exportGanttToPdf({
+      const { pageCount, filename, presentation } = await exportGanttToPdf({
         project: selectedProject,
         tasks: tasksWithEffective.length ? tasksWithEffective : scheduleTasks,
       });
+      if (presentation === "failed") {
+        toast.dismiss(t);
+        return;
+      }
       toast.success(
         `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
         { id: t },

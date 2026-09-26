@@ -16,6 +16,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { generateMarkupSummaryPdf, suggestMarkupPdfFilename } from "@/lib/exports/markupPDF";
 import { fetchMarkupRows, fetchSignoffRows } from "@/lib/exports/markupExportData";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 
@@ -113,7 +114,12 @@ export default function ExportMarkupPDFModal({
         signoffs,
       });
       const filename = suggestMarkupPdfFilename({ scope, label });
-      pdf.save(filename);
+      const presentation = await presentGeneratedFile({
+        blob: pdf.output("blob"),
+        filename,
+        title: "Markup summary",
+      });
+      if (presentation === "failed") return;
       toast.success("Markup PDF exported");
       onClose?.();
     } catch (err) {

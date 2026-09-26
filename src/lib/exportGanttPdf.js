@@ -12,6 +12,7 @@
  */
 
 import { jsPDF } from "jspdf";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import { parseDateUTC, fmtDate } from "@/components/schedule/scheduleDateUtils";
 
 const PAGE_FORMAT = "tabloid";
@@ -455,11 +456,15 @@ function filenameFor(project, now = new Date()) {
  * @param {object} [opts.project]
  * @param {Array}  [opts.tasks]
  * @param {Date}   [opts.now]
- * @returns {Promise<{pageCount:number, filename:string}>}
+ * @returns {Promise<{pageCount:number, filename:string, presentation:"downloaded"|"shared"|"failed"}>}
  */
 export async function exportGanttToPdf({ project = {}, tasks = [], now = new Date() } = {}) {
   const pdf = buildGanttPdf({ project, tasks, now });
   const filename = filenameFor(project, now);
-  pdf.save(filename);
-  return { pageCount: pdf.internal.getNumberOfPages(), filename };
+  const presentation = await presentGeneratedFile({
+    blob: pdf.output("blob"),
+    filename,
+    title: "Schedule PDF",
+  });
+  return { pageCount: pdf.internal.getNumberOfPages(), filename, presentation };
 }

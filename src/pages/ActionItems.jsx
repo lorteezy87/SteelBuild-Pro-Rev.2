@@ -14,6 +14,7 @@ import { BulkActionBar, Button } from "@/components/design-system";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
 import {
   buildActionItemAssignPatch,
@@ -40,12 +41,7 @@ function exportActionItemsToCSV(items) {
     .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "action-items.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename: "action-items.csv", title: "Action items" });
 }
 
 const priorities = [

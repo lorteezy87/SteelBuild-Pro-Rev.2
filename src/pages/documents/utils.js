@@ -9,6 +9,8 @@
  * the boundary so every downstream component gets the same shape.
  */
 
+import { presentGeneratedFile } from "@/lib/native/fileExport";
+
 export function normalizeDocument(d) {
   return {
     ...d,
@@ -83,14 +85,11 @@ export function exportDocsCsv(docs, projectName) {
   ]);
   const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${(projectName || "project").replace(/\s+/g, "_")}_documents_${new Date().toISOString().split("T")[0]}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `${(projectName || "project").replace(/\s+/g, "_")}_documents_${new Date().toISOString().split("T")[0]}.csv`,
+    title: "Document register",
+  });
 }
 
 /** File-type badge color map used in the list view. */

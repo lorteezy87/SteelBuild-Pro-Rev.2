@@ -1,3 +1,5 @@
+import { presentGeneratedFile } from "@/lib/native/fileExport";
+
 /**
  * exportToCSV — render a header row + data rows into a downloaded CSV file.
  *
@@ -37,20 +39,10 @@ const escapeCell = (cell: CsvCell): string => {
 };
 
 export function exportToCSV({ filename, headers, rows }: ExportToCSVArgs): void {
-  if (typeof document === "undefined" || typeof URL === "undefined") {
-    // No-op on the server. Nothing else this helper would do is meaningful.
-    return;
-  }
-
   const csv = [headers, ...rows]
     .map((row) => row.map(escapeCell).join(","))
     .join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename, title: "CSV export" });
 }

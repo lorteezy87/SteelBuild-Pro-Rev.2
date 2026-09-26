@@ -31,8 +31,8 @@ import {
   buildClaimsManifestCsv,
   buildReadme,
   suggestPackageName,
-  downloadTextFile,
 } from "@/lib/exports/fabRelease";
+import { presentGeneratedFiles } from "@/lib/native/fileExport";
 
 /**
  * Group key for a sheet: the FK set id, else the id of the drawing_sets row
@@ -422,15 +422,27 @@ export default function ExportFabReleaseModal({
         zipped: false,
       });
 
-      downloadTextFile(manifestCsv, `${stem}_manifest.csv`, "text/csv;charset=utf-8");
-      downloadTextFile(readme, `${stem}_README.md`, "text/markdown;charset=utf-8");
+      const files = [
+        {
+          blob: new Blob([manifestCsv], { type: "text/csv;charset=utf-8" }),
+          filename: `${stem}_manifest.csv`,
+        },
+        {
+          blob: new Blob([readme], { type: "text/markdown;charset=utf-8" }),
+          filename: `${stem}_README.md`,
+        },
+      ];
       if (urlLines.length > 0) {
-        downloadTextFile(
-          ["set_name | sheet_number | title | file_url", ...urlLines].join("\n"),
-          `${stem}_URLS.txt`,
-          "text/plain;charset=utf-8"
-        );
+        files.push({
+          blob: new Blob(
+            [["set_name | sheet_number | title | file_url", ...urlLines].join("\n")],
+            { type: "text/plain;charset=utf-8" },
+          ),
+          filename: `${stem}_URLS.txt`,
+        });
       }
+      const presentation = await presentGeneratedFiles({ title: cfg.title, files });
+      if (presentation === "failed") return;
 
       // (The release + any override are recorded server-side via recordFabRelease
       // above — the old best-effort fab_release_overrides insert is superseded.)

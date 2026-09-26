@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { resolveFileUrl } from "@/api/supabaseClient";
+import { presentRemoteFile } from "@/lib/native/fileExport";
 import {
   PHOTO_CATEGORIES,
   createPhotoEditPatch,
@@ -85,17 +86,14 @@ export default function PhotoLightbox({
     setEditing(false);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     try {
       if (!resolvedUrl) return;
-      const anchor = document.createElement("a");
-      anchor.href = resolvedUrl;
-      anchor.download = photo.file_name || photo.title || "photo";
-      anchor.target = "_blank";
-      anchor.rel = "noopener";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
+      await presentRemoteFile({
+        url: resolvedUrl,
+        filename: photo.file_name || photo.title || "photo",
+        title: photo.title || "Jobsite photo",
+      });
     } catch {
       toast.error("Download failed");
     }

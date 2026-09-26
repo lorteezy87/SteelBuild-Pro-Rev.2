@@ -4,6 +4,7 @@ import { parseUserPreferencesExport, serializeUserPreferences } from "@/lib/user
 import type { UserPreferences } from "@/lib/userPreferences/schema";
 import { decodeTextBytes, readFileText, stripNulDeep, TextDecodingError } from "@/lib/textDecoding";
 import { PreferenceResetPanel } from "./PreferenceResetPanel";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 /**
  * Decode by byte-order mark / UTF-16 sniff and drop U+0000, which Postgres
@@ -28,13 +29,11 @@ export function PreferencesDataTab({ preferences, onSave, onPatch, isSaving }: {
 
   const exportSettings = () => {
     const blob = new Blob([serializeUserPreferences(preferences)], { type: "application/json" });
-    if (typeof URL.createObjectURL !== "function") return;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `steelbuild-settings-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    void presentGeneratedFile({
+      blob,
+      filename: `steelbuild-settings-${new Date().toISOString().slice(0, 10)}.json`,
+      title: "SteelBuild settings",
+    });
   };
 
   const importFile = async (file: File | undefined) => {

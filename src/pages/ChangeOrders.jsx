@@ -46,6 +46,7 @@ import {
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 import { BulkActionBar } from "@/components/design-system";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 export default function ChangeOrders() {
   const qc = useQueryClient();
@@ -415,12 +416,11 @@ export default function ChangeOrders() {
       ),
     ].join("\n");
     const blob = new Blob([rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `change-orders-${projectName.replace(/\s+/g, "-")}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    void presentGeneratedFile({
+      blob,
+      filename: `change-orders-${projectName.replace(/\s+/g, "-")}.csv`,
+      title: "Change orders",
+    });
   };
 
   const modals = (

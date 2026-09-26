@@ -11,6 +11,7 @@ import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 import { compareDrawingSetPackages, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
 import { resolveDrawingPackageDue } from "@/pages/drawingSubmittalHub/format";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 /**
  * Decide whether a stage transition is legal.
@@ -155,12 +156,11 @@ export function exportTransmittal(drawings, projectName) {
     .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${projectName || "project"}_transmittal_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `${projectName || "project"}_transmittal_${new Date().toISOString().slice(0, 10)}.csv`,
+    title: "Drawing transmittal",
+  });
 }
 
 /**
