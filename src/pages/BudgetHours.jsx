@@ -39,6 +39,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
 import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
 import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 /* ─────────────────────────────────────────────
    Variance helpers
@@ -759,12 +760,7 @@ export default function BudgetHours() {
       ]);
       const csv = [headers, ...exportRows].map((row) => row.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "budget_hours.csv";
-      a.click();
-      URL.revokeObjectURL(url);
+      void presentGeneratedFile({ blob, filename: "budget_hours.csv", title: "Budget hours" });
     };
 
     return (

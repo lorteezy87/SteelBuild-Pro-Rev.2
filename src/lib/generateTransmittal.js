@@ -4,6 +4,7 @@
  * Produces a clean, professionally formatted construction transmittal letter.
  */
 import { jsPDF } from "jspdf";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import { formatLocalDate } from "@/utils/dates";
 
 // ── Color palette (RGB) ──────────────────────────────────────────────────────
@@ -322,5 +323,5 @@ export function generateTransmittal({
 
   // ── Save ─────────────────────────────────────────────────────────────────
   const filename = `Transmittal_${(transmittalNumber || "T001").replace(/\s/g, "_")}_${project.project_number || "PRJ"}.pdf`;
-  pdf.save(filename);
+  return presentGeneratedFile({ blob: pdf.output("blob"), filename, title: "Document transmittal" });
 }

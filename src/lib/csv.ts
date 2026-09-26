@@ -1,3 +1,5 @@
+import { presentGeneratedFile, type GeneratedFilePresentation } from "@/lib/native/fileExport";
+
 /**
  * exportToCSV — render a header row + data rows into a downloaded CSV file.
  *
@@ -36,21 +38,11 @@ const escapeCell = (cell: CsvCell): string => {
   return `"${raw.replace(/"/g, '""')}"`;
 };
 
-export function exportToCSV({ filename, headers, rows }: ExportToCSVArgs): void {
-  if (typeof document === "undefined" || typeof URL === "undefined") {
-    // No-op on the server. Nothing else this helper would do is meaningful.
-    return;
-  }
-
+export function exportToCSV({ filename, headers, rows }: ExportToCSVArgs): Promise<GeneratedFilePresentation> {
   const csv = [headers, ...rows]
     .map((row) => row.map(escapeCell).join(","))
     .join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  return presentGeneratedFile({ blob, filename, title: "CSV export" });
 }
