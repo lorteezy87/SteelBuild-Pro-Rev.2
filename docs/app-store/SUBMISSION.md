@@ -21,9 +21,9 @@ done in CI/Linux.
   `webDir: dist`), plugins **installed** (`app`, `status-bar`, `splash-screen`,
   `keyboard`, `haptics`, `camera`, `share`, `preferences`), npm scripts
   (`cap:add:ios`, `cap:sync`, `cap:open`, `ios`).
-  - ⚠️ Installed is not wired. Only `app`, `keyboard`, `splash-screen` and
-    `status-bar` have call sites; `camera`, `haptics`, `share` and `preferences`
-    have none — see guideline 4.2 below.
+  - ✅ `camera`, `haptics`, and `share` are wired to field-photo uploads and
+    project-aware report-link sharing. `preferences` is installed but remains
+    unused.
   - ✅ **The `ios/` Xcode project is committed.** `npm run cap:sync` and an
     unsigned generic-device Xcode build passed on 2026-09-23. Simulator and
     real-device UI checks are still required before submission.
@@ -137,7 +137,8 @@ must serve the bundled offline assets, not a dev URL.
 | Guideline | What it requires | Status / action |
 |---|---|---|
 | **2.1 Completeness** | Reviewer can actually use the app | **Action:** create a demo login with seeded data; put it in App Review Information. |
-| **4.2 Minimum functionality** | Not "just a repackaged website" | **NOT handled — highest rejection risk (MOB-2).** `@capacitor/camera`, `@capacitor/haptics`, `@capacitor/share` and `@capacitor/preferences` are installed but have **zero call sites in `src/`** (verified 2026-09-22). Only `app`, `keyboard`, `splash-screen` and `status-bar` are wired, in `src/lib/native/capacitor.ts` — that is chrome, not capability. As it stands this is a wrapped website. **Action:** actually ship camera capture (field photos, punchlist), the share sheet (transmittals, reports) and haptics on the gated actions before submitting. |
+| **4.2 Minimum functionality** | Not "just a repackaged website" | ✅ **Implemented in code (MOB-2); signed-in real-device verification remains.** Native users can take a camera photo through the existing Daily Log/Punchlist photo uploader, share a project-aware link to any report through the iOS share sheet, and receive haptic confirmation after successful photo uploads and report-link sharing. These workflows use `src/lib/native/capabilities.ts` and remain hidden or inert in a regular web browser. **Before submission:** verify camera permission, upload completion, share-sheet presentation, and haptics on a signed-in physical iPhone. |
+| **2.1 Export completeness** | Advertised actions work in the submitted build | **Action (MOB-5):** native CSV/PDF/XLSX exports still use browser blob/download flows. Route them through `@capacitor/filesystem` plus `Share.share({ files })` before submission, or hide each unsupported native export action. Report-link sharing does not close this item. |
 | **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ✅ **Implemented — see §6.1** (self-service "Delete my account" in Settings → Profile). Needs staging deploy + test before submission. |
 | **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ✅ **Handled — see §6.2 (MOB-4).** Native signed-out users go directly to a non-dismissible sign-in surface; marketing, pricing, signup, Billing navigation, checkout, portal and upgrade prompts remain web-only. |
 | **5.1.1 / 5.1.2 Data & privacy** | Privacy policy linked; data use disclosed | **Handled:** legal pages exist; link them and complete nutrition labels. |

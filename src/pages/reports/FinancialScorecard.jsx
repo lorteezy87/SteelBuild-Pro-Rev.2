@@ -368,7 +368,7 @@ export default function FinancialScorecard() {
 
   if (!kpis) {
     return (
-      <ReportShell title="Financial Scorecard" subtitle="Loading...">
+      <ReportShell title="Financial Scorecard" subtitle="Loading..." shareProjectId={projectId}>
         <div style={{ ...CARD, textAlign: "center", padding: 60 }}>
           <div style={{ ...body, fontSize: 14, color: "var(--text-muted)" }}>Loading project data...</div>
         </div>
@@ -383,6 +383,7 @@ export default function FinancialScorecard() {
     <ReportShell
       title="Financial Scorecard"
       subtitle={`${projectNumber} — ${projectName}`}
+      shareProjectId={projectId}
       onExportCSV={() => {
         const rows = [
           { kpi: "CPI", value: kpis.cpi?.toFixed(2) || "N/A", target: ">= 0.95" },
