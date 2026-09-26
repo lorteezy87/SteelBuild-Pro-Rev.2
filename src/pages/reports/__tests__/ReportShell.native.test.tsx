@@ -53,6 +53,7 @@ describe("ReportShell native actions", () => {
           onExportCSV={undefined}
           onPrint={() => {}}
           headerActions={undefined}
+          shareProjectId="project-42"
         >
           Report body
         </ReportShell>
@@ -67,6 +68,33 @@ describe("ReportShell native actions", () => {
     await waitFor(() => expect(shareCurrentReport).toHaveBeenCalledWith({
       title: "Project Status",
       url: sharedUrl.toString(),
+    }));
+  });
+
+  it("does not attach the active project to a portfolio report link", async () => {
+    window.history.pushState({}, "", "/Reports/project-status");
+    render(
+      <MemoryRouter>
+        <ReportShell
+          title="Project Status"
+          count={undefined}
+          unit={undefined}
+          subtitle={undefined}
+          filters={undefined}
+          onExportCSV={undefined}
+          onPrint={() => {}}
+          headerActions={undefined}
+        >
+          Portfolio report body
+        </ReportShell>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Share link" }));
+
+    await waitFor(() => expect(shareCurrentReport).toHaveBeenCalledWith({
+      title: "Project Status",
+      url: window.location.href,
     }));
   });
 

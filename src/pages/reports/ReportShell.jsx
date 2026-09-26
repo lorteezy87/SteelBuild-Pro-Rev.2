@@ -22,6 +22,21 @@ import { isNativePlatform } from "@/lib/native/platform";
 import { isNativeActionCancelled, shareCurrentReport } from "@/lib/native/capabilities";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 
+/**
+ * @param {{
+ *   eyebrow?: string,
+ *   title: string,
+ *   count?: React.ReactNode,
+ *   unit?: React.ReactNode,
+ *   subtitle?: React.ReactNode,
+ *   filters?: React.ReactNode,
+ *   onExportCSV?: (() => unknown) | null,
+ *   onPrint?: (() => unknown) | null,
+ *   headerActions?: React.ReactNode,
+ *   shareProjectId?: string | null,
+ *   children?: React.ReactNode,
+ * }} props
+ */
 export default function ReportShell({
   eyebrow = "REPORTS",
   title,
@@ -32,6 +47,7 @@ export default function ReportShell({
   onExportCSV,
   onPrint = printReport,
   headerActions,
+  shareProjectId = null,
   children,
 }) {
   const navigate = useNavigate();
@@ -54,7 +70,7 @@ export default function ReportShell({
   const shareReport = async () => {
     try {
       const url = new URL(window.location.href);
-      if (activeProject?.id) url.searchParams.set("projectId", activeProject.id);
+      if (shareProjectId) url.searchParams.set("projectId", shareProjectId);
       await shareCurrentReport({ title, url: url.toString() });
     } catch (error) {
       if (!isNativeActionCancelled(error)) toast.error("Could not open the share sheet.");
