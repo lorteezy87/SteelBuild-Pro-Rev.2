@@ -37,14 +37,19 @@ export default function ReportShell({
   const navigate = useNavigate();
   const native = isNativePlatform();
   const { activeProject, loading: projectsLoading, projects, setActiveProject } = useProjectContext();
+  const sharedProjectId = new URLSearchParams(window.location.search).get("projectId");
+  const sharedProject = sharedProjectId
+    ? projects.find((project) => project.id === sharedProjectId)
+    : null;
 
   useEffect(() => {
-    if (projectsLoading) return;
-    const sharedProjectId = new URLSearchParams(window.location.search).get("projectId");
-    if (!sharedProjectId || activeProject?.id === sharedProjectId) return;
-    const sharedProject = projects.find((project) => project.id === sharedProjectId);
-    if (sharedProject) setActiveProject(sharedProject);
-  }, [activeProject?.id, projects, projectsLoading, setActiveProject]);
+    if (!sharedProjectId || projectsLoading) return;
+    if (!sharedProject) {
+      if (activeProject) setActiveProject(null);
+      return;
+    }
+    if (activeProject?.id !== sharedProjectId) setActiveProject(sharedProject);
+  }, [activeProject, projectsLoading, setActiveProject, sharedProject, sharedProjectId]);
 
   const shareReport = async () => {
     try {
@@ -55,6 +60,22 @@ export default function ReportShell({
       if (!isNativeActionCancelled(error)) toast.error("Could not open the share sheet.");
     }
   };
+
+  if (sharedProjectId && projectsLoading) {
+    return <div role="status">Loading the shared project…</div>;
+  }
+
+  if (sharedProjectId && !sharedProject) {
+    return (
+      <div role="alert">
+        This shared project is unavailable. Ask the sender to confirm your project access.
+      </div>
+    );
+  }
+
+  if (sharedProjectId && activeProject?.id !== sharedProjectId) {
+    return <div role="status">Opening the shared project…</div>;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

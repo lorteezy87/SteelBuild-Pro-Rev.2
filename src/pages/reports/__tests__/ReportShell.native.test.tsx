@@ -99,4 +99,35 @@ describe("ReportShell native actions", () => {
 
     await waitFor(() => expect(setActiveProject).toHaveBeenCalledWith(sharedProject));
   });
+
+  it("fails closed when a shared project is inaccessible", async () => {
+    useProjectContext.mockReturnValue({
+      activeProject: { id: "project-42", name: "Tower A" },
+      loading: false,
+      projects: [{ id: "project-42", name: "Tower A" }],
+      setActiveProject,
+    });
+    window.history.pushState({}, "", "/Reports/project-status?projectId=project-99");
+
+    render(
+      <MemoryRouter>
+        <ReportShell
+          title="Project Status"
+          count={undefined}
+          unit={undefined}
+          subtitle={undefined}
+          filters={undefined}
+          onExportCSV={undefined}
+          onPrint={() => {}}
+          headerActions={undefined}
+        >
+          Private report body
+        </ReportShell>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(setActiveProject).toHaveBeenCalledWith(null));
+    expect(screen.getByRole("alert")).toHaveTextContent("shared project is unavailable");
+    expect(screen.queryByText("Private report body")).not.toBeInTheDocument();
+  });
 });
