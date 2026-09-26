@@ -48,4 +48,24 @@ describe("PhotoStripUploader native capture", () => {
     ]);
     expect(nativeImpact).toHaveBeenCalledWith("medium");
   });
+
+  it("prevents photo removal while an upload is still running", async () => {
+    let finishUpload: ((value: { file_url: string }) => void) | undefined;
+    uploadFile.mockReturnValue(new Promise((resolve) => { finishUpload = resolve; }));
+    const photo = new File(["image"], "jobsite.jpg", { type: "image/jpeg" });
+    captureNativePhoto.mockResolvedValue(photo);
+
+    render(
+      <PhotoStripUploader
+        value={[{ file_url: "https://files.example/existing.jpg", name: "existing.jpg" }]}
+        onChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+
+    await waitFor(() => expect(uploadFile).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: "Remove photo" })).toBeDisabled();
+    finishUpload?.({ file_url: "https://files.example/jobsite.jpg" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Remove photo" })).not.toBeDisabled());
+  });
 });

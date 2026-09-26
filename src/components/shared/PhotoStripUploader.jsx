@@ -141,7 +141,7 @@ export default function PhotoStripUploader({
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); removeAt(idx); }}
-                disabled={disabled}
+                disabled={disabled || uploading || capturing}
                 aria-label="Remove photo"
                 style={{
                   // 40px transparent hit area anchored top-right so the tap

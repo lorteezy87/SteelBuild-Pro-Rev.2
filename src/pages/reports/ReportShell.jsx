@@ -11,7 +11,7 @@
  * reports that need to disable print can pass `onPrint={null}`.
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CommandBar } from "@/components/design-system";
 import { ChevronLeft, Download, Printer, Share2 } from "lucide-react";
@@ -20,6 +20,7 @@ import { mono } from "./constants";
 import { printReport } from "./utils";
 import { isNativePlatform } from "@/lib/native/platform";
 import { isNativeActionCancelled, shareCurrentReport } from "@/lib/native/capabilities";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
 export default function ReportShell({
   eyebrow = "REPORTS",
@@ -35,10 +36,21 @@ export default function ReportShell({
 }) {
   const navigate = useNavigate();
   const native = isNativePlatform();
+  const { activeProject, loading: projectsLoading, projects, setActiveProject } = useProjectContext();
+
+  useEffect(() => {
+    if (projectsLoading) return;
+    const sharedProjectId = new URLSearchParams(window.location.search).get("projectId");
+    if (!sharedProjectId || activeProject?.id === sharedProjectId) return;
+    const sharedProject = projects.find((project) => project.id === sharedProjectId);
+    if (sharedProject) setActiveProject(sharedProject);
+  }, [activeProject?.id, projects, projectsLoading, setActiveProject]);
 
   const shareReport = async () => {
     try {
-      await shareCurrentReport({ title, url: window.location.href });
+      const url = new URL(window.location.href);
+      if (activeProject?.id) url.searchParams.set("projectId", activeProject.id);
+      await shareCurrentReport({ title, url: url.toString() });
     } catch (error) {
       if (!isNativeActionCancelled(error)) toast.error("Could not open the share sheet.");
     }
@@ -81,7 +93,7 @@ export default function ReportShell({
         {headerActions}
         {native && (
           <button
-            aria-label="Share"
+            aria-label="Share link"
             onClick={() => { void shareReport(); }}
             style={{
               display: "flex",
@@ -100,7 +112,7 @@ export default function ReportShell({
               cursor: "pointer",
             }}
           >
-            <Share2 size={12} /> Share
+            <Share2 size={12} /> Share link
           </button>
         )}
         {onExportCSV && (

@@ -78,6 +78,19 @@ describe("native app capabilities", () => {
     }));
   });
 
+  it("does not expose a localhost development URL through the share sheet", async () => {
+    share.mockResolvedValue(undefined);
+
+    await shareCurrentReport({
+      title: "Project Status",
+      url: "http://localhost:5173/Reports/project-status?projectId=42",
+    });
+
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({
+      url: "https://steelbuild-pro.com/Reports/project-status?projectId=42",
+    }));
+  });
+
   it("skips plugin calls in a regular web browser", async () => {
     isNativePlatform.mockReturnValue(false);
 

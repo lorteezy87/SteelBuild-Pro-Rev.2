@@ -15,7 +15,10 @@ function fileExtension(format?: string): string {
 function publicShareUrl(url: string): string {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed.toString();
+    const isPublicWebUrl = (parsed.protocol === "http:" || parsed.protocol === "https:")
+      && parsed.hostname !== "localhost"
+      && parsed.hostname !== "127.0.0.1";
+    if (isPublicWebUrl) return parsed.toString();
     return `${PUBLIC_ORIGIN}${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return PUBLIC_ORIGIN;
