@@ -9,7 +9,7 @@
  * budget+actual, field hours budget+actual, notes. Save routes to the parent's
  * createMut (create) or updateMut ({ id, patch }) (edit) — the modal never
  * touches Supabase or the query cache itself, so audit + invalidation stay
- * owned by BudgetHours.jsx (mirrors the page mutation contract).
+ * owned by BudgetHours.tsx (mirrors the page mutation contract).
  *
  * Styled with the shared design-system primitives (.sbd-input / .sbd-select /
  * .sbd-textarea, design tokens) so it reads correctly under the light command
@@ -18,6 +18,10 @@
 
 import React, { useState } from "react";
 import { X } from "lucide-react";
+import type {
+  BudgetHourPatch,
+  BudgetHourRow,
+} from "./budgetHoursControlCenter.derive";
 
 // ─── Form shape ────────────────────────────────────────────────────────────────
 
@@ -34,20 +38,19 @@ export interface ScopeItemFormValues {
 }
 
 /** Minimal shape of an existing row we can edit (subset of BudgetHourRow). */
-export interface ScopeItemEditTarget {
-  id: string;
-  scope_item?: string | null;
-  category?: string | null;
-  is_specialty?: boolean | null;
-  shop_hours_budget?: number | null;
-  shop_hours_actual?: number | null;
-  field_hours_budget?: number | null;
-  field_hours_actual?: number | null;
-  notes?: string | null;
-  /** Present when actuals roll up from linked work packages — actual fields are
-   *  then read-only (edited through the page-owned row flow). */
-  metadata?: { linked_work_package_ids?: string[]; [key: string]: unknown } | null;
-}
+export type ScopeItemEditTarget = Pick<
+  BudgetHourRow,
+  | "id"
+  | "scope_item"
+  | "category"
+  | "is_specialty"
+  | "shop_hours_budget"
+  | "shop_hours_actual"
+  | "field_hours_budget"
+  | "field_hours_actual"
+  | "notes"
+  | "metadata"
+>;
 
 // ─── Pure helpers (exported for tests) ───────────────────────────────────────────
 
@@ -69,7 +72,7 @@ export function validateScopeItem(values: Pick<ScopeItemFormValues, "scope_item"
 }
 
 /** Build the Supabase write payload from form values (shared create/edit shape). */
-export function buildScopeItemPatch(values: ScopeItemFormValues): Record<string, unknown> {
+export function buildScopeItemPatch(values: ScopeItemFormValues): BudgetHourPatch {
   const isSpecialty = values.category === "Specialty" || values.is_specialty;
   return {
     scope_item: values.scope_item.trim(),
@@ -106,7 +109,7 @@ export interface ScopeItemFormModalProps {
   saving?: boolean;
   onClose: () => void;
   /** Called with the validated write payload. Parent runs the mutation. */
-  onSave: (patch: Record<string, unknown>) => void;
+  onSave: (patch: BudgetHourPatch) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────

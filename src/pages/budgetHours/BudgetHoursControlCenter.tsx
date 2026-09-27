@@ -17,7 +17,7 @@
  *   DataTable     — Scope Item, Shop Bud, Shop Act, Shop Δ%, Field Bud,
  *                   Field Act, Field Δ%, Total Bud, Total Act, Total Δ%
  *
- * Data + mutations are owned by the parent BudgetHours.jsx and passed as props
+ * Data + mutations are owned by the parent BudgetHours.tsx and passed as props
  * while preserving the page-owned mutation path.
  *
  * CSS classes emitted as inline styles where command.css classes would be
@@ -37,14 +37,20 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { formatCurrencyWhole } from "@/components/shared/formatters";
 import { photoFor } from "@/config/launcherConfig";
 import {
+  buildBudgetHourTableRows,
   buildBudgetHoursSummary,
   fmtHours,
   fmtPct,
   varianceTone,
 } from "./budgetHoursControlCenter.derive";
-import type { BudgetHourRow, WorkPackageRow } from "./budgetHoursControlCenter.derive";
+import type {
+  BudgetHourRow,
+  BudgetHourTableRow,
+  WorkPackageRow,
+} from "./budgetHoursControlCenter.derive";
 import BhChartRow from "./BhChartRow";
 
 // ─── Variance color (mirrors the page varianceColor helper) ────────────────────
@@ -63,7 +69,7 @@ export interface BudgetHoursControlCenterProps {
   /** All active rows (is_deleted already filtered). */
   rows: BudgetHourRow[];
   /** Work packages for linked-hours rollup. */
-  wpsById: Map<string, WorkPackageRow>;
+  wpsById: ReadonlyMap<string, WorkPackageRow>;
   /** Search string state (controlled by parent). */
   search: string;
   onSearch: (v: string) => void;
@@ -95,17 +101,6 @@ export interface BudgetHoursControlCenterProps {
 
 // ─── Derived table row type (for DataTable) ───────────────────────────────────
 
-interface TableRow extends BudgetHourRow {
-  _shopActual: number;
-  _fieldActual: number;
-  _shopVarPct: number;
-  _fieldVarPct: number;
-  _totalBudget: number;
-  _totalActual: number;
-  _totalVarPct: number;
-  _isLinked: boolean;
-}
-
 const CATEGORY_OPTIONS = ["All", "Standard", "Specialty"] as const;
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -136,42 +131,10 @@ export default function BudgetHoursControlCenter({
   const s = useMemo(() => buildBudgetHoursSummary(rows, wpsById), [rows, wpsById]);
 
   // Enrich filteredRows with derived columns for the DataTable
-  const tableRows: TableRow[] = useMemo(() => {
-    return filteredRows.map((r) => {
-      const linked = r.metadata?.linked_work_package_ids;
-      const isLinked = Array.isArray(linked) && linked.length > 0;
-      let shopActual = Number(r.shop_hours_actual) || 0;
-      let fieldActual = Number(r.field_hours_actual) || 0;
-      if (isLinked) {
-        shopActual = 0;
-        fieldActual = 0;
-        for (const id of linked) {
-          const wp = wpsById.get(id);
-          if (!wp) continue;
-          shopActual += Number(wp.shop_hours_actual) || 0;
-          fieldActual += Number(wp.field_hours_actual) || 0;
-        }
-      }
-      const shopBudget = Number(r.shop_hours_budget) || 0;
-      const fieldBudget = Number(r.field_hours_budget) || 0;
-      const totalBudget = shopBudget + fieldBudget;
-      const totalActual = shopActual + fieldActual;
-      const shopVarPct = shopBudget <= 0 ? (shopActual > 0 ? 100 : 0) : ((shopActual - shopBudget) / shopBudget) * 100;
-      const fieldVarPct = fieldBudget <= 0 ? (fieldActual > 0 ? 100 : 0) : ((fieldActual - fieldBudget) / fieldBudget) * 100;
-      const totalVarPct = totalBudget <= 0 ? (totalActual > 0 ? 100 : 0) : ((totalActual - totalBudget) / totalBudget) * 100;
-      return {
-        ...r,
-        _shopActual: shopActual,
-        _fieldActual: fieldActual,
-        _shopVarPct: shopVarPct,
-        _fieldVarPct: fieldVarPct,
-        _totalBudget: totalBudget,
-        _totalActual: totalActual,
-        _totalVarPct: totalVarPct,
-        _isLinked: isLinked,
-      };
-    });
-  }, [filteredRows, wpsById]);
+  const tableRows = useMemo(
+    () => buildBudgetHourTableRows(filteredRows, wpsById),
+    [filteredRows, wpsById],
+  );
 
   // ── Hero chips ──
   const heroChips = [
@@ -227,7 +190,7 @@ export default function BudgetHoursControlCenter({
   ];
 
   // ── DataTable columns ──
-  const columns: Column<TableRow>[] = [
+  const columns: Column<BudgetHourTableRow>[] = [
     {
       key: "scope",
       header: "Scope Item",
@@ -459,7 +422,7 @@ export default function BudgetHoursControlCenter({
                   fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
                   color: "var(--status-warning)", whiteSpace: "nowrap", marginLeft: 8,
                 }}>
-                  ${m.rough_cost.toLocaleString()}
+                  {formatCurrencyWhole(m.rough_cost)}
                 </span>
               )}
             </div>
