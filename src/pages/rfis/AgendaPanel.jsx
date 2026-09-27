@@ -1,6 +1,7 @@
 import React from "react";
 import { BicPill } from "@/components/design-system";
 import { AGENDA_GROUPS } from "@/lib/commandCenter/rfiAgenda";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 const GROUP_ACCENT = {
   Overdue: "var(--status-error)",
@@ -28,12 +29,11 @@ function exportAgendaCsv(agenda) {
   ]);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `rfi-agenda-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `rfi-agenda-${new Date().toISOString().slice(0, 10)}.csv`,
+    title: "RFI agenda",
+  });
 }
 
 function AgendaRow({ item, onOpenRfi }) {

@@ -9,6 +9,7 @@
  * html2canvas). `now` is injected so the generated date is deterministic in tests.
  */
 import { jsPDF } from "jspdf";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
 const SEV_RGB = {
@@ -151,6 +152,7 @@ export function downloadRevisionImpactPdf(args = {}) {
   const pdf = buildRevisionImpactPdf(args);
   const safe = (String(args?.set?.name || "drawing-set").replace(/[^\w.-]+/g, "_").slice(0, 60)) || "drawing-set";
   const stamp = fmtDate(args?.now instanceof Date ? args.now : new Date());
-  pdf.save(`Revision-Impact-${safe}-${stamp}.pdf`);
+  const filename = `Revision-Impact-${safe}-${stamp}.pdf`;
+  void presentGeneratedFile({ blob: pdf.output("blob"), filename, title: "Revision impact report" });
   return pdf;
 }

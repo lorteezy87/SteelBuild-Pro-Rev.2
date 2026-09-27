@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { useQueryClient } from "@tanstack/react-query";
 import { entities, integrations } from "@/api/supabaseClient";
 import { useFieldOutbox } from "@/hooks/useFieldOutbox";
-import { progressPatch } from "@/lib/field/fieldToday";
+import { captureDayFromTimestamp, persistScheduleProgress } from "@/lib/field/progressSync";
 import {
   OP_SCHEDULE_PROGRESS,
   OP_PUNCH_CREATE,
@@ -43,8 +43,16 @@ export function useOutbox() {
 function makeGlobalHandlers(queryClient) {
   const invalidate = (queryKey) => queryClient.invalidateQueries({ queryKey });
   return {
-    [OP_SCHEDULE_PROGRESS]: async ({ id, pct }) => {
-      await entities.ScheduleTask.update(id, progressPatch(pct));
+    [OP_SCHEDULE_PROGRESS]: async ({ id, pct, captureDay }, op) => {
+      // New ops persist their original local work day explicitly. The timestamp
+      // fallback keeps already-queued v1 ops replayable after this deployment.
+      const capturedDay = captureDay || captureDayFromTimestamp(op?.createdAt);
+      await persistScheduleProgress({
+        gateway: entities.ScheduleTask,
+        id,
+        pct,
+        capturedDay,
+      });
       invalidate(["schedule-tasks"]);
       invalidate(["field-plan-tasks"]);
     },

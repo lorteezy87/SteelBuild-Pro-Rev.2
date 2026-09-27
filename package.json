@@ -45,6 +45,8 @@
     "@capacitor/app": "^8.1.1",
     "@capacitor/camera": "^8.2.2",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/file-transfer": "^2.0.5",
+    "@capacitor/filesystem": "^8.1.3",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.0",
     "@capacitor/keyboard": "^8.0.5",
@@ -102,7 +104,7 @@
     "react-hook-form": "^7.54.2",
     "react-markdown": "^9.0.1",
     "react-resizable-panels": "^2.1.7",
-    "react-router-dom": "^6.26.0",
+    "react-router-dom": "^7.18.4",
     "recharts": "^2.15.4",
     "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",
@@ -153,5 +155,10 @@
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.60.0"
+  },
+  "overrides": {
+    "xcode": {
+      "uuid": "11.1.1"
+    }
   }
 }

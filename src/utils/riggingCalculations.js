@@ -9,8 +9,13 @@
  *   ASME B30.9-2021  — Slings (sling-angle / LAF / capacity relations)
  *   ASME B30.5-2018  — Mobile and Locomotive Cranes
  *   OSHA 29 CFR 1926.1400 subpart CC — Cranes and Derricks in Construction
- *     1926.1431(k) — critical lift ≈ >90% of rated capacity
+ *     1926.1431    — hoisting personnel (≤ 50% of rated capacity)
  *     1926.251     — rigging equipment
+ *   Subpart CC does NOT define a critical lift by percentage. The 75% / 90%
+ *   bands below are common contractor lift-planning thresholds (ASME P30.1
+ *   leaves the number to the employer's policy; USACE EM 385-1-1 uses 75%).
+ *   An earlier version cited "1926.1431(k)" for the 90% band — 1926.1431 is
+ *   the personnel-hoisting section and sets no such threshold.
  *
  * SCOPE (v1)
  *   Symmetric picks only — equal-leg bridle, centered center-of-gravity.
@@ -156,10 +161,9 @@ export function calculateUtilization(totalLoad, craneCapacity) {
  *
  *   < 75%     → green   (acceptable)
  *   75–90%    → yellow  (verify crane load chart before lift)
- *   > 90%     → red     (OSHA 1926.1431(k) critical-lift territory;
- *                        most contractor policies require an engineered
- *                        lift plan, tandem lift analysis, or additional
- *                        engineering sign-off)
+ *   > 90%     → red     (critical-lift territory under most contractor
+ *                        lift-planning policies — engineered lift plan
+ *                        or additional sign-off; see header for sources)
  *
  * Returns null if the input isn't a finite number.
  */
@@ -234,9 +238,10 @@ export function angleFromHeightSpan(height, halfSpan) {
  * results. Returns an array of { severity, message } — severity is
  * "red" | "yellow", ordered red first then yellow.
  *
- *   { angleStatus, capacityStatus, angleDegrees, utilizationPercent }
+ *   { angleStatus, capacityStatus, angleDegrees, utilizationPercent,
+ *     numLegs, liftType }   liftType: "standard" (default) | "personnel"
  */
-export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utilizationPercent, numLegs }) {
+export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utilizationPercent, numLegs, liftType = "standard" }) {
   const out = [];
   if (angleStatus === "red") {
     out.push({
@@ -255,7 +260,9 @@ export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utili
   } else if (capacityStatus === "red") {
     out.push({
       severity: "red",
-      message: `Capacity utilization ${Number(utilizationPercent).toFixed(1)}% exceeds 90% — critical lift territory. Engineered lift plan required per OSHA 1926.1431(k) and most contractor standards.`,
+      message: liftType === "personnel"
+        ? `Capacity utilization ${Number(utilizationPercent).toFixed(1)}% exceeds 50% — a personnel platform plus rigging may not exceed 50% of rated capacity (29 CFR 1926.1431). Do not hoist personnel in this configuration.`
+        : `Capacity utilization ${Number(utilizationPercent).toFixed(1)}% exceeds 90% — critical lift territory. Most contractor lift-planning policies (ASME P30.1) require an engineered critical-lift plan and sign-off at this level.`,
     });
   }
   if (angleStatus === "yellow") {
@@ -267,7 +274,9 @@ export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utili
   if (capacityStatus === "yellow") {
     out.push({
       severity: "yellow",
-      message: `Capacity utilization ${Number(utilizationPercent).toFixed(1)}% is in the 75–90% range. Double-check crane load chart entry, boom length, radius, and counterweight configuration.`,
+      message: liftType === "personnel"
+        ? `Capacity utilization ${Number(utilizationPercent).toFixed(1)}% is within 10 points of the 50% personnel-hoisting limit. Confirm platform, occupant and tool weights before the trial lift.`
+        : `Capacity utilization ${Number(utilizationPercent).toFixed(1)}% is in the 75–90% range. Double-check crane load chart entry, boom length, radius, and counterweight configuration.`,
     });
   }
   // State the rigid-load assumption on the face of the output. A rigger reading
