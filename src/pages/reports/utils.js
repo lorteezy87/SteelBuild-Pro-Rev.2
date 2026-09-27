@@ -3,6 +3,8 @@
  * health grader, date-range filter, CSV export, print.
  */
 
+import { presentGeneratedFile } from "@/lib/native/fileExport";
+
 /**
  * Compact currency formatter — switches to "$12.3M" / "$456K" above
  * the $1K threshold. Kept separate from the shared formatters because
@@ -76,12 +78,11 @@ export function exportReportCSV(rows, portfolioValue, openRFICount, pendingCOCou
     .join("\n");
 
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `portfolio_report_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `portfolio_report_${new Date().toISOString().slice(0, 10)}.csv`,
+    title: "Portfolio report",
+  });
 }
 
 export function printReport() {
@@ -121,12 +122,11 @@ export function exportTableCSV({ filename, columns, rows, summary }) {
     .join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `${filename}_${new Date().toISOString().slice(0, 10)}.csv`,
+    title: "Report export",
+  });
 }
 
 /** Format an ISO/JS date as MM/DD/YYYY (US). Returns "—" when input is missing. */
