@@ -1,6 +1,7 @@
 import { getWorkPackageDisplayName } from "./analytics";
 import { drawingPackageLabel, num, stageMeta } from "./format";
 import type { EnrichedWorkPackage } from "./types";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 function escapeCsv(value: unknown): string {
   const text = String(value ?? "");
@@ -40,12 +41,5 @@ export function exportFabReleaseCSV(rows: EnrichedWorkPackage[], fileName = "fab
     ].map(escapeCsv).join(",")),
   ];
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename: fileName, title: "Fab release export" });
 }

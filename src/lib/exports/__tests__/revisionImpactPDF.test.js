@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock jsPDF so the test exercises OUR layout logic (data handling, page breaks,
 // filename) deterministically — no real PDF engine, no DOM needed.
 const textCalls = [];
-const saveCalls = [];
+const { presentGeneratedFile } = vi.hoisted(() => ({ presentGeneratedFile: vi.fn() }));
+vi.mock("@/lib/native/fileExport", () => ({ presentGeneratedFile }));
 vi.mock("jspdf", () => {
   class FakePdf {
     constructor() {
@@ -20,7 +21,7 @@ vi.mock("jspdf", () => {
     addPage() { this._pages += 1; }
     setPage() {}
     text(t) { textCalls.push(Array.isArray(t) ? t.join(" ") : String(t)); }
-    save(name) { saveCalls.push(name); }
+    output() { return new Blob(["pdf"], { type: "application/pdf" }); }
   }
   return { jsPDF: FakePdf };
 });
@@ -43,7 +44,11 @@ const SAMPLE = {
 };
 
 describe("buildRevisionImpactPdf", () => {
-  beforeEach(() => { textCalls.length = 0; saveCalls.length = 0; });
+  beforeEach(() => {
+    textCalls.length = 0;
+    presentGeneratedFile.mockReset();
+    presentGeneratedFile.mockResolvedValue("downloaded");
+  });
 
   it("emits the title, set name, sheet numbers, and kept delta text", () => {
     buildRevisionImpactPdf(SAMPLE);
@@ -70,12 +75,15 @@ describe("buildRevisionImpactPdf", () => {
 
   it("downloads with a sanitized, locally-dated filename", () => {
     downloadRevisionImpactPdf(SAMPLE);
-    expect(saveCalls).toHaveLength(1);
-    expect(saveCalls[0]).toBe("Revision-Impact-Main_Steel_-_IFC-2026-06-16.pdf");
+    expect(presentGeneratedFile).toHaveBeenCalledWith(expect.objectContaining({
+      filename: "Revision-Impact-Main_Steel_-_IFC-2026-06-16.pdf",
+    }));
   });
 
   it("falls back to a default filename when the set has no name", () => {
     downloadRevisionImpactPdf({ ...SAMPLE, set: {} });
-    expect(saveCalls[0]).toBe("Revision-Impact-drawing-set-2026-06-16.pdf");
+    expect(presentGeneratedFile).toHaveBeenCalledWith(expect.objectContaining({
+      filename: "Revision-Impact-drawing-set-2026-06-16.pdf",
+    }));
   });
 });

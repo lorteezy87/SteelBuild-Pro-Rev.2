@@ -14,6 +14,7 @@ import { entities } from "@/api/supabaseClient";
 import { calculateMarginRisk } from "@/services/marginRiskEngine";
 import { buildRiskSummary } from "./riskHub/riskControlCenter.derive";
 import RiskControlCenter from "./riskHub/RiskControlCenter";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 export default function RiskHub() {
   const projectId = useProjectId();
@@ -77,11 +78,11 @@ export default function RiskHub() {
       ...filtered.map((r) => [r.label, r.category, r.severity, r.exposure, r.mitigationStatus ?? "Active", r.owner ?? "—", r.detail]),
     ];
     const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "risk-export.csv";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    void presentGeneratedFile({
+      blob: new Blob([csv], { type: "text/csv" }),
+      filename: "risk-export.csv",
+      title: "Risk export",
+    });
   };
 
   if (!projectId) {

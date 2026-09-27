@@ -12,6 +12,7 @@
  * Custom fixed overlay (no Radix Dialog), no <form> elements — per CLAUDE.md.
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import {
   AREA_LABELS,
   OUTRIGGER_LABELS,
@@ -146,12 +147,11 @@ export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onU
   // ── import / export ──
   const doExport = () => {
     const blob = new Blob([exportLibrary(cranes)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `crane-library-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void presentGeneratedFile({
+      blob,
+      filename: `crane-library-${new Date().toISOString().slice(0, 10)}.json`,
+      title: "Crane library",
+    });
   };
 
   const onImportFile = async (e: ChangeEvent<HTMLInputElement>) => {

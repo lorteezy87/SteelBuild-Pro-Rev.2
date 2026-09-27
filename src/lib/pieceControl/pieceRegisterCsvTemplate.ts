@@ -4,6 +4,8 @@
  * post-apply assignment / link hints carried in original_payload.
  */
 
+import { presentGeneratedFile } from "@/lib/native/fileExport";
+
 export const PIECE_REGISTER_CSV_HEADERS = [
   "piece_mark",
   "quantity",
@@ -82,13 +84,5 @@ export function downloadPieceRegisterCsvTemplate(
 ): void {
   const csv = buildPieceRegisterCsvTemplate();
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.rel = "noopener";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename, title: "Piece register template" });
 }

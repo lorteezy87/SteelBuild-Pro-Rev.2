@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { localToday } from "@/utils/dates";
 import { formatMoney, sumMoney } from "@/lib/money";
@@ -160,10 +161,17 @@ export default function PayApplications() {
     onError: (e) => toast.error(`Delete failed: ${toUserErrorMessage(e)}`),
   });
 
-  const exportPdf = () => {
+  const exportPdf = async () => {
     try {
       if (!linesReady || lineMut.isPending) throw new Error("Wait for complete certificate lines before exporting.");
-      buildPayAppPdf({ app: selectedApp, lines, project: activeProject }).save(`${suggestPayAppFilename(selectedApp, activeProject)}.pdf`);
+      const filename = `${suggestPayAppFilename(selectedApp, activeProject)}.pdf`;
+      const pdf = buildPayAppPdf({ app: selectedApp, lines, project: activeProject });
+      const presentation = await presentGeneratedFile({
+        blob: pdf.output("blob"),
+        filename,
+        title: "Pay application",
+      });
+      if (presentation !== "downloaded" && presentation !== "shared") return;
       toast.success("Pay application PDF exported");
     } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };

@@ -3,6 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock jsPDF so the test exercises OUR layout logic deterministically — no real
 // PDF engine, no DOM. Same pattern as revisionImpactPDF.test.js.
 const textCalls = [];
+const { presentGeneratedFile } = vi.hoisted(() => ({
+  presentGeneratedFile: vi.fn().mockResolvedValue("downloaded"),
+}));
+vi.mock("@/lib/native/fileExport", () => ({ presentGeneratedFile }));
 vi.mock("jspdf", () => {
   class FakePdf {
     constructor() {
@@ -15,7 +19,8 @@ vi.mock("jspdf", () => {
     setLineWidth() {} setFillColor() {} rect() {} line() {} circle() {}
     splitTextToSize(t) { return String(t).split("\n"); }
     getTextWidth(t) { return String(t).length * 5; }
-    addPage() {} setPage() {} save() {}
+    addPage() {} setPage() {}
+    output() { return new Blob(["pdf"], { type: "application/pdf" }); }
     text(t) { textCalls.push(Array.isArray(t) ? t.join(" ") : String(t)); }
   }
   return { jsPDF: FakePdf };

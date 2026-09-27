@@ -198,7 +198,10 @@ that reconciliation: 0 critical · 20 high (3 closed) · 54 medium (8 closed) ·
 **Already closed by `main` / production — do not re-open:** AUTH-1 (org admin
 could delete the sole owner), AUTH-3 (invite tokens readable by every member),
 RLS-1 (cross-tenant audit-row RPCs), RLS-8, CI-1 (secret-scan and drift are now
-deploy gates), CI-4, CI-8, EDGE-1, EDGE-3, EDGE-4, PERF-11, DR-4. Narrowed:
+deploy gates), CI-4, CI-8, EDGE-1, EDGE-3, EDGE-4, PERF-11, DR-4, **DATA-2 and
+DATA-3** (PR #480: schedule bulk/field status-percent reconciliation, NULL
+preservation, and field actual-date stamping), **LOGIC-1** (PR #477: ZonePanel
+fails closed when official RFI number allocation is unavailable). Narrowed:
 RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
 
 **P0 — before the next production deploy:**
@@ -209,9 +212,7 @@ RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
   before `refreshMfaRequired()` resolves), AUTH-4 (a password-recovery session
   reaches the full app), AUTH-6 (sign-out leaves tenant caches populated and
   swallows the error).
-- **Invariant regressions that corrupt records.** DATA-2 and DATA-3 (schedule
-  status/percent — both flagged in `CLAUDE.md`), LOGIC-1 (ZonePanel invents an
-  official RFI number when the sequence RPC fails), DATA-1 (the Pay Applications
+- **Invariant regressions that corrupt records.** DATA-1 (the Pay Applications
   contract query is permanently broken by the global `['projects']` select
   default), DATA-4 (two shipping importers write `deliveries` in a shape
   production rejects), DATA-5, LOGIC-5, LOGIC-6.

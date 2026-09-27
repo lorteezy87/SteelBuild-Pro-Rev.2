@@ -3,6 +3,7 @@ import {
   clampPercent,
   statusForPercent,
   progressPatch,
+  progressUpdatePatch,
   taskUrgency,
   partitionFieldTasks,
   tasksForToday,
@@ -48,6 +49,49 @@ describe("progressPatch", () => {
     expect(progressPatch(50)).toEqual({ percent_complete: 50, status: "In Progress" });
     expect(progressPatch(100)).toEqual({ percent_complete: 100, status: "Complete" });
     expect(progressPatch(0)).toEqual({ percent_complete: 0, status: "Not Started" });
+  });
+});
+
+describe("progressUpdatePatch", () => {
+  it("stamps actual start when field progress begins", () => {
+    expect(progressUpdatePatch(
+      { status: "Not Started", percent_complete: 0, actual_start_date: null, actual_finish_date: null },
+      25,
+      TODAY,
+    )).toEqual({
+      percent_complete: 25,
+      status: "In Progress",
+      actual_start_date: TODAY,
+    });
+  });
+
+  it("stamps start and finish when the field completes a task", () => {
+    expect(progressUpdatePatch(
+      { status: "In Progress", percent_complete: 75, actual_start_date: null, actual_finish_date: null },
+      100,
+      TODAY,
+    )).toEqual({
+      percent_complete: 100,
+      status: "Complete",
+      actual_start_date: TODAY,
+      actual_finish_date: TODAY,
+    });
+  });
+
+  it("never overwrites actual dates already recorded", () => {
+    expect(progressUpdatePatch(
+      {
+        status: "In Progress",
+        percent_complete: 75,
+        actual_start_date: "2026-06-10",
+        actual_finish_date: "2026-06-11",
+      },
+      100,
+      TODAY,
+    )).toEqual({
+      percent_complete: 100,
+      status: "Complete",
+    });
   });
 });
 
