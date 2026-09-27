@@ -15,6 +15,23 @@ export function eraseOrgArgs(orgId: string, reason: string): { p_org_id: string;
   return { p_org_id: orgId, p_reason: reason };
 }
 
+/** Arguments for `erase_my_sole_member_workspaces(p_reason text)` (20260927160000). */
+export function eraseSoleWorkspacesArgs(reason: string): { p_reason: string } {
+  return { p_reason: reason };
+}
+
+/**
+ * The org and project ids `erase_my_sole_member_workspaces` erased, for the
+ * Storage purge. Anything but a string in either list is ignored, so a
+ * malformed body purges nothing rather than the wrong prefix.
+ */
+export function erasedWorkspaceIds(result: unknown): { orgIds: string[]; projectIds: string[] } {
+  const body = (result ?? {}) as { org_ids?: unknown; project_ids?: unknown };
+  const ids = (value: unknown) =>
+    Array.isArray(value) ? value.filter((id): id is string => typeof id === "string" && id.length > 0) : [];
+  return { orgIds: ids(body.org_ids), projectIds: ids(body.project_ids) };
+}
+
 export interface OrgRoster {
   orgId: string;
   orgName: string;
