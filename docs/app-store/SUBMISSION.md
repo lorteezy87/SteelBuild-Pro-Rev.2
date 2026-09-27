@@ -26,7 +26,7 @@ iPhone (checked 2026-09-26).
 | Account deletion: sole-owner rule, working erase call | 5.1.1(v) | #491 | open |
 | Account deletion: release authored records, erase in one transaction (two migrations) | 5.1.1(v) | #492 | open, draft |
 | Deep links limited to SteelBuild domains; app-bound domains off (MOB-8) | — | #486 | open: revert its `AGENT_CLAIMS.md` separator row first (it drops a column and breaks the table) |
-| Support page for the Support URL; Support & legal links for every user in Settings → Profile; crash reports tagged with platform, version and build (MOB-6) | 5.1.1 | this runbook's PR | open |
+| Support page for the Support URL; Support & legal links for every user in Settings → Profile; crash reports tagged with platform, version and build (MOB-6); status bar matches the page in both themes (MOB-10); no zoom when an input takes focus; dialog backdrops cover the full phone screen; listing copy | 5.1.1, 2.3 | #493 | open |
 
 Merge #491 before #492. The rest can go in any order.
 
@@ -160,7 +160,7 @@ plus our support page and email, are in Settings > Profile > Support & legal.
   - host `apple-app-site-association` at `https://steelbuild-pro.com/.well-known/`;
   - add the Associated Domains capability (`applinks:steelbuild-pro.com`).
 - **Push notifications.** Add `@capacitor/push-notifications`, the Push Notifications capability and an APNs key.
-- **Smaller native items (MOB-10).** The light-theme status bar, self-hosted fonts for offline cold starts, and Keychain-backed session storage.
+- **Smaller native items (MOB-10).** Self-hosted fonts for offline cold starts, and Keychain-backed session storage.
 
 ---
 
