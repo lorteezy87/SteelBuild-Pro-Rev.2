@@ -291,7 +291,7 @@ function PresetDialog({ open, onClose, onPick }) {
           border: "1px solid var(--border-default)",
           borderRadius: 12,
           padding: 22,
-          minWidth: 460,
+          minWidth: "min(460px, calc(100vw - 24px))",
           maxWidth: 560,
         }}
       >
