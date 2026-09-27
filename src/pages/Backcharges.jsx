@@ -10,6 +10,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { presentGeneratedFiles } from "@/lib/native/fileExport";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { formatLocalDate, localToday } from "@/utils/dates";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -325,8 +326,18 @@ export default function Backcharges() {
       const bc = withLinkNumbers(bc0);
       const [tks, evs] = await Promise.all([listTmTickets(bc.id), listEvents(bc.id)]);
       const stem = suggestDefenseFilename(bc, activeProject);
-      buildDefensePdf({ backcharge: bc, tickets: tks, events: evs, project: activeProject }).save(`${stem}.pdf`);
-      downloadTextFile(buildDefenseManifestCsv(bc, tks, evs), `${stem}_manifest.csv`, "text/csv;charset=utf-8");
+      const pdf = buildDefensePdf({ backcharge: bc, tickets: tks, events: evs, project: activeProject });
+      const presentation = await presentGeneratedFiles({
+        title: "Backcharge defense package",
+        files: [
+          { blob: pdf.output("blob"), filename: `${stem}.pdf` },
+          {
+            blob: new Blob([buildDefenseManifestCsv(bc, tks, evs)], { type: "text/csv;charset=utf-8" }),
+            filename: `${stem}_manifest.csv`,
+          },
+        ],
+      });
+      if (presentation !== "downloaded" && presentation !== "shared") return;
       toast.success("Defense package exported (PDF + CSV)");
     } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };

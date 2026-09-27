@@ -55,7 +55,8 @@ export default function SystemTab({ user }) {
         onProgress: (done, total, name) =>
           setExportMsg(name ? `Exporting ${Math.min(done + 1, total)} of ${total}: ${name}…` : 'Packaging backup…'),
       });
-      downloadWorkspaceExport(bundle);
+      const presentation = await downloadWorkspaceExport(bundle);
+      if (presentation !== 'downloaded' && presentation !== 'shared') return;
       const skipped = bundle.failures.length;
       toast.success(
         `Exported ${bundle.project_count} project${bundle.project_count === 1 ? '' : 's'} · ` +

@@ -14,6 +14,7 @@
  * is documented in the modal UI and the README header.
  */
 import { isGoverningDrawingReleaseReady } from "@/lib/pieceControl/drawingReleaseReady";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 /** Minimal drawing shape used by fab-release / turnover / claims helpers. */
 export interface DrawingLike {
@@ -472,13 +473,7 @@ export function buildClaimsManifestCsv({
  * isolated so the export module can stub it out in tests.
  */
 export function downloadBlob(blob: Blob, filename: string): void {
-  if (typeof document === "undefined" || typeof URL === "undefined") return;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  void presentGeneratedFile({ blob, filename, title: "Fab release export" });
 }
 
 /**

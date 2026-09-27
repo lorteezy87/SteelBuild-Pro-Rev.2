@@ -18,6 +18,12 @@ import React, { useRef, useState } from "react";
 import { integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { compressImage } from "@/utils/compressImage";
+import { isNativePlatform } from "@/lib/native/platform";
+import {
+  captureNativePhoto,
+  isNativeActionCancelled,
+  nativeImpact,
+} from "@/lib/native/capabilities";
 
 const labelStyle = {
   fontFamily: "var(--font-mono)",
@@ -29,6 +35,10 @@ const labelStyle = {
   marginBottom: "4px",
 };
 
+/**
+ * @typedef {{ file_url?: string, path?: string, url?: string, name?: string, uploaded_at?: string }} UploadedPhoto
+ * @param {{ value?: UploadedPhoto[], onChange?: (photos: UploadedPhoto[]) => void, disabled?: boolean, max?: number, label?: string }} props
+ */
 export default function PhotoStripUploader({
   value = [],
   onChange,
@@ -38,8 +48,10 @@ export default function PhotoStripUploader({
 }) {
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
   const photos = Array.isArray(value) ? value : [];
+  const native = isNativePlatform();
 
   const handleFiles = async (fileList) => {
     if (!fileList || fileList.length === 0) return;
@@ -69,10 +81,26 @@ export default function PhotoStripUploader({
       if (uploaded.length > 0) {
         onChange?.([...photos, ...uploaded]);
         toast.success(`${uploaded.length} photo${uploaded.length === 1 ? "" : "s"} uploaded`);
+        if (native) void nativeImpact("medium");
       }
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const handleNativeCapture = async () => {
+    setCapturing(true);
+    try {
+      const photo = await captureNativePhoto();
+      if (photo) await handleFiles([photo]);
+    } catch (error) {
+      if (!isNativeActionCancelled(error)) {
+        console.error("[PhotoStripUploader] native capture failed:", error);
+        toast.error("Could not take a photo. Check camera access and try again.");
+      }
+    } finally {
+      setCapturing(false);
     }
   };
 
@@ -117,7 +145,7 @@ export default function PhotoStripUploader({
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); removeAt(idx); }}
-                disabled={disabled}
+                disabled={disabled || uploading || capturing}
                 aria-label="Remove photo"
                 style={{
                   // 40px transparent hit area anchored top-right so the tap
@@ -160,10 +188,42 @@ export default function PhotoStripUploader({
           );
         })}
 
+        {native && (
+          <button
+            type="button"
+            aria-label="Take photo"
+            onClick={() => { void handleNativeCapture(); }}
+            disabled={disabled || uploading || capturing || photos.length >= max}
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 8,
+              border: "1px solid var(--accent)",
+              background: "var(--accent-muted)",
+              color: "var(--accent)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              cursor: disabled || uploading || capturing ? "wait" : "pointer",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              flexShrink: 0,
+            }}
+          >
+            <span aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>⌾</span>
+            <span>{capturing ? "Opening…" : "Camera"}</span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          disabled={disabled || uploading || photos.length >= max}
+          disabled={disabled || uploading || capturing || photos.length >= max}
           style={{
             width: 72,
             height: 72,
