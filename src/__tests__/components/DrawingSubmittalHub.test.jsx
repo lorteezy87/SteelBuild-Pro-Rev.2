@@ -310,7 +310,9 @@ describe("DrawingSubmittalHub — tab history", () => {
     renderHub({ entries: ["/DrawingSubmittalHub?projectId=test-project-id&project=test-project-id&hub_tab=matrix&matrix_filter=hold"] });
 
     await user.click(await screen.findByRole("tab", { name: /Holds & Blockers/ }));
-    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=holds");
+    await waitFor(() => {
+      expect(screen.getByTestId("search").textContent).toBe("?hub_tab=holds");
+    });
   });
 
   it("drops unconsumed record and create params so they can't fire on a later visit", async () => {
@@ -763,7 +765,9 @@ describe("DrawingSubmittalHub — record deep links", () => {
     expect(await screen.findByRole("dialog", { name: "New Submittal" }, { timeout: 8000 })).toBeInTheDocument();
     // The modal hides the page behind it from the accessibility tree.
     expect(screen.getByRole("tab", { name: /Submittal Register/, hidden: true })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals");
+    await waitFor(() => {
+      expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals");
+    });
     expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
   });
 });

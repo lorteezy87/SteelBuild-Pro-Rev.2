@@ -26,7 +26,7 @@ const dt = (d) => (d ? formatLocalDate(d) : "—");
 const label = (map, key, fb = "—") => (key ? map[key] || key : fb);
 
 /**
- * @returns {jsPDF} the document (caller calls `.save(filename)` / `.output(...)`).
+ * @returns {jsPDF} the document (caller presents `.output("blob")` through the platform export flow).
  */
 export function buildDefensePdf({ backcharge, tickets = [], events = [], project = {} } = {}) {
   const bc = backcharge || {};

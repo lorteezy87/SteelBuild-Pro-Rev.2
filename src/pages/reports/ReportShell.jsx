@@ -11,13 +11,32 @@
  * reports that need to disable print can pass `onPrint={null}`.
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CommandBar } from "@/components/design-system";
-import { ChevronLeft, Download, Printer } from "lucide-react";
+import { ChevronLeft, Download, Printer, Share2 } from "lucide-react";
+import { toast } from "sonner";
 import { mono } from "./constants";
 import { printReport } from "./utils";
+import { isNativePlatform } from "@/lib/native/platform";
+import { isNativeActionCancelled, shareCurrentReport } from "@/lib/native/capabilities";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
+/**
+ * @param {{
+ *   eyebrow?: string,
+ *   title: string,
+ *   count?: React.ReactNode,
+ *   unit?: React.ReactNode,
+ *   subtitle?: React.ReactNode,
+ *   filters?: React.ReactNode,
+ *   onExportCSV?: (() => unknown) | null,
+ *   onPrint?: (() => unknown) | null,
+ *   headerActions?: React.ReactNode,
+ *   shareProjectId?: string | null,
+ *   children?: React.ReactNode,
+ * }} props
+ */
 export default function ReportShell({
   eyebrow = "REPORTS",
   title,
@@ -28,9 +47,51 @@ export default function ReportShell({
   onExportCSV,
   onPrint = printReport,
   headerActions,
+  shareProjectId = null,
   children,
 }) {
   const navigate = useNavigate();
+  const native = isNativePlatform();
+  const { activeProject, loading: projectsLoading, projects, setActiveProject } = useProjectContext();
+  const sharedProjectId = new URLSearchParams(window.location.search).get("projectId");
+  const sharedProject = sharedProjectId
+    ? projects.find((project) => project.id === sharedProjectId)
+    : null;
+
+  useEffect(() => {
+    if (!sharedProjectId || projectsLoading) return;
+    if (!sharedProject) {
+      if (activeProject) setActiveProject(null);
+      return;
+    }
+    if (activeProject?.id !== sharedProjectId) setActiveProject(sharedProject);
+  }, [activeProject, projectsLoading, setActiveProject, sharedProject, sharedProjectId]);
+
+  const shareReport = async () => {
+    try {
+      const url = new URL(window.location.href);
+      if (shareProjectId) url.searchParams.set("projectId", shareProjectId);
+      await shareCurrentReport({ title, url: url.toString() });
+    } catch (error) {
+      if (!isNativeActionCancelled(error)) toast.error("Could not open the share sheet.");
+    }
+  };
+
+  if (sharedProjectId && projectsLoading) {
+    return <div role="status">Loading the shared project…</div>;
+  }
+
+  if (sharedProjectId && !sharedProject) {
+    return (
+      <div role="alert">
+        This shared project is unavailable. Ask the sender to confirm your project access.
+      </div>
+    );
+  }
+
+  if (sharedProjectId && activeProject?.id !== sharedProjectId) {
+    return <div role="status">Opening the shared project…</div>;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -67,6 +128,30 @@ export default function ReportShell({
         subtitle={subtitle}
       >
         {headerActions}
+        {native && (
+          <button
+            aria-label="Share link"
+            onClick={() => { void shareReport(); }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: "var(--bg-surface)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 12px",
+              ...mono,
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+            }}
+          >
+            <Share2 size={12} /> Share link
+          </button>
+        )}
         {onExportCSV && (
           <button
             onClick={onExportCSV}

@@ -192,16 +192,17 @@ export default function FieldPlan() {
   }, [tasks, blockerResolvers, days]);
 
   // ── Export the visible plan to calendar ────────────────────────────
-  const exportIcs = useCallback(() => {
+  const exportIcs = useCallback(async () => {
     if (!projectId || tasks.length === 0) { toast.info("Nothing to export."); return; }
     const events = tasks
       .map((t) => scheduleTaskToEvent(t, activeProject?.project_number || ""))
       .filter(Boolean);
-    downloadIcs({
+    const presentation = await downloadIcs({
       filename: `field-plan-${activeProject?.project_number || projectId}-${horizonDays}d.ics`,
       calendarName: `${activeProject?.project_name || "Project"} — ${horizonDays}-day Field Plan`,
       events,
     });
+    if (presentation !== "downloaded" && presentation !== "shared") return;
     toast.success(`Exported ${events.length} tasks to calendar`);
   }, [projectId, tasks, activeProject, horizonDays]);
 

@@ -16,6 +16,7 @@ import {
   parseDependencies as parseScheduleDependencies,
   serializeDependencies as serializeScheduleDependencies,
 } from '@/services/scheduleCascade';
+import { reconcileStatusPercent } from '@/lib/schedule/taskStatus';
 import { SupabaseOperationError } from './errors';
 import {
   addAliases,
@@ -241,9 +242,6 @@ export const entities = {
     // friendlier UX (a slider drag to 100% silently flips status to Complete)
     // and avoids round-trip 400 errors. Existing bad rows are NOT auto-fixed.
     const base = createEntityClient('schedule_tasks');
-    const STATUS_VALUES = new Set([
-      'Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold', 'Cancelled',
-    ]);
     const normalizeFields = (fields: Record<string, unknown> = {}): Record<string, unknown> => {
       const out: Record<string, unknown> = { ...fields };
       const hasStatus = Object.prototype.hasOwnProperty.call(out, 'status');
@@ -259,36 +257,52 @@ export const entities = {
         }
       }
 
-      if (hasPct) {
-        const n = Number(out.percent_complete);
-        if (Number.isFinite(n)) out.percent_complete = Math.max(0, Math.min(100, n));
-      }
-      if (hasStatus && !STATUS_VALUES.has(out.status as string)) {
-        // Unrecognised status — leave it alone, server CHECK will reject.
+      // A NULL percent means UNKNOWN, not zero, and the CHECK accepts null
+      // beside any status. reconcileStatusPercent returns null on purpose when
+      // a finished task reopens: the transition says the task is no longer
+      // done but not how much of it remains. Everything below therefore treats
+      // a null percent as "not supplied a number", because Number(null) is 0
+      // and Number.isFinite(0) is true -- clamping without this guard turned
+      // that deliberate unknown into "0% done", which printed 0% and dropped
+      // the task into the stalled filter one click after it showed 100%.
+      const pctIsKnown = hasPct
+        && out.percent_complete !== null
+        && out.percent_complete !== undefined
+        && Number.isFinite(Number(out.percent_complete));
+
+      if (pctIsKnown) {
+        out.percent_complete = Math.max(0, Math.min(100, Number(out.percent_complete)));
       }
 
-      // Reconciliation rules — explicit caller intent wins; we only fill
-      // gaps where the caller set ONE side of the pair without the other.
-      if (hasStatus && !hasPct) {
+      // Reconciliation rules — explicit caller intent wins; we only fill gaps
+      // where the caller set ONE side of the pair without the other.
+      //
+      // This layer is a safety net for every caller, including importers, and
+      // it does NOT know the stored row. So it fills only the two definitional
+      // gaps that are true regardless of what is stored, and otherwise leaves
+      // the column alone; the canonical status/percent answer needs the stored
+      // percent and belongs to withReconciledPercent in the mutation path.
+      if (hasStatus && !pctIsKnown) {
         if (out.status === 'Complete')    out.percent_complete = 100;
         if (out.status === 'Not Started') out.percent_complete = 0;
-        // 'In Progress' / 'Delayed' / 'On Hold' don't pin a value — keep DB current
-      } else if (hasPct && !hasStatus) {
-        const pct = out.percent_complete as number;
+        // 'In Progress' / 'Delayed' / 'On Hold' pin no value. Leave the column
+        // as supplied — including an explicit null, which is the reopen case.
+      } else if (pctIsKnown && !hasStatus) {
+        // Progress → status, the slider's friendly behaviour. Guarded on
+        // pctIsKnown because an unknown percent implies no status at all:
+        // this branch once read null as 0 and silently marked the task
+        // 'Not Started', changing a column the caller never mentioned.
+        const pct = Number(out.percent_complete);
         if (pct >= 100)      out.status = 'Complete';
         else if (pct > 0)    out.status = 'In Progress';
         else                 out.status = 'Not Started';
-      } else if (hasStatus && hasPct) {
-        // Both supplied — coerce contradictions into the canonical pair so
-        // bad inputs land cleanly instead of failing the CHECK constraint.
-        const pct = out.percent_complete as number;
-        if (out.status === 'Complete' && pct < 100) {
-          out.percent_complete = 100;
-        } else if (out.status === 'Not Started' && pct > 0) {
-          out.percent_complete = 0;
-        } else if (out.status === 'In Progress' && pct >= 100) {
-          out.percent_complete = 99;
-        }
+      } else if (hasStatus && pctIsKnown) {
+        // Both supplied and contradictory — defer to the one reconciler rather
+        // than a second opinion. It previously wrote 99 for In Progress at
+        // 100, which taskStatus.ts names as a lie: 99% asserts the task is
+        // nearly finished when the truth is that progress is unknown.
+        const reconciled = reconcileStatusPercent(out.status, out.percent_complete);
+        if (reconciled !== undefined) out.percent_complete = reconciled;
       }
 
       // Cross-module link arrays (migration 055). Each is an optional
