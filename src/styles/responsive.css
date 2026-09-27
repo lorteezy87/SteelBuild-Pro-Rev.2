@@ -232,6 +232,19 @@ body {
   .rivet-phase-row > :first-child {
     flex-basis: 100%;
   }
+
+  /* Schedule Task List, the phone default view: each phase panel scrolls
+     sideways and its rows keep room for the ten columns (640px of them are
+     fixed), instead of crushing the task name to ~26px and clipping Finish
+     through Status. Same idea as the .sbp-table min-width rule above. */
+  .sched-task-list-panel {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sched-task-list-panel > .sched-task-list-row {
+    min-width: 960px;
+  }
 }
 
 @media (max-width: 480px) {
