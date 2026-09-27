@@ -25,6 +25,12 @@ import {
 } from "../../supabase/functions/llm-proxy/providers/cost";
 
 describe("cost.isModelPriced (gateway model allowlist)", () => {
+  it.each(['constructor', 'toString', '__proto__'])('rejects inherited provider/model keys: %s', (key) => {
+    expect(isModelPriced('openai', key)).toBe(false);
+    expect(isModelPriced(key, 'gpt-4o')).toBe(false);
+    expect(computeCostUsd('openai', key, 1, 1)).toBeNull();
+    expect(getProviderForUseCase(key)).toEqual(getProviderForUseCase('general'));
+  });
   it("allows every model the router can route to (allowlist superset of routing table)", () => {
     for (const target of Object.values(ROUTING_TABLE)) {
       expect(isModelPriced(target.provider, target.model)).toBe(true);

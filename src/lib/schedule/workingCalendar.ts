@@ -6,7 +6,7 @@
  * on **Saturday**. 32 tasks in production start on a weekend.
  *
  * The repo already had two working-day libraries and the Gantt used neither:
- * `lib/workingDays.ts` (Mon–Fri, used by Submittals) and `lib/workweek.js`
+ * `lib/workingDays.ts` (Mon–Fri, used by Submittals) and `lib/workweek.ts`
  * (a WORKDAYS_PER_WEEK knob, used by Crew Scheduling). So Crew Scheduling and
  * the Gantt disagreed about how long a week is, in the same app, about the same
  * crews. Neither supports holidays or a per-project shift pattern, which is why

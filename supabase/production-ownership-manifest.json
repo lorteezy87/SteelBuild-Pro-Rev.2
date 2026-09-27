@@ -25,6 +25,21 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20260921080604",
+        "lifecycle": "required",
+        "evidence": "Launch-security candidate. Verified in a rolled-back staging transaction with authenticated role checks; not yet applied to production. Preserve the normal drift gate until the reviewed SQL is explicitly approved, applied and stamped with matching payload."
+      },
+      {
+        "version": "20260921054458",
+        "lifecycle": "required",
+        "evidence": "Owner approved release of PR #460 on 2026-09-21 after checks. Applied and stamped atomically in production after transactional staging permission tests; ledger SQL matches the committed file (MD5 8e7a375975fa3d6ca73bbaa8894d892e). Invoker RPC and INSERT policy use org-aware project access; PM-only edits remain."
+      },
+      {
+        "version": "20260921055027",
+        "lifecycle": "required",
+        "evidence": "Owner approved release of PR #460 on 2026-09-21 after checks. Applied and stamped atomically in production after transactional staging alias tests; ledger SQL matches the committed file (MD5 d0dba6a21cc34e544e54f26c9947f87d). Preflight found no conflicts; 25 recorded-date alias discrepancies were synchronized and verification found zero remaining."
+      },
+      {
         "version": "20260913084700",
         "lifecycle": "intentionally-frozen",
         "evidence": "MUST NOT BE APPLIED. Its create_expense() half is already live in production (verified 2026-09-14 by the 'Not authorized to log expenses for this project' marker in the live body), but it also drops every trigger on public.expenses and installs a create-only guard, enforce_expense_rpc_create, which is absent from production. Production instead carries trg_a_enforce_expense_guards -> enforce_expense_guards, which is strictly stronger: it enforces the same RPC-only insert rule ('Use create_expense() - expense numbers are minted there') plus project_id and expense_number immutability, status and stamp routing through move_expense(), an approved-expense freeze, a field-edit restriction, delete restrictions, and transition validation via expense_transition_allowed. Applying this file would tear all of that out. Superseded, not pending. QUARANTINED 2026-09-14: moved to supabase/migrations_quarantine/20260913084700_expense_atomic_creation.sql, outside every runner's glob, because an override silences the drift report but is not read by the Supabase CLI or the branching runner - a staging branch would have executed it and replaced the live guards."
@@ -492,8 +507,8 @@
     {
       "slug": "sheets-api",
       "owner": "lorteezy87/steelbuild-sheets-web",
-      "lifecycle": "required",
-      "evidence": "supabase/migrations/20260912023827_revoke_trigger_fn_execute_and_sheets_grants.sql documents the external source-of-truth repository and legitimate service-role caller"
+      "lifecycle": "deprecated",
+      "evidence": "Owner confirmed intentional retirement on 2026-09-21 after live inventory verified removal; see docs/runbooks/supabase-production-ownership.md#sheets-api-retirement. Historical owner and grants remain recorded in supabase/migrations/20260912023827_revoke_trigger_fn_execute_and_sheets_grants.sql"
     },
     {
       "slug": "schedule-assistant",

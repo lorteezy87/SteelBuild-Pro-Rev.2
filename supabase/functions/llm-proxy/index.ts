@@ -71,6 +71,8 @@ import { getProviderForUseCase } from "./router.ts";
 import { checkUserQuota } from "./quota.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
+import { normalizeRequestLimits } from "./requestLimits.ts";
+import { authorizeTelemetryProject, readBoundedJson, RequestBoundaryError } from "./requestBoundary.ts";
 
 // Protocol versions:
 //   v3 = verify_jwt disabled
@@ -91,26 +93,6 @@ function isTruthy(v: string | undefined): boolean {
   return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 }
 
-// Use-cases that send large document/image inputs (high per-call cost). For
-// these the quota check fails CLOSED when usage can't be verified, so a usage-
-// read outage can't be exploited to bypass the spend cap on the costly calls.
-// Cheap chat/extraction calls stay fail-open (telemetry never breaks the request).
-const EXPENSIVE_USE_CASES = new Set([
-  "drawing-analysis",
-  "revision-compare",
-  "sheet-extraction",
-  "photo-ocr",
-  "shipping-ticket-import",
-  "rfi-log-import",
-]);
-
-// Telemetry's project_id comes from the request body, so it is caller-supplied.
-// It is only ever used as a value in a JSON insert (never interpolated into a
-// PostgREST filter here), but an unvalidated string still lets a caller attribute
-// their spend to another org's project and corrupt per-project cost reporting.
-// Accept a UUID or nothing.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * Ceiling on the raw request body.
  *
@@ -121,8 +103,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *
  * 24 MB of base64 is roughly 18 MB of decoded document — comfortably above the
  * largest real drawing set anyone submits, and bounded. Checked from
- * Content-Length before the body is read, so an oversized payload is rejected
- * without being buffered.
+ * Content-Length before reading and by streamed byte count while reading, so
+ * callers cannot bypass the limit by omitting or falsifying the header.
  */
 const MAX_REQUEST_BYTES = 24 * 1024 * 1024;
 
@@ -180,7 +162,7 @@ async function authenticateRequest(req: Request): Promise<{ ok: true; userId: st
     console.error("[llm-proxy] Auth /user fetch threw:", msg);
     return {
       ok: false,
-      response: json({ error: `Auth service unreachable: ${msg}`, protocol_version: PROTOCOL_VERSION }, 502, req),
+      response: json({ error: "Auth service unreachable. Please retry.", protocol_version: PROTOCOL_VERSION }, 502, req),
     };
   }
 }
@@ -271,30 +253,20 @@ async function handle(req: Request): Promise<Response> {
     );
   }
 
-  // NOTE: the per-user spend/volume quota is checked AFTER the routing decision
-  // (below), so it can fail CLOSED for expensive use-cases. Body parse + routing
-  // are cheap; the provider call (the thing being gated) is still well after it.
-
-  // Reject an oversized payload from Content-Length BEFORE buffering it.
-  const declaredLength = Number(req.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
-    return json(
-      {
-        error: `Request too large (${Math.round(declaredLength / 1024 / 1024)} MB). The gateway accepts up to ${MAX_REQUEST_BYTES / 1024 / 1024} MB — split the document and retry.`,
-        protocol_version: PROTOCOL_VERSION,
-      },
-      413,
-      req,
-    );
-  }
-
   let body: any;
+  let projectId: string | null;
   try {
-    body = await req.json();
+    body = await readBoundedJson(req, MAX_REQUEST_BYTES);
+    projectId = await authorizeTelemetryProject(body.project_id, {
+      url: Deno.env.get("SUPABASE_URL")!,
+      anonKey: Deno.env.get("SUPABASE_ANON_KEY")!,
+      authorization: req.headers.get("Authorization")!,
+    });
   } catch (err) {
+    if (!(err instanceof RequestBoundaryError)) throw err;
     return json(
-      { error: `Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`, protocol_version: PROTOCOL_VERSION },
-      400,
+      { error: err.message, protocol_version: PROTOCOL_VERSION },
+      err.status,
       req,
     );
   }
@@ -321,7 +293,7 @@ async function handle(req: Request): Promise<Response> {
   const provider = explicitProvider || routed.provider;
   const model    = explicitModel    || routed.model;
 
-  const client = PROVIDER_REGISTRY[provider];
+  const client = Object.hasOwn(PROVIDER_REGISTRY, provider) ? PROVIDER_REGISTRY[provider] : undefined;
   if (!client) {
     return json(
       { error: `Unknown provider: "${provider}". Use "anthropic" or "openai".`, protocol_version: PROTOCOL_VERSION },
@@ -348,18 +320,16 @@ async function handle(req: Request): Promise<Response> {
   // caller-supplied value to a ceiling generous enough for every real caller
   // (observed max is 8000 across extraction/import/copilot) yet tight enough
   // that one request can't run away. Refine per-useCase here if ever needed.
-  const OUTPUT_TOKEN_CEILING = 16000;
-  if (typeof body?.maxTokens === "number" && body.maxTokens > OUTPUT_TOKEN_CEILING) {
-    console.warn(`[llm-proxy] clamping maxTokens ${body.maxTokens} -> ${OUTPUT_TOKEN_CEILING} (useCase=${useCase})`);
-    body.maxTokens = OUTPUT_TOKEN_CEILING;
+  try {
+    Object.assign(body, normalizeRequestLimits(body, provider));
+  } catch (error) {
+    return json({ error: (error as Error).message, protocol_version: PROTOCOL_VERSION }, 400, req);
   }
 
   // ── Per-user daily spend/volume guard ───────────────────────────────────
-  // No-op unless a cap secret is set. Now that the use-case is known, expensive
-  // (document/image) use-cases fail CLOSED if usage can't be verified; cheap
-  // calls stay fail-open. Checked before the provider call so a throttled user
-  // never reaches a provider.
-  const quota = await checkUserQuota(auth.userId, { failClosed: EXPENSIVE_USE_CASES.has(useCase) });
+  // No-op unless a cap secret is set. Every configured quota fails closed on
+  // read failure: caller-controlled routing labels cannot waive spend controls.
+  const quota = await checkUserQuota(auth.userId);
   if (!quota.ok) {
     const res = json({ error: quota.error, protocol_version: PROTOCOL_VERSION }, quota.status, req);
     res.headers.set("Retry-After", String(quota.retryAfterSeconds));
@@ -393,9 +363,6 @@ async function handle(req: Request): Promise<Response> {
 
   // ── Provider call (timed) ──────────────────────────────────────────────
   const t0 = performance.now();
-  const projectId = typeof body?.project_id === "string" && UUID_RE.test(body.project_id)
-    ? body.project_id
-    : null;
 
   try {
     const result = await client.call(body, { model });
@@ -460,7 +427,7 @@ async function handle(req: Request): Promise<Response> {
     }
 
     return json(
-      { error: `${provider} handler: ${message}`, protocol_version: PROTOCOL_VERSION },
+      { error: isLLMError ? message : "AI request failed. Please retry.", protocol_version: PROTOCOL_VERSION },
       status,
       req,
     );
@@ -471,14 +438,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     return await handle(req);
   } catch (err) {
-    const name = err instanceof Error ? err.name : "Error";
-    const message = err instanceof Error ? err.message : String(err);
     // Log (+ Sentry when EDGE_SENTRY_DSN is set). Do NOT return the stack to
     // the client — it can disclose internal file paths / structure.
     await reportError(err, "llm-proxy", { unhandled: true });
     return json(
       {
-        error: `Unhandled ${name}: ${message}`,
+        error: "AI request failed. Please retry.",
         protocol_version: PROTOCOL_VERSION,
       },
       500,

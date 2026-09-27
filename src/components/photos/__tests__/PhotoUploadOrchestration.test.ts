@@ -25,7 +25,9 @@ function uploadItem(id: string, status: "pending" | "done" = "pending") {
 function photoRow(record: Insert<"photos">): RowWithAliases<"photos"> {
   return {
     category: record.category ?? null,
+    client_op_id: null,
     created_at: null,
+    created_by: null,
     daily_log_id: null,
     deleted_at: null,
     description: record.description ?? null,
@@ -42,6 +44,7 @@ function photoRow(record: Insert<"photos">): RowWithAliases<"photos"> {
     taken_date: record.taken_date ?? null,
     title: record.title ?? null,
     updated_at: null,
+    work_package_id: null,
   };
 }
 

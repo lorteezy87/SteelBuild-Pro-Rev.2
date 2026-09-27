@@ -67,11 +67,14 @@ export const STATUS_COLOR = {
  * tokenized surfaces, not as chrome colors. // semantic stage — allowlisted
  */
 export const BIC_COLOR = {
-  Contractor: "#C89B20",
-  GC:         "#3B82F6",
-  Engineer:   "#14B8A6",
-  Architect:  "#0EA5A4",
-  Owner:      "#22C55E",
+  Contractor:    "var(--accent)",
+  Subcontractor: "var(--status-info)",
+  Detailer:      "var(--secondary)",
+  GC:            "var(--status-info)",
+  EOR:           "var(--status-warning)",
+  AOR:           "var(--status-review)",
+  Architect:     "var(--status-success)",
+  Owner:         "var(--status-error)",
 };
 
 /**

@@ -6,14 +6,32 @@
  * reaching back into the page shell.
  */
 
+import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
+
 export const mono = { fontFamily: "var(--font-mono)" };
 
+export const UNASSIGNED_BIC_COLORS = {
+  bg: "var(--bg-elevated)",
+  text: "var(--text-muted)",
+};
+
+// One entry per BALL_IN_COURT_PARTIES member, asserted by test. DetailPanel
+// renders unknown parties neutrally; the coverage test keeps a missing
+// canonical party from silently losing its color. The original parties keep
+// their existing colours; EOR takes
+// the slot "Engineer" had, since Engineer was its synonym.
 export const BIC_COLORS = {
-  Contractor: { bg: "var(--info-muted)",   text: "var(--accent)" },
-  GC:         { bg: "var(--accent-muted)",  text: "var(--secondary)" },
-  Engineer:   { bg: "var(--warning-muted)",  text: "var(--status-warning)" },
-  Architect:  { bg: "var(--success-muted)", text: "var(--status-success)" },
-  Owner:      { bg: "var(--danger-muted)", text: "var(--status-error)" },
+  // Detailer class — our side of the handoff.
+  Contractor:    { bg: "var(--info-muted)",          text: "var(--accent)" },
+  Subcontractor: { bg: "var(--info-muted)",          text: "var(--status-info)" },
+  Detailer:      { bg: "var(--secondary-muted)",     text: "var(--secondary)" },
+  // Approver class.
+  EOR:           { bg: "var(--warning-muted)",       text: "var(--status-warning)" },
+  Architect:     { bg: "var(--success-muted)",       text: "var(--status-success)" },
+  AOR:           { bg: "var(--status-review-muted)", text: "var(--status-review)" },
+  // Downstream.
+  GC:            { bg: "var(--accent-muted)",        text: "var(--secondary)" },
+  Owner:         { bg: "var(--danger-muted)",        text: "var(--status-error)" },
 };
 
 export const PRIORITY_CFG = {
@@ -62,7 +80,11 @@ export const KPI_ACCENT_MAP = {
   "var(--accent)":         "var(--accent-muted)",
 };
 
-export const BIC_PARTIES = ["Contractor", "GC", "Engineer", "Architect", "Owner"];
+// The buttons DetailPanel writes straight to rfis.ball_in_court, so this must
+// be the vocabulary chk_rfis_ball_in_court enforces. It used to be its own
+// five-value list containing "Engineer", which no constraint allows — one click
+// lost the user's save.
+export const BIC_PARTIES = BALL_IN_COURT_PARTIES;
 export const PRIORITIES  = ["Critical", "High", "Medium", "Low"];
 
 // Discipline filter chips used by the canonical RFI control center.

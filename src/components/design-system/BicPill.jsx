@@ -1,7 +1,6 @@
 /**
- * BicPill — ball-in-court chip. One of five party types each with a
- * distinct semantic color (Contractor gold / GC blue / Engineer teal /
- * Architect darker teal / Owner green). Mono uppercase like StatusPill
+ * BicPill — ball-in-court chip. Canonical parties use the semantic
+ * theme colors defined in BIC_COLOR. Mono uppercase like StatusPill
  * but slightly smaller (8pt).
  */
 

@@ -29,7 +29,7 @@ const CACHE_VERSION = "sbp-shell-v1";
 const SHELL_URL = "/index.html";
 // Best-effort precache so the very first offline boot has a shell even if the
 // user never triggered a same-origin navigation while online.
-const PRECACHE_URLS = [SHELL_URL, "/", "/manifest.json", "/favicon.svg", "/icon-maskable.svg"];
+const PRECACHE_URLS = [SHELL_URL, "/", "/manifest.json", "/favicon.svg", "/icon-maskable.svg", "/steelbuild-pro-mark.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

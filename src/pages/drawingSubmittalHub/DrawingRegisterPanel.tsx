@@ -58,7 +58,7 @@ export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
     <HubViewToggle label="Drawing register view" options={VIEWS} value={view} onChange={setView} />
     {view === "sheets" && (
       <DrawingRegisterWorkbench projectId={projectId} activeProject={props.activeProject}>
-        {({ selected, onToggleSelect, onToggleSelectAll }) => (
+        {({ selected, onToggleSelect, onToggleSelectAll, onMarkTitleblock }) => (
           <DrawingRegisterGridPanel
             projectId={projectId}
             activeProject={props.activeProject}
@@ -70,15 +70,16 @@ export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
             selected={selected}
             onToggleSelect={onToggleSelect}
             onToggleSelectAll={onToggleSelectAll}
+            onMarkTitleblock={onMarkTitleblock}
           />
         )}
       </DrawingRegisterWorkbench>
     )}
     {view === "sets" && (
       <DrawingRegisterWorkbench projectId={projectId} activeProject={props.activeProject}>
-        {() => (
+        {({ onMarkTitleblock }) => (
           <Suspense fallback={<p role="status">Loading drawing sets…</p>}>
-            <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []} />
+            <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []} onMarkTitleblock={onMarkTitleblock} />
           </Suspense>
         )}
       </DrawingRegisterWorkbench>

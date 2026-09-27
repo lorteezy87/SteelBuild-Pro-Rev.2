@@ -10,6 +10,11 @@ import {
 } from "../rfiControlCenter.derive";
 
 // Build an ISO date (YYYY-MM-DD) `offsetDays` from today (UTC midnight basis).
+it("does not assign imported unknown parties to the Contractor workload", () => {
+  const rows = ballInCourtSummary([{ id: "unknown", status: "Open", ball_in_court: null }]);
+  expect(rows.map(({ company, count }) => ({ company, count }))).toEqual([{ company: "Unassigned", count: 1 }]);
+});
+
 function isoOffset(offsetDays: number): string {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -63,10 +68,10 @@ describe("ballInCourtSummary", () => {
     const gc = rows.find((r) => r.company === "GC");
     expect(gc?.count).toBe(1); // the Closed one is excluded
   });
-  it("buckets a null ball_in_court under 'Contractor' and sorts by count desc", () => {
+  it("buckets a null ball_in_court under 'Unassigned' and sorts by count desc", () => {
     const rows = ballInCourtSummary(rfis);
     expect(rows[0].company).toBe("Engineer"); // highest count first
-    expect(rows.some((r) => r.company === "Contractor")).toBe(true);
+    expect(rows.some((r) => r.company === "Unassigned")).toBe(true);
   });
   it("reports a finite, non-negative average age", () => {
     const rows = ballInCourtSummary(rfis);
@@ -117,7 +122,10 @@ describe("RFI operational signals", () => {
     const rfi = {
       id: "ops-1",
       status: "Open",
-      ball_in_court: "Engineer",
+      // Was "Engineer", which chk_rfis_ball_in_court rejects -- no row can
+      // hold it, so the fixture asserted a state production cannot reach.
+      // EOR is the storable party it was a synonym for.
+      ball_in_court: "EOR",
       date_required: isoOffset(2),
       work_package_id: "wp-42",
       metadata: {

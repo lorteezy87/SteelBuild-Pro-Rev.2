@@ -60,5 +60,5 @@ export const ROUTING_TABLE: Record<string, RoutingTarget> = {
  */
 export function getProviderForUseCase(useCase: string | undefined | null): RoutingTarget {
   const key = (useCase && typeof useCase === "string") ? useCase : "general";
-  return ROUTING_TABLE[key] || ROUTING_TABLE["general"];
+  return Object.hasOwn(ROUTING_TABLE, key) ? ROUTING_TABLE[key] : ROUTING_TABLE["general"];
 }

@@ -31,11 +31,11 @@ function memStorage(initial = null) {
 
 describe("makeProgressOp", () => {
   it("builds an idempotent op keyed by task", () => {
-    const op = makeProgressOp("task-1", 50, 1000);
+    const op = makeProgressOp("task-1", 50, 1000, "2026-06-12");
     expect(op).toMatchObject({
       type: OP_SCHEDULE_PROGRESS,
       coalesceKey: "schedule-progress:task-1",
-      payload: { id: "task-1", pct: 50 },
+      payload: { id: "task-1", pct: 50, captureDay: "2026-06-12" },
       createdAt: 1000,
     });
   });

@@ -16,16 +16,9 @@
 //      forge nor suppress it. Every successful export is recorded in
 //      `activities` (action='exported', entity_type='Project').
 //
-// The pure shaping + audit-record helpers below are the canonical, unit-tested
-// versions in src/services/projectExportService.ts. That module can't be
-// imported here (Deno can't resolve the `@/` alias), so the helpers are
-// duplicated verbatim — keep the two in lockstep.
-//   ⚠ DIVERGENCE: this copy now (a) reads every table PAGED past PostgREST's
-//   ~1000-row cap, (b) exports the comprehensive project-scoped table superset,
-//   and (c) adds a Storage `files` manifest (bucket/path/size) to the envelope.
-//   The src/ mirror must be brought back in lockstep (table list, envelope
-//   `files`/`file_count` fields) in a separate change — this task is scoped to
-//   supabase/functions/ only.
+// Preserve the deployed shared v2 contract in ./exportShape.ts.
+// Table reads page to completeness under caller RLS and fail on any missing page.
+// Additional storage listing lives in storage_files; files retains v2 row references.
 //
 // Auth: JWT-verified. Method: POST { project_id }.
 //
@@ -36,201 +29,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { readTablePaged, readQueryPages, type ExportClient } from "./readTablePaged.ts";
+import { buildProjectExport, buildExportAuditRecord, PROJECT_EXPORT_TABLES, type ProjectExportTableResult, type StorageFile } from "./exportShape.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 
-// ── Pure export shaping (mirror of src/services/projectExportService.ts) ──────
-
-const PROJECT_EXPORT_VERSION = 1;
-
-// Comprehensive project-scoped tenant table set. Every table listed has a
-// `project_id` column and an `id` column; reads run under RLS. Org-scoped
-// note folders are exported separately via readNoteFolderExport.
-const PROJECT_EXPORT_TABLES: readonly string[] = [
-  "action_items",
-  "activities",
-  "alerts",
-  "backcharge_events",
-  "backcharge_tm_tickets",
-  "backcharges",
-  "budget_hour_items",
-  "change_orders",
-  "change_requests",
-  "comments",
-  "contacts",
-  "cost_codes",
-  "daily_logs",
-  "deliveries",
-  "document_folders",
-  "documents",
-  "drawing_activity",
-  "drawing_analyses",
-  "drawing_impacts",
-  "drawing_links",
-  "drawing_markups",
-  "drawing_reviews",
-  "drawing_revision_comparisons",
-  "drawing_revision_summaries",
-  "drawing_revisions",
-  "drawing_sets",
-  "drawing_signoffs",
-  "drawing_transmittal_items",
-  "drawing_transmittals",
-  "drawing_watchers",
-  "drawing_zones",
-  "drawing_zone_activity",
-  "drawing_zone_dependencies",
-  "drawing_zone_proposals",
-  "drawings",
-  "email_accounts",
-  "email_attachments",
-  "email_intake_queue",
-  "email_integration_settings",
-  "email_messages",
-  "expenses",
-  "external_file_refs",
-  "external_linked_folders",
-  "fab_release_log",
-  "fab_release_overrides",
-  "fab_releases",
-  "inspections",
-  "linked_folders",
-  "look_ahead",
-  "meetings",
-  "mitigation_actions",
-  "mitigation_logs",
-  "model_element_links",
-  "model_elements",
-  "model_registry",
-  "pay_application_lines",
-  "pay_applications",
-  "photos",
-  "piece_production",
-  "production_notes",
-  "project_closeout",
-  "project_handoff_items",
-  "punchlist_items",
-  "quality_control_records",
-  "resources",
-  "rfis",
-  "risks",
-  "safety_incidents",
-  "schedule_tasks",
-  "scope_items",
-  "sov_items",
-  "submittal_activity",
-  "submittal_rounds",
-  "submittal_sheet_responses",
-  "submittals",
-  "task_dependencies",
-  "uploaded_files",
-  "warranties",
-  "work_packages",
-] as const;
-
-// Storage buckets whose project-prefixed objects are listed in the export
-// manifest (paths + sizes only — bytes are never downloaded).
-const PROJECT_EXPORT_STORAGE_BUCKETS: readonly string[] = [
-  "app-files",
-  "email-attachments",
-] as const;
-
-// PostgREST returns at most ~1000 rows per request. Read each table in pages of
-// this size and accumulate until a short page signals the end — a single
-// unpaginated select silently truncates large tables.
+// Additional object inventory supplements, rather than replaces, the v2 file references.
+const PROJECT_EXPORT_STORAGE_BUCKETS = ["app-files", "email-attachments"] as const;
 const EXPORT_PAGE_SIZE = 1000;
-
-interface ProjectExportTableResult {
-  table: string;
-  rows: Record<string, unknown>[];
-}
-
-interface ProjectExportFile {
-  bucket: string;
-  path: string;
-  size: number;
-}
-
-interface ProjectExportEnvelope {
-  export_version: number;
-  exported_at: string;
-  exported_by: string;
-  project: Record<string, unknown>;
-  tables: Record<string, Record<string, unknown>[]>;
-  row_counts: Record<string, number>;
-  total_rows: number;
-  files: ProjectExportFile[];
-  file_count: number;
-}
-
-function buildProjectExport(args: {
-  project: Record<string, unknown>;
-  tableResults: ProjectExportTableResult[];
-  files: ProjectExportFile[];
-  exportedBy: string;
-  exportedAt?: string;
-}): ProjectExportEnvelope {
-  const exportedAt = args.exportedAt ?? new Date().toISOString();
-  const tables: Record<string, Record<string, unknown>[]> = {};
-  const rowCounts: Record<string, number> = {};
-  let totalRows = 0;
-
-  for (const result of args.tableResults) {
-    const rows = Array.isArray(result.rows) ? result.rows : [];
-    tables[result.table] = rows;
-    rowCounts[result.table] = rows.length;
-    totalRows += rows.length;
-  }
-
-  const files = Array.isArray(args.files) ? args.files : [];
-
-  return {
-    export_version: PROJECT_EXPORT_VERSION,
-    exported_at: exportedAt,
-    exported_by: args.exportedBy,
-    project: args.project ?? {},
-    tables,
-    row_counts: rowCounts,
-    total_rows: totalRows,
-    files,
-    file_count: files.length,
-  };
-}
-
-function getExportProjectName(project: Record<string, unknown> | null | undefined): string {
-  if (!project) return "project";
-  const name = project.name ?? project.project_name ?? project.title;
-  return typeof name === "string" && name.trim() ? name.trim() : "project";
-}
-
-function buildExportAuditRecord(args: {
-  projectId: string;
-  project: Record<string, unknown>;
-  envelope: ProjectExportEnvelope;
-  performedBy: string;
-  timestamp?: string;
-}) {
-  const tableCount = Object.keys(args.envelope.tables).length;
-  const projectName = getExportProjectName(args.project);
-  return {
-    project_id: args.projectId,
-    project_name: projectName,
-    entity_type: "Project" as const,
-    entity_id: args.projectId,
-    action: "exported" as const,
-    description:
-      `Exported project backup — ${args.envelope.total_rows} rows across ` +
-      `${tableCount} tables`,
-    performed_by: args.performedBy,
-    timestamp: args.timestamp ?? new Date().toISOString(),
-    metadata: {
-      export_version: args.envelope.export_version,
-      total_rows: args.envelope.total_rows,
-      table_count: tableCount,
-    },
-  };
-}
+type ProjectExportFile = StorageFile;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -268,44 +76,6 @@ async function verifyJwt(
 }
 
 // ── Paginated table read ───────────────────────────────────────────────────────
-
-interface PaginatedReadResult {
-  rows: Record<string, unknown>[];
-  error: string | null;
-}
-
-/**
- * Read every row of a project-scoped table under RLS, paging through PostgREST's
- * ~1000-row cap. Accumulates fixed-size pages ordered by id until a short page
- * (fewer than EXPORT_PAGE_SIZE rows) signals the end. On any page error the whole
- * read fails — the caller aborts the export rather than shipping a partial backup.
- */
-async function readTablePaged(
-  rls: SupabaseClient,
-  table: string,
-  projectId: string,
-): Promise<PaginatedReadResult> {
-  const rows: Record<string, unknown>[] = [];
-  let from = 0;
-  // Bounded loop: every iteration either appends a full page (advancing `from`)
-  // or returns. A short page ends it, so it can't spin.
-  for (;;) {
-    const { data, error } = await rls
-      .from(table)
-      .select("*")
-      .eq("project_id", projectId)
-      .order("id", { ascending: true })
-      .range(from, from + EXPORT_PAGE_SIZE - 1);
-    if (error) {
-      return { rows, error: error.message };
-    }
-    const page = (data ?? []) as Record<string, unknown>[];
-    rows.push(...page);
-    if (page.length < EXPORT_PAGE_SIZE) break; // short page → last page
-    from += EXPORT_PAGE_SIZE;
-  }
-  return { rows, error: null };
-}
 
 /**
  * Note folders are org-scoped (no project_id / no single id on the link PK).
@@ -352,11 +122,13 @@ async function readNoteFolderExport(
         folders.push(row);
       }
     }
-    const { data: children, error: childErr } = await rls
+    const { rows: children, error: childErr } = await readQueryPages(async (start, end) => await rls
       .from("note_folders")
       .select("*")
-      .in("parent_folder_id", chunk);
-    if (childErr) return { results: [], error: childErr.message };
+      .in("parent_folder_id", chunk)
+      .order("id", { ascending: true })
+      .range(start, end));
+    if (childErr) return { results: [], error: childErr };
     for (const row of (children ?? []) as Record<string, unknown>[]) {
       if (typeof row.id !== "string" || folderIds.has(row.id)) continue;
       folderIds.add(row.id);
@@ -386,6 +158,7 @@ async function readNoteFolderExport(
 async function listProjectStorageFiles(
   rls: SupabaseClient,
   projectId: string,
+  orgId?: string,
 ): Promise<ProjectExportFile[]> {
   const files: ProjectExportFile[] = [];
   const STORAGE_PAGE = 1000;
@@ -393,11 +166,11 @@ async function listProjectStorageFiles(
   for (const bucket of PROJECT_EXPORT_STORAGE_BUCKETS) {
     // Recursively walk the project prefix. supabase-js storage.list() is not
     // recursive — a "folder" comes back as an entry with a null id — so we
-    // descend explicitly. `prefix` is relative to the project root.
-    const prefixes: string[] = [""];
+    // descend explicitly. Read both legacy and organization-prefixed project roots.
+    const prefixes: string[] = orgId ? [projectId, `${orgId}/${projectId}`] : [projectId];
     while (prefixes.length > 0) {
       const prefix = prefixes.pop() as string;
-      const dir = prefix ? `${projectId}/${prefix}` : projectId;
+      const dir = prefix;
       let offset = 0;
       for (;;) {
         const { data, error } = await rls.storage.from(bucket).list(dir, {
@@ -421,7 +194,7 @@ async function listProjectStorageFiles(
           }
           const size =
             typeof entry.metadata?.size === "number" ? entry.metadata.size : 0;
-          files.push({ bucket, path: `${projectId}/${relPath}`, size });
+          files.push({ bucket, path: relPath, size });
         }
         if (entries.length < STORAGE_PAGE) break; // last page for this dir
         offset += STORAGE_PAGE;
@@ -493,7 +266,9 @@ async function handle(req: Request): Promise<Response> {
   // rows (or a whole table) is worse than none.
   const tableResults: ProjectExportTableResult[] = [];
   for (const table of PROJECT_EXPORT_TABLES) {
-    const { rows, error } = await readTablePaged(rls, table, projectId);
+    // Narrow the dynamic-table client boundary; expanding Supabase's full generic
+    // query builder here exceeds Deno's type-instantiation limit.
+    const { rows, error } = await readTablePaged(rls as unknown as ExportClient, table, projectId);
     if (error) {
       console.error(`[project-export] ${table} fetch error: ${error}`);
       return errorResponse(500, `Failed to read ${table}`, req);
@@ -510,12 +285,12 @@ async function handle(req: Request): Promise<Response> {
 
   // Storage manifest (paths + sizes only, never bytes). Best-effort: a failure
   // here is logged and skipped — it must not abort a data-complete export.
-  const files = await listProjectStorageFiles(rls, projectId);
+  const files = await listProjectStorageFiles(rls, projectId, typeof project.org_id === "string" ? project.org_id : undefined);
 
   const envelope = buildProjectExport({
     project: project as Record<string, unknown>,
     tableResults,
-    files,
+    storageFiles: files,
     exportedBy: user.displayName,
   });
 
@@ -527,6 +302,7 @@ async function handle(req: Request): Promise<Response> {
     project: project as Record<string, unknown>,
     envelope,
     performedBy: user.displayName,
+    performedByUserId: user.id,
   });
 
   const admin = createClient(supabaseUrl, serviceKey);

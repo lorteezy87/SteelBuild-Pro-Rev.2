@@ -15,6 +15,7 @@
 import { supabase } from "@/lib/supabase";
 import { integrations } from "@/api/supabaseClient";
 import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
+import { normalizeBallInCourt } from "@/lib/ballInCourt";
 
 const STORAGE_BUCKET  = "app-files";
 const MAX_PDF_BYTES   = 32 * 1024 * 1024;
@@ -280,7 +281,14 @@ export function buildRfiImportRows({ rfis = [], projectId, projectName, existing
       date_answered:  answered,
       status:         answered ? "Closed" : "Open",
       priority:       "Medium",
-      ball_in_court:  answered ? "Contractor" : (r.assigned_to || "Engineer"),
+      // assigned_to is free text from a spreadsheet -- often a PERSON ("John
+      // Doe, PE"), which is not a party and which chk_rfis_ball_in_court
+      // rejects, failing the whole row. Preserve unrecognised parties as null;
+      // neither a person's name nor a company name proves who holds the ball.
+      // The raw value remains in assigned_to above.
+      ball_in_court:  answered
+        ? "Contractor"
+        : normalizeBallInCourt(r.assigned_to),
     });
   }
 

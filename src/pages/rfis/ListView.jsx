@@ -15,7 +15,7 @@
  */
 
 import React from "react";
-import { mono, PRIORITY_CFG, STATUS_CFG, BIC_COLORS } from "./constants";
+import { mono, PRIORITY_CFG, STATUS_CFG, BIC_COLORS, UNASSIGNED_BIC_COLORS } from "./constants";
 import { isOverdue, daysOpen } from "./utils";
 import { Pill } from "./subcomponents";
 
@@ -104,7 +104,7 @@ function Row({ r, isSelected, isChecked, onSelect, onToggleSelect, onToggleStatu
   const overdue = isOverdue(r);
   const pr = PRIORITY_CFG[r.priority] || PRIORITY_CFG.Medium;
   const st = STATUS_CFG[r.status] || STATUS_CFG.Open;
-  const bic = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
+  const bic = BIC_COLORS[r.ball_in_court || "Unassigned"] || UNASSIGNED_BIC_COLORS;
   const due = r.date_required ? new Date(r.date_required + "T00:00:00") : null;
   const diff = due ? Math.ceil((due - new Date()) / 86400000) : null;
   const overdueDays = overdue && diff != null ? Math.abs(diff) : 0;
@@ -176,7 +176,7 @@ function Row({ r, isSelected, isChecked, onSelect, onToggleSelect, onToggleStatu
         <div style={{ ...mono, fontSize: 8, color: "var(--status-error)" }}>{r.cost_impact ? "$" : ""}</div>
         <div style={{ ...mono, fontSize: 8, color: "var(--status-warning)" }}>{r.schedule_impact ? "⏱" : ""}</div>
       </div>
-      <div><Pill label={r.ball_in_court || "Contractor"} color={bic.text} bg={bic.bg} /></div>
+      <div><Pill label={r.ball_in_court || "Unassigned"} color={bic.text} bg={bic.bg} /></div>
       <div style={{ ...mono, fontSize: 9, color: overdue ? "var(--status-error)" : diff != null && diff <= 3 ? "var(--status-warning)" : "var(--text-secondary)", fontWeight: overdue || (diff != null && diff <= 3) ? 700 : 500 }}>
         {due ? due.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
         {overdue && <div style={{ fontSize: 8, color: "var(--status-error)" }}>{Math.abs(diff)}d LATE</div>}

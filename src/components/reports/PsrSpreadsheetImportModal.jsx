@@ -397,7 +397,7 @@ function ImportReviewCard({ item, projects, onChange }) {
                 {parsed.job_name || "Unnamed PSR"}
               </div>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
-                {item.fileName} - sheet {parsed.sheet_name || "-"} - S&H #{parsed.job_number || "-"} - updated {parsed.last_updated || "-"}
+                {item.fileName} - sheet {parsed.sheet_name || "-"} - Job #{parsed.job_number || "-"} - updated {parsed.last_updated || "-"}
               </div>
             </div>
             <HealthPill status={parsed.proposed_health_status} />

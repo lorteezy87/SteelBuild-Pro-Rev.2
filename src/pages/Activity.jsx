@@ -6,6 +6,7 @@ import { createPageUrl } from "@/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ActivityFeed from "../components/shared/ActivityFeed";
 import LoadingSkeleton from "../components/shared/LoadingSkeleton";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 const DATE_RANGES = [
   { value: "all", label: "All Time" },
@@ -102,11 +103,11 @@ export default function ActivityPage() {
 
     const csv = [headers, ...rows].map((r) => r.map((cell) => `"${cell}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `activity-audit-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
+    void presentGeneratedFile({
+      blob,
+      filename: `activity-audit-${new Date().toISOString().split("T")[0]}.csv`,
+      title: "Activity audit",
+    });
   };
 
   const selectTriggerClass = "bg-transparent text-slate-50 px-3 py-2 text-sm rounded-md flex h-9 w-full items-center justify-between whitespace-nowrap border border-input shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1";
@@ -436,4 +437,3 @@ export default function ActivityPage() {
     </div>
   );
 }
-

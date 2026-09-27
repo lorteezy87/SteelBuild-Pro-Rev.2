@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import { IMPORT_TARGETS, stageImportText } from "@/lib/onboardingTemplates";
 import {
   buildJsonExport,
@@ -129,14 +130,7 @@ function downloadTextFile({
   type: string;
 }): void {
   const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename, title: "Data exchange export" });
 }
 
 function errorMessage(error: unknown, fallback: string): string {

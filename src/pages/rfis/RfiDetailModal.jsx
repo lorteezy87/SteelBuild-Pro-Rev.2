@@ -84,7 +84,7 @@ export default function RfiDetailModal({
     {
       key: "bic",
       label: "Ball in Court",
-      value: rfi.ball_in_court || "Contractor",
+      value: rfi.ball_in_court || "Unassigned",
       detail: rfi.assigned_to || "No individual assignee",
     },
     {

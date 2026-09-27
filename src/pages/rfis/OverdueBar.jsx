@@ -9,7 +9,7 @@
 
 import React from "react";
 import { parseUTCDate } from "@/components/shared/formatters";
-import { mono, BIC_COLORS } from "./constants";
+import { mono, BIC_COLORS, UNASSIGNED_BIC_COLORS } from "./constants";
 
 export default function OverdueBar({ overdueList, overdueCount, onSelect }) {
   if (!overdueList?.length) return null;
@@ -23,7 +23,7 @@ export default function OverdueBar({ overdueList, overdueCount, onSelect }) {
       {overdueList.map((r) => {
         const due = r.date_required ? parseUTCDate(r.date_required) : null;
         const lateDays = due ? Math.abs(Math.ceil((due - new Date()) / 86400000)) : 0;
-        const bic = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
+        const bic = BIC_COLORS[r.ball_in_court || "Unassigned"] || UNASSIGNED_BIC_COLORS;
         return (
           <div
             key={r.id}

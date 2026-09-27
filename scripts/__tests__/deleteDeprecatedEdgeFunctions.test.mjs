@@ -19,6 +19,7 @@ describe('deprecated Edge Function reconciliation', () => {
       'bluebeam-proxy',
       'schedule-assistant',
       'sharepoint-proxy',
+      'sheets-api',
       'stripe-setup',
       'stripe-webhook',
       'stripe-worker',

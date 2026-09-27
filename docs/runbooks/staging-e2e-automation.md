@@ -1,5 +1,10 @@
 # Authenticated staging E2E automation
 
+> Current setup: [staging-setup.md](staging-setup.md). The July Vercel project,
+> Supabase ref and bootstrap steps below are historical. The replacement uses
+> ndyfjffsulfbwpmwdmic, a Cloudflare Worker and scripts/seed-staging.mjs.
+> Do not deploy the old bootstrap endpoint or reuse its retired project ref.
+
 `staging-e2e-readonly` runs after staging deploy. It first selects
 `e2e/smoke.spec.ts` and `e2e/daily-workflow.spec.ts`, then starts a second
 Playwright invocation for `e2e/staging-auth-boundary.spec.ts`. The boundary

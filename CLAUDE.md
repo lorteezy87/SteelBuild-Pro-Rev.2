@@ -11,17 +11,18 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 ## Commands
 - `npm run dev` — local dev server
 - `npm run lint` — lint (must be clean before commit)
-- `npm run test` — full test suite (6,470 tests / 678 files as of 2026-09-19)
+- `npm run test` — full test suite (6,842 tests / 712 files as of 2026-09-22)
 - `npm run build` — production build
 - CI gates — every PR must pass all of them: `lint`, `typecheck`, `typecheck:js`, `typecheck:strict`, `typecheck:noimplicitany`, `check:no-new-js`, `test`, `build`.
   - New source files must be `.ts`/`.tsx` (enforced by `check:no-new-js`). Editing existing `.js`/`.jsx` files is fine.
+  - **A deploy is gated on four jobs, not just `ci`.** `deploy-cloudflare` and `preview-cloudflare` both declare `needs: [ci, secret-scan, supabase-drift, edge-typecheck]`. `edge-typecheck` is a Deno check over the released Edge Functions, so an Edge Function that does not type-check blocks the web deploy too.
 - Tests run with `TZ=UTC` (`vite.config.js`), which hides local-vs-UTC bugs.
   - A test that must prove local-day behaviour has to inject the zone, for example by stubbing the date conversion or the `Date` getters.
   - Building dates from local parts passes vacuously on the UTC runner.
 
 ## Deploy — Cloudflare Workers
 - **Production:** the static-asset Worker `steelbuild-pro-rev-2`, configured in `wrangler.jsonc`.
-- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after a green `ci` run. PRs get a Cloudflare preview.
+- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after green `ci`, `secret-scan`, `supabase-drift`, and `edge-typecheck` jobs. PRs get a Cloudflare preview.
 - **Custom domains:** `steelbuild-pro.com` and `www.steelbuild-pro.com`.
 - **Vercel is retired.** Don't reintroduce it.
 - **`wrangler.jsonc`:** keep `workers_dev` and `preview_urls` set explicitly. Adding `routes` silently turns both off, which once broke the post-deploy health check.
@@ -41,8 +42,21 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - SECURITY DEFINER functions must set `search_path` explicitly.
 - Known-fixed classes of bugs (do not reintroduce): feature_flags privilege escalation, vendors blanket-true policies.
 
+## Applying a migration — the file lands with the stamp, DO NOT regress
+`supabase db push` **cannot run against this project**: 42 versions in the remote ledger have no local file, and the CLI refuses rather than understanding a database two repos share. Re-counted 2026-09-22 — ledger 130 versions, repo 123 files, 42 ledger-only (38 sibling-2026, 2 Rev.2 apply-time restamps, 2 shared-production), and 35 repo files with no ledger row from the re-baselining. Every one of the 42 is accounted for in `supabase/production-ownership-manifest.json`; that manifest is the record, never a way to silence the check. Its own suggested remedy, `migration repair --status reverted`, would mark those applied migrations as reverted and **corrupt the ledger for both apps** — never run it. MCP `apply_migration` is also out: it stamps its own apply-time version, which is how the ledger drifted from the repo in the first place.
+
+So migrations here are applied and stamped by hand, and *that* is what makes the ordering a rule rather than a nicety:
+
+- **Commit the file in the same change that applies the migration — file first if anything.** `Supabase drift check` reads production's ledger against the repo's `supabase/migrations/` on **every branch**, so a stamp whose file is still unmerged turns `main` red *and* every open PR red, each one a PR whose own diff is innocent. This has happened three times in two days: `20260919082758` (#441), `20260920014500` (#445), `20260921034212` (#455). Each cost several sessions a red-CI diagnosis.
+- **The name must be the stamped ledger version**, not the authoring timestamp — the check matches local filenames against remote versions.
+- **Verify the committed file against the ledger payload** (`supabase_migrations.schema_migrations.statements`) rather than trusting that it is what ran. Hash it.
+- **Never clear a drift failure by weakening the check** — no manifest override, no exclusion, no deleting the stamp. Production holding an asset the repo can't account for is exactly the condition the check exists to catch on a shared database. Land the file.
+- If a drift failure names a version another branch already carries, **port that file alone** (byte-identical, so neither branch conflicts) instead of waiting for that PR to merge.
+
 ## Number-sequence integrity — DO NOT regress
-Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC `get_next_sequence_number` — never derive the next number client-side. `src/components/shared/numberSequencing.jsx` once floored the RPC with a client-side `Math.max()`, which could mint duplicate numbers under concurrency; that was removed (fixed c5612168) — `getNextFormattedNumber` now re-allocates from the RPC until it clears any existing records, and fails closed if the RPC is unavailable. Keep it RPC-only. Gated by a hook (see `.claude/hooks/`).
+Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC `get_next_sequence_number` — never derive the next number client-side. `src/components/shared/numberSequencing.jsx` once floored the RPC with a client-side `Math.max()`, which could mint duplicate numbers under concurrency; that was removed (fixed c5612168) — `getNextFormattedNumber` now re-allocates from the RPC until it clears any existing records, and fails closed if the RPC is unavailable. Keep it RPC-only.
+- **LOGIC-1 closed by PR #477:** `ZonePanel.jsx` now lets sequence-allocation failure abort the create instead of inventing an RFI number from the clock.
+- The legacy hook still only guards files whose path matches `numberSequencing`, so CI also runs `src/components/shared/__tests__/noInventedRecordNumbers.test.ts`. That test scans non-test application source and rejects clock/random-derived official-number assignments and prefixed record numbers. Treat the test as the application-wide gate; do not replace it with a narrower hook-only check.
 
 ## Linked-RFI id spaces — two columns, same name, different types
 `drawings.linked_rfi_ids` is **text**: a comma-separated list of RFI *numbers* ("RFI #001, RFI #002" — what SheetFormModal asks detailers to type). `submittals.linked_rfi_ids` is **uuid[]**: FKs to `rfis.id`. `drawing_sets` has no such column at all. Never pool them into one set. Match numbers with the canonical `normNum` + `linkedRfiNumbers` from `src/lib/fabReleaseGate.ts` — comma-only split, `toUpperCase().replace(/[^A-Z0-9]/g,"")`. Hand-rolled variants have shipped twice that split on whitespace or kept the `#`, so "RFI #001" never matched and packages reported "Fab ready" with an open RFI against them (fixed e40711b8, df1d885e).
@@ -82,15 +96,26 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
   `schedule_status_pct_consistency` then ties status to `percent_complete`. A
   CHECK is evaluated against the **whole resulting row**, so an UPDATE sending
   `status` alone is validated against the percent already *stored*: → Complete
-  needs 100, → Not Started needs 0, → In Progress needs < 100. Every write path
-  except the bulk toolbar violated this, which made marking a task Complete and
+  needs 100, → Not Started needs 0, → In Progress needs < 100. Nearly every
+  write path violated this once, which made marking a task Complete and
   reopening a finished one fail with a raw Postgres constraint name. Take the
   vocabulary from `SCHEDULE_STATUSES` and let `withReconciledPercent` set the
   percent — never hand-write either (`src/lib/schedule/taskStatus.ts`).
+  - **Closed 2026-09-24 (PR #480): bulk and field progress now use the
+    canonical reconciliation.** The bulk toolbar passes each row's stored
+    percent to `reconcileStatusPercent`, so reopening Complete → In Progress
+    writes NULL rather than sending `status` alone. Field Today and its offline
+    replay also use a task-aware canonical patch that stamps actual start/finish
+    dates instead of maintaining a second schedule-write semantic.
 - **Reopening clears the percent to NULL on purpose.** Complete → 100 and
   Not Started → 0 are definitional; In Progress is not. The transition says the
   task is no longer done but not how much remains, so the percent becomes
   *unknown*. Don't "fix" that by inventing 0 or 99.
+  - **Closed 2026-09-24 (PR #480): NULL remains unknown end to end.**
+    `normalizeFields` now distinguishes a present numeric percent from an
+    explicit NULL before coercion and delegates contradictory status/percent
+    pairs to `reconcileStatusPercent`; it no longer turns NULL into 0, invents
+    a status for a null-only write, or fabricates 99% for a reopen.
 - **Two percent readers, and they are not interchangeable.**
   `percentCompleteOrNull` returns null when unknown — use it for any **claim**
   (a printed figure, an average, a stalled test). `displayPct` flattens unknown
@@ -129,10 +154,14 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 ## Sibling app: SteelBuild-Pro-2026
 - `lorteezy87/SteelBuild-Pro-2026` is a **reference only**. Borrow ideas, layout and logic from it, not code wholesale; Rev.2 is the product.
 - Both apps share the production Supabase project, and which repo owns the schema is still undecided.
-- Without the owner's say-so, don't add migrations for 2026-only tables or columns: `gc_drawings`, `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
+- The owner authorized Rev.2's GC register on 2026-09-19. Migration `20260919120000_gc_document_register.sql` adopts `gc_drawings` and `gc_drawing_sets` into Rev.2's lineage; changes still have to preserve sibling callers.
+- Without the owner's say-so, don't add migrations for the other 2026-only tables or columns: `drawing_transmittal_activity`, transmittal `status`/`submittal_id`, `submittals.stage_entered_at`.
 
 ## MCP server
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.
+
+## Production-readiness audit (2026-09-21)
+`docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md` is the evidence-based audit of security, tenancy, data correctness, performance, store readiness and release process. §9 reconciles it against `main` after PRs #460–#464, so read a finding's status there before acting on it. The invariants above that it found regressed are flagged inline in this file; the rest are tracked in `TECH_DEBT.md`.
 
 ## Branches — PRs target `main`
 `main` is the integration and GitHub default branch (verified 2026-09-11). Open PRs against `main`. Check the live default branch and `git rev-list --count origin/main..HEAD` before opening a PR; older notes naming `codex/base44-deploy-nick` are stale.

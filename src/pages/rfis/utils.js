@@ -6,6 +6,7 @@
 import { RFI_NUMBER_PATTERN, DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } from "./constants";
 import { isRfiClosed } from "@/lib/entityPredicates";
 import { localToday } from "@/utils/dates";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 export const extractRfiSequence = (value) => {
   if (!value) return null;
@@ -186,12 +187,7 @@ export const exportRFIsToCSV = (rows, filename = "rfi-log.csv") => {
     .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename, title: "RFI export" });
 };
 
 // ─── RFI page derivations (extracted from RFIs.jsx) ─────────────────────────

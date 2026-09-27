@@ -14,68 +14,160 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_deletions: {
+        Row: {
+          created_at: string
+          deleted_by: string | null
+          id: string
+          note: string | null
+          org_id: string
+          org_name: string | null
+          projects_deleted: number
+        }
+        Insert: {
+          created_at?: string
+          deleted_by?: string | null
+          id?: string
+          note?: string | null
+          org_id: string
+          org_name?: string | null
+          projects_deleted?: number
+        }
+        Update: {
+          created_at?: string
+          deleted_by?: string | null
+          id?: string
+          note?: string | null
+          org_id?: string
+          org_name?: string | null
+          projects_deleted?: number
+        }
+        Relationships: []
+      }
       action_items: {
         Row: {
+          action_date: string | null
+          action_number: string | null
+          archived_at: string | null
           assigned_to: string | null
+          assigned_user_id: string | null
           category: string | null
+          completed_at: string | null
+          completed_by: string | null
           constraint_number: string | null
           constraint_type: string | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
           description: string | null
           due_date: string | null
+          follow_up_date: string | null
           id: string
+          impact_date: string | null
+          is_deleted: boolean
+          meeting_id: string | null
           meeting_reference: string | null
           metadata: Json | null
           priority: string
           project_area: string | null
           project_id: string
           project_name: string | null
+          source_entity_id: string | null
+          source_entity_type: string | null
           status: string
           title: string | null
           updated_at: string | null
+          waiting_on: string | null
           work_package_id: string | null
+          workstream: string | null
         }
         Insert: {
+          action_date?: string | null
+          action_number?: string | null
+          archived_at?: string | null
           assigned_to?: string | null
+          assigned_user_id?: string | null
           category?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           constraint_number?: string | null
           constraint_type?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           description?: string | null
           due_date?: string | null
+          follow_up_date?: string | null
           id?: string
+          impact_date?: string | null
+          is_deleted?: boolean
+          meeting_id?: string | null
           meeting_reference?: string | null
           metadata?: Json | null
           priority?: string
           project_area?: string | null
           project_id: string
           project_name?: string | null
+          source_entity_id?: string | null
+          source_entity_type?: string | null
           status?: string
           title?: string | null
           updated_at?: string | null
+          waiting_on?: string | null
           work_package_id?: string | null
+          workstream?: string | null
         }
         Update: {
+          action_date?: string | null
+          action_number?: string | null
+          archived_at?: string | null
           assigned_to?: string | null
+          assigned_user_id?: string | null
           category?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           constraint_number?: string | null
           constraint_type?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           description?: string | null
           due_date?: string | null
+          follow_up_date?: string | null
           id?: string
+          impact_date?: string | null
+          is_deleted?: boolean
+          meeting_id?: string | null
           meeting_reference?: string | null
           metadata?: Json | null
           priority?: string
           project_area?: string | null
           project_id?: string
           project_name?: string | null
+          source_entity_id?: string | null
+          source_entity_type?: string | null
           status?: string
           title?: string | null
           updated_at?: string | null
+          waiting_on?: string | null
           work_package_id?: string | null
+          workstream?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "action_items_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "action_items_project_id_fkey"
             columns: ["project_id"]
@@ -103,6 +195,7 @@ export type Database = {
           id: string
           metadata: Json | null
           performed_by: string | null
+          performed_by_user_id: string | null
           project_id: string
           project_name: string | null
           timestamp: string | null
@@ -118,6 +211,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           performed_by?: string | null
+          performed_by_user_id?: string | null
           project_id: string
           project_name?: string | null
           timestamp?: string | null
@@ -133,6 +227,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           performed_by?: string | null
+          performed_by_user_id?: string | null
           project_id?: string
           project_name?: string | null
           timestamp?: string | null
@@ -269,6 +364,269 @@ export type Database = {
           },
         ]
       }
+      backcharge_events: {
+        Row: {
+          actor: string | null
+          backcharge_id: string
+          created_at: string
+          detail: string | null
+          event_type: string
+          from_status: string | null
+          id: string
+          project_id: string
+          to_status: string | null
+        }
+        Insert: {
+          actor?: string | null
+          backcharge_id: string
+          created_at?: string
+          detail?: string | null
+          event_type: string
+          from_status?: string | null
+          id?: string
+          project_id: string
+          to_status?: string | null
+        }
+        Update: {
+          actor?: string | null
+          backcharge_id?: string
+          created_at?: string
+          detail?: string | null
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          project_id?: string
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backcharge_events_backcharge_id_fkey"
+            columns: ["backcharge_id"]
+            isOneToOne: false
+            referencedRelation: "backcharges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backcharge_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backcharge_tm_tickets: {
+        Row: {
+          amount: number
+          attachments: Json
+          backcharge_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          equipment_cost: number
+          id: string
+          is_deleted: boolean
+          labor_hours: number
+          labor_rate: number
+          markup_percent: number
+          material_cost: number
+          project_id: string
+          signed_by: string | null
+          sort_order: number | null
+          ticket_date: string | null
+          ticket_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          attachments?: Json
+          backcharge_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          equipment_cost?: number
+          id?: string
+          is_deleted?: boolean
+          labor_hours?: number
+          labor_rate?: number
+          markup_percent?: number
+          material_cost?: number
+          project_id: string
+          signed_by?: string | null
+          sort_order?: number | null
+          ticket_date?: string | null
+          ticket_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          attachments?: Json
+          backcharge_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          equipment_cost?: number
+          id?: string
+          is_deleted?: boolean
+          labor_hours?: number
+          labor_rate?: number
+          markup_percent?: number
+          material_cost?: number
+          project_id?: string
+          signed_by?: string | null
+          sort_order?: number | null
+          ticket_date?: string | null
+          ticket_number?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backcharge_tm_tickets_backcharge_id_fkey"
+            columns: ["backcharge_id"]
+            isOneToOne: false
+            referencedRelation: "backcharges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backcharge_tm_tickets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backcharges: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          attachments: Json
+          backcharge_number: string | null
+          collected_amount: number | null
+          collected_at: string | null
+          cost_code_id: string | null
+          created_at: string
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          incident_date: string | null
+          is_deleted: boolean
+          linked_co_id: string | null
+          metadata: Json
+          notes: string | null
+          notice_date: string | null
+          project_id: string
+          reason_code: string | null
+          responsible_party: string | null
+          responsible_party_type: string | null
+          source_rfi_id: string | null
+          status: string
+          ticket_total: number
+          title: string
+          updated_at: string
+          void_reason: string | null
+        }
+        Insert: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          attachments?: Json
+          backcharge_number?: string | null
+          collected_amount?: number | null
+          collected_at?: string | null
+          cost_code_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_notes?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          incident_date?: string | null
+          is_deleted?: boolean
+          linked_co_id?: string | null
+          metadata?: Json
+          notes?: string | null
+          notice_date?: string | null
+          project_id: string
+          reason_code?: string | null
+          responsible_party?: string | null
+          responsible_party_type?: string | null
+          source_rfi_id?: string | null
+          status?: string
+          ticket_total?: number
+          title: string
+          updated_at?: string
+          void_reason?: string | null
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          attachments?: Json
+          backcharge_number?: string | null
+          collected_amount?: number | null
+          collected_at?: string | null
+          cost_code_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_notes?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          incident_date?: string | null
+          is_deleted?: boolean
+          linked_co_id?: string | null
+          metadata?: Json
+          notes?: string | null
+          notice_date?: string | null
+          project_id?: string
+          reason_code?: string | null
+          responsible_party?: string | null
+          responsible_party_type?: string | null
+          source_rfi_id?: string | null
+          status?: string
+          ticket_total?: number
+          title?: string
+          updated_at?: string
+          void_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backcharges_cost_code_id_fkey"
+            columns: ["cost_code_id"]
+            isOneToOne: false
+            referencedRelation: "cost_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backcharges_linked_co_id_fkey"
+            columns: ["linked_co_id"]
+            isOneToOne: false
+            referencedRelation: "change_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backcharges_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backcharges_source_rfi_id_fkey"
+            columns: ["source_rfi_id"]
+            isOneToOne: false
+            referencedRelation: "rfis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_config: {
         Row: {
           livemode: boolean | null
@@ -335,11 +693,12 @@ export type Database = {
         Row: {
           category: string
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           field_hours_actual: number | null
           field_hours_budget: number | null
           id: string
-          is_deleted: boolean | null
+          is_deleted: boolean
           is_specialty: boolean | null
           metadata: Json | null
           notes: string | null
@@ -353,11 +712,12 @@ export type Database = {
         Insert: {
           category: string
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           field_hours_actual?: number | null
           field_hours_budget?: number | null
           id?: string
-          is_deleted?: boolean | null
+          is_deleted?: boolean
           is_specialty?: boolean | null
           metadata?: Json | null
           notes?: string | null
@@ -371,11 +731,12 @@ export type Database = {
         Update: {
           category?: string
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           field_hours_actual?: number | null
           field_hours_budget?: number | null
           id?: string
-          is_deleted?: boolean | null
+          is_deleted?: boolean
           is_specialty?: boolean | null
           metadata?: Json | null
           notes?: string | null
@@ -398,13 +759,17 @@ export type Database = {
       }
       change_orders: {
         Row: {
+          approved_at: string | null
           approved_by: string | null
           approved_date: string | null
           attachments: string | null
+          change_request_id: string | null
           co_amount: number | null
           co_number: string | null
           cost_code_id: string | null
           created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
           deleted_at: string | null
           description: string | null
           id: string
@@ -417,21 +782,29 @@ export type Database = {
           reason_code: string | null
           schedule_impact_days: number | null
           source_rfi_id: string | null
+          sov_applied_at: string | null
           sov_line_item_id: string | null
           sov_line_number: number | null
+          sov_mode: string | null
           status: string
+          submitted_by: string | null
           submitted_date: string | null
           title: string | null
           updated_at: string | null
+          void_reason: string | null
         }
         Insert: {
+          approved_at?: string | null
           approved_by?: string | null
           approved_date?: string | null
           attachments?: string | null
+          change_request_id?: string | null
           co_amount?: number | null
           co_number?: string | null
           cost_code_id?: string | null
           created_at?: string | null
+          created_by?: string | null
+          decision_notes?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
@@ -444,21 +817,29 @@ export type Database = {
           reason_code?: string | null
           schedule_impact_days?: number | null
           source_rfi_id?: string | null
+          sov_applied_at?: string | null
           sov_line_item_id?: string | null
           sov_line_number?: number | null
+          sov_mode?: string | null
           status?: string
+          submitted_by?: string | null
           submitted_date?: string | null
           title?: string | null
           updated_at?: string | null
+          void_reason?: string | null
         }
         Update: {
+          approved_at?: string | null
           approved_by?: string | null
           approved_date?: string | null
           attachments?: string | null
+          change_request_id?: string | null
           co_amount?: number | null
           co_number?: string | null
           cost_code_id?: string | null
           created_at?: string | null
+          created_by?: string | null
+          decision_notes?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
@@ -471,14 +852,25 @@ export type Database = {
           reason_code?: string | null
           schedule_impact_days?: number | null
           source_rfi_id?: string | null
+          sov_applied_at?: string | null
           sov_line_item_id?: string | null
           sov_line_number?: number | null
+          sov_mode?: string | null
           status?: string
+          submitted_by?: string | null
           submitted_date?: string | null
           title?: string | null
           updated_at?: string | null
+          void_reason?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "change_orders_change_request_id_fkey"
+            columns: ["change_request_id"]
+            isOneToOne: false
+            referencedRelation: "change_requests"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "change_orders_project_id_fkey"
             columns: ["project_id"]
@@ -491,11 +883,17 @@ export type Database = {
       change_requests: {
         Row: {
           affected_areas: string | null
+          change_order_id: string | null
+          cr_number: string | null
           created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
           description: string | null
           estimated_cost_impact: number | null
           estimated_schedule_impact_days: number | null
           id: string
+          is_deleted: boolean
           metadata: Json | null
           priority: string
           project_id: string
@@ -510,11 +908,17 @@ export type Database = {
         }
         Insert: {
           affected_areas?: string | null
+          change_order_id?: string | null
+          cr_number?: string | null
           created_at?: string | null
+          created_by?: string | null
+          decision_notes?: string | null
+          deleted_at?: string | null
           description?: string | null
           estimated_cost_impact?: number | null
           estimated_schedule_impact_days?: number | null
           id?: string
+          is_deleted?: boolean
           metadata?: Json | null
           priority?: string
           project_id: string
@@ -529,11 +933,17 @@ export type Database = {
         }
         Update: {
           affected_areas?: string | null
+          change_order_id?: string | null
+          cr_number?: string | null
           created_at?: string | null
+          created_by?: string | null
+          decision_notes?: string | null
+          deleted_at?: string | null
           description?: string | null
           estimated_cost_impact?: number | null
           estimated_schedule_impact_days?: number | null
           id?: string
+          is_deleted?: boolean
           metadata?: Json | null
           priority?: string
           project_id?: string
@@ -548,6 +958,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "change_requests_change_order_id_fkey"
+            columns: ["change_order_id"]
+            isOneToOne: false
+            referencedRelation: "change_orders"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "change_requests_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -555,6 +972,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      client_events: {
+        Row: {
+          app_version: string | null
+          id: string
+          kind: string
+          message: string
+          metadata: Json
+          occurred_at: string
+          org_id: string | null
+          project_id: string | null
+          route: string | null
+          source: string | null
+          stack: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          id?: string
+          kind: string
+          message: string
+          metadata?: Json
+          occurred_at?: string
+          org_id?: string | null
+          project_id?: string | null
+          route?: string | null
+          source?: string | null
+          stack?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          metadata?: Json
+          occurred_at?: string
+          org_id?: string | null
+          project_id?: string | null
+          route?: string | null
+          source?: string | null
+          stack?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       comments: {
         Row: {
@@ -701,14 +1166,19 @@ export type Database = {
           committed_cost: number | null
           cost_code_number: string | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
           description: string | null
+          expense_actual: number
           forecast_to_complete: number | null
           id: string
+          is_deleted: boolean
           metadata: Json | null
           notes: string | null
           phase: string | null
           project_id: string
           project_name: string | null
+          sort_order: number | null
           updated_at: string | null
         }
         Insert: {
@@ -722,14 +1192,19 @@ export type Database = {
           committed_cost?: number | null
           cost_code_number?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           description?: string | null
+          expense_actual?: number
           forecast_to_complete?: number | null
           id?: string
+          is_deleted?: boolean
           metadata?: Json | null
           notes?: string | null
           phase?: string | null
           project_id: string
           project_name?: string | null
+          sort_order?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -743,14 +1218,19 @@ export type Database = {
           committed_cost?: number | null
           cost_code_number?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           description?: string | null
+          expense_actual?: number
           forecast_to_complete?: number | null
           id?: string
+          is_deleted?: boolean
           metadata?: Json | null
           notes?: string | null
           phase?: string | null
           project_id?: string
           project_name?: string | null
+          sort_order?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -766,7 +1246,9 @@ export type Database = {
       daily_logs: {
         Row: {
           activities: string | null
+          client_op_id: string | null
           created_at: string | null
+          created_by: string | null
           crew_name: string | null
           date: string | null
           delay_hours: number | null
@@ -778,7 +1260,9 @@ export type Database = {
           hours_worked: number | null
           id: string
           is_deleted: boolean
+          materials_received: string | null
           metadata: Json | null
+          phase: string | null
           photos: Json | null
           project_id: string
           project_name: string | null
@@ -798,7 +1282,9 @@ export type Database = {
         }
         Insert: {
           activities?: string | null
+          client_op_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           crew_name?: string | null
           date?: string | null
           delay_hours?: number | null
@@ -810,7 +1296,9 @@ export type Database = {
           hours_worked?: number | null
           id?: string
           is_deleted?: boolean
+          materials_received?: string | null
           metadata?: Json | null
+          phase?: string | null
           photos?: Json | null
           project_id: string
           project_name?: string | null
@@ -830,7 +1318,9 @@ export type Database = {
         }
         Update: {
           activities?: string | null
+          client_op_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           crew_name?: string | null
           date?: string | null
           delay_hours?: number | null
@@ -842,7 +1332,9 @@ export type Database = {
           hours_worked?: number | null
           id?: string
           is_deleted?: boolean
+          materials_received?: string | null
           metadata?: Json | null
+          phase?: string | null
           photos?: Json | null
           project_id?: string
           project_name?: string | null
@@ -869,6 +1361,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      data_erasure_log: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          org_id: string | null
+          org_name: string | null
+          project_id: string | null
+          project_name: string | null
+          project_number: string | null
+          reason: string | null
+          record_id: string | null
+          record_label: string | null
+          requested_by: string | null
+          requested_by_email: string | null
+          row_counts: Json
+          storage_prefix: string | null
+          subject_email: string | null
+          subject_user_id: string | null
+          table_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          org_id?: string | null
+          org_name?: string | null
+          project_id?: string | null
+          project_name?: string | null
+          project_number?: string | null
+          reason?: string | null
+          record_id?: string | null
+          record_label?: string | null
+          requested_by?: string | null
+          requested_by_email?: string | null
+          row_counts?: Json
+          storage_prefix?: string | null
+          subject_email?: string | null
+          subject_user_id?: string | null
+          table_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string | null
+          org_name?: string | null
+          project_id?: string | null
+          project_name?: string | null
+          project_number?: string | null
+          reason?: string | null
+          record_id?: string | null
+          record_label?: string | null
+          requested_by?: string | null
+          requested_by_email?: string | null
+          row_counts?: Json
+          storage_prefix?: string | null
+          subject_email?: string | null
+          subject_user_id?: string | null
+          table_name?: string | null
+        }
+        Relationships: []
       }
       default_cost_codes: {
         Row: {
@@ -918,6 +1473,7 @@ export type Database = {
           contact_name: string | null
           contact_phone: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           delivery_number: string | null
           delivery_title: string | null
@@ -936,12 +1492,15 @@ export type Database = {
           notes: string | null
           order_placed_date: string | null
           pieces: number | null
+          pieces_advanced_count: number
           po_number: string | null
           priority: string
           procurement_category: string | null
           project_id: string
           project_name: string | null
+          received_at: string | null
           received_by: string | null
+          received_notes: string | null
           receiving_location: string | null
           required_date: string | null
           scheduled_date: string | null
@@ -965,6 +1524,7 @@ export type Database = {
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           delivery_number?: string | null
           delivery_title?: string | null
@@ -983,12 +1543,15 @@ export type Database = {
           notes?: string | null
           order_placed_date?: string | null
           pieces?: number | null
+          pieces_advanced_count?: number
           po_number?: string | null
           priority?: string
           procurement_category?: string | null
           project_id: string
           project_name?: string | null
+          received_at?: string | null
           received_by?: string | null
+          received_notes?: string | null
           receiving_location?: string | null
           required_date?: string | null
           scheduled_date?: string | null
@@ -1012,6 +1575,7 @@ export type Database = {
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           delivery_number?: string | null
           delivery_title?: string | null
@@ -1030,12 +1594,15 @@ export type Database = {
           notes?: string | null
           order_placed_date?: string | null
           pieces?: number | null
+          pieces_advanced_count?: number
           po_number?: string | null
           priority?: string
           procurement_category?: string | null
           project_id?: string
           project_name?: string | null
+          received_at?: string | null
           received_by?: string | null
+          received_notes?: string | null
           receiving_location?: string | null
           required_date?: string | null
           scheduled_date?: string | null
@@ -1074,8 +1641,11 @@ export type Database = {
           line_no: number | null
           metadata: Json | null
           notes: string | null
+          piece_id: string | null
           profile: string | null
           qty: number
+          received_at: string | null
+          received_qty: number | null
           sequence: string | null
           updated_at: string | null
           weight_lbs: number | null
@@ -1092,8 +1662,11 @@ export type Database = {
           line_no?: number | null
           metadata?: Json | null
           notes?: string | null
+          piece_id?: string | null
           profile?: string | null
           qty?: number
+          received_at?: string | null
+          received_qty?: number | null
           sequence?: string | null
           updated_at?: string | null
           weight_lbs?: number | null
@@ -1110,8 +1683,11 @@ export type Database = {
           line_no?: number | null
           metadata?: Json | null
           notes?: string | null
+          piece_id?: string | null
           profile?: string | null
           qty?: number
+          received_at?: string | null
+          received_qty?: number | null
           sequence?: string | null
           updated_at?: string | null
           weight_lbs?: number | null
@@ -1124,40 +1700,92 @@ export type Database = {
             referencedRelation: "deliveries"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "delivery_items_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      demo_requests: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string
+          id: string
+          message: string | null
+          name: string
+          source: string
+          status: string
+          tonnage: string | null
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          message?: string | null
+          name: string
+          source?: string
+          status?: string
+          tonnage?: string | null
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string | null
+          name?: string
+          source?: string
+          status?: string
+          tonnage?: string | null
+        }
+        Relationships: []
       }
       document_folders: {
         Row: {
           created_at: string | null
           created_by: string | null
+          created_by_id: string | null
           deleted_at: string | null
+          description: string | null
           id: string
           is_deleted: boolean
           name: string
           parent_folder_id: string | null
           project_id: string
+          sort_order: number | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           created_by?: string | null
+          created_by_id?: string | null
           deleted_at?: string | null
+          description?: string | null
           id?: string
           is_deleted?: boolean
           name: string
           parent_folder_id?: string | null
           project_id: string
+          sort_order?: number | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           created_by?: string | null
+          created_by_id?: string | null
           deleted_at?: string | null
+          description?: string | null
           id?: string
           is_deleted?: boolean
           name?: string
           parent_folder_id?: string | null
           project_id?: string
+          sort_order?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1280,6 +1908,7 @@ export type Database = {
           category: string | null
           change_order_id: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           delivery_id: string | null
           description: string | null
@@ -1311,20 +1940,25 @@ export type Database = {
           linked_wp_id: string | null
           metadata: Json | null
           mime_type: string | null
+          notes: string | null
           project_id: string
           project_name: string | null
           review_lead_time: number | null
           revision: string | null
           revision_date: string | null
+          revision_note: string | null
           revision_number: string | null
           rfi_id: string | null
           sheet_number: string | null
           status: string | null
           submittal_id: string | null
+          superseded_by_id: string | null
+          supersedes_id: string | null
           tags: string | null
           title: string | null
           updated_at: string | null
           uploaded_by: string | null
+          uploaded_by_id: string | null
           uploaded_date: string | null
           version: string | null
           work_package_id: string | null
@@ -1333,6 +1967,7 @@ export type Database = {
           category?: string | null
           change_order_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           delivery_id?: string | null
           description?: string | null
@@ -1364,20 +1999,25 @@ export type Database = {
           linked_wp_id?: string | null
           metadata?: Json | null
           mime_type?: string | null
+          notes?: string | null
           project_id: string
           project_name?: string | null
           review_lead_time?: number | null
           revision?: string | null
           revision_date?: string | null
+          revision_note?: string | null
           revision_number?: string | null
           rfi_id?: string | null
           sheet_number?: string | null
           status?: string | null
           submittal_id?: string | null
+          superseded_by_id?: string | null
+          supersedes_id?: string | null
           tags?: string | null
           title?: string | null
           updated_at?: string | null
           uploaded_by?: string | null
+          uploaded_by_id?: string | null
           uploaded_date?: string | null
           version?: string | null
           work_package_id?: string | null
@@ -1386,6 +2026,7 @@ export type Database = {
           category?: string | null
           change_order_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           delivery_id?: string | null
           description?: string | null
@@ -1417,20 +2058,25 @@ export type Database = {
           linked_wp_id?: string | null
           metadata?: Json | null
           mime_type?: string | null
+          notes?: string | null
           project_id?: string
           project_name?: string | null
           review_lead_time?: number | null
           revision?: string | null
           revision_date?: string | null
+          revision_note?: string | null
           revision_number?: string | null
           rfi_id?: string | null
           sheet_number?: string | null
           status?: string | null
           submittal_id?: string | null
+          superseded_by_id?: string | null
+          supersedes_id?: string | null
           tags?: string | null
           title?: string | null
           updated_at?: string | null
           uploaded_by?: string | null
+          uploaded_by_id?: string | null
           uploaded_date?: string | null
           version?: string | null
           work_package_id?: string | null
@@ -1462,6 +2108,20 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
             referencedColumns: ["id"]
           },
         ]
@@ -1594,6 +2254,90 @@ export type Database = {
           },
         ]
       }
+      drawing_callout_links: {
+        Row: {
+          coords: Json | null
+          created_at: string
+          created_by_id: string | null
+          detail_number: string | null
+          id: string
+          link_source: string
+          project_id: string
+          raw_text: string
+          source_drawing_id: string
+          target_as_printed: string
+          target_drawing_id: string | null
+          target_sheet_key: string
+          updated_at: string
+        }
+        Insert: {
+          coords?: Json | null
+          created_at?: string
+          created_by_id?: string | null
+          detail_number?: string | null
+          id?: string
+          link_source?: string
+          project_id: string
+          raw_text: string
+          source_drawing_id: string
+          target_as_printed: string
+          target_drawing_id?: string | null
+          target_sheet_key: string
+          updated_at?: string
+        }
+        Update: {
+          coords?: Json | null
+          created_at?: string
+          created_by_id?: string | null
+          detail_number?: string | null
+          id?: string
+          link_source?: string
+          project_id?: string
+          raw_text?: string
+          source_drawing_id?: string
+          target_as_printed?: string
+          target_drawing_id?: string | null
+          target_sheet_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawing_callout_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_callout_links_source_drawing_id_fkey"
+            columns: ["source_drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "drawing_callout_links_source_drawing_id_fkey"
+            columns: ["source_drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_callout_links_target_drawing_id_fkey"
+            columns: ["target_drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "drawing_callout_links_target_drawing_id_fkey"
+            columns: ["target_drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drawing_findings: {
         Row: {
           analysis_id: string | null
@@ -1681,10 +2425,12 @@ export type Database = {
           drawing_id: string
           id: string
           is_active: boolean
+          metadata: Json
           placed_at: string
           placed_by_id: string | null
           placed_by_name: string | null
           prior_release_status: string | null
+          prior_stage: string | null
           project_id: string
           reason: string
           release_notes: string | null
@@ -1698,10 +2444,12 @@ export type Database = {
           drawing_id: string
           id?: string
           is_active?: boolean
+          metadata?: Json
           placed_at?: string
           placed_by_id?: string | null
           placed_by_name?: string | null
           prior_release_status?: string | null
+          prior_stage?: string | null
           project_id: string
           reason: string
           release_notes?: string | null
@@ -1715,10 +2463,12 @@ export type Database = {
           drawing_id?: string
           id?: string
           is_active?: boolean
+          metadata?: Json
           placed_at?: string
           placed_by_id?: string | null
           placed_by_name?: string | null
           prior_release_status?: string | null
+          prior_stage?: string | null
           project_id?: string
           reason?: string
           release_notes?: string | null
@@ -1756,7 +2506,7 @@ export type Database = {
           assigned_to: string | null
           created_at: string
           created_by: string | null
-          drawing_revision_id: string | null
+          drawing_revision_id: string
           due_date: string | null
           id: string
           impact_type: string
@@ -1772,7 +2522,7 @@ export type Database = {
           assigned_to?: string | null
           created_at?: string
           created_by?: string | null
-          drawing_revision_id?: string | null
+          drawing_revision_id: string
           due_date?: string | null
           id?: string
           impact_type: string
@@ -2097,57 +2847,112 @@ export type Database = {
         Row: {
           ai_summary: string | null
           compare_status: string | null
+          completed_at: string | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
           delta_count: number | null
+          deterministic_stats: Json | null
+          drawing_id: string | null
           error_message: string | null
-          from_analysis_id: string
+          from_analysis_id: string | null
+          from_revision_id: string | null
           id: string
+          is_deleted: boolean
           metadata: Json | null
           model: string | null
           project_id: string | null
           raw_ai_response: Json | null
           requested_by: string | null
-          to_analysis_id: string
+          source: string
+          to_analysis_id: string | null
+          to_revision_id: string | null
           updated_at: string | null
         }
         Insert: {
           ai_summary?: string | null
           compare_status?: string | null
+          completed_at?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           delta_count?: number | null
+          deterministic_stats?: Json | null
+          drawing_id?: string | null
           error_message?: string | null
-          from_analysis_id: string
+          from_analysis_id?: string | null
+          from_revision_id?: string | null
           id?: string
+          is_deleted?: boolean
           metadata?: Json | null
           model?: string | null
           project_id?: string | null
           raw_ai_response?: Json | null
           requested_by?: string | null
-          to_analysis_id: string
+          source?: string
+          to_analysis_id?: string | null
+          to_revision_id?: string | null
           updated_at?: string | null
         }
         Update: {
           ai_summary?: string | null
           compare_status?: string | null
+          completed_at?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           delta_count?: number | null
+          deterministic_stats?: Json | null
+          drawing_id?: string | null
           error_message?: string | null
-          from_analysis_id?: string
+          from_analysis_id?: string | null
+          from_revision_id?: string | null
           id?: string
+          is_deleted?: boolean
           metadata?: Json | null
           model?: string | null
           project_id?: string | null
           raw_ai_response?: Json | null
           requested_by?: string | null
-          to_analysis_id?: string
+          source?: string
+          to_analysis_id?: string | null
+          to_revision_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "drawing_revision_comparisons_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "drawing_revision_comparisons_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "drawing_revision_comparisons_from_analysis_id_fkey"
             columns: ["from_analysis_id"]
             isOneToOne: false
             referencedRelation: "drawing_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_revision_comparisons_from_revision_id_fkey"
+            columns: ["from_revision_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["current_revision_id"]
+          },
+          {
+            foreignKeyName: "drawing_revision_comparisons_from_revision_id_fkey"
+            columns: ["from_revision_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_revisions"
             referencedColumns: ["id"]
           },
           {
@@ -2164,49 +2969,93 @@ export type Database = {
             referencedRelation: "drawing_analyses"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "drawing_revision_comparisons_to_revision_id_fkey"
+            columns: ["to_revision_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["current_revision_id"]
+          },
+          {
+            foreignKeyName: "drawing_revision_comparisons_to_revision_id_fkey"
+            columns: ["to_revision_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_revisions"
+            referencedColumns: ["id"]
+          },
         ]
       }
       drawing_revision_deltas: {
         Row: {
+          change_category: string | null
+          classification_confidence: string | null
+          classification_source: string | null
           comparison_id: string | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
           delta_type: string | null
           description: string
           dismissed: boolean | null
           dismissed_at: string | null
           dismissed_by: string | null
+          drawing_id: string | null
           id: string
+          impact_summary: string | null
+          is_deleted: boolean
+          likely_owner: string | null
           linked_rfi_id: string | null
+          project_id: string | null
           recommended_action: string | null
           severity: string | null
           sheet_number: string | null
           updated_at: string | null
         }
         Insert: {
+          change_category?: string | null
+          classification_confidence?: string | null
+          classification_source?: string | null
           comparison_id?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           delta_type?: string | null
           description: string
           dismissed?: boolean | null
           dismissed_at?: string | null
           dismissed_by?: string | null
+          drawing_id?: string | null
           id?: string
+          impact_summary?: string | null
+          is_deleted?: boolean
+          likely_owner?: string | null
           linked_rfi_id?: string | null
+          project_id?: string | null
           recommended_action?: string | null
           severity?: string | null
           sheet_number?: string | null
           updated_at?: string | null
         }
         Update: {
+          change_category?: string | null
+          classification_confidence?: string | null
+          classification_source?: string | null
           comparison_id?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           delta_type?: string | null
           description?: string
           dismissed?: boolean | null
           dismissed_at?: string | null
           dismissed_by?: string | null
+          drawing_id?: string | null
           id?: string
+          impact_summary?: string | null
+          is_deleted?: boolean
+          likely_owner?: string | null
           linked_rfi_id?: string | null
+          project_id?: string | null
           recommended_action?: string | null
           severity?: string | null
           sheet_number?: string | null
@@ -2225,6 +3074,72 @@ export type Database = {
             columns: ["linked_rfi_id"]
             isOneToOne: false
             referencedRelation: "rfis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drawing_revision_summaries: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          drawing_set_id: string | null
+          generated_at: string
+          generated_by: string | null
+          high_risk_count: number
+          id: string
+          impact_level: string
+          is_deleted: boolean
+          likely_rfi: boolean
+          project_id: string
+          set_name: string | null
+          sheets_changed: number
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          drawing_set_id?: string | null
+          generated_at?: string
+          generated_by?: string | null
+          high_risk_count?: number
+          id?: string
+          impact_level?: string
+          is_deleted?: boolean
+          likely_rfi?: boolean
+          project_id: string
+          set_name?: string | null
+          sheets_changed?: number
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          drawing_set_id?: string | null
+          generated_at?: string
+          generated_by?: string | null
+          high_risk_count?: number
+          id?: string
+          impact_level?: string
+          is_deleted?: boolean
+          likely_rfi?: boolean
+          project_id?: string
+          set_name?: string | null
+          sheets_changed?: number
+          summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawing_revision_summaries_drawing_set_id_fkey"
+            columns: ["drawing_set_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_revision_summaries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -2355,6 +3270,7 @@ export type Database = {
       drawing_sets: {
         Row: {
           area_sequence: string | null
+          category: string
           created_at: string | null
           current_submittal_id: string | null
           deleted_at: string | null
@@ -2382,6 +3298,7 @@ export type Database = {
           processed_count: number | null
           project_id: string
           project_name: string | null
+          register: string
           revision: string | null
           revision_history: string | null
           revision_summary: string | null
@@ -2395,12 +3312,14 @@ export type Database = {
           status: string | null
           submittal_status: string | null
           titleblock_number_rect: Json | null
+          titleblock_revision_rect: Json | null
           titleblock_title_rect: Json | null
           updated_at: string | null
           upload_batch_id: string | null
         }
         Insert: {
           area_sequence?: string | null
+          category?: string
           created_at?: string | null
           current_submittal_id?: string | null
           deleted_at?: string | null
@@ -2428,6 +3347,7 @@ export type Database = {
           processed_count?: number | null
           project_id: string
           project_name?: string | null
+          register?: string
           revision?: string | null
           revision_history?: string | null
           revision_summary?: string | null
@@ -2441,12 +3361,14 @@ export type Database = {
           status?: string | null
           submittal_status?: string | null
           titleblock_number_rect?: Json | null
+          titleblock_revision_rect?: Json | null
           titleblock_title_rect?: Json | null
           updated_at?: string | null
           upload_batch_id?: string | null
         }
         Update: {
           area_sequence?: string | null
+          category?: string
           created_at?: string | null
           current_submittal_id?: string | null
           deleted_at?: string | null
@@ -2474,6 +3396,7 @@ export type Database = {
           processed_count?: number | null
           project_id?: string
           project_name?: string | null
+          register?: string
           revision?: string | null
           revision_history?: string | null
           revision_summary?: string | null
@@ -2487,6 +3410,7 @@ export type Database = {
           status?: string | null
           submittal_status?: string | null
           titleblock_number_rect?: Json | null
+          titleblock_revision_rect?: Json | null
           titleblock_title_rect?: Json | null
           updated_at?: string | null
           upload_batch_id?: string | null
@@ -2660,35 +3584,114 @@ export type Database = {
           },
         ]
       }
+      drawing_transmittal_activity: {
+        Row: {
+          actor_id: string | null
+          actor_name: string | null
+          created_at: string
+          event_type: string
+          from_status: string | null
+          id: string
+          metadata: Json
+          project_id: string
+          reason: string | null
+          to_status: string | null
+          transmittal_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_name?: string | null
+          created_at?: string
+          event_type: string
+          from_status?: string | null
+          id?: string
+          metadata?: Json
+          project_id: string
+          reason?: string | null
+          to_status?: string | null
+          transmittal_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_name?: string | null
+          created_at?: string
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          metadata?: Json
+          project_id?: string
+          reason?: string | null
+          to_status?: string | null
+          transmittal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawing_transmittal_activity_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_transmittal_activity_transmittal_id_fkey"
+            columns: ["transmittal_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_transmittals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drawing_transmittal_items: {
         Row: {
           created_at: string
           drawing_id: string | null
-          drawing_revision_id: string
+          drawing_revision_id: string | null
           gc_drawing_id: string | null
           id: string
+          notes: string | null
+          number_at_send: string | null
           project_id: string
+          revision_at_send: string | null
+          sort_order: number
+          title_at_send: string | null
           transmittal_id: string
         }
         Insert: {
           created_at?: string
           drawing_id?: string | null
-          drawing_revision_id: string
+          drawing_revision_id?: string | null
           gc_drawing_id?: string | null
           id?: string
+          notes?: string | null
+          number_at_send?: string | null
           project_id: string
+          revision_at_send?: string | null
+          sort_order?: number
+          title_at_send?: string | null
           transmittal_id: string
         }
         Update: {
           created_at?: string
           drawing_id?: string | null
-          drawing_revision_id?: string
+          drawing_revision_id?: string | null
           gc_drawing_id?: string | null
           id?: string
+          notes?: string | null
+          number_at_send?: string | null
           project_id?: string
+          revision_at_send?: string | null
+          sort_order?: number
+          title_at_send?: string | null
           transmittal_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "drawing_transmittal_items_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
           {
             foreignKeyName: "drawing_transmittal_items_drawing_id_fkey"
             columns: ["drawing_id"]
@@ -2711,6 +3714,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "drawing_transmittal_items_gc_drawing_id_fkey"
+            columns: ["gc_drawing_id"]
+            isOneToOne: false
+            referencedRelation: "gc_drawings"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "drawing_transmittal_items_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -2728,55 +3738,103 @@ export type Database = {
       }
       drawing_transmittals: {
         Row: {
+          acknowledged_at: string | null
+          acknowledged_by_name: string | null
+          acknowledged_notes: string | null
           created_at: string
           created_by: string | null
           date_received: string | null
           date_sent: string | null
+          deleted_at: string | null
           direction: string
           id: string
           is_deleted: boolean
+          metadata: Json
           notes: string | null
           project_id: string
+          purpose: string | null
           received_from: string | null
+          recipient_company: string | null
+          recipient_email: string | null
+          sent_by: string | null
+          sent_by_name: string | null
           sent_to: string | null
           source_company: string | null
+          status: string
           subject: string | null
+          submittal_id: string | null
+          submittal_round_id: string | null
           transmittal_number: string
           updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by_name?: string | null
+          acknowledged_notes?: string | null
           created_at?: string
           created_by?: string | null
           date_received?: string | null
           date_sent?: string | null
+          deleted_at?: string | null
           direction?: string
           id?: string
           is_deleted?: boolean
+          metadata?: Json
           notes?: string | null
           project_id: string
+          purpose?: string | null
           received_from?: string | null
+          recipient_company?: string | null
+          recipient_email?: string | null
+          sent_by?: string | null
+          sent_by_name?: string | null
           sent_to?: string | null
           source_company?: string | null
+          status?: string
           subject?: string | null
+          submittal_id?: string | null
+          submittal_round_id?: string | null
           transmittal_number: string
           updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
+          acknowledged_at?: string | null
+          acknowledged_by_name?: string | null
+          acknowledged_notes?: string | null
           created_at?: string
           created_by?: string | null
           date_received?: string | null
           date_sent?: string | null
+          deleted_at?: string | null
           direction?: string
           id?: string
           is_deleted?: boolean
+          metadata?: Json
           notes?: string | null
           project_id?: string
+          purpose?: string | null
           received_from?: string | null
+          recipient_company?: string | null
+          recipient_email?: string | null
+          sent_by?: string | null
+          sent_by_name?: string | null
           sent_to?: string | null
           source_company?: string | null
+          status?: string
           subject?: string | null
+          submittal_id?: string | null
+          submittal_round_id?: string | null
           transmittal_number?: string
           updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
           {
@@ -2784,6 +3842,20 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_transmittals_submittal_id_fkey"
+            columns: ["submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drawing_transmittals_submittal_round_id_fkey"
+            columns: ["submittal_round_id"]
+            isOneToOne: false
+            referencedRelation: "submittal_rounds"
             referencedColumns: ["id"]
           },
         ]
@@ -3276,6 +4348,7 @@ export type Database = {
       drawings: {
         Row: {
           ai_extraction_error: string | null
+          ai_extraction_source: string | null
           ai_extraction_status: string | null
           callouts: Json | null
           created_at: string | null
@@ -3310,6 +4383,7 @@ export type Database = {
           return_date: string | null
           reviewer: string | null
           revision_number: string | null
+          scale_status: string | null
           set_approval_status: string | null
           set_approved_date: string | null
           sheet_number: string | null
@@ -3324,6 +4398,7 @@ export type Database = {
         }
         Insert: {
           ai_extraction_error?: string | null
+          ai_extraction_source?: string | null
           ai_extraction_status?: string | null
           callouts?: Json | null
           created_at?: string | null
@@ -3358,6 +4433,7 @@ export type Database = {
           return_date?: string | null
           reviewer?: string | null
           revision_number?: string | null
+          scale_status?: string | null
           set_approval_status?: string | null
           set_approved_date?: string | null
           sheet_number?: string | null
@@ -3372,6 +4448,7 @@ export type Database = {
         }
         Update: {
           ai_extraction_error?: string | null
+          ai_extraction_source?: string | null
           ai_extraction_status?: string | null
           callouts?: Json | null
           created_at?: string | null
@@ -3406,6 +4483,7 @@ export type Database = {
           return_date?: string | null
           reviewer?: string | null
           revision_number?: string | null
+          scale_status?: string | null
           set_approval_status?: string | null
           set_approved_date?: string | null
           sheet_number?: string | null
@@ -3819,8 +4897,11 @@ export type Database = {
           approved_by: string | null
           approved_date: string | null
           cost_code: string | null
+          cost_code_id: string | null
           cost_code_name: string | null
           created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
           deleted_at: string | null
           description: string | null
           expense_date: string | null
@@ -3832,20 +4913,25 @@ export type Database = {
           is_deleted: boolean
           metadata: Json | null
           notes: string | null
+          paid_by: string | null
           payment_date: string | null
           payment_status: string | null
           project_id: string
           project_name: string | null
           quantity: number | null
+          receipt_path: string | null
           receipt_url: string | null
           sov_line_item_id: string | null
           sov_line_item_name: string | null
           submitted_by: string | null
+          submitted_date: string | null
           tags: string | null
           unit: string | null
           unit_cost: number | null
           updated_at: string | null
           vendor: string | null
+          vendor_id: string | null
+          void_reason: string | null
           work_package_id: string | null
           work_package_name: string | null
         }
@@ -3854,8 +4940,11 @@ export type Database = {
           approved_by?: string | null
           approved_date?: string | null
           cost_code?: string | null
+          cost_code_id?: string | null
           cost_code_name?: string | null
           created_at?: string | null
+          created_by?: string | null
+          decision_notes?: string | null
           deleted_at?: string | null
           description?: string | null
           expense_date?: string | null
@@ -3867,20 +4956,25 @@ export type Database = {
           is_deleted?: boolean
           metadata?: Json | null
           notes?: string | null
+          paid_by?: string | null
           payment_date?: string | null
           payment_status?: string | null
           project_id: string
           project_name?: string | null
           quantity?: number | null
+          receipt_path?: string | null
           receipt_url?: string | null
           sov_line_item_id?: string | null
           sov_line_item_name?: string | null
           submitted_by?: string | null
+          submitted_date?: string | null
           tags?: string | null
           unit?: string | null
           unit_cost?: number | null
           updated_at?: string | null
           vendor?: string | null
+          vendor_id?: string | null
+          void_reason?: string | null
           work_package_id?: string | null
           work_package_name?: string | null
         }
@@ -3889,8 +4983,11 @@ export type Database = {
           approved_by?: string | null
           approved_date?: string | null
           cost_code?: string | null
+          cost_code_id?: string | null
           cost_code_name?: string | null
           created_at?: string | null
+          created_by?: string | null
+          decision_notes?: string | null
           deleted_at?: string | null
           description?: string | null
           expense_date?: string | null
@@ -3902,29 +4999,48 @@ export type Database = {
           is_deleted?: boolean
           metadata?: Json | null
           notes?: string | null
+          paid_by?: string | null
           payment_date?: string | null
           payment_status?: string | null
           project_id?: string
           project_name?: string | null
           quantity?: number | null
+          receipt_path?: string | null
           receipt_url?: string | null
           sov_line_item_id?: string | null
           sov_line_item_name?: string | null
           submitted_by?: string | null
+          submitted_date?: string | null
           tags?: string | null
           unit?: string | null
           unit_cost?: number | null
           updated_at?: string | null
           vendor?: string | null
+          vendor_id?: string | null
+          void_reason?: string | null
           work_package_id?: string | null
           work_package_name?: string | null
         }
         Relationships: [
           {
+            foreignKeyName: "expenses_cost_code_id_fkey"
+            columns: ["cost_code_id"]
+            isOneToOne: false
+            referencedRelation: "cost_codes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "expenses_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -4080,41 +5196,158 @@ export type Database = {
           },
         ]
       }
+      fab_release_log: {
+        Row: {
+          blockers: Json
+          blocking_rfi_numbers: string[]
+          created_at: string
+          drawing_count: number
+          drawing_ids: string[]
+          drawing_set_id: string | null
+          governing_stage: string | null
+          id: string
+          is_override: boolean
+          metadata: Json
+          notes: string | null
+          override_reason: string | null
+          package_kind: string
+          package_name: string | null
+          project_id: string
+          released_at: string
+          released_by: string | null
+          released_by_name: string | null
+          submittal_id: string | null
+        }
+        Insert: {
+          blockers?: Json
+          blocking_rfi_numbers?: string[]
+          created_at?: string
+          drawing_count?: number
+          drawing_ids?: string[]
+          drawing_set_id?: string | null
+          governing_stage?: string | null
+          id?: string
+          is_override?: boolean
+          metadata?: Json
+          notes?: string | null
+          override_reason?: string | null
+          package_kind?: string
+          package_name?: string | null
+          project_id: string
+          released_at?: string
+          released_by?: string | null
+          released_by_name?: string | null
+          submittal_id?: string | null
+        }
+        Update: {
+          blockers?: Json
+          blocking_rfi_numbers?: string[]
+          created_at?: string
+          drawing_count?: number
+          drawing_ids?: string[]
+          drawing_set_id?: string | null
+          governing_stage?: string | null
+          id?: string
+          is_override?: boolean
+          metadata?: Json
+          notes?: string | null
+          override_reason?: string | null
+          package_kind?: string
+          package_name?: string | null
+          project_id?: string
+          released_at?: string
+          released_by?: string | null
+          released_by_name?: string | null
+          submittal_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fab_release_log_drawing_set_id_fkey"
+            columns: ["drawing_set_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fab_release_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fab_release_log_submittal_id_fkey"
+            columns: ["submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fab_release_overrides: {
         Row: {
+          blockers: Json
           blocking_rfi_numbers: string[]
           created_at: string
           drawing_count: number | null
+          drawing_set_id: string | null
+          fab_release_log_id: string | null
           id: string
           overridden_by: string | null
+          overridden_by_name: string | null
           package_kind: string | null
           package_name: string | null
           project_id: string
           reason: string | null
+          submittal_id: string | null
         }
         Insert: {
+          blockers?: Json
           blocking_rfi_numbers?: string[]
           created_at?: string
           drawing_count?: number | null
+          drawing_set_id?: string | null
+          fab_release_log_id?: string | null
           id?: string
           overridden_by?: string | null
+          overridden_by_name?: string | null
           package_kind?: string | null
           package_name?: string | null
           project_id: string
           reason?: string | null
+          submittal_id?: string | null
         }
         Update: {
+          blockers?: Json
           blocking_rfi_numbers?: string[]
           created_at?: string
           drawing_count?: number | null
+          drawing_set_id?: string | null
+          fab_release_log_id?: string | null
           id?: string
           overridden_by?: string | null
+          overridden_by_name?: string | null
           package_kind?: string | null
           package_name?: string | null
           project_id?: string
           reason?: string | null
+          submittal_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fab_release_overrides_drawing_set_id_fkey"
+            columns: ["drawing_set_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fab_release_overrides_fab_release_log_id_fkey"
+            columns: ["fab_release_log_id"]
+            isOneToOne: false
+            referencedRelation: "fab_release_log"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fab_release_overrides_project_id_fkey"
             columns: ["project_id"]
@@ -4122,13 +5355,24 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fab_release_overrides_submittal_id_fkey"
+            columns: ["submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
         ]
       }
       fab_releases: {
         Row: {
+          canonical_release: boolean
           created_at: string | null
+          exception_reason: string | null
+          gate_snapshot: Json | null
           id: string
           is_deleted: boolean | null
+          is_exception: boolean
           name: string
           notes: string | null
           piece_count: number | null
@@ -4136,15 +5380,23 @@ export type Database = {
           project_id: string | null
           release_date: string | null
           release_number: string
+          release_source: string | null
+          released_at: string | null
+          released_by: string | null
           required_date: string | null
+          risk_id: string | null
           status: string
           weight_tons: number | null
           work_package_id: string | null
         }
         Insert: {
+          canonical_release?: boolean
           created_at?: string | null
+          exception_reason?: string | null
+          gate_snapshot?: Json | null
           id?: string
           is_deleted?: boolean | null
+          is_exception?: boolean
           name: string
           notes?: string | null
           piece_count?: number | null
@@ -4152,15 +5404,23 @@ export type Database = {
           project_id?: string | null
           release_date?: string | null
           release_number: string
+          release_source?: string | null
+          released_at?: string | null
+          released_by?: string | null
           required_date?: string | null
+          risk_id?: string | null
           status?: string
           weight_tons?: number | null
           work_package_id?: string | null
         }
         Update: {
+          canonical_release?: boolean
           created_at?: string | null
+          exception_reason?: string | null
+          gate_snapshot?: Json | null
           id?: string
           is_deleted?: boolean | null
+          is_exception?: boolean
           name?: string
           notes?: string | null
           piece_count?: number | null
@@ -4168,7 +5428,11 @@ export type Database = {
           project_id?: string | null
           release_date?: string | null
           release_number?: string
+          release_source?: string | null
+          released_at?: string | null
+          released_by?: string | null
           required_date?: string | null
+          risk_id?: string | null
           status?: string
           weight_tons?: number | null
           work_package_id?: string | null
@@ -4181,6 +5445,20 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fab_releases_risk_fk"
+            columns: ["risk_id"]
+            isOneToOne: false
+            referencedRelation: "risks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fab_releases_work_package_fk"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
         ]
       }
       feature_flags: {
@@ -4191,6 +5469,7 @@ export type Database = {
           flag_key: string
           id: string
           updated_at: string
+          updated_by: string | null
           user_overrides: Json
         }
         Insert: {
@@ -4200,6 +5479,7 @@ export type Database = {
           flag_key: string
           id?: string
           updated_at?: string
+          updated_by?: string | null
           user_overrides?: Json
         }
         Update: {
@@ -4209,6 +5489,7 @@ export type Database = {
           flag_key?: string
           id?: string
           updated_at?: string
+          updated_by?: string | null
           user_overrides?: Json
         }
         Relationships: []
@@ -4410,14 +5691,18 @@ export type Database = {
       }
       inspections: {
         Row: {
+          completed_at: string | null
           corrective_actions: string | null
           created_at: string | null
+          created_by: string | null
           deficiencies_count: number | null
           deleted_at: string | null
           description: string | null
+          drawing_id: string | null
           findings: string | null
           id: string
           inspection_date: string | null
+          inspection_number: string | null
           inspection_type: string | null
           inspector_name: string | null
           inspector_role: string | null
@@ -4425,21 +5710,29 @@ export type Database = {
           location: string | null
           metadata: Json | null
           notes: string | null
+          phase: string | null
           project_id: string
           project_name: string | null
           sign_off_status: string | null
+          signed_off_at: string | null
+          signed_off_by: string | null
           status: string
           updated_at: string | null
+          work_package_id: string | null
         }
         Insert: {
+          completed_at?: string | null
           corrective_actions?: string | null
           created_at?: string | null
+          created_by?: string | null
           deficiencies_count?: number | null
           deleted_at?: string | null
           description?: string | null
+          drawing_id?: string | null
           findings?: string | null
           id?: string
           inspection_date?: string | null
+          inspection_number?: string | null
           inspection_type?: string | null
           inspector_name?: string | null
           inspector_role?: string | null
@@ -4447,21 +5740,29 @@ export type Database = {
           location?: string | null
           metadata?: Json | null
           notes?: string | null
+          phase?: string | null
           project_id: string
           project_name?: string | null
           sign_off_status?: string | null
+          signed_off_at?: string | null
+          signed_off_by?: string | null
           status?: string
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Update: {
+          completed_at?: string | null
           corrective_actions?: string | null
           created_at?: string | null
+          created_by?: string | null
           deficiencies_count?: number | null
           deleted_at?: string | null
           description?: string | null
+          drawing_id?: string | null
           findings?: string | null
           id?: string
           inspection_date?: string | null
+          inspection_number?: string | null
           inspection_type?: string | null
           inspector_name?: string | null
           inspector_role?: string | null
@@ -4469,18 +5770,43 @@ export type Database = {
           location?: string | null
           metadata?: Json | null
           notes?: string | null
+          phase?: string | null
           project_id?: string
           project_name?: string | null
           sign_off_status?: string | null
+          signed_off_at?: string | null
+          signed_off_by?: string | null
           status?: string
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "inspections_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "inspections_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inspections_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspections_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -4615,11 +5941,19 @@ export type Database = {
       }
       look_ahead: {
         Row: {
+          activity: string | null
           constraints: string | null
           created_at: string | null
+          crew: string | null
+          forecast_end: string | null
+          forecast_start: string | null
           id: string
           metadata: Json | null
           notes: string | null
+          percent_complete: number
+          phase: string | null
+          planned_end: string | null
+          planned_start: string | null
           project_id: string
           project_name: string | null
           status: string | null
@@ -4629,11 +5963,19 @@ export type Database = {
           week_start: string | null
         }
         Insert: {
+          activity?: string | null
           constraints?: string | null
           created_at?: string | null
+          crew?: string | null
+          forecast_end?: string | null
+          forecast_start?: string | null
           id?: string
           metadata?: Json | null
           notes?: string | null
+          percent_complete?: number
+          phase?: string | null
+          planned_end?: string | null
+          planned_start?: string | null
           project_id: string
           project_name?: string | null
           status?: string | null
@@ -4643,11 +5985,19 @@ export type Database = {
           week_start?: string | null
         }
         Update: {
+          activity?: string | null
           constraints?: string | null
           created_at?: string | null
+          crew?: string | null
+          forecast_end?: string | null
+          forecast_start?: string | null
           id?: string
           metadata?: Json | null
           notes?: string | null
+          percent_complete?: number
+          phase?: string | null
+          planned_end?: string | null
+          planned_start?: string | null
           project_id?: string
           project_name?: string | null
           status?: string | null
@@ -4666,58 +6016,216 @@ export type Database = {
           },
         ]
       }
+      material_receipt_events: {
+        Row: {
+          id: string
+          material_requirement_id: string
+          next_state: string
+          previous_state: string | null
+          project_id: string
+          provenance: Json
+          receipt_reference: string | null
+          receipt_source: string | null
+          received_quantity: number | null
+          recorded_at: string
+          recorded_by: string
+        }
+        Insert: {
+          id?: string
+          material_requirement_id: string
+          next_state: string
+          previous_state?: string | null
+          project_id: string
+          provenance?: Json
+          receipt_reference?: string | null
+          receipt_source?: string | null
+          received_quantity?: number | null
+          recorded_at?: string
+          recorded_by: string
+        }
+        Update: {
+          id?: string
+          material_requirement_id?: string
+          next_state?: string
+          previous_state?: string | null
+          project_id?: string
+          provenance?: Json
+          receipt_reference?: string | null
+          receipt_source?: string | null
+          received_quantity?: number | null
+          recorded_at?: string
+          recorded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_receipt_events_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_receipt_events_requirement_fk"
+            columns: ["material_requirement_id"]
+            isOneToOne: false
+            referencedRelation: "material_requirements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_requirements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          external_ref: string | null
+          id: string
+          is_deleted: boolean
+          material_grade: string | null
+          metadata: Json
+          profile: string | null
+          project_id: string
+          quantity_required: number | null
+          receipt_reference: string | null
+          receipt_source: string | null
+          receipt_state: string
+          receipt_verified_at: string | null
+          receipt_verified_by: string | null
+          received_quantity: number | null
+          requirement_code: string
+          source_system: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          external_ref?: string | null
+          id?: string
+          is_deleted?: boolean
+          material_grade?: string | null
+          metadata?: Json
+          profile?: string | null
+          project_id: string
+          quantity_required?: number | null
+          receipt_reference?: string | null
+          receipt_source?: string | null
+          receipt_state?: string
+          receipt_verified_at?: string | null
+          receipt_verified_by?: string | null
+          received_quantity?: number | null
+          requirement_code: string
+          source_system?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          external_ref?: string | null
+          id?: string
+          is_deleted?: boolean
+          material_grade?: string | null
+          metadata?: Json
+          profile?: string | null
+          project_id?: string
+          quantity_required?: number | null
+          receipt_reference?: string | null
+          receipt_source?: string | null
+          receipt_state?: string
+          receipt_verified_at?: string | null
+          receipt_verified_by?: string | null
+          received_quantity?: number | null
+          requirement_code?: string
+          source_system?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_requirements_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meetings: {
         Row: {
+          agenda: string | null
           attendees: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
+          held_at: string | null
+          held_by: string | null
           id: string
           is_deleted: boolean
           location: string | null
           meeting_date: string | null
+          meeting_number: string | null
           meeting_type: string | null
           metadata: Json | null
           minutes: string | null
           next_meeting_date: string | null
           project_id: string
           project_name: string | null
-          status: string | null
+          start_time: string | null
+          status: string
           title: string | null
           updated_at: string | null
         }
         Insert: {
+          agenda?: string | null
           attendees?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
+          held_at?: string | null
+          held_by?: string | null
           id?: string
           is_deleted?: boolean
           location?: string | null
           meeting_date?: string | null
+          meeting_number?: string | null
           meeting_type?: string | null
           metadata?: Json | null
           minutes?: string | null
           next_meeting_date?: string | null
           project_id: string
           project_name?: string | null
-          status?: string | null
+          start_time?: string | null
+          status?: string
           title?: string | null
           updated_at?: string | null
         }
         Update: {
+          agenda?: string | null
           attendees?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
+          held_at?: string | null
+          held_by?: string | null
           id?: string
           is_deleted?: boolean
           location?: string | null
           meeting_date?: string | null
+          meeting_number?: string | null
           meeting_type?: string | null
           metadata?: Json | null
           minutes?: string | null
           next_meeting_date?: string | null
           project_id?: string
           project_name?: string | null
-          status?: string | null
+          start_time?: string | null
+          status?: string
           title?: string | null
           updated_at?: string | null
         }
@@ -4786,10 +6294,13 @@ export type Database = {
           action_date: string | null
           action_type: string | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
           description: string
           follow_up_date: string | null
           follow_up_required: boolean | null
           id: string
+          is_deleted: boolean
           mitigation_id: string
           outcome: string | null
           performed_by: string | null
@@ -4802,10 +6313,13 @@ export type Database = {
           action_date?: string | null
           action_type?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           description: string
           follow_up_date?: string | null
           follow_up_required?: boolean | null
           id?: string
+          is_deleted?: boolean
           mitigation_id: string
           outcome?: string | null
           performed_by?: string | null
@@ -4818,10 +6332,13 @@ export type Database = {
           action_date?: string | null
           action_type?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           description?: string
           follow_up_date?: string | null
           follow_up_required?: boolean | null
           id?: string
+          is_deleted?: boolean
           mitigation_id?: string
           outcome?: string | null
           performed_by?: string | null
@@ -4851,8 +6368,11 @@ export type Database = {
         Row: {
           approval_date: string | null
           approved_by: string | null
+          change_order_id: string | null
           cost_exposure: number | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
           expected_recovery: number | null
           id: string
           identified_by: string | null
@@ -4860,6 +6380,7 @@ export type Database = {
           impact_types: string | null
           internal_notes: string | null
           is_co_candidate: boolean | null
+          is_deleted: boolean
           issue_source: string | null
           mitigation_number: string | null
           notice_method: string | null
@@ -4868,6 +6389,7 @@ export type Database = {
           project_id: string
           recovery_likelihood: number | null
           responsible_party: string | null
+          risk_id: string | null
           root_cause_category: string | null
           schedule_exposure_days: number | null
           source_entity_id: string | null
@@ -4879,8 +6401,11 @@ export type Database = {
         Insert: {
           approval_date?: string | null
           approved_by?: string | null
+          change_order_id?: string | null
           cost_exposure?: number | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           expected_recovery?: number | null
           id?: string
           identified_by?: string | null
@@ -4888,6 +6413,7 @@ export type Database = {
           impact_types?: string | null
           internal_notes?: string | null
           is_co_candidate?: boolean | null
+          is_deleted?: boolean
           issue_source?: string | null
           mitigation_number?: string | null
           notice_method?: string | null
@@ -4896,6 +6422,7 @@ export type Database = {
           project_id: string
           recovery_likelihood?: number | null
           responsible_party?: string | null
+          risk_id?: string | null
           root_cause_category?: string | null
           schedule_exposure_days?: number | null
           source_entity_id?: string | null
@@ -4907,8 +6434,11 @@ export type Database = {
         Update: {
           approval_date?: string | null
           approved_by?: string | null
+          change_order_id?: string | null
           cost_exposure?: number | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           expected_recovery?: number | null
           id?: string
           identified_by?: string | null
@@ -4916,6 +6446,7 @@ export type Database = {
           impact_types?: string | null
           internal_notes?: string | null
           is_co_candidate?: boolean | null
+          is_deleted?: boolean
           issue_source?: string | null
           mitigation_number?: string | null
           notice_method?: string | null
@@ -4924,6 +6455,7 @@ export type Database = {
           project_id?: string
           recovery_likelihood?: number | null
           responsible_party?: string | null
+          risk_id?: string | null
           root_cause_category?: string | null
           schedule_exposure_days?: number | null
           source_entity_id?: string | null
@@ -4934,10 +6466,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "mitigation_logs_change_order_id_fkey"
+            columns: ["change_order_id"]
+            isOneToOne: false
+            referencedRelation: "change_orders"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "mitigation_logs_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mitigation_logs_risk_id_fkey"
+            columns: ["risk_id"]
+            isOneToOne: false
+            referencedRelation: "risks"
             referencedColumns: ["id"]
           },
         ]
@@ -5003,11 +6549,13 @@ export type Database = {
           drawing_set_id: string | null
           element_guid: string | null
           erection_area: string | null
+          fab_status: string | null
           id: string
           is_deleted: boolean
           material_grade: string | null
           metadata: Json
           model_id: string | null
+          piece_id: string | null
           piece_mark: string
           profile: string | null
           project_id: string
@@ -5027,11 +6575,13 @@ export type Database = {
           drawing_set_id?: string | null
           element_guid?: string | null
           erection_area?: string | null
+          fab_status?: string | null
           id?: string
           is_deleted?: boolean
           material_grade?: string | null
           metadata?: Json
           model_id?: string | null
+          piece_id?: string | null
           piece_mark: string
           profile?: string | null
           project_id: string
@@ -5051,11 +6601,13 @@ export type Database = {
           drawing_set_id?: string | null
           element_guid?: string | null
           erection_area?: string | null
+          fab_status?: string | null
           id?: string
           is_deleted?: boolean
           material_grade?: string | null
           metadata?: Json
           model_id?: string | null
+          piece_id?: string | null
           piece_mark?: string
           profile?: string | null
           project_id?: string
@@ -5096,6 +6648,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "model_elements_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "model_elements_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -5117,21 +6676,25 @@ export type Database = {
           cloud_url: string | null
           coordinate_system: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           document_id: string | null
+          element_count: number | null
           file_name: string
           file_type: string
           file_url: string | null
           id: string
-          is_deleted: boolean | null
+          is_deleted: boolean
           linked_drawings: Json | null
           linked_rfis: Json | null
           linked_work_packages: Json | null
           metadata: Json | null
+          notes: string | null
           project_id: string
           revision_number: number | null
           source: string
           status: string
+          superseded_at: string | null
           superseded_by: string | null
           updated_at: string | null
           upload_date: string | null
@@ -5142,21 +6705,25 @@ export type Database = {
           cloud_url?: string | null
           coordinate_system?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           document_id?: string | null
+          element_count?: number | null
           file_name: string
           file_type: string
           file_url?: string | null
           id?: string
-          is_deleted?: boolean | null
+          is_deleted?: boolean
           linked_drawings?: Json | null
           linked_rfis?: Json | null
           linked_work_packages?: Json | null
           metadata?: Json | null
+          notes?: string | null
           project_id: string
           revision_number?: number | null
           source?: string
           status?: string
+          superseded_at?: string | null
           superseded_by?: string | null
           updated_at?: string | null
           upload_date?: string | null
@@ -5167,21 +6734,25 @@ export type Database = {
           cloud_url?: string | null
           coordinate_system?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           document_id?: string | null
+          element_count?: number | null
           file_name?: string
           file_type?: string
           file_url?: string | null
           id?: string
-          is_deleted?: boolean | null
+          is_deleted?: boolean
           linked_drawings?: Json | null
           linked_rfis?: Json | null
           linked_work_packages?: Json | null
           metadata?: Json | null
+          notes?: string | null
           project_id?: string
           revision_number?: number | null
           source?: string
           status?: string
+          superseded_at?: string | null
           superseded_by?: string | null
           updated_at?: string | null
           upload_date?: string | null
@@ -5207,6 +6778,226 @@ export type Database = {
             columns: ["superseded_by"]
             isOneToOne: false
             referencedRelation: "model_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      note_folder_audit_events: {
+        Row: {
+          accepted: boolean
+          action: string
+          actor_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          error_code: string | null
+          folder_id: string | null
+          id: string
+          metadata: Json
+          org_id: string | null
+        }
+        Insert: {
+          accepted: boolean
+          action: string
+          actor_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          error_code?: string | null
+          folder_id?: string | null
+          id?: string
+          metadata?: Json
+          org_id?: string | null
+        }
+        Update: {
+          accepted?: boolean
+          action?: string
+          actor_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          error_code?: string | null
+          folder_id?: string | null
+          id?: string
+          metadata?: Json
+          org_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_folder_audit_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      note_folder_job_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          folder_id: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          folder_id: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          folder_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_folder_job_links_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "note_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "note_folder_job_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      note_folder_migrations: {
+        Row: {
+          general_notes_id: string
+          migrated_at: string
+          notes_after: number
+          notes_before: number
+          org_id: string
+        }
+        Insert: {
+          general_notes_id: string
+          migrated_at?: string
+          notes_after: number
+          notes_before: number
+          org_id: string
+        }
+        Update: {
+          general_notes_id?: string
+          migrated_at?: string
+          notes_after?: number
+          notes_before?: number
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_folder_migrations_general_notes_id_fkey"
+            columns: ["general_notes_id"]
+            isOneToOne: false
+            referencedRelation: "note_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "note_folder_migrations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      note_folder_mutation_receipts: {
+        Row: {
+          command: string
+          created_at: string
+          idempotency_key: string
+          org_id: string
+          result: Json
+        }
+        Insert: {
+          command: string
+          created_at?: string
+          idempotency_key: string
+          org_id: string
+          result: Json
+        }
+        Update: {
+          command?: string
+          created_at?: string
+          idempotency_key?: string
+          org_id?: string
+          result?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_folder_mutation_receipts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      note_folders: {
+        Row: {
+          archive_reason: string | null
+          archived_at: string | null
+          archived_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_system: boolean
+          link_mode: string
+          name: string
+          org_id: string
+          parent_folder_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          archive_reason?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_system?: boolean
+          link_mode?: string
+          name: string
+          org_id: string
+          parent_folder_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          archive_reason?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_system?: boolean
+          link_mode?: string
+          name?: string
+          org_id?: string
+          parent_folder_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_folders_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "note_folders_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "note_folders"
             referencedColumns: ["id"]
           },
         ]
@@ -5320,6 +7111,7 @@ export type Database = {
           created_by: string | null
           current_period_end: string | null
           id: string
+          member_default_project_role: string | null
           metadata: Json
           name: string
           plan: string
@@ -5334,6 +7126,7 @@ export type Database = {
           created_by?: string | null
           current_period_end?: string | null
           id?: string
+          member_default_project_role?: string | null
           metadata?: Json
           name: string
           plan?: string
@@ -5348,6 +7141,7 @@ export type Database = {
           created_by?: string | null
           current_period_end?: string | null
           id?: string
+          member_default_project_role?: string | null
           metadata?: Json
           name?: string
           plan?: string
@@ -5359,10 +7153,204 @@ export type Database = {
         }
         Relationships: []
       }
+      pay_application_lines: {
+        Row: {
+          balance_to_finish: number
+          created_at: string
+          description: string | null
+          id: string
+          line_item_number: string | null
+          materials_stored: number
+          metadata: Json
+          pay_application_id: string
+          percent_complete: number
+          project_id: string
+          retainage: number
+          scheduled_value: number
+          sort_order: number
+          sov_item_id: string | null
+          total_completed_stored: number
+          updated_at: string | null
+          work_completed_previous: number
+          work_completed_this_period: number
+        }
+        Insert: {
+          balance_to_finish?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          line_item_number?: string | null
+          materials_stored?: number
+          metadata?: Json
+          pay_application_id: string
+          percent_complete?: number
+          project_id: string
+          retainage?: number
+          scheduled_value?: number
+          sort_order?: number
+          sov_item_id?: string | null
+          total_completed_stored?: number
+          updated_at?: string | null
+          work_completed_previous?: number
+          work_completed_this_period?: number
+        }
+        Update: {
+          balance_to_finish?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          line_item_number?: string | null
+          materials_stored?: number
+          metadata?: Json
+          pay_application_id?: string
+          percent_complete?: number
+          project_id?: string
+          retainage?: number
+          scheduled_value?: number
+          sort_order?: number
+          sov_item_id?: string | null
+          total_completed_stored?: number
+          updated_at?: string | null
+          work_completed_previous?: number
+          work_completed_this_period?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pay_application_lines_pay_application_id_fkey"
+            columns: ["pay_application_id"]
+            isOneToOne: false
+            referencedRelation: "pay_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pay_application_lines_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pay_application_lines_sov_item_id_fkey"
+            columns: ["sov_item_id"]
+            isOneToOne: false
+            referencedRelation: "sov_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pay_applications: {
+        Row: {
+          application_label: string | null
+          application_number: number
+          approved_by: string | null
+          balance_to_finish: number
+          certified_date: string | null
+          created_at: string
+          created_by: string | null
+          current_payment_due: number
+          deleted_at: string | null
+          id: string
+          is_deleted: boolean
+          less_previous_certificates: number
+          metadata: Json
+          net_change_orders: number
+          notes: string | null
+          original_contract_sum: number
+          paid_date: string | null
+          period_from: string | null
+          period_to: string | null
+          project_id: string
+          retainage_percent: number
+          sov_reconciles: boolean | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          total_completed_stored: number
+          total_earned_less_retainage: number
+          total_retainage: number
+          updated_at: string
+          void_reason: string | null
+        }
+        Insert: {
+          application_label?: string | null
+          application_number?: number
+          approved_by?: string | null
+          balance_to_finish?: number
+          certified_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_payment_due?: number
+          deleted_at?: string | null
+          id?: string
+          is_deleted?: boolean
+          less_previous_certificates?: number
+          metadata?: Json
+          net_change_orders?: number
+          notes?: string | null
+          original_contract_sum?: number
+          paid_date?: string | null
+          period_from?: string | null
+          period_to?: string | null
+          project_id: string
+          retainage_percent?: number
+          sov_reconciles?: boolean | null
+          status?: string
+          submitted_by?: string | null
+          submitted_date?: string | null
+          total_completed_stored?: number
+          total_earned_less_retainage?: number
+          total_retainage?: number
+          updated_at?: string
+          void_reason?: string | null
+        }
+        Update: {
+          application_label?: string | null
+          application_number?: number
+          approved_by?: string | null
+          balance_to_finish?: number
+          certified_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_payment_due?: number
+          deleted_at?: string | null
+          id?: string
+          is_deleted?: boolean
+          less_previous_certificates?: number
+          metadata?: Json
+          net_change_orders?: number
+          notes?: string | null
+          original_contract_sum?: number
+          paid_date?: string | null
+          period_from?: string | null
+          period_to?: string | null
+          project_id?: string
+          retainage_percent?: number
+          sov_reconciles?: boolean | null
+          status?: string
+          submitted_by?: string | null
+          submitted_date?: string | null
+          total_completed_stored?: number
+          total_earned_less_retainage?: number
+          total_retainage?: number
+          updated_at?: string
+          void_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pay_applications_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       photos: {
         Row: {
           category: string | null
+          client_op_id: string | null
           created_at: string | null
+          created_by: string | null
           daily_log_id: string | null
           deleted_at: string | null
           description: string | null
@@ -5379,10 +7367,13 @@ export type Database = {
           taken_date: string | null
           title: string | null
           updated_at: string | null
+          work_package_id: string | null
         }
         Insert: {
           category?: string | null
+          client_op_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           daily_log_id?: string | null
           deleted_at?: string | null
           description?: string | null
@@ -5399,10 +7390,13 @@ export type Database = {
           taken_date?: string | null
           title?: string | null
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Update: {
           category?: string | null
+          client_op_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           daily_log_id?: string | null
           deleted_at?: string | null
           description?: string | null
@@ -5419,6 +7413,7 @@ export type Database = {
           taken_date?: string | null
           title?: string | null
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Relationships: [
           {
@@ -5449,19 +7444,874 @@ export type Database = {
             referencedRelation: "punchlist_items"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "photos_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_control_command_failures: {
+        Row: {
+          actor_id: string | null
+          command_name: string
+          context: Json
+          entity_ids: string[]
+          error_code: string
+          error_detail: string | null
+          error_message: string
+          id: string
+          occurred_at: string
+          project_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          command_name: string
+          context?: Json
+          entity_ids?: string[]
+          error_code: string
+          error_detail?: string | null
+          error_message: string
+          id?: string
+          occurred_at?: string
+          project_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          command_name?: string
+          context?: Json
+          entity_ids?: string[]
+          error_code?: string
+          error_detail?: string | null
+          error_message?: string
+          id?: string
+          occurred_at?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_control_command_failures_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_control_mode_events: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          confirmation: string
+          id: string
+          next_mode: string
+          previous_mode: string
+          project_id: string
+          readiness_snapshot: Json
+        }
+        Insert: {
+          changed_at?: string
+          changed_by: string
+          confirmation: string
+          id?: string
+          next_mode: string
+          previous_mode: string
+          project_id: string
+          readiness_snapshot?: Json
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          confirmation?: string
+          id?: string
+          next_mode?: string
+          previous_mode?: string
+          project_id?: string
+          readiness_snapshot?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_control_mode_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_drawing_sets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          drawing_set_id: string
+          id: string
+          piece_id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          drawing_set_id: string
+          id?: string
+          piece_id: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          drawing_set_id?: string
+          id?: string
+          piece_id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_drawing_sets_piece_fk"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_drawing_sets_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_drawing_sets_set_fk"
+            columns: ["drawing_set_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_drawings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          drawing_id: string
+          id: string
+          piece_id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          drawing_id: string
+          id?: string
+          piece_id: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          drawing_id?: string
+          id?: string
+          piece_id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_drawings_drawing_fk"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "piece_drawings_drawing_fk"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_drawings_piece_fk"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_drawings_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_type: string
+          id: string
+          next_state: Json
+          piece_id: string
+          previous_state: Json
+          project_id: string
+          reason: string | null
+          source_system: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_type: string
+          id?: string
+          next_state?: Json
+          piece_id: string
+          previous_state?: Json
+          project_id: string
+          reason?: string | null
+          source_system?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_type?: string
+          id?: string
+          next_state?: Json
+          piece_id?: string
+          previous_state?: Json
+          project_id?: string
+          reason?: string | null
+          source_system?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_events_piece_fk"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_events_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_import_batches: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          apply_summary: Json | null
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          decision_counts: Json
+          id: string
+          project_id: string
+          row_count: number
+          source_name: string | null
+          source_type: string
+          status: string
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          apply_summary?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          decision_counts?: Json
+          id?: string
+          project_id: string
+          row_count?: number
+          source_name?: string | null
+          source_type: string
+          status?: string
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          apply_summary?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          decision_counts?: Json
+          id?: string
+          project_id?: string
+          row_count?: number
+          source_name?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_import_batches_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_import_rows: {
+        Row: {
+          batch_id: string
+          created_at: string
+          decision: string
+          id: string
+          matched_piece_id: string | null
+          normalized_payload: Json
+          original_payload: Json
+          project_id: string
+          resolution: string | null
+          source_row_number: number
+          warnings: string[]
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          decision: string
+          id?: string
+          matched_piece_id?: string | null
+          normalized_payload?: Json
+          original_payload: Json
+          project_id: string
+          resolution?: string | null
+          source_row_number: number
+          warnings?: string[]
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          decision?: string
+          id?: string
+          matched_piece_id?: string | null
+          normalized_payload?: Json
+          original_payload?: Json
+          project_id?: string
+          resolution?: string | null
+          source_row_number?: number
+          warnings?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_import_rows_batch_fk"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "piece_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_import_rows_piece_fk"
+            columns: ["matched_piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_import_rows_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_material_requirements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          material_requirement_id: string
+          piece_id: string
+          project_id: string
+          quantity_allocated: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_requirement_id: string
+          piece_id: string
+          project_id: string
+          quantity_allocated?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_requirement_id?: string
+          piece_id?: string
+          project_id?: string
+          quantity_allocated?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_material_requirements_piece_fk"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_material_requirements_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_material_requirements_requirement_fk"
+            columns: ["material_requirement_id"]
+            isOneToOne: false
+            referencedRelation: "material_requirements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_production: {
+        Row: {
+          assembly_mark: string | null
+          created_at: string
+          erection_area: string | null
+          external_ref: string | null
+          id: string
+          imported_at: string
+          is_deleted: boolean
+          notes: string | null
+          percent_complete: number | null
+          piece_mark: string
+          project_id: string
+          quantity: number | null
+          sequence_number: string | null
+          ship_date: string | null
+          source: string
+          stage_data: Json | null
+          status: string | null
+          updated_at: string
+          weight: number | null
+        }
+        Insert: {
+          assembly_mark?: string | null
+          created_at?: string
+          erection_area?: string | null
+          external_ref?: string | null
+          id?: string
+          imported_at?: string
+          is_deleted?: boolean
+          notes?: string | null
+          percent_complete?: number | null
+          piece_mark: string
+          project_id: string
+          quantity?: number | null
+          sequence_number?: string | null
+          ship_date?: string | null
+          source?: string
+          stage_data?: Json | null
+          status?: string | null
+          updated_at?: string
+          weight?: number | null
+        }
+        Update: {
+          assembly_mark?: string | null
+          created_at?: string
+          erection_area?: string | null
+          external_ref?: string | null
+          id?: string
+          imported_at?: string
+          is_deleted?: boolean
+          notes?: string | null
+          percent_complete?: number | null
+          piece_mark?: string
+          project_id?: string
+          quantity?: number | null
+          sequence_number?: string | null
+          ship_date?: string | null
+          source?: string
+          stage_data?: Json | null
+          status?: string | null
+          updated_at?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_production_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_station_completions: {
+        Row: {
+          completed_at: string
+          completed_by: string
+          created_at: string
+          earned_percent: number
+          id: string
+          inherited_from_completion_id: string | null
+          is_override: boolean
+          metadata: Json
+          override_reason: string | null
+          piece_id: string
+          project_id: string
+          sort_order: number
+          station_configuration_id: string
+          station_key: string
+          station_name: string
+        }
+        Insert: {
+          completed_at?: string
+          completed_by: string
+          created_at?: string
+          earned_percent: number
+          id?: string
+          inherited_from_completion_id?: string | null
+          is_override?: boolean
+          metadata?: Json
+          override_reason?: string | null
+          piece_id: string
+          project_id: string
+          sort_order: number
+          station_configuration_id: string
+          station_key: string
+          station_name: string
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string
+          created_at?: string
+          earned_percent?: number
+          id?: string
+          inherited_from_completion_id?: string | null
+          is_override?: boolean
+          metadata?: Json
+          override_reason?: string | null
+          piece_id?: string
+          project_id?: string
+          sort_order?: number
+          station_configuration_id?: string
+          station_key?: string
+          station_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_station_completions_inherited_from_completion_id_fkey"
+            columns: ["inherited_from_completion_id"]
+            isOneToOne: false
+            referencedRelation: "piece_station_completions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_station_completions_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_station_completions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "piece_station_completions_station_configuration_id_fkey"
+            columns: ["station_configuration_id"]
+            isOneToOne: false
+            referencedRelation: "piece_station_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      piece_station_configurations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          earned_percent: number
+          id: string
+          is_active: boolean
+          project_id: string
+          sort_order: number
+          station_key: string
+          station_name: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          earned_percent: number
+          id?: string
+          is_active?: boolean
+          project_id: string
+          sort_order: number
+          station_key: string
+          station_name: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          earned_percent?: number
+          id?: string
+          is_active?: boolean
+          project_id?: string
+          sort_order?: number
+          station_key?: string
+          station_name?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_station_configurations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pieces: {
+        Row: {
+          created_at: string
+          current_station: string | null
+          deleted_at: string | null
+          erection_area: string | null
+          external_ref: string | null
+          id: string
+          is_container: boolean
+          is_deleted: boolean
+          length_inches: number | null
+          lifecycle_status: string
+          lot_code: string
+          material_grade: string | null
+          metadata: Json
+          normalized_piece_mark: string | null
+          on_hold: boolean
+          on_hold_at: string | null
+          on_hold_by: string | null
+          on_hold_reason: string | null
+          parent_piece_id: string | null
+          piece_mark: string
+          profile: string | null
+          project_id: string
+          quantity: number
+          sequence_number: string | null
+          source_system: string | null
+          updated_at: string
+          weight_each_lbs: number | null
+          weight_total_lbs: number | null
+          work_package_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_station?: string | null
+          deleted_at?: string | null
+          erection_area?: string | null
+          external_ref?: string | null
+          id?: string
+          is_container?: boolean
+          is_deleted?: boolean
+          length_inches?: number | null
+          lifecycle_status?: string
+          lot_code?: string
+          material_grade?: string | null
+          metadata?: Json
+          normalized_piece_mark?: string | null
+          on_hold?: boolean
+          on_hold_at?: string | null
+          on_hold_by?: string | null
+          on_hold_reason?: string | null
+          parent_piece_id?: string | null
+          piece_mark: string
+          profile?: string | null
+          project_id: string
+          quantity?: number
+          sequence_number?: string | null
+          source_system?: string | null
+          updated_at?: string
+          weight_each_lbs?: number | null
+          weight_total_lbs?: number | null
+          work_package_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_station?: string | null
+          deleted_at?: string | null
+          erection_area?: string | null
+          external_ref?: string | null
+          id?: string
+          is_container?: boolean
+          is_deleted?: boolean
+          length_inches?: number | null
+          lifecycle_status?: string
+          lot_code?: string
+          material_grade?: string | null
+          metadata?: Json
+          normalized_piece_mark?: string | null
+          on_hold?: boolean
+          on_hold_at?: string | null
+          on_hold_by?: string | null
+          on_hold_reason?: string | null
+          parent_piece_id?: string | null
+          piece_mark?: string
+          profile?: string | null
+          project_id?: string
+          quantity?: number
+          sequence_number?: string | null
+          source_system?: string | null
+          updated_at?: string
+          weight_each_lbs?: number | null
+          weight_total_lbs?: number | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pieces_parent_piece_fk"
+            columns: ["parent_piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pieces_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pieces_work_package_fk"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planner_action_events: {
+        Row: {
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          entity_id: string
+          entity_type: string
+          event_type: string
+          id: string
+          occurred_at: string
+          project_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          entity_id: string
+          entity_type: string
+          event_type: string
+          id?: string
+          occurred_at?: string
+          project_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          entity_id?: string
+          entity_type?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planner_action_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planner_offline_operation_receipts: {
+        Row: {
+          applied_at: string
+          canonical_payload: Json
+          client_op_id: string
+          entity_id: string
+          entity_type: string
+          operation_kind: string
+          project_id: string
+          stored_result: Json
+          user_id: string
+        }
+        Insert: {
+          applied_at?: string
+          canonical_payload: Json
+          client_op_id: string
+          entity_id: string
+          entity_type: string
+          operation_kind: string
+          project_id: string
+          stored_result: Json
+          user_id: string
+        }
+        Update: {
+          applied_at?: string
+          canonical_payload?: Json
+          client_op_id?: string
+          entity_id?: string
+          entity_type?: string
+          operation_kind?: string
+          project_id?: string
+          stored_result?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planner_offline_operation_receipts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pma_assumptions: {
         Row: {
           category: string | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
           description: string | null
           id: string
+          is_deleted: boolean
           metadata: Json | null
           notes: string | null
           owner: string | null
           project_id: string
           project_name: string | null
+          risk_id: string | null
           risk_level: string | null
           status: string | null
           title: string | null
@@ -5470,13 +8320,17 @@ export type Database = {
         Insert: {
           category?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           description?: string | null
           id?: string
+          is_deleted?: boolean
           metadata?: Json | null
           notes?: string | null
           owner?: string | null
           project_id: string
           project_name?: string | null
+          risk_id?: string | null
           risk_level?: string | null
           status?: string | null
           title?: string | null
@@ -5485,13 +8339,17 @@ export type Database = {
         Update: {
           category?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           description?: string | null
           id?: string
+          is_deleted?: boolean
           metadata?: Json | null
           notes?: string | null
           owner?: string | null
           project_id?: string
           project_name?: string | null
+          risk_id?: string | null
           risk_level?: string | null
           status?: string | null
           title?: string | null
@@ -5503,6 +8361,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pma_assumptions_risk_id_fkey"
+            columns: ["risk_id"]
+            isOneToOne: false
+            referencedRelation: "risks"
             referencedColumns: ["id"]
           },
         ]
@@ -5562,16 +8427,22 @@ export type Database = {
           alternatives: string | null
           category: string | null
           created_at: string | null
+          created_by: string | null
           decided_by: string | null
           decision_date: string | null
+          decision_number: string | null
+          deleted_at: string | null
           description: string | null
           id: string
           impact: string | null
+          is_deleted: boolean
           metadata: Json | null
           project_id: string
           project_name: string | null
           rationale: string | null
+          risk_id: string | null
           status: string | null
+          superseded_by_id: string | null
           title: string | null
           updated_at: string | null
         }
@@ -5579,16 +8450,22 @@ export type Database = {
           alternatives?: string | null
           category?: string | null
           created_at?: string | null
+          created_by?: string | null
           decided_by?: string | null
           decision_date?: string | null
+          decision_number?: string | null
+          deleted_at?: string | null
           description?: string | null
           id?: string
           impact?: string | null
+          is_deleted?: boolean
           metadata?: Json | null
           project_id: string
           project_name?: string | null
           rationale?: string | null
+          risk_id?: string | null
           status?: string | null
+          superseded_by_id?: string | null
           title?: string | null
           updated_at?: string | null
         }
@@ -5596,16 +8473,22 @@ export type Database = {
           alternatives?: string | null
           category?: string | null
           created_at?: string | null
+          created_by?: string | null
           decided_by?: string | null
           decision_date?: string | null
+          decision_number?: string | null
+          deleted_at?: string | null
           description?: string | null
           id?: string
           impact?: string | null
+          is_deleted?: boolean
           metadata?: Json | null
           project_id?: string
           project_name?: string | null
           rationale?: string | null
+          risk_id?: string | null
           status?: string | null
+          superseded_by_id?: string | null
           title?: string | null
           updated_at?: string | null
         }
@@ -5617,6 +8500,20 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pma_decisions_risk_id_fkey"
+            columns: ["risk_id"]
+            isOneToOne: false
+            referencedRelation: "risks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pma_decisions_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "pma_decisions"
+            referencedColumns: ["id"]
+          },
         ]
       }
       production_notes: {
@@ -5626,6 +8523,8 @@ export type Database = {
           content: string | null
           created_at: string | null
           date: string | null
+          date_due: string | null
+          date_noted: string | null
           folder_id: string
           id: string
           is_high_priority: boolean | null
@@ -5647,6 +8546,8 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           date?: string | null
+          date_due?: string | null
+          date_noted?: string | null
           folder_id: string
           id?: string
           is_high_priority?: boolean | null
@@ -5668,6 +8569,8 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           date?: string | null
+          date_due?: string | null
+          date_noted?: string | null
           folder_id?: string
           id?: string
           is_high_priority?: boolean | null
@@ -5700,58 +8603,126 @@ export type Database = {
           },
         ]
       }
+      project_calendars: {
+        Row: {
+          created_at: string
+          holidays: string[]
+          project_id: string
+          shift_label: string | null
+          updated_at: string
+          work_days: number[]
+        }
+        Insert: {
+          created_at?: string
+          holidays?: string[]
+          project_id: string
+          shift_label?: string | null
+          updated_at?: string
+          work_days?: number[]
+        }
+        Update: {
+          created_at?: string
+          holidays?: string[]
+          project_id?: string
+          shift_label?: string | null
+          updated_at?: string
+          work_days?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_calendars_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_closeout: {
         Row: {
           as_built_complete: boolean | null
+          blockers_at_completion: Json | null
           certificate_of_occupancy: string | null
           checklist: Json | null
           closeout_date: string | null
+          completed_at: string | null
+          completed_by: string | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          final_completion_date: string | null
           final_inspection_date: string | null
           id: string
+          is_deleted: boolean
           manuals_complete: boolean | null
           metadata: Json | null
           notes: string | null
+          override_by: string | null
+          override_reason: string | null
           project_id: string
           project_name: string | null
           punchlist_complete: boolean | null
+          reopen_reason: string | null
           status: string | null
+          substantial_completion_date: string | null
           updated_at: string | null
           warranties_complete: boolean | null
         }
         Insert: {
           as_built_complete?: boolean | null
+          blockers_at_completion?: Json | null
           certificate_of_occupancy?: string | null
           checklist?: Json | null
           closeout_date?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
+          final_completion_date?: string | null
           final_inspection_date?: string | null
           id?: string
+          is_deleted?: boolean
           manuals_complete?: boolean | null
           metadata?: Json | null
           notes?: string | null
+          override_by?: string | null
+          override_reason?: string | null
           project_id: string
           project_name?: string | null
           punchlist_complete?: boolean | null
+          reopen_reason?: string | null
           status?: string | null
+          substantial_completion_date?: string | null
           updated_at?: string | null
           warranties_complete?: boolean | null
         }
         Update: {
           as_built_complete?: boolean | null
+          blockers_at_completion?: Json | null
           certificate_of_occupancy?: string | null
           checklist?: Json | null
           closeout_date?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
+          final_completion_date?: string | null
           final_inspection_date?: string | null
           id?: string
+          is_deleted?: boolean
           manuals_complete?: boolean | null
           metadata?: Json | null
           notes?: string | null
+          override_by?: string | null
+          override_reason?: string | null
           project_id?: string
           project_name?: string | null
           punchlist_complete?: boolean | null
+          reopen_reason?: string | null
           status?: string | null
+          substantial_completion_date?: string | null
           updated_at?: string | null
           warranties_complete?: boolean | null
         }
@@ -5767,41 +8738,59 @@ export type Database = {
       }
       project_handoff_items: {
         Row: {
+          category: string | null
           completed_by: string | null
+          completed_by_id: string | null
           created_at: string
+          created_by: string | null
           date_completed: string | null
           date_required: string | null
+          deleted_at: string | null
           description: string
           id: string
+          is_deleted: boolean
           notes: string | null
+          owner: string | null
           project_id: string
-          seq: number
+          seq: number | null
           status: string
           updated_at: string
         }
         Insert: {
+          category?: string | null
           completed_by?: string | null
+          completed_by_id?: string | null
           created_at?: string
+          created_by?: string | null
           date_completed?: string | null
           date_required?: string | null
+          deleted_at?: string | null
           description: string
           id?: string
+          is_deleted?: boolean
           notes?: string | null
+          owner?: string | null
           project_id: string
-          seq: number
+          seq?: number | null
           status?: string
           updated_at?: string
         }
         Update: {
+          category?: string | null
           completed_by?: string | null
+          completed_by_id?: string | null
           created_at?: string
+          created_by?: string | null
           date_completed?: string | null
           date_required?: string | null
+          deleted_at?: string | null
           description?: string
           id?: string
+          is_deleted?: boolean
           notes?: string | null
+          owner?: string | null
           project_id?: string
-          seq?: number
+          seq?: number | null
           status?: string
           updated_at?: string
         }
@@ -5818,6 +8807,8 @@ export type Database = {
       projects: {
         Row: {
           address: string | null
+          adjusted_contract_value: number | null
+          approved_change_total: number
           client: string | null
           contingency_amount: number | null
           contract_type: string | null
@@ -5848,8 +8839,10 @@ export type Database = {
           on_hold_at: string | null
           on_hold_by: string | null
           on_hold_reason: string | null
+          org_id: string
           original_contract_value: number | null
           phase: string
+          piece_control_mode: string
           project_manager: string | null
           project_number: string | null
           retainage_percent: number | null
@@ -5863,6 +8856,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          adjusted_contract_value?: number | null
+          approved_change_total?: number
           client?: string | null
           contingency_amount?: number | null
           contract_type?: string | null
@@ -5893,8 +8888,10 @@ export type Database = {
           on_hold_at?: string | null
           on_hold_by?: string | null
           on_hold_reason?: string | null
+          org_id: string
           original_contract_value?: number | null
           phase?: string
+          piece_control_mode?: string
           project_manager?: string | null
           project_number?: string | null
           retainage_percent?: number | null
@@ -5908,6 +8905,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          adjusted_contract_value?: number | null
+          approved_change_total?: number
           client?: string | null
           contingency_amount?: number | null
           contract_type?: string | null
@@ -5938,8 +8937,10 @@ export type Database = {
           on_hold_at?: string | null
           on_hold_by?: string | null
           on_hold_reason?: string | null
+          org_id?: string
           original_contract_value?: number | null
           phase?: string
+          piece_control_mode?: string
           project_manager?: string | null
           project_number?: string | null
           retainage_percent?: number | null
@@ -5959,15 +8960,25 @@ export type Database = {
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       punchlist_items: {
         Row: {
           assigned_to: string | null
           category: string | null
+          client_op_id: string | null
           closed_at: string | null
           closed_by: string | null
+          closing_photo_id: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           description: string | null
           drawing_id: string | null
@@ -5978,6 +8989,7 @@ export type Database = {
           metadata: Json | null
           notes: string | null
           percent_complete: number | null
+          phase: string | null
           photos: Json | null
           priority: string
           project_id: string
@@ -5985,13 +8997,17 @@ export type Database = {
           status: string
           target_completion_date: string | null
           updated_at: string | null
+          work_package_id: string | null
         }
         Insert: {
           assigned_to?: string | null
           category?: string | null
+          client_op_id?: string | null
           closed_at?: string | null
           closed_by?: string | null
+          closing_photo_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           drawing_id?: string | null
@@ -6002,6 +9018,7 @@ export type Database = {
           metadata?: Json | null
           notes?: string | null
           percent_complete?: number | null
+          phase?: string | null
           photos?: Json | null
           priority?: string
           project_id: string
@@ -6009,13 +9026,17 @@ export type Database = {
           status?: string
           target_completion_date?: string | null
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Update: {
           assigned_to?: string | null
           category?: string | null
+          client_op_id?: string | null
           closed_at?: string | null
           closed_by?: string | null
+          closing_photo_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           drawing_id?: string | null
@@ -6026,6 +9047,7 @@ export type Database = {
           metadata?: Json | null
           notes?: string | null
           percent_complete?: number | null
+          phase?: string | null
           photos?: Json | null
           priority?: string
           project_id?: string
@@ -6033,8 +9055,16 @@ export type Database = {
           status?: string
           target_completion_date?: string | null
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "punchlist_items_closing_photo_id_fkey"
+            columns: ["closing_photo_id"]
+            isOneToOne: false
+            referencedRelation: "photos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "punchlist_items_drawing_id_fkey"
             columns: ["drawing_id"]
@@ -6063,23 +9093,34 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "punchlist_items_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
         ]
       }
       quality_control_records: {
         Row: {
           acceptance_criteria: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           id: string
+          inspection_id: string | null
           is_deleted: boolean
           location: string | null
           material_or_component: string | null
           metadata: Json | null
           notes: string | null
+          piece_id: string | null
           project_id: string
           project_name: string | null
           quantity_passed: number | null
           quantity_tested: number | null
+          record_number: string | null
           result: string | null
           specification: string | null
           status: string | null
@@ -6088,21 +9129,26 @@ export type Database = {
           test_type: string | null
           test_value: string | null
           updated_at: string | null
+          work_package_id: string | null
         }
         Insert: {
           acceptance_criteria?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           id?: string
+          inspection_id?: string | null
           is_deleted?: boolean
           location?: string | null
           material_or_component?: string | null
           metadata?: Json | null
           notes?: string | null
+          piece_id?: string | null
           project_id: string
           project_name?: string | null
           quantity_passed?: number | null
           quantity_tested?: number | null
+          record_number?: string | null
           result?: string | null
           specification?: string | null
           status?: string | null
@@ -6111,21 +9157,26 @@ export type Database = {
           test_type?: string | null
           test_value?: string | null
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Update: {
           acceptance_criteria?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           id?: string
+          inspection_id?: string | null
           is_deleted?: boolean
           location?: string | null
           material_or_component?: string | null
           metadata?: Json | null
           notes?: string | null
+          piece_id?: string | null
           project_id?: string
           project_name?: string | null
           quantity_passed?: number | null
           quantity_tested?: number | null
+          record_number?: string | null
           result?: string | null
           specification?: string | null
           status?: string | null
@@ -6134,13 +9185,35 @@ export type Database = {
           test_type?: string | null
           test_value?: string | null
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "quality_control_records_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_control_records_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "quality_control_records_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_control_records_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -6218,13 +9291,17 @@ export type Database = {
         Row: {
           answer: string | null
           answered_by: string | null
+          answered_by_id: string | null
           area_sequence: string | null
           assigned_to: string | null
           ball_in_court: string | null
+          closed_at: string | null
+          closed_by: string | null
           cost_code_id: string | null
           cost_impact: boolean | null
           cost_impact_amount: number | null
           created_at: string | null
+          created_by: string | null
           created_date: string | null
           date_answered: string | null
           date_required: string | null
@@ -6232,9 +9309,12 @@ export type Database = {
           description: string | null
           discipline: string | null
           distribution_list: string | null
+          drawing_id: string | null
           drawing_reference: string | null
           drawing_set_id: string | null
           due_date: string | null
+          gc_drawing_id: string | null
+          holds_released_count: number
           id: string
           impacts_activity_ids: string[] | null
           internal_notes: string | null
@@ -6255,18 +9335,23 @@ export type Database = {
           submitted_date: string | null
           title: string | null
           updated_at: string | null
+          void_reason: string | null
           work_package_id: string | null
         }
         Insert: {
           answer?: string | null
           answered_by?: string | null
+          answered_by_id?: string | null
           area_sequence?: string | null
           assigned_to?: string | null
           ball_in_court?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
           cost_code_id?: string | null
           cost_impact?: boolean | null
           cost_impact_amount?: number | null
           created_at?: string | null
+          created_by?: string | null
           created_date?: string | null
           date_answered?: string | null
           date_required?: string | null
@@ -6274,9 +9359,12 @@ export type Database = {
           description?: string | null
           discipline?: string | null
           distribution_list?: string | null
+          drawing_id?: string | null
           drawing_reference?: string | null
           drawing_set_id?: string | null
           due_date?: string | null
+          gc_drawing_id?: string | null
+          holds_released_count?: number
           id?: string
           impacts_activity_ids?: string[] | null
           internal_notes?: string | null
@@ -6297,18 +9385,23 @@ export type Database = {
           submitted_date?: string | null
           title?: string | null
           updated_at?: string | null
+          void_reason?: string | null
           work_package_id?: string | null
         }
         Update: {
           answer?: string | null
           answered_by?: string | null
+          answered_by_id?: string | null
           area_sequence?: string | null
           assigned_to?: string | null
           ball_in_court?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
           cost_code_id?: string | null
           cost_impact?: boolean | null
           cost_impact_amount?: number | null
           created_at?: string | null
+          created_by?: string | null
           created_date?: string | null
           date_answered?: string | null
           date_required?: string | null
@@ -6316,9 +9409,12 @@ export type Database = {
           description?: string | null
           discipline?: string | null
           distribution_list?: string | null
+          drawing_id?: string | null
           drawing_reference?: string | null
           drawing_set_id?: string | null
           due_date?: string | null
+          gc_drawing_id?: string | null
+          holds_released_count?: number
           id?: string
           impacts_activity_ids?: string[] | null
           internal_notes?: string | null
@@ -6339,14 +9435,36 @@ export type Database = {
           submitted_date?: string | null
           title?: string | null
           updated_at?: string | null
+          void_reason?: string | null
           work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "rfis_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "rfis_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rfis_drawing_set_id_fkey"
             columns: ["drawing_set_id"]
             isOneToOne: false
             referencedRelation: "drawing_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rfis_gc_drawing_id_fkey"
+            columns: ["gc_drawing_id"]
+            isOneToOne: false
+            referencedRelation: "gc_drawings"
             referencedColumns: ["id"]
           },
           {
@@ -6371,6 +9489,7 @@ export type Database = {
           closed_date: string | null
           contingency_plan: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           description: string | null
           id: string
@@ -6383,6 +9502,8 @@ export type Database = {
           owner: string | null
           probability: number
           project_id: string
+          risk_number: string | null
+          score: number | null
           severity: string | null
           status: string
           target_close_date: string | null
@@ -6395,6 +9516,7 @@ export type Database = {
           closed_date?: string | null
           contingency_plan?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
@@ -6407,6 +9529,8 @@ export type Database = {
           owner?: string | null
           probability: number
           project_id: string
+          risk_number?: string | null
+          score?: number | null
           severity?: string | null
           status?: string
           target_close_date?: string | null
@@ -6419,6 +9543,7 @@ export type Database = {
           closed_date?: string | null
           contingency_plan?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
@@ -6431,6 +9556,8 @@ export type Database = {
           owner?: string | null
           probability?: number
           project_id?: string
+          risk_number?: string | null
+          score?: number | null
           severity?: string | null
           status?: string
           target_close_date?: string | null
@@ -6448,15 +9575,46 @@ export type Database = {
           },
         ]
       }
+      runtime_config: {
+        Row: {
+          description: string | null
+          is_public: boolean
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          is_public?: boolean
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          description?: string | null
+          is_public?: boolean
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       safety_incidents: {
         Row: {
           action_due_date: string | null
+          closed_at: string | null
+          closed_by: string | null
           corrective_actions: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           description: string | null
           id: string
           incident_date: string | null
+          incident_number: string | null
           incident_time: string | null
           incident_type: string | null
           injuries: string | null
@@ -6465,6 +9623,7 @@ export type Database = {
           location: string | null
           metadata: Json | null
           notes: string | null
+          phase: string | null
           project_id: string
           project_name: string | null
           reported_by: string | null
@@ -6478,12 +9637,16 @@ export type Database = {
         }
         Insert: {
           action_due_date?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
           corrective_actions?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
           incident_date?: string | null
+          incident_number?: string | null
           incident_time?: string | null
           incident_type?: string | null
           injuries?: string | null
@@ -6492,6 +9655,7 @@ export type Database = {
           location?: string | null
           metadata?: Json | null
           notes?: string | null
+          phase?: string | null
           project_id: string
           project_name?: string | null
           reported_by?: string | null
@@ -6505,12 +9669,16 @@ export type Database = {
         }
         Update: {
           action_due_date?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
           corrective_actions?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
           incident_date?: string | null
+          incident_number?: string | null
           incident_time?: string | null
           incident_type?: string | null
           injuries?: string | null
@@ -6519,6 +9687,7 @@ export type Database = {
           location?: string | null
           metadata?: Json | null
           notes?: string | null
+          phase?: string | null
           project_id?: string
           project_name?: string | null
           reported_by?: string | null
@@ -6533,85 +9702,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "safety_incidents_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_calendars: {
-        Row: {
-          created_at: string
-          holidays: string[]
-          project_id: string
-          shift_label: string | null
-          updated_at: string
-          work_days: number[]
-        }
-        Insert: {
-          created_at?: string
-          holidays?: string[]
-          project_id: string
-          shift_label?: string | null
-          updated_at?: string
-          work_days?: number[]
-        }
-        Update: {
-          created_at?: string
-          holidays?: string[]
-          project_id?: string
-          shift_label?: string | null
-          updated_at?: string
-          work_days?: number[]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_calendars_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: true
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      planner_action_events: {
-        Row: {
-          actor_user_id: string | null
-          after_state: Json | null
-          before_state: Json | null
-          entity_id: string | null
-          entity_type: string
-          event_type: string
-          id: string
-          occurred_at: string
-          project_id: string
-        }
-        Insert: {
-          actor_user_id?: string | null
-          after_state?: Json | null
-          before_state?: Json | null
-          entity_id?: string | null
-          entity_type: string
-          event_type: string
-          id?: string
-          occurred_at?: string
-          project_id: string
-        }
-        Update: {
-          actor_user_id?: string | null
-          after_state?: Json | null
-          before_state?: Json | null
-          entity_id?: string | null
-          entity_type?: string
-          event_type?: string
-          id?: string
-          occurred_at?: string
-          project_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "planner_action_events_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -6727,12 +9817,15 @@ export type Database = {
           assigned_to: string | null
           blockers: Json | null
           created_at: string | null
+          created_by: string | null
           crew_id: string | null
           crew_name: string | null
+          deleted_at: string | null
           dependencies: string | null
           duration: number | null
           end_date: string | null
           id: string
+          is_deleted: boolean
           is_milestone: boolean | null
           is_summary: boolean
           metadata: Json | null
@@ -6757,6 +9850,7 @@ export type Database = {
           task_type: string | null
           updated_at: string | null
           wbs_code: string | null
+          work_package_id: string | null
         }
         Insert: {
           actual_finish_date?: string | null
@@ -6764,12 +9858,15 @@ export type Database = {
           assigned_to?: string | null
           blockers?: Json | null
           created_at?: string | null
+          created_by?: string | null
           crew_id?: string | null
           crew_name?: string | null
+          deleted_at?: string | null
           dependencies?: string | null
           duration?: number | null
           end_date?: string | null
           id?: string
+          is_deleted?: boolean
           is_milestone?: boolean | null
           is_summary?: boolean
           metadata?: Json | null
@@ -6794,6 +9891,7 @@ export type Database = {
           task_type?: string | null
           updated_at?: string | null
           wbs_code?: string | null
+          work_package_id?: string | null
         }
         Update: {
           actual_finish_date?: string | null
@@ -6801,12 +9899,15 @@ export type Database = {
           assigned_to?: string | null
           blockers?: Json | null
           created_at?: string | null
+          created_by?: string | null
           crew_id?: string | null
           crew_name?: string | null
+          deleted_at?: string | null
           dependencies?: string | null
           duration?: number | null
           end_date?: string | null
           id?: string
+          is_deleted?: boolean
           is_milestone?: boolean | null
           is_summary?: boolean
           metadata?: Json | null
@@ -6831,6 +9932,7 @@ export type Database = {
           task_type?: string | null
           updated_at?: string | null
           wbs_code?: string | null
+          work_package_id?: string | null
         }
         Relationships: [
           {
@@ -6847,17 +9949,28 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "schedule_tasks_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
         ]
       }
       scope_items: {
         Row: {
           added_by: string | null
           category: string | null
+          change_order_id: string | null
           completed_at: string | null
           completed_by: string | null
+          completed_by_id: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           description: string | null
+          document_id: string | null
           file_name: string | null
           file_url: string | null
           id: string
@@ -6872,17 +9985,23 @@ export type Database = {
           project_id: string
           project_name: string | null
           reference: string | null
+          scope_number: string | null
+          sort_order: number | null
           storage_path: string | null
           updated_at: string | null
         }
         Insert: {
           added_by?: string | null
           category?: string | null
+          change_order_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
+          completed_by_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          document_id?: string | null
           file_name?: string | null
           file_url?: string | null
           id?: string
@@ -6897,17 +10016,23 @@ export type Database = {
           project_id: string
           project_name?: string | null
           reference?: string | null
+          scope_number?: string | null
+          sort_order?: number | null
           storage_path?: string | null
           updated_at?: string | null
         }
         Update: {
           added_by?: string | null
           category?: string | null
+          change_order_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
+          completed_by_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          document_id?: string | null
           file_name?: string | null
           file_url?: string | null
           id?: string
@@ -6922,10 +10047,26 @@ export type Database = {
           project_id?: string
           project_name?: string | null
           reference?: string | null
+          scope_number?: string | null
+          sort_order?: number | null
           storage_path?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "scope_items_change_order_id_fkey"
+            columns: ["change_order_id"]
+            isOneToOne: false
+            referencedRelation: "change_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scope_items_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "scope_items_project_id_fkey"
             columns: ["project_id"]
@@ -6935,12 +10076,87 @@ export type Database = {
           },
         ]
       }
+      sheets_config: {
+        Row: {
+          created_at: string
+          id: string
+          passcode_hash: string | null
+          passcode_salt: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          passcode_hash?: string | null
+          passcode_salt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          passcode_hash?: string | null
+          passcode_salt?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sheets_doc: {
+        Row: {
+          doc: Json
+          id: string
+          rev: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          doc?: Json
+          id?: string
+          rev?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          doc?: Json
+          id?: string
+          rev?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      sheets_doc_backup: {
+        Row: {
+          backup_at: string
+          doc: Json | null
+          id: string
+          note: string | null
+          rev: number
+        }
+        Insert: {
+          backup_at?: string
+          doc?: Json | null
+          id: string
+          note?: string | null
+          rev: number
+        }
+        Update: {
+          backup_at?: string
+          doc?: Json | null
+          id?: string
+          note?: string | null
+          rev?: number
+        }
+        Relationships: []
+      }
       sov_items: {
         Row: {
           application_number: number | null
+          change_order_id: string | null
           cost_code: string | null
+          cost_code_id: string | null
           cost_code_name: string | null
           created_at: string | null
+          created_by: string | null
           current_percent_complete: number | null
           deleted_at: string | null
           description: string | null
@@ -6956,16 +10172,21 @@ export type Database = {
           project_name: string | null
           retainage_percent: number | null
           scheduled_value: number | null
+          sort_order: number | null
           sov_id: string | null
           status: string | null
           submitted_date: string | null
           updated_at: string | null
+          work_package_id: string | null
         }
         Insert: {
           application_number?: number | null
+          change_order_id?: string | null
           cost_code?: string | null
+          cost_code_id?: string | null
           cost_code_name?: string | null
           created_at?: string | null
+          created_by?: string | null
           current_percent_complete?: number | null
           deleted_at?: string | null
           description?: string | null
@@ -6981,16 +10202,21 @@ export type Database = {
           project_name?: string | null
           retainage_percent?: number | null
           scheduled_value?: number | null
+          sort_order?: number | null
           sov_id?: string | null
           status?: string | null
           submitted_date?: string | null
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Update: {
           application_number?: number | null
+          change_order_id?: string | null
           cost_code?: string | null
+          cost_code_id?: string | null
           cost_code_name?: string | null
           created_at?: string | null
+          created_by?: string | null
           current_percent_complete?: number | null
           deleted_at?: string | null
           description?: string | null
@@ -7006,17 +10232,40 @@ export type Database = {
           project_name?: string | null
           retainage_percent?: number | null
           scheduled_value?: number | null
+          sort_order?: number | null
           sov_id?: string | null
           status?: string | null
           submitted_date?: string | null
           updated_at?: string | null
+          work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sov_items_change_order_id_fkey"
+            columns: ["change_order_id"]
+            isOneToOne: false
+            referencedRelation: "change_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sov_items_cost_code_id_fkey"
+            columns: ["cost_code_id"]
+            isOneToOne: false
+            referencedRelation: "cost_codes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sov_items_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sov_items_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -7056,6 +10305,13 @@ export type Database = {
           to_value?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "submittal_activity_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "submittal_activity_submittal_id_fkey"
             columns: ["submittal_id"]
@@ -7148,6 +10404,13 @@ export type Database = {
           verified_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "submittal_comment_dispositions_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
           {
             foreignKeyName: "submittal_comment_dispositions_drawing_id_fkey"
             columns: ["drawing_id"]
@@ -7418,12 +10681,17 @@ export type Database = {
           current_round_id: string | null
           days_in_review: number | null
           deleted_at: string | null
+          derived_stage: string | null
           discipline: string | null
           distributed_to: string | null
           drawing_set_ids: string[] | null
           external_id: string | null
           external_source: string | null
+          fab_release_override_reason: string | null
           file_url: string | null
+          gate_override_at: string | null
+          gate_override_by: string | null
+          gate_override_reason: string | null
           id: string
           is_deleted: boolean | null
           linked_rfi_ids: string[] | null
@@ -7441,6 +10709,7 @@ export type Database = {
           round_number: number | null
           spec_section: string | null
           split_reason: string | null
+          stage_entered_at: string | null
           status: string
           submittal_number: string
           submittal_type: string | null
@@ -7461,12 +10730,17 @@ export type Database = {
           current_round_id?: string | null
           days_in_review?: number | null
           deleted_at?: string | null
+          derived_stage?: string | null
           discipline?: string | null
           distributed_to?: string | null
           drawing_set_ids?: string[] | null
           external_id?: string | null
           external_source?: string | null
+          fab_release_override_reason?: string | null
           file_url?: string | null
+          gate_override_at?: string | null
+          gate_override_by?: string | null
+          gate_override_reason?: string | null
           id?: string
           is_deleted?: boolean | null
           linked_rfi_ids?: string[] | null
@@ -7484,6 +10758,7 @@ export type Database = {
           round_number?: number | null
           spec_section?: string | null
           split_reason?: string | null
+          stage_entered_at?: string | null
           status?: string
           submittal_number: string
           submittal_type?: string | null
@@ -7504,12 +10779,17 @@ export type Database = {
           current_round_id?: string | null
           days_in_review?: number | null
           deleted_at?: string | null
+          derived_stage?: string | null
           discipline?: string | null
           distributed_to?: string | null
           drawing_set_ids?: string[] | null
           external_id?: string | null
           external_source?: string | null
+          fab_release_override_reason?: string | null
           file_url?: string | null
+          gate_override_at?: string | null
+          gate_override_by?: string | null
+          gate_override_reason?: string | null
           id?: string
           is_deleted?: boolean | null
           linked_rfi_ids?: string[] | null
@@ -7527,6 +10807,7 @@ export type Database = {
           round_number?: number | null
           spec_section?: string | null
           split_reason?: string | null
+          stage_entered_at?: string | null
           status?: string
           submittal_number?: string
           submittal_type?: string | null
@@ -7746,12 +11027,17 @@ export type Database = {
           company_name: string | null
           contact_person: string | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
           email: string | null
           id: string
           insurance_expiry: string | null
           insurance_provider: string | null
+          is_deleted: boolean
           is_preferred: boolean | null
           metadata: Json | null
+          notes: string | null
+          org_id: string | null
           payment_terms: string | null
           phone: string | null
           pricing_tier: string | null
@@ -7772,12 +11058,17 @@ export type Database = {
           company_name?: string | null
           contact_person?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           email?: string | null
           id?: string
           insurance_expiry?: string | null
           insurance_provider?: string | null
+          is_deleted?: boolean
           is_preferred?: boolean | null
           metadata?: Json | null
+          notes?: string | null
+          org_id?: string | null
           payment_terms?: string | null
           phone?: string | null
           pricing_tier?: string | null
@@ -7798,12 +11089,17 @@ export type Database = {
           company_name?: string | null
           contact_person?: string | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
           email?: string | null
           id?: string
           insurance_expiry?: string | null
           insurance_provider?: string | null
+          is_deleted?: boolean
           is_preferred?: boolean | null
           metadata?: Json | null
+          notes?: string | null
+          org_id?: string | null
           payment_terms?: string | null
           phone?: string | null
           pricing_tier?: string | null
@@ -7816,17 +11112,29 @@ export type Database = {
           years_in_business?: number | null
           zip?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vendors_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       warranties: {
         Row: {
           component_description: string | null
           coverage_percentage: number | null
           created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          document_path: string | null
           exclusions: string | null
           expiration_date: string | null
           id: string
           is_active: boolean | null
+          is_deleted: boolean
           metadata: Json | null
           notes: string | null
           project_id: string
@@ -7844,10 +11152,14 @@ export type Database = {
           component_description?: string | null
           coverage_percentage?: number | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
+          document_path?: string | null
           exclusions?: string | null
           expiration_date?: string | null
           id?: string
           is_active?: boolean | null
+          is_deleted?: boolean
           metadata?: Json | null
           notes?: string | null
           project_id: string
@@ -7865,10 +11177,14 @@ export type Database = {
           component_description?: string | null
           coverage_percentage?: number | null
           created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
+          document_path?: string | null
           exclusions?: string | null
           expiration_date?: string | null
           id?: string
           is_active?: boolean | null
+          is_deleted?: boolean
           metadata?: Json | null
           notes?: string | null
           project_id?: string
@@ -7895,12 +11211,17 @@ export type Database = {
       work_packages: {
         Row: {
           area: string | null
+          budget_hour_item_id: string | null
           created_at: string | null
+          created_by: string | null
           crew: string | null
           deleted_at: string | null
+          description: string | null
           drawing_ids: string[] | null
+          drawing_set_ids: string[]
           field_hours_actual: number | null
           field_hours_budget: number | null
+          gc_drawing_ids: string[]
           id: string
           install_phase: string | null
           is_deleted: boolean
@@ -7934,12 +11255,17 @@ export type Database = {
         }
         Insert: {
           area?: string | null
+          budget_hour_item_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           crew?: string | null
           deleted_at?: string | null
+          description?: string | null
           drawing_ids?: string[] | null
+          drawing_set_ids?: string[]
           field_hours_actual?: number | null
           field_hours_budget?: number | null
+          gc_drawing_ids?: string[]
           id?: string
           install_phase?: string | null
           is_deleted?: boolean
@@ -7973,12 +11299,17 @@ export type Database = {
         }
         Update: {
           area?: string | null
+          budget_hour_item_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           crew?: string | null
           deleted_at?: string | null
+          description?: string | null
           drawing_ids?: string[] | null
+          drawing_set_ids?: string[]
           field_hours_actual?: number | null
           field_hours_budget?: number | null
+          gc_drawing_ids?: string[]
           id?: string
           install_phase?: string | null
           is_deleted?: boolean
@@ -8012,6 +11343,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "work_packages_budget_hour_item_id_fkey"
+            columns: ["budget_hour_item_id"]
+            isOneToOne: false
+            referencedRelation: "budget_hour_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "work_packages_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -8024,6 +11362,9 @@ export type Database = {
     Views: {
       drawing_register_view: {
         Row: {
+          active_hold_id: string | null
+          active_hold_placed_at: string | null
+          active_hold_reason: string | null
           current_issued_at: string | null
           current_revision: string | null
           current_revision_id: string | null
@@ -8053,6 +11394,91 @@ export type Database = {
       }
     }
     Functions: {
+      _tmp_timeout_probe: { Args: never; Returns: string }
+      accept_invitation: { Args: { p_token: string }; Returns: Json }
+      acknowledge_transmittal: {
+        Args: {
+          p_at?: string
+          p_by_name: string
+          p_notes?: string
+          p_transmittal_id: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by_name: string | null
+          acknowledged_notes: string | null
+          created_at: string
+          created_by: string | null
+          date_received: string | null
+          date_sent: string | null
+          deleted_at: string | null
+          direction: string
+          id: string
+          is_deleted: boolean
+          metadata: Json
+          notes: string | null
+          project_id: string
+          purpose: string | null
+          received_from: string | null
+          recipient_company: string | null
+          recipient_email: string | null
+          sent_by: string | null
+          sent_by_name: string | null
+          sent_to: string | null
+          source_company: string | null
+          status: string
+          subject: string | null
+          submittal_id: string | null
+          submittal_round_id: string | null
+          transmittal_number: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_transmittals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      action_item_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
+      actor_display_name: { Args: never; Returns: string }
+      add_tm_ticket: {
+        Args: { p_backcharge_id: string; p_payload: Json }
+        Returns: {
+          amount: number
+          attachments: Json
+          backcharge_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          equipment_cost: number
+          id: string
+          is_deleted: boolean
+          labor_hours: number
+          labor_rate: number
+          markup_percent: number
+          material_cost: number
+          project_id: string
+          signed_by: string | null
+          sort_order: number | null
+          ticket_date: string | null
+          ticket_number: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "backcharge_tm_tickets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       add_updated_at_trigger:
         | {
             Args: { tbl: unknown }
@@ -8066,55 +11492,1378 @@ export type Database = {
               error: true
             } & "Could not choose the best candidate function between: public.add_updated_at_trigger(tbl => text), public.add_updated_at_trigger(tbl => regclass). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
-      create_project: { Args: { project_data: Json }; Returns: Json }
-      create_expense: {
-        Args: { p_project_id: string; p_payload: Json }
-        Returns: Database["public"]["Tables"]["expenses"]["Row"]
-      }
-      generate_pay_application: {
-        // public.pay_applications is not in the generated Tables (see
-        // src/lib/payapp/repository.ts), so the row comes back as Json and that
-        // module's typed signatures enforce the shape.
-        Args: { p_project_id: string; p_period_from: string | null; p_period_to: string | null; p_notes?: string | null }
-        Returns: Json
-      }
-      move_pay_application: {
+      advance_piece_station: {
         Args: {
-          p_id: string
-          p_status: string
-          p_notes?: string | null
-          p_actor?: string | null
-          p_date?: string | null
+          p_override?: boolean
+          p_override_reason?: string
+          p_piece_id: string
+          p_project_id: string
+          p_station_key: string
         }
         Returns: Json
       }
-      refresh_pay_application_totals: { Args: { p_id: string }; Returns: undefined }
-      create_backcharge: {
-        // public.backcharges is not in the generated Tables yet (see
-        // src/lib/backcharge/repository.ts), so the row comes back as Json and
-        // that module's typed signatures enforce the shape.
-        Args: { p_project_id: string; p_payload: Json }
+      advance_piece_station_impl: {
+        Args: {
+          p_override?: boolean
+          p_override_reason?: string
+          p_piece_id: string
+          p_project_id: string
+          p_station_key: string
+        }
         Returns: Json
       }
+      advance_piece_stations: {
+        Args: {
+          p_override?: boolean
+          p_override_reason?: string
+          p_piece_ids: string[]
+          p_project_id: string
+          p_station_key?: string
+        }
+        Returns: Json
+      }
+      advance_piece_stations_impl: {
+        Args: {
+          p_override?: boolean
+          p_override_reason?: string
+          p_piece_ids: string[]
+          p_project_id: string
+          p_station_key?: string
+        }
+        Returns: Json
+      }
+      answer_rfi: {
+        Args: {
+          p_answer: string
+          p_answered_by?: string
+          p_date_answered?: string
+          p_release_holds?: boolean
+          p_release_notes?: string
+          p_rfi_id: string
+        }
+        Returns: {
+          answer: string | null
+          answered_by: string | null
+          answered_by_id: string | null
+          area_sequence: string | null
+          assigned_to: string | null
+          ball_in_court: string | null
+          closed_at: string | null
+          closed_by: string | null
+          cost_code_id: string | null
+          cost_impact: boolean | null
+          cost_impact_amount: number | null
+          created_at: string | null
+          created_by: string | null
+          created_date: string | null
+          date_answered: string | null
+          date_required: string | null
+          deleted_at: string | null
+          description: string | null
+          discipline: string | null
+          distribution_list: string | null
+          drawing_id: string | null
+          drawing_reference: string | null
+          drawing_set_id: string | null
+          due_date: string | null
+          gc_drawing_id: string | null
+          holds_released_count: number
+          id: string
+          impacts_activity_ids: string[] | null
+          internal_notes: string | null
+          is_deleted: boolean
+          metadata: Json | null
+          priority: string
+          project_id: string
+          project_name: string | null
+          question: string | null
+          responded_date: string | null
+          response_text: string | null
+          rfi_number: string | null
+          schedule_impact: boolean | null
+          schedule_impact_days: number | null
+          spec_section: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "rfis"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      apply_piece_import_batch: { Args: { p_batch_id: string }; Returns: Json }
+      apply_planner_offline_operation: {
+        Args: {
+          p_client_op_id: string
+          p_entity_id: string
+          p_expected_updated_at: string
+          p_kind: string
+          p_patch: Json
+          p_project_id: string
+        }
+        Returns: Json
+      }
+      apply_project_template: {
+        Args: { p_project_id: string; p_template_key?: string }
+        Returns: Json
+      }
+      apply_schedule_changes: {
+        Args: { p_changes: Json; p_project_id: string }
+        Returns: {
+          actual_finish_date: string | null
+          actual_start_date: string | null
+          assigned_to: string | null
+          blockers: Json | null
+          created_at: string | null
+          created_by: string | null
+          crew_id: string | null
+          crew_name: string | null
+          deleted_at: string | null
+          dependencies: string | null
+          duration: number | null
+          end_date: string | null
+          id: string
+          is_deleted: boolean
+          is_milestone: boolean | null
+          is_summary: boolean
+          metadata: Json | null
+          milestone: boolean | null
+          notes: string | null
+          outline_level: number | null
+          parent_task_id: string | null
+          percent_complete: number | null
+          phase: string | null
+          priority: string | null
+          project_id: string
+          project_name: string | null
+          related_action_item_ids: Json | null
+          related_change_order_ids: Json | null
+          related_rfi_ids: Json | null
+          resource_names: string | null
+          sort_order: number | null
+          start_date: string | null
+          status: string
+          target_release: string | null
+          task_name: string | null
+          task_type: string | null
+          updated_at: string | null
+          wbs_code: string | null
+          work_package_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "schedule_tasks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      approve_change_order: {
+        Args: {
+          p_approved_by: string
+          p_approved_date?: string
+          p_id: string
+          p_sov_line_item_id?: string
+          p_sov_mode?: string
+        }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_date: string | null
+          attachments: string | null
+          change_request_id: string | null
+          co_amount: number | null
+          co_number: string | null
+          cost_code_id: string | null
+          created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          is_deleted: boolean
+          margin_percent: number | null
+          metadata: Json | null
+          notes: string | null
+          project_id: string
+          project_name: string | null
+          reason_code: string | null
+          schedule_impact_days: number | null
+          source_rfi_id: string | null
+          sov_applied_at: string | null
+          sov_line_item_id: string | null
+          sov_line_number: number | null
+          sov_mode: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "change_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      approve_piece_import_batch: {
+        Args: { p_batch_id: string }
+        Returns: Json
+      }
+      archive_note_folder: {
+        Args: {
+          p_expected_version: number
+          p_folder_id: string
+          p_idempotency_key?: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      archive_piece_lots: {
+        Args: {
+          p_confirmation: string
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      assign_pieces_to_work_package: {
+        Args: {
+          p_piece_ids: string[]
+          p_project_id: string
+          p_work_package_id: string
+        }
+        Returns: Json
+      }
+      attach_revision_to_submittal_round: {
+        Args: {
+          p_drawing_id: string
+          p_revision_id: string
+          p_submittal_id: string
+        }
+        Returns: {
+          ball_in_court: string | null
+          created_at: string
+          deleted_at: string | null
+          drawing_set_ids: string[]
+          file_url: string | null
+          id: string
+          is_deleted: boolean
+          markup_file_url: string | null
+          metadata: Json
+          project_id: string
+          response_notes: string | null
+          returned_date: string | null
+          reviewer: string | null
+          round_number: number
+          status: string
+          submittal_id: string
+          submitted_by: string | null
+          submitted_date: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "submittal_rounds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      backcharge_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
+      billing_plans_available: { Args: never; Returns: Json }
+      build_pay_application_lines: {
+        Args: { p_app: Database["public"]["Tables"]["pay_applications"]["Row"] }
+        Returns: number
+      }
+      build_revision_impact_report: {
+        Args: { p_drawing_set_id: string }
+        Returns: {
+          created_at: string
+          deleted_at: string | null
+          drawing_set_id: string | null
+          generated_at: string
+          generated_by: string | null
+          high_risk_count: number
+          id: string
+          impact_level: string
+          is_deleted: boolean
+          likely_rfi: boolean
+          project_id: string
+          set_name: string | null
+          sheets_changed: number
+          summary: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_revision_summaries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      bulk_update_piece_attributes: {
+        Args: { p_patch: Json; p_piece_ids: string[]; p_project_id: string }
+        Returns: Json
+      }
+      bulk_update_piece_attributes_impl: {
+        Args: { p_patch: Json; p_piece_ids: string[]; p_project_id: string }
+        Returns: Json
+      }
+      change_order_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
+      close_punchlist_item: {
+        Args: { p_item_id: string; p_notes?: string; p_photo_id: string }
+        Returns: {
+          assigned_to: string | null
+          category: string | null
+          client_op_id: string | null
+          closed_at: string | null
+          closed_by: string | null
+          closing_photo_id: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          drawing_id: string | null
+          id: string
+          inspection_id: string | null
+          is_deleted: boolean
+          location: string | null
+          metadata: Json | null
+          notes: string | null
+          percent_complete: number | null
+          phase: string | null
+          photos: Json | null
+          priority: string
+          project_id: string
+          project_name: string | null
+          status: string
+          target_completion_date: string | null
+          updated_at: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "punchlist_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      close_rfi: {
+        Args: { p_notes?: string; p_rfi_id: string }
+        Returns: {
+          answer: string | null
+          answered_by: string | null
+          answered_by_id: string | null
+          area_sequence: string | null
+          assigned_to: string | null
+          ball_in_court: string | null
+          closed_at: string | null
+          closed_by: string | null
+          cost_code_id: string | null
+          cost_impact: boolean | null
+          cost_impact_amount: number | null
+          created_at: string | null
+          created_by: string | null
+          created_date: string | null
+          date_answered: string | null
+          date_required: string | null
+          deleted_at: string | null
+          description: string | null
+          discipline: string | null
+          distribution_list: string | null
+          drawing_id: string | null
+          drawing_reference: string | null
+          drawing_set_id: string | null
+          due_date: string | null
+          gc_drawing_id: string | null
+          holds_released_count: number
+          id: string
+          impacts_activity_ids: string[] | null
+          internal_notes: string | null
+          is_deleted: boolean
+          metadata: Json | null
+          priority: string
+          project_id: string
+          project_name: string | null
+          question: string | null
+          responded_date: string | null
+          response_text: string | null
+          rfi_number: string | null
+          schedule_impact: boolean | null
+          schedule_impact_days: number | null
+          spec_section: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "rfis"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      complete_project_closeout: {
+        Args: {
+          p_notes?: string
+          p_override_reason?: string
+          p_project_id: string
+        }
+        Returns: {
+          as_built_complete: boolean | null
+          blockers_at_completion: Json | null
+          certificate_of_occupancy: string | null
+          checklist: Json | null
+          closeout_date: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          final_completion_date: string | null
+          final_inspection_date: string | null
+          id: string
+          is_deleted: boolean
+          manuals_complete: boolean | null
+          metadata: Json | null
+          notes: string | null
+          override_by: string | null
+          override_reason: string | null
+          project_id: string
+          project_name: string | null
+          punchlist_complete: boolean | null
+          reopen_reason: string | null
+          status: string | null
+          substantial_completion_date: string | null
+          updated_at: string | null
+          warranties_complete: boolean | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_closeout"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      complete_staging_e2e_bootstrap: {
+        Args: { p_org_id: string; p_project_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      consume_desktop_session_handoff: {
+        Args: { p_code_challenge: string; p_code_hash: string }
+        Returns: {
+          encrypted_session: Json
+          state: string
+        }[]
+      }
+      convert_change_request: {
+        Args: { p_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_date: string | null
+          attachments: string | null
+          change_request_id: string | null
+          co_amount: number | null
+          co_number: string | null
+          cost_code_id: string | null
+          created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          is_deleted: boolean
+          margin_percent: number | null
+          metadata: Json | null
+          notes: string | null
+          project_id: string
+          project_name: string | null
+          reason_code: string | null
+          schedule_impact_days: number | null
+          source_rfi_id: string | null
+          sov_applied_at: string | null
+          sov_line_item_id: string | null
+          sov_line_number: number | null
+          sov_mode: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "change_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_backcharge: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          attachments: Json
+          backcharge_number: string | null
+          collected_amount: number | null
+          collected_at: string | null
+          cost_code_id: string | null
+          created_at: string
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          incident_date: string | null
+          is_deleted: boolean
+          linked_co_id: string | null
+          metadata: Json
+          notes: string | null
+          notice_date: string | null
+          project_id: string
+          reason_code: string | null
+          responsible_party: string | null
+          responsible_party_type: string | null
+          source_rfi_id: string | null
+          status: string
+          ticket_total: number
+          title: string
+          updated_at: string
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "backcharges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_change_order: {
-        Args: { p_project_id: string; p_payload: Json }
-        Returns: Database["public"]["Tables"]["change_orders"]["Row"]
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_date: string | null
+          attachments: string | null
+          change_request_id: string | null
+          co_amount: number | null
+          co_number: string | null
+          cost_code_id: string | null
+          created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          is_deleted: boolean
+          margin_percent: number | null
+          metadata: Json | null
+          notes: string | null
+          project_id: string
+          project_name: string | null
+          reason_code: string | null
+          schedule_impact_days: number | null
+          source_rfi_id: string | null
+          sov_applied_at: string | null
+          sov_line_item_id: string | null
+          sov_line_number: number | null
+          sov_mode: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "change_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       create_change_request: {
-        Args: { p_project_id: string; p_payload: Json }
-        Returns: Database["public"]["Tables"]["change_requests"]["Row"]
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          affected_areas: string | null
+          change_order_id: string | null
+          cr_number: string | null
+          created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          estimated_cost_impact: number | null
+          estimated_schedule_impact_days: number | null
+          id: string
+          is_deleted: boolean
+          metadata: Json | null
+          priority: string
+          project_id: string
+          project_name: string | null
+          reason: string | null
+          request_date: string | null
+          requested_by: string | null
+          scope_impact: string | null
+          status: string
+          title: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "change_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       create_delivery: {
-        Args: { p_project_id: string; p_payload: Json }
-        Returns: Database["public"]["Tables"]["deliveries"]["Row"]
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          actual_date: string | null
+          area: string | null
+          capacity_lbs: number | null
+          carrier: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          delivery_number: string | null
+          delivery_title: string | null
+          delivery_type: string | null
+          description: string | null
+          expected_ship_date: string | null
+          id: string
+          impacts_activity_ids: string[] | null
+          inspection_required: boolean | null
+          is_deleted: boolean
+          is_long_lead: boolean | null
+          lead_time_weeks: number | null
+          load_category: string | null
+          load_number: string | null
+          metadata: Json | null
+          notes: string | null
+          order_placed_date: string | null
+          pieces: number | null
+          pieces_advanced_count: number
+          po_number: string | null
+          priority: string
+          procurement_category: string | null
+          project_id: string
+          project_name: string | null
+          received_at: string | null
+          received_by: string | null
+          received_notes: string | null
+          receiving_location: string | null
+          required_date: string | null
+          scheduled_date: string | null
+          sequence_number: string | null
+          shipping_ticket_name: string | null
+          shipping_ticket_path: string | null
+          shipping_ticket_url: string | null
+          special_instructions: string | null
+          status: string
+          tracking_number: string | null
+          updated_at: string | null
+          vendor: string | null
+          weight_tons: number | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "deliveries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_desktop_session_handoff: {
+        Args: {
+          p_code_challenge: string
+          p_code_hash: string
+          p_created_at: string
+          p_encrypted_session: Json
+          p_expires_at: string
+          p_state: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      create_expense: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          amount: number | null
+          approved_by: string | null
+          approved_date: string | null
+          cost_code: string | null
+          cost_code_id: string | null
+          cost_code_name: string | null
+          created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          expense_date: string | null
+          expense_number: string | null
+          expense_type: string | null
+          id: string
+          invoice_date: string | null
+          invoice_number: string | null
+          is_deleted: boolean
+          metadata: Json | null
+          notes: string | null
+          paid_by: string | null
+          payment_date: string | null
+          payment_status: string | null
+          project_id: string
+          project_name: string | null
+          quantity: number | null
+          receipt_path: string | null
+          receipt_url: string | null
+          sov_line_item_id: string | null
+          sov_line_item_name: string | null
+          submitted_by: string | null
+          submitted_date: string | null
+          tags: string | null
+          unit: string | null
+          unit_cost: number | null
+          updated_at: string | null
+          vendor: string | null
+          vendor_id: string | null
+          void_reason: string | null
+          work_package_id: string | null
+          work_package_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "expenses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_inspection: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          completed_at: string | null
+          corrective_actions: string | null
+          created_at: string | null
+          created_by: string | null
+          deficiencies_count: number | null
+          deleted_at: string | null
+          description: string | null
+          drawing_id: string | null
+          findings: string | null
+          id: string
+          inspection_date: string | null
+          inspection_number: string | null
+          inspection_type: string | null
+          inspector_name: string | null
+          inspector_role: string | null
+          is_deleted: boolean
+          location: string | null
+          metadata: Json | null
+          notes: string | null
+          phase: string | null
+          project_id: string
+          project_name: string | null
+          sign_off_status: string | null
+          signed_off_at: string | null
+          signed_off_by: string | null
+          status: string
+          updated_at: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inspections"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_material_requirement: {
+        Args: {
+          p_description?: string
+          p_external_ref?: string
+          p_material_grade?: string
+          p_profile?: string
+          p_project_id: string
+          p_quantity_required?: number
+          p_requirement_code: string
+          p_source_system?: string
+          p_unit?: string
+        }
+        Returns: Json
+      }
+      create_note_folder: {
+        Args: {
+          p_idempotency_key?: string
+          p_name: string
+          p_org_id: string
+          p_parent_folder_id?: string
+        }
+        Returns: Json
+      }
+      create_organization: {
+        Args: { p_name: string; p_slug?: string }
+        Returns: Json
+      }
+      create_project: { Args: { project_data: Json }; Returns: Json }
+      create_qc_record: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          acceptance_criteria: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          inspection_id: string | null
+          is_deleted: boolean
+          location: string | null
+          material_or_component: string | null
+          metadata: Json | null
+          notes: string | null
+          piece_id: string | null
+          project_id: string
+          project_name: string | null
+          quantity_passed: number | null
+          quantity_tested: number | null
+          record_number: string | null
+          result: string | null
+          specification: string | null
+          status: string | null
+          test_date: string | null
+          test_lab_or_inspector: string | null
+          test_type: string | null
+          test_value: string | null
+          updated_at: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "quality_control_records"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_revision_comparison: {
+        Args: {
+          p_drawing_id: string
+          p_from_revision_id: string
+          p_to_revision_id: string
+        }
+        Returns: {
+          ai_summary: string | null
+          compare_status: string | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          delta_count: number | null
+          deterministic_stats: Json | null
+          drawing_id: string | null
+          error_message: string | null
+          from_analysis_id: string | null
+          from_revision_id: string | null
+          id: string
+          is_deleted: boolean
+          metadata: Json | null
+          model: string | null
+          project_id: string | null
+          raw_ai_response: Json | null
+          requested_by: string | null
+          source: string
+          to_analysis_id: string | null
+          to_revision_id: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_revision_comparisons"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_rfi: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          answer: string | null
+          answered_by: string | null
+          answered_by_id: string | null
+          area_sequence: string | null
+          assigned_to: string | null
+          ball_in_court: string | null
+          closed_at: string | null
+          closed_by: string | null
+          cost_code_id: string | null
+          cost_impact: boolean | null
+          cost_impact_amount: number | null
+          created_at: string | null
+          created_by: string | null
+          created_date: string | null
+          date_answered: string | null
+          date_required: string | null
+          deleted_at: string | null
+          description: string | null
+          discipline: string | null
+          distribution_list: string | null
+          drawing_id: string | null
+          drawing_reference: string | null
+          drawing_set_id: string | null
+          due_date: string | null
+          gc_drawing_id: string | null
+          holds_released_count: number
+          id: string
+          impacts_activity_ids: string[] | null
+          internal_notes: string | null
+          is_deleted: boolean
+          metadata: Json | null
+          priority: string
+          project_id: string
+          project_name: string | null
+          question: string | null
+          responded_date: string | null
+          response_text: string | null
+          rfi_number: string | null
+          schedule_impact: boolean | null
+          schedule_impact_days: number | null
+          spec_section: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "rfis"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_rfi_from_delta: {
+        Args: { p_delta_id: string; p_payload: Json }
+        Returns: {
+          answer: string | null
+          answered_by: string | null
+          answered_by_id: string | null
+          area_sequence: string | null
+          assigned_to: string | null
+          ball_in_court: string | null
+          closed_at: string | null
+          closed_by: string | null
+          cost_code_id: string | null
+          cost_impact: boolean | null
+          cost_impact_amount: number | null
+          created_at: string | null
+          created_by: string | null
+          created_date: string | null
+          date_answered: string | null
+          date_required: string | null
+          deleted_at: string | null
+          description: string | null
+          discipline: string | null
+          distribution_list: string | null
+          drawing_id: string | null
+          drawing_reference: string | null
+          drawing_set_id: string | null
+          due_date: string | null
+          gc_drawing_id: string | null
+          holds_released_count: number
+          id: string
+          impacts_activity_ids: string[] | null
+          internal_notes: string | null
+          is_deleted: boolean
+          metadata: Json | null
+          priority: string
+          project_id: string
+          project_name: string | null
+          question: string | null
+          responded_date: string | null
+          response_text: string | null
+          rfi_number: string | null
+          schedule_impact: boolean | null
+          schedule_impact_days: number | null
+          spec_section: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "rfis"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_safety_incident: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          action_due_date: string | null
+          closed_at: string | null
+          closed_by: string | null
+          corrective_actions: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          incident_date: string | null
+          incident_number: string | null
+          incident_time: string | null
+          incident_type: string | null
+          injuries: string | null
+          investigation_completed: boolean | null
+          is_deleted: boolean
+          location: string | null
+          metadata: Json | null
+          notes: string | null
+          phase: string | null
+          project_id: string
+          project_name: string | null
+          reported_by: string | null
+          responsible_party: string | null
+          root_cause: string | null
+          safety_trained: boolean | null
+          severity: string
+          status: string
+          updated_at: string | null
+          witnesses: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "safety_incidents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       create_sov_item: {
-        Args: { p_project_id: string; p_payload: Json }
-        Returns: Database["public"]["Tables"]["sov_items"]["Row"]
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          application_number: number | null
+          change_order_id: string | null
+          cost_code: string | null
+          cost_code_id: string | null
+          cost_code_name: string | null
+          created_at: string | null
+          created_by: string | null
+          current_percent_complete: number | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          is_deleted: boolean
+          line_item_number: number | null
+          metadata: Json | null
+          payment_received_date: string | null
+          period_from: string | null
+          period_to: string | null
+          previous_percent_complete: number | null
+          project_id: string
+          project_name: string | null
+          retainage_percent: number | null
+          scheduled_value: number | null
+          sort_order: number | null
+          sov_id: string | null
+          status: string | null
+          submitted_date: string | null
+          updated_at: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sov_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_submittal: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          approval_chain: Json | null
+          approval_chain_step: number | null
+          approved_date: string | null
+          approver_notes: Json
+          ball_in_court: string | null
+          created_at: string | null
+          current_round_id: string | null
+          days_in_review: number | null
+          deleted_at: string | null
+          derived_stage: string | null
+          discipline: string | null
+          distributed_to: string | null
+          drawing_set_ids: string[] | null
+          external_id: string | null
+          external_source: string | null
+          fab_release_override_reason: string | null
+          file_url: string | null
+          gate_override_at: string | null
+          gate_override_by: string | null
+          gate_override_reason: string | null
+          id: string
+          is_deleted: boolean | null
+          linked_rfi_ids: string[] | null
+          linked_task_ids: string[] | null
+          metadata: Json | null
+          notes: string | null
+          parent_submittal_id: string | null
+          project_id: string
+          project_name: string | null
+          received_from: string | null
+          required_date: string | null
+          returned_date: string | null
+          reviewer: string | null
+          revision: string | null
+          round_number: number | null
+          spec_section: string | null
+          split_reason: string | null
+          stage_entered_at: string | null
+          status: string
+          submittal_number: string
+          submittal_type: string | null
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string
+          total_rounds: number
+          transmittal_number: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "submittals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_transmittal: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by_name: string | null
+          acknowledged_notes: string | null
+          created_at: string
+          created_by: string | null
+          date_received: string | null
+          date_sent: string | null
+          deleted_at: string | null
+          direction: string
+          id: string
+          is_deleted: boolean
+          metadata: Json
+          notes: string | null
+          project_id: string
+          purpose: string | null
+          received_from: string | null
+          recipient_company: string | null
+          recipient_email: string | null
+          sent_by: string | null
+          sent_by_name: string | null
+          sent_to: string | null
+          source_company: string | null
+          status: string
+          subject: string | null
+          submittal_id: string | null
+          submittal_round_id: string | null
+          transmittal_number: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_transmittals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_work_package: {
+        Args: { p_payload: Json; p_project_id: string }
+        Returns: {
+          area: string | null
+          budget_hour_item_id: string | null
+          created_at: string | null
+          created_by: string | null
+          crew: string | null
+          deleted_at: string | null
+          description: string | null
+          drawing_ids: string[] | null
+          drawing_set_ids: string[]
+          field_hours_actual: number | null
+          field_hours_budget: number | null
+          gc_drawing_ids: string[]
+          id: string
+          install_phase: string | null
+          is_deleted: boolean
+          linked_drawing_ids: string | null
+          linked_rfi_ids: string | null
+          load_list_complete: boolean | null
+          metadata: Json | null
+          name: string | null
+          notes: string | null
+          percent_complete: number | null
+          phase: string | null
+          project_id: string
+          project_name: string | null
+          released_date: string | null
+          rfi_ids: string[] | null
+          scheduled_end_date: string | null
+          scheduled_start_date: string | null
+          sequence_confirmed: boolean | null
+          sequence_number: string | null
+          shipping_phase: string | null
+          shop_hours_actual: number | null
+          shop_hours_budget: number | null
+          status: string
+          tonnage: number | null
+          trade_phase: string | null
+          updated_at: string | null
+          vif_confirmed: boolean | null
+          vif_confirmed_by: string | null
+          vif_confirmed_date: string | null
+          wp_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_packages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       delete_drawing_set: { Args: { p_set_id: string }; Returns: number }
-      soft_delete_project: { Args: { p_project_id: string }; Returns: undefined }
+      deliver_piece_lots: {
+        Args: {
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reference_data?: Json
+        }
+        Returns: Json
+      }
+      deliver_piece_lots_impl: {
+        Args: {
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reference_data?: Json
+        }
+        Returns: Json
+      }
+      document_folder_has_cycle: {
+        Args: { p_folder_id: string; p_parent_id: string }
+        Returns: boolean
+      }
+      ensure_general_notes_folder: {
+        Args: { p_org_id: string }
+        Returns: string
+      }
+      ensure_project_closeout: {
+        Args: { p_project_id: string }
+        Returns: {
+          as_built_complete: boolean | null
+          blockers_at_completion: Json | null
+          certificate_of_occupancy: string | null
+          checklist: Json | null
+          closeout_date: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          final_completion_date: string | null
+          final_inspection_date: string | null
+          id: string
+          is_deleted: boolean
+          manuals_complete: boolean | null
+          metadata: Json | null
+          notes: string | null
+          override_by: string | null
+          override_reason: string | null
+          project_id: string
+          project_name: string | null
+          punchlist_complete: boolean | null
+          reopen_reason: string | null
+          status: string | null
+          substantial_completion_date: string | null
+          updated_at: string | null
+          warranties_complete: boolean | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_closeout"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      erase_my_account: { Args: { p_confirm_email: string }; Returns: Json }
+      erasure_toggle_user_triggers: {
+        Args: { p_disable: boolean; p_list?: string[]; p_tables: string[] }
+        Returns: string[]
+      }
+      erect_piece_lots: {
+        Args: {
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reference_data?: Json
+        }
+        Returns: Json
+      }
+      erect_piece_lots_impl: {
+        Args: {
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reference_data?: Json
+        }
+        Returns: Json
+      }
       escalate_rfi_sla: { Args: never; Returns: number }
+      evaluate_fab_release_package: {
+        Args: { p_drawing_ids: string[] }
+        Returns: {
+          kind: string
+          rfi_numbers: string[]
+          sheet_numbers: string[]
+          title: string
+        }[]
+      }
+      evaluate_fab_release_set: {
+        Args: { p_drawing_set_id: string; p_project_id: string }
+        Returns: Json
+      }
+      evaluate_project_closeout: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      evaluate_release_gate: {
+        Args: { p_work_package_id: string }
+        Returns: Json
+      }
+      expense_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
       fab_release_blocking_rfis: {
         Args: { p_drawing_ids: string[] }
         Returns: {
@@ -8125,11 +12874,566 @@ export type Database = {
           title: string
         }[]
       }
+      feature_flag_enabled_for: {
+        Args: { p_email: string; p_key: string }
+        Returns: boolean
+      }
+      field_sync_op: {
+        Args: {
+          p_client_op_id: string
+          p_kind: string
+          p_payload: Json
+          p_project_id: string
+        }
+        Returns: Json
+      }
+      founding_org_id: { Args: never; Returns: string }
+      generate_operational_alerts: {
+        Args: { p_project_id?: string }
+        Returns: number
+      }
+      generate_pay_application: {
+        Args: {
+          p_notes?: string
+          p_period_from: string
+          p_period_to: string
+          p_project_id: string
+        }
+        Returns: {
+          application_label: string | null
+          application_number: number
+          approved_by: string | null
+          balance_to_finish: number
+          certified_date: string | null
+          created_at: string
+          created_by: string | null
+          current_payment_due: number
+          deleted_at: string | null
+          id: string
+          is_deleted: boolean
+          less_previous_certificates: number
+          metadata: Json
+          net_change_orders: number
+          notes: string | null
+          original_contract_sum: number
+          paid_date: string | null
+          period_from: string | null
+          period_to: string | null
+          project_id: string
+          retainage_percent: number
+          sov_reconciles: boolean | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          total_completed_stored: number
+          total_earned_less_retainage: number
+          total_retainage: number
+          updated_at: string
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pay_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      generate_project_alerts: {
+        Args: { p_project_id: string }
+        Returns: number
+      }
+      get_invitation: { Args: { p_token: string }; Returns: Json }
+      get_llm_usage_window: {
+        Args: { p_since: string; p_user_id: string }
+        Returns: {
+          cost_sum: number
+          request_count: number
+        }[]
+      }
+      get_maintenance_job_context: {
+        Args: { p_job_key: string }
+        Returns: {
+          completed_at: string
+          expected_project_ref: string
+          founding_org_id: string
+          token_sha256: string
+        }[]
+      }
       get_my_project_role: { Args: { p_project_id: string }; Returns: string }
       get_next_sequence_number: {
         Args: { p_project_id: string; p_record_type: string }
         Returns: number
       }
+      hard_delete_allowlist: { Args: never; Returns: string[] }
+      hard_delete_merge_counts: { Args: { a: Json; b: Json }; Returns: Json }
+      hard_delete_organization: {
+        Args: { p_org_id: string; p_reason: string }
+        Returns: Json
+      }
+      hard_delete_project: {
+        Args: { p_project_id: string; p_reason: string }
+        Returns: Json
+      }
+      hard_delete_record: {
+        Args: { p_id: string; p_reason?: string; p_table: string }
+        Returns: Json
+      }
+      hard_delete_records: {
+        Args: { p_ids: string[]; p_reason?: string; p_table: string }
+        Returns: Json
+      }
+      hard_delete_release_dependents: {
+        Args: { p_depth?: number; p_ids: string[]; p_table: string }
+        Returns: Json
+      }
+      hard_delete_toggle_triggers: {
+        Args: {
+          p_before_only?: boolean
+          p_disable: boolean
+          p_list?: string[]
+          p_tables: string[]
+        }
+        Returns: string[]
+      }
+      import_model_elements: {
+        Args: { p_model_id: string; p_rows: Json }
+        Returns: Json
+      }
+      link_model_elements_to_pieces: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      link_model_elements_to_pieces_page: {
+        Args: { p_after_id?: string; p_limit?: number; p_project_id: string }
+        Returns: Json
+      }
+      link_piece_drawing: {
+        Args: { p_drawing_id: string; p_piece_id: string; p_project_id: string }
+        Returns: Json
+      }
+      link_piece_drawing_set: {
+        Args: {
+          p_drawing_set_id: string
+          p_piece_id: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
+      link_unlinked_model_elements_for_piece: {
+        Args: { p_piece_id: string }
+        Returns: number
+      }
+      list_drawing_impact_assignees: {
+        Args: { p_project_id: string }
+        Returns: {
+          display_name: string
+          project_role: string
+          user_id: string
+        }[]
+      }
+      list_visible_note_folders: {
+        Args: { p_include_archived?: boolean; p_org_id: string }
+        Returns: Json
+      }
+      log_backcharge_event: {
+        Args: {
+          p_backcharge_id: string
+          p_detail: string
+          p_event_type: string
+          p_from: string
+          p_to: string
+        }
+        Returns: undefined
+      }
+      log_submittal_event: {
+        Args: {
+          p_event: string
+          p_from: string
+          p_meta?: Json
+          p_project_id: string
+          p_submittal_id: string
+          p_to: string
+        }
+        Returns: undefined
+      }
+      log_transmittal_event: {
+        Args: {
+          p_event: string
+          p_from: string
+          p_metadata?: Json
+          p_project_id: string
+          p_reason?: string
+          p_to: string
+          p_transmittal_id: string
+        }
+        Returns: undefined
+      }
+      map_material_requirement_to_pieces: {
+        Args: {
+          p_material_requirement_id: string
+          p_piece_ids: string[]
+          p_project_id: string
+        }
+        Returns: Json
+      }
+      meeting_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
+      model_fab_rollup: { Args: { p_model_id: string }; Returns: Json }
+      move_backcharge: {
+        Args: {
+          p_actor?: string
+          p_collected_amount?: number
+          p_date?: string
+          p_id: string
+          p_notes?: string
+          p_status: string
+        }
+        Returns: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          attachments: Json
+          backcharge_number: string | null
+          collected_amount: number | null
+          collected_at: string | null
+          cost_code_id: string | null
+          created_at: string
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          incident_date: string | null
+          is_deleted: boolean
+          linked_co_id: string | null
+          metadata: Json
+          notes: string | null
+          notice_date: string | null
+          project_id: string
+          reason_code: string | null
+          responsible_party: string | null
+          responsible_party_type: string | null
+          source_rfi_id: string | null
+          status: string
+          ticket_total: number
+          title: string
+          updated_at: string
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "backcharges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      move_change_order: {
+        Args: { p_id: string; p_notes?: string; p_status: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_date: string | null
+          attachments: string | null
+          change_request_id: string | null
+          co_amount: number | null
+          co_number: string | null
+          cost_code_id: string | null
+          created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          is_deleted: boolean
+          margin_percent: number | null
+          metadata: Json | null
+          notes: string | null
+          project_id: string
+          project_name: string | null
+          reason_code: string | null
+          schedule_impact_days: number | null
+          source_rfi_id: string | null
+          sov_applied_at: string | null
+          sov_line_item_id: string | null
+          sov_line_number: number | null
+          sov_mode: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "change_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      move_expense: {
+        Args: {
+          p_actor?: string
+          p_date?: string
+          p_id: string
+          p_notes?: string
+          p_status: string
+        }
+        Returns: {
+          amount: number | null
+          approved_by: string | null
+          approved_date: string | null
+          cost_code: string | null
+          cost_code_id: string | null
+          cost_code_name: string | null
+          created_at: string | null
+          created_by: string | null
+          decision_notes: string | null
+          deleted_at: string | null
+          description: string | null
+          expense_date: string | null
+          expense_number: string | null
+          expense_type: string | null
+          id: string
+          invoice_date: string | null
+          invoice_number: string | null
+          is_deleted: boolean
+          metadata: Json | null
+          notes: string | null
+          paid_by: string | null
+          payment_date: string | null
+          payment_status: string | null
+          project_id: string
+          project_name: string | null
+          quantity: number | null
+          receipt_path: string | null
+          receipt_url: string | null
+          sov_line_item_id: string | null
+          sov_line_item_name: string | null
+          submitted_by: string | null
+          submitted_date: string | null
+          tags: string | null
+          unit: string | null
+          unit_cost: number | null
+          updated_at: string | null
+          vendor: string | null
+          vendor_id: string | null
+          void_reason: string | null
+          work_package_id: string | null
+          work_package_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "expenses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      move_note_folder: {
+        Args: {
+          p_expected_version: number
+          p_folder_id: string
+          p_idempotency_key?: string
+          p_parent_folder_id: string
+        }
+        Returns: Json
+      }
+      move_pay_application: {
+        Args: {
+          p_actor?: string
+          p_date?: string
+          p_id: string
+          p_notes?: string
+          p_status: string
+        }
+        Returns: {
+          application_label: string | null
+          application_number: number
+          approved_by: string | null
+          balance_to_finish: number
+          certified_date: string | null
+          created_at: string
+          created_by: string | null
+          current_payment_due: number
+          deleted_at: string | null
+          id: string
+          is_deleted: boolean
+          less_previous_certificates: number
+          metadata: Json
+          net_change_orders: number
+          notes: string | null
+          original_contract_sum: number
+          paid_date: string | null
+          period_from: string | null
+          period_to: string | null
+          project_id: string
+          retainage_percent: number
+          sov_reconciles: boolean | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          total_completed_stored: number
+          total_earned_less_retainage: number
+          total_retainage: number
+          updated_at: string
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pay_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      move_risk: {
+        Args: { p_id: string; p_notes?: string; p_status: string }
+        Returns: {
+          category: string | null
+          closed_date: string | null
+          contingency_plan: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          identified_date: string | null
+          impact: number
+          is_deleted: boolean | null
+          metadata: Json | null
+          mitigation_plan: string | null
+          notes: string | null
+          owner: string | null
+          probability: number
+          project_id: string
+          risk_number: string | null
+          score: number | null
+          severity: string | null
+          status: string
+          target_close_date: string | null
+          title: string
+          trigger_event: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "risks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      note_backcharge: {
+        Args: { p_id: string; p_note: string }
+        Returns: undefined
+      }
+      note_folder_effective_project_ids: {
+        Args: { p_folder_id: string }
+        Returns: string[]
+      }
+      note_folder_receipt_get: { Args: { p_key: string }; Returns: Json }
+      note_folder_receipt_put: {
+        Args: {
+          p_command: string
+          p_key: string
+          p_org_id: string
+          p_result: Json
+        }
+        Returns: undefined
+      }
+      note_folder_reject: {
+        Args: {
+          p_action: string
+          p_before?: Json
+          p_code: string
+          p_folder_id: string
+          p_message: string
+          p_org_id: string
+        }
+        Returns: Json
+      }
+      note_folder_same_org_projects: {
+        Args: { p_org_id: string; p_project_ids: string[] }
+        Returns: boolean
+      }
+      note_folder_visible_payload: {
+        Args: { p_folder_id: string }
+        Returns: Json
+      }
+      note_folder_write_audit: {
+        Args: {
+          p_accepted: boolean
+          p_action: string
+          p_after: Json
+          p_before: Json
+          p_error_code: string
+          p_folder_id: string
+          p_metadata?: Json
+          p_org_id: string
+        }
+        Returns: string
+      }
+      ops_snapshot: { Args: never; Returns: Json }
+      org_plan_usage: { Args: { p_org_id: string }; Returns: Json }
+      org_portfolio_snapshot: { Args: { p_org_id: string }; Returns: Json }
+      pay_application_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
+      piece_control_drawing_is_approved: {
+        Args: { p_drawing_id: string }
+        Returns: boolean
+      }
+      piece_control_pilot_readiness: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      piece_import_normalize_payload: {
+        Args: { p_payload: Json; p_source_type: string }
+        Returns: Json
+      }
+      piece_import_reconcile_row: {
+        Args: { p_payload: Json; p_project_id: string; p_source_type: string }
+        Returns: {
+          decision: string
+          matched_piece_id: string
+          normalized_payload: Json
+          warnings: string[]
+        }[]
+      }
+      place_drawing_hold: {
+        Args: { p_drawing_id: string; p_reason: string }
+        Returns: {
+          created_at: string
+          drawing_id: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          placed_at: string
+          placed_by_id: string | null
+          placed_by_name: string | null
+          prior_release_status: string | null
+          prior_stage: string | null
+          project_id: string
+          reason: string
+          release_notes: string | null
+          released_at: string | null
+          released_by_id: string | null
+          released_by_name: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_holds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      plan_limits: { Args: { p_plan: string }; Returns: Json }
+      plan_member_limit: { Args: { p_plan: string }; Returns: number }
+      plan_project_limit: { Args: { p_plan: string }; Returns: number }
+      project_row_counts: { Args: { p_project_id: string }; Returns: Json }
+      prune_client_events: { Args: { p_days?: number }; Returns: number }
       publish_drawing_revision: {
         Args: { p_release_status?: string; p_revision_id: string }
         Returns: {
@@ -8149,6 +13453,8 @@ export type Database = {
           revision_code: string
           revision_name: string | null
           revision_notes: string | null
+          revision_reason: string | null
+          revision_source: string | null
           sheet_number: string
           sheet_title: string
           supersedes_revision_id: string | null
@@ -8165,16 +13471,915 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      raise_if_drawing_set_locked: {
+        Args: { p_set_id: string }
+        Returns: undefined
+      }
+      raise_meeting_action_items: {
+        Args: { p_items: Json; p_meeting_id: string }
+        Returns: {
+          action_date: string | null
+          action_number: string | null
+          archived_at: string | null
+          assigned_to: string | null
+          assigned_user_id: string | null
+          category: string | null
+          completed_at: string | null
+          completed_by: string | null
+          constraint_number: string | null
+          constraint_type: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          due_date: string | null
+          follow_up_date: string | null
+          id: string
+          impact_date: string | null
+          is_deleted: boolean
+          meeting_id: string | null
+          meeting_reference: string | null
+          metadata: Json | null
+          priority: string
+          project_area: string | null
+          project_id: string
+          project_name: string | null
+          source_entity_id: string | null
+          source_entity_type: string | null
+          status: string
+          title: string | null
+          updated_at: string | null
+          waiting_on: string | null
+          work_package_id: string | null
+          workstream: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "action_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      receive_delivery: {
+        Args: {
+          p_actual_date?: string
+          p_advance_pieces?: boolean
+          p_delivery_id: string
+          p_notes?: string
+          p_received_by: string
+        }
+        Returns: Json
+      }
+      recompute_schedule_summary: {
+        Args: { p_task_id: string }
+        Returns: undefined
+      }
       reconcile_stuck_extractions: { Args: never; Returns: number }
+      record_piece_control_command_failure: {
+        Args: {
+          p_command_name: string
+          p_context: Json
+          p_entity_ids: string[]
+          p_error_code: string
+          p_error_detail: string
+          p_error_message: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
+      record_revision_comparison: {
+        Args: {
+          p_comparison_id: string
+          p_deltas?: Json
+          p_error?: string
+          p_model?: string
+          p_raw?: Json
+          p_stats?: Json
+          p_status: string
+          p_summary?: string
+        }
+        Returns: {
+          ai_summary: string | null
+          compare_status: string | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          delta_count: number | null
+          deterministic_stats: Json | null
+          drawing_id: string | null
+          error_message: string | null
+          from_analysis_id: string | null
+          from_revision_id: string | null
+          id: string
+          is_deleted: boolean
+          metadata: Json | null
+          model: string | null
+          project_id: string | null
+          raw_ai_response: Json | null
+          requested_by: string | null
+          source: string
+          to_analysis_id: string | null
+          to_revision_id: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_revision_comparisons"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_submittal_response: {
+        Args: {
+          p_ball_in_court?: string
+          p_notes?: string
+          p_returned_date: string
+          p_round_id: string
+          p_sheet_responses?: Json
+          p_status: string
+        }
+        Returns: {
+          approval_chain: Json | null
+          approval_chain_step: number | null
+          approved_date: string | null
+          approver_notes: Json
+          ball_in_court: string | null
+          created_at: string | null
+          current_round_id: string | null
+          days_in_review: number | null
+          deleted_at: string | null
+          derived_stage: string | null
+          discipline: string | null
+          distributed_to: string | null
+          drawing_set_ids: string[] | null
+          external_id: string | null
+          external_source: string | null
+          fab_release_override_reason: string | null
+          file_url: string | null
+          gate_override_at: string | null
+          gate_override_by: string | null
+          gate_override_reason: string | null
+          id: string
+          is_deleted: boolean | null
+          linked_rfi_ids: string[] | null
+          linked_task_ids: string[] | null
+          metadata: Json | null
+          notes: string | null
+          parent_submittal_id: string | null
+          project_id: string
+          project_name: string | null
+          received_from: string | null
+          required_date: string | null
+          returned_date: string | null
+          reviewer: string | null
+          revision: string | null
+          round_number: number | null
+          spec_section: string | null
+          split_reason: string | null
+          stage_entered_at: string | null
+          status: string
+          submittal_number: string
+          submittal_type: string | null
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string
+          total_rounds: number
+          transmittal_number: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "submittals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      recount_drawing_set: { Args: { p_set_id: string }; Returns: undefined }
+      refresh_cost_code_actual: {
+        Args: { p_cost_code_id: string }
+        Returns: undefined
+      }
+      refresh_pay_application_totals: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      refresh_project_change_total: {
+        Args: { p_project_id: string }
+        Returns: number
+      }
+      refresh_work_package_progress: {
+        Args: { p_work_package_id: string }
+        Returns: Json
+      }
+      regenerate_pay_application_lines: {
+        Args: { p_id: string }
+        Returns: {
+          application_label: string | null
+          application_number: number
+          approved_by: string | null
+          balance_to_finish: number
+          certified_date: string | null
+          created_at: string
+          created_by: string | null
+          current_payment_due: number
+          deleted_at: string | null
+          id: string
+          is_deleted: boolean
+          less_previous_certificates: number
+          metadata: Json
+          net_change_orders: number
+          notes: string | null
+          original_contract_sum: number
+          paid_date: string | null
+          period_from: string | null
+          period_to: string | null
+          project_id: string
+          retainage_percent: number
+          sov_reconciles: boolean | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          total_completed_stored: number
+          total_earned_less_retainage: number
+          total_retainage: number
+          updated_at: string
+          void_reason: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pay_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      register_model: {
+        Args: {
+          p_payload: Json
+          p_project_id: string
+          p_supersede_active?: boolean
+        }
+        Returns: {
+          cloud_model_id: string | null
+          cloud_url: string | null
+          coordinate_system: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          document_id: string | null
+          element_count: number | null
+          file_name: string
+          file_type: string
+          file_url: string | null
+          id: string
+          is_deleted: boolean
+          linked_drawings: Json | null
+          linked_rfis: Json | null
+          linked_work_packages: Json | null
+          metadata: Json | null
+          notes: string | null
+          project_id: string
+          revision_number: number | null
+          source: string
+          status: string
+          superseded_at: string | null
+          superseded_by: string | null
+          updated_at: string | null
+          upload_date: string | null
+          version: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "model_registry"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      release_drawing_hold: {
+        Args: { p_hold_id: string; p_notes?: string }
+        Returns: {
+          created_at: string
+          drawing_id: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          placed_at: string
+          placed_by_id: string | null
+          placed_by_name: string | null
+          prior_release_status: string | null
+          prior_stage: string | null
+          project_id: string
+          reason: string
+          release_notes: string | null
+          released_at: string | null
+          released_by_id: string | null
+          released_by_name: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_holds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      release_package_for_fabrication: {
+        Args: {
+          p_drawing_set_id: string
+          p_notes?: string
+          p_override_reason?: string
+          p_project_id: string
+        }
+        Returns: {
+          blockers: Json
+          blocking_rfi_numbers: string[]
+          created_at: string
+          drawing_count: number
+          drawing_ids: string[]
+          drawing_set_id: string | null
+          governing_stage: string | null
+          id: string
+          is_override: boolean
+          metadata: Json
+          notes: string | null
+          override_reason: string | null
+          package_kind: string
+          package_name: string | null
+          project_id: string
+          released_at: string
+          released_by: string | null
+          released_by_name: string | null
+          submittal_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fab_release_log"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      release_work_package_canonical: {
+        Args: { p_exception_reason?: string; p_work_package_id: string }
+        Returns: Json
+      }
+      release_work_package_canonical_impl: {
+        Args: { p_exception_reason?: string; p_work_package_id: string }
+        Returns: Json
+      }
+      rename_note_folder: {
+        Args: {
+          p_expected_version: number
+          p_folder_id: string
+          p_idempotency_key?: string
+          p_name: string
+        }
+        Returns: Json
+      }
+      reopen_project_closeout: {
+        Args: { p_project_id: string; p_reason: string }
+        Returns: {
+          as_built_complete: boolean | null
+          blockers_at_completion: Json | null
+          certificate_of_occupancy: string | null
+          checklist: Json | null
+          closeout_date: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          final_completion_date: string | null
+          final_inspection_date: string | null
+          id: string
+          is_deleted: boolean
+          manuals_complete: boolean | null
+          metadata: Json | null
+          notes: string | null
+          override_by: string | null
+          override_reason: string | null
+          project_id: string
+          project_name: string | null
+          punchlist_complete: boolean | null
+          reopen_reason: string | null
+          status: string | null
+          substantial_completion_date: string | null
+          updated_at: string | null
+          warranties_complete: boolean | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_closeout"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reset_org_data: {
+        Args: { p_confirmation: string; p_org_id: string }
+        Returns: Json
+      }
+      restore_note_folder: {
+        Args: {
+          p_expected_version: number
+          p_folder_id: string
+          p_idempotency_key?: string
+        }
+        Returns: Json
+      }
+      risk_severity: { Args: { p_score: number }; Returns: string }
+      risk_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
+      save_titleblock_map: {
+        Args: {
+          p_number_rect: Json
+          p_project_id: string
+          p_register: string
+          p_revision_rect: Json
+          p_title_rect: Json
+        }
+        Returns: number
+      }
+      scope_item_apply_progress: {
+        Args: {
+          p_new: Database["public"]["Tables"]["scope_items"]["Row"]
+          p_old: Database["public"]["Tables"]["scope_items"]["Row"]
+        }
+        Returns: {
+          added_by: string | null
+          category: string | null
+          change_order_id: string | null
+          completed_at: string | null
+          completed_by: string | null
+          completed_by_id: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          document_id: string | null
+          file_name: string | null
+          file_url: string | null
+          id: string
+          in_progress: boolean
+          in_progress_at: string | null
+          in_progress_by: string | null
+          is_completed: boolean
+          is_deleted: boolean
+          item_type: string
+          metadata: Json | null
+          notes: string | null
+          project_id: string
+          project_name: string | null
+          reference: string | null
+          scope_number: string | null
+          sort_order: number | null
+          storage_path: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "scope_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      scope_item_check_links: {
+        Args: { p_row: Database["public"]["Tables"]["scope_items"]["Row"] }
+        Returns: undefined
+      }
+      seed_cost_codes_from_defaults: {
+        Args: { p_project_id: string }
+        Returns: number
+      }
+      seed_default_piece_stations: {
+        Args: { p_actor?: string; p_project_id: string }
+        Returns: undefined
+      }
       seed_project_handoff_items: {
         Args: { p_project_id: string }
         Returns: undefined
+      }
+      send_transmittal: {
+        Args: { p_sent_date?: string; p_transmittal_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by_name: string | null
+          acknowledged_notes: string | null
+          created_at: string
+          created_by: string | null
+          date_received: string | null
+          date_sent: string | null
+          deleted_at: string | null
+          direction: string
+          id: string
+          is_deleted: boolean
+          metadata: Json
+          notes: string | null
+          project_id: string
+          purpose: string | null
+          received_from: string | null
+          recipient_company: string | null
+          recipient_email: string | null
+          sent_by: string | null
+          sent_by_name: string | null
+          sent_to: string | null
+          source_company: string | null
+          status: string
+          subject: string | null
+          submittal_id: string | null
+          submittal_round_id: string | null
+          transmittal_number: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_transmittals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_delivery_items: {
+        Args: { p_delivery_id: string; p_items: Json }
+        Returns: {
+          assembly_mark: string | null
+          created_at: string | null
+          delivery_id: string | null
+          finish: string | null
+          grade: string | null
+          id: string
+          length_inches: number | null
+          length_text: string | null
+          line_no: number | null
+          metadata: Json | null
+          notes: string | null
+          piece_id: string | null
+          profile: string | null
+          qty: number
+          received_at: string | null
+          received_qty: number | null
+          sequence: string | null
+          updated_at: string | null
+          weight_lbs: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "delivery_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      set_feature_flag: {
+        Args: { p_description?: string; p_enabled: boolean; p_flag_key: string }
+        Returns: {
+          created_at: string
+          description: string | null
+          enabled: boolean
+          flag_key: string
+          id: string
+          updated_at: string
+          updated_by: string | null
+          user_overrides: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "feature_flags"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_feature_flag_override: {
+        Args: { p_email: string; p_flag_key: string; p_value: boolean }
+        Returns: {
+          created_at: string
+          description: string | null
+          enabled: boolean
+          flag_key: string
+          id: string
+          updated_at: string
+          updated_by: string | null
+          user_overrides: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "feature_flags"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_for_drawing_is_locked: {
         Args: { p_drawing_id: string }
         Returns: boolean
       }
       set_for_zone_is_locked: { Args: { p_zone_id: string }; Returns: boolean }
+      set_material_requirement_receipt_state: {
+        Args: {
+          p_material_requirement_id: string
+          p_project_id: string
+          p_provenance?: Json
+          p_receipt_reference?: string
+          p_receipt_source?: string
+          p_receipt_state: string
+          p_received_quantity?: number
+        }
+        Returns: Json
+      }
+      set_note_folder_links: {
+        Args: {
+          p_expected_version: number
+          p_folder_id: string
+          p_idempotency_key?: string
+          p_make_independent?: boolean
+          p_project_ids: string[]
+        }
+        Returns: Json
+      }
+      set_piece_control_mode: {
+        Args: {
+          p_confirmation: string
+          p_next_mode: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
+      set_piece_hold: {
+        Args: {
+          p_on_hold: boolean
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      set_piece_hold_impl: {
+        Args: {
+          p_on_hold: boolean
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      set_project_station_configuration: {
+        Args: { p_project_id: string; p_stations: Json }
+        Returns: Json
+      }
+      set_runtime_config: {
+        Args: {
+          p_description?: string
+          p_is_public?: boolean
+          p_key: string
+          p_value: Json
+        }
+        Returns: {
+          description: string | null
+          is_public: boolean
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "runtime_config"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_transmittal_items: {
+        Args: { p_refs: Json; p_transmittal_id: string }
+        Returns: {
+          created_at: string
+          drawing_id: string | null
+          drawing_revision_id: string | null
+          gc_drawing_id: string | null
+          id: string
+          notes: string | null
+          number_at_send: string | null
+          project_id: string
+          revision_at_send: string | null
+          sort_order: number
+          title_at_send: string | null
+          transmittal_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "drawing_transmittal_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      ship_piece_lots: {
+        Args: {
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reference_data?: Json
+        }
+        Returns: Json
+      }
+      ship_piece_lots_impl: {
+        Args: {
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reference_data?: Json
+        }
+        Returns: Json
+      }
+      soft_delete_project: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
+      split_piece_lot: {
+        Args: { p_allocations: Json; p_piece_id: string; p_project_id: string }
+        Returns: Json
+      }
+      split_piece_lot_impl: {
+        Args: { p_allocations: Json; p_piece_id: string; p_project_id: string }
+        Returns: Json
+      }
+      stage_piece_import_batch: {
+        Args: {
+          p_project_id: string
+          p_rows: Json
+          p_source_name: string
+          p_source_type: string
+        }
+        Returns: Json
+      }
+      submittal_bic_class: { Args: { p_bic: string }; Returns: string }
+      submittal_blocking_rfis: {
+        Args: { p_submittal_id: string }
+        Returns: {
+          id: string
+          project_id: string
+          rfi_number: string
+          status: string
+          title: string
+        }[]
+      }
+      submittal_derived_stage: {
+        Args: { p_approved_date: string; p_bic: string; p_status: string }
+        Returns: string
+      }
+      submittal_ofs_checklist_complete: {
+        Args: { p_metadata: Json }
+        Returns: boolean
+      }
+      supersede_document: {
+        Args: { p_document_id: string; p_payload: Json }
+        Returns: {
+          category: string | null
+          change_order_id: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          delivery_id: string | null
+          description: string | null
+          discipline: string | null
+          display_name: string | null
+          document_number: string | null
+          document_type: string | null
+          drawing_number: string | null
+          due_date: string | null
+          external_drive_id: string | null
+          external_file_id: string | null
+          external_file_url: string | null
+          external_last_modified: string | null
+          external_provider: string | null
+          external_site_id: string | null
+          external_synced_at: string | null
+          file_name: string | null
+          file_size: number | null
+          file_size_kb: number | null
+          file_type: string | null
+          file_url: string | null
+          folder_id: string | null
+          id: string
+          import_source: string | null
+          is_current: boolean | null
+          is_deleted: boolean
+          is_submittal: boolean | null
+          linked_folder_id: string | null
+          linked_wp_id: string | null
+          metadata: Json | null
+          mime_type: string | null
+          notes: string | null
+          project_id: string
+          project_name: string | null
+          review_lead_time: number | null
+          revision: string | null
+          revision_date: string | null
+          revision_note: string | null
+          revision_number: string | null
+          rfi_id: string | null
+          sheet_number: string | null
+          status: string | null
+          submittal_id: string | null
+          superseded_by_id: string | null
+          supersedes_id: string | null
+          tags: string | null
+          title: string | null
+          updated_at: string | null
+          uploaded_by: string | null
+          uploaded_by_id: string | null
+          uploaded_date: string | null
+          version: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "documents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      sync_model_fab_status: { Args: { p_project_id: string }; Returns: Json }
+      sync_production_stages_to_pieces: {
+        Args: { p_project_id: string; p_source?: string; p_updates: Json }
+        Returns: Json
+      }
+      sync_production_stages_to_pieces_impl: {
+        Args: { p_project_id: string; p_source?: string; p_updates: Json }
+        Returns: Json
+      }
+      transition_piece_lots_canonical: {
+        Args: {
+          p_event_type: string
+          p_next_status: string
+          p_piece_ids: string[]
+          p_project_id: string
+          p_reference_data?: Json
+          p_required_status: string
+        }
+        Returns: Json
+      }
+      transmit_submittal_round: {
+        Args: {
+          p_ball_in_court: string
+          p_drawing_set_ids?: string[]
+          p_notes?: string
+          p_reviewer?: string
+          p_submittal_id: string
+          p_submitted_date: string
+        }
+        Returns: {
+          ball_in_court: string | null
+          created_at: string
+          deleted_at: string | null
+          drawing_set_ids: string[]
+          file_url: string | null
+          id: string
+          is_deleted: boolean
+          markup_file_url: string | null
+          metadata: Json
+          project_id: string
+          response_notes: string | null
+          returned_date: string | null
+          reviewer: string | null
+          round_number: number
+          status: string
+          submittal_id: string
+          submitted_by: string | null
+          submitted_date: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "submittal_rounds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      unassign_pieces_from_work_package: {
+        Args: { p_piece_ids: string[]; p_project_id: string }
+        Returns: Json
+      }
+      unlink_piece_drawing: {
+        Args: { p_drawing_id: string; p_piece_id: string; p_project_id: string }
+        Returns: Json
+      }
+      unlink_piece_drawing_set: {
+        Args: {
+          p_drawing_set_id: string
+          p_piece_id: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
+      user_can_access_note_folder: {
+        Args: { p_folder_id: string }
+        Returns: boolean
+      }
+      user_can_edit_note_folder: {
+        Args: { p_folder_id: string }
+        Returns: boolean
+      }
+      user_can_manage_note_folder_links: {
+        Args: { p_org_id: string; p_project_ids: string[] }
+        Returns: boolean
+      }
       user_has_project_access: {
         Args: { p_project_id: string }
         Returns: boolean
@@ -8187,11 +14392,127 @@ export type Database = {
         Args: { p_min_role: string; p_project_id: string }
         Returns: boolean
       }
+      user_is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
+      user_is_org_member: { Args: { p_org_id: string }; Returns: boolean }
       user_is_project_admin: {
         Args: { p_project_id: string }
         Returns: boolean
       }
       user_is_system_admin: { Args: never; Returns: boolean }
+      user_org_role_at_least: {
+        Args: { p_min_role: string; p_org_id: string }
+        Returns: boolean
+      }
+      users_share_org: { Args: { p_a: string; p_b: string }; Returns: boolean }
+      validate_piece_station_configuration: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
+      void_rfi: {
+        Args: { p_reason: string; p_rfi_id: string }
+        Returns: {
+          answer: string | null
+          answered_by: string | null
+          answered_by_id: string | null
+          area_sequence: string | null
+          assigned_to: string | null
+          ball_in_court: string | null
+          closed_at: string | null
+          closed_by: string | null
+          cost_code_id: string | null
+          cost_impact: boolean | null
+          cost_impact_amount: number | null
+          created_at: string | null
+          created_by: string | null
+          created_date: string | null
+          date_answered: string | null
+          date_required: string | null
+          deleted_at: string | null
+          description: string | null
+          discipline: string | null
+          distribution_list: string | null
+          drawing_id: string | null
+          drawing_reference: string | null
+          drawing_set_id: string | null
+          due_date: string | null
+          gc_drawing_id: string | null
+          holds_released_count: number
+          id: string
+          impacts_activity_ids: string[] | null
+          internal_notes: string | null
+          is_deleted: boolean
+          metadata: Json | null
+          priority: string
+          project_id: string
+          project_name: string | null
+          question: string | null
+          responded_date: string | null
+          response_text: string | null
+          rfi_number: string | null
+          schedule_impact: boolean | null
+          schedule_impact_days: number | null
+          spec_section: string | null
+          status: string
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string | null
+          void_reason: string | null
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "rfis"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      void_transmittal: {
+        Args: { p_reason: string; p_transmittal_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by_name: string | null
+          acknowledged_notes: string | null
+          created_at: string
+          created_by: string | null
+          date_received: string | null
+          date_sent: string | null
+          deleted_at: string | null
+          direction: string
+          id: string
+          is_deleted: boolean
+          metadata: Json
+          notes: string | null
+          project_id: string
+          purpose: string | null
+          received_from: string | null
+          recipient_company: string | null
+          recipient_email: string | null
+          sent_by: string | null
+          sent_by_name: string | null
+          sent_to: string | null
+          source_company: string | null
+          status: string
+          subject: string | null
+          submittal_id: string | null
+          submittal_round_id: string | null
+          transmittal_number: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_transmittals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      work_package_drawing_set_reports: {
+        Args: { p_work_package_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
@@ -8210,12 +14531,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8239,11 +14560,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8264,11 +14585,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8289,11 +14610,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8306,11 +14627,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

@@ -135,7 +135,7 @@ describe("getCapacityStatus thresholds (75% / 90%)", () => {
     expect(getCapacityStatus(90)).toBe("yellow");
   });
 
-  it("is red above 90% (OSHA critical-lift territory)", () => {
+  it("is red above 90% (contractor critical-lift territory)", () => {
     expect(getCapacityStatus(90.01)).toBe("red");
     expect(getCapacityStatus(150)).toBe("red");
   });
@@ -207,12 +207,21 @@ describe("buildWarnings", () => {
     expect(w[0].message).toContain("below 30");
   });
 
-  it("emits a red capacity warning citing the OSHA critical-lift rule", () => {
+  it("emits a red capacity warning for a critical lift without mis-citing OSHA", () => {
     const w = buildWarnings({ capacityStatus: "red", angleStatus: "green", utilizationPercent: 93.2 });
     expect(w).toHaveLength(1);
     expect(w[0].severity).toBe("red");
     expect(w[0].message).toContain("93.2%");
-    expect(w[0].message).toContain("1926.1431(k)");
+    expect(w[0].message).toContain("critical lift");
+    // 1926.1431 is the personnel-hoisting section; it sets no 90% critical-lift rule.
+    expect(w[0].message).not.toContain("1926.1431");
+  });
+
+  it("uses the 50% personnel-hoisting limit for a personnel lift", () => {
+    const w = buildWarnings({ capacityStatus: "red", angleStatus: "green", utilizationPercent: 55, liftType: "personnel" });
+    expect(w).toHaveLength(1);
+    expect(w[0].message).toContain("50%");
+    expect(w[0].message).toContain("1926.1431");
   });
 
   it("orders reds before yellows when both fire", () => {
