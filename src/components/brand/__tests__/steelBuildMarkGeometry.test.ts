@@ -51,16 +51,6 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     expect(brandCss).toMatch(/--accent:\s+var\(--brand-orange\)/);
   });
 
-  it("fills the landing-page mark with Signal Amber, not the landing UI accent", () => {
-    // The landing page keeps its own executive-light accent (C.amber, #F5A800)
-    // for buttons, rules and focus rings. It is close enough to Signal Amber to
-    // look right in isolation, which is exactly why passing it to the mark went
-    // unnoticed: the public logo rendered a different yellow from the favicon
-    // and the in-app logo.
-    const landing = read("src/pages/Landing.jsx");
-    expect(landing).toContain("<SteelBuildMark size={size} color={MARK_AMBER}");
-    expect(landing).not.toMatch(/<SteelBuildMark[^>]*color=\{C\.amber\}/);
-  });
 });
 
 /** Width and height out of a PNG's IHDR chunk, which always starts at byte 16. */

@@ -65,7 +65,7 @@ interface ParsedAttachment {
   filename: string;
   contentType: string;
   sizeBytes: number;
-  content: Uint8Array;
+  content: Uint8Array<ArrayBuffer>;
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -197,7 +197,7 @@ async function fetchActiveProjectMailboxAddresses(
 ): Promise<Set<string>> {
   const resp = await fetch(
     `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${projectId}&is_active=eq.true&select=email_address&limit=500`,
-    { headers: { "apikey": serviceKey, "Authorization": `****** } },
+    { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
   );
   if (!resp.ok) {
     const detail = await resp.text();
@@ -333,7 +333,7 @@ function parseRecipientsField(raw: any): string[] {
  * and Microsoft Graph deliver attachment payloads as a single base64
  * `contentBytes` string.
  */
-function base64ToBytes(b64: string): Uint8Array {
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const clean = b64.replace(/\s/g, "");
   const binary = atob(clean);
   const bytes = new Uint8Array(binary.length);
@@ -804,7 +804,7 @@ async function logClassifyTelemetry(
 
 // ── Content Hash ───────────────────────────────────────────────────────────
 
-async function hashContent(data: Uint8Array): Promise<string> {
+async function hashContent(data: Uint8Array<ArrayBuffer>): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");

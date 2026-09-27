@@ -437,7 +437,7 @@ async function sendViaMsGraph(
 
 // ── Attachment Helpers ──────────────────────────────────────────────────────────
 
-function base64ToBytes(b64: string): Uint8Array {
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const clean = b64.replace(/\s/g, "");
   const binary = atob(clean);
   const bytes = new Uint8Array(binary.length);
@@ -445,7 +445,7 @@ function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
-async function hashContent(data: Uint8Array): Promise<string> {
+async function hashContent(data: Uint8Array<ArrayBuffer>): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");

@@ -7,6 +7,16 @@
 
 ---
 
+> **Superseded in part — read this first.** This audit was taken at `642ce154`
+> (2026-07-01). A newer, broader
+> [production-readiness audit (2026-09-21)](docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md)
+> re-measured the same ground and reconciles its findings against current `main`
+> in its §9. Where the two disagree, the newer one wins. Two facts below are now
+> stale by design: **hosting is Cloudflare Workers, not Vercel** (the Vercel
+> account is closed), and the table/finding counts predate roughly three months
+> of schema and remediation work. Open remediation items are tracked in
+> [`TECH_DEBT.md`](TECH_DEBT.md).
+
 ## 1. Executive Summary
 
 **Bottom line:** The *product core* is in good shape and its crown-jewel boundaries are genuinely sound — **there are zero critical findings and the tenant-isolation, money-math, and fab-release-gate layers hold up under live testing.** What is *not* yet enterprise-ready is the **operational, governance, and compliance wrapper** an enterprise buyer's security team and procurement will grade you on: no staging environment, database migrations applied by hand straight to production, no backup/DR posture for the drawing files that *are* the business, no password-reset or MFA, no data-erasure path (while your live Privacy Policy promises one), draft legal pages already in production, and a systemic accessibility gap. These are the gaps that fail a SOC 2 audit, a security questionnaire, or a pen test — not the application logic.

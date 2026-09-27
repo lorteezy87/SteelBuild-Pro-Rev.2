@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { supabase } from "@/lib/supabase";
+import { presentRemoteFile } from "@/lib/native/fileExport";
 import * as pdfjsLib from "pdfjs-dist";
 // Bundle the pdf.js worker with Vite so versions always match the installed
 // pdfjs-dist package. Previously we loaded `.min.js` from cdnjs, but pdfjs-dist
@@ -480,12 +481,11 @@ export default function DrawingViewer() {
   const handleDownload = async () => {
     const url = resolvedUrl || await resolveFileUrl(activeDrawing?.file_url);
     if (!url) { toast?.error?.("No file URL available"); return; }
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = activeDrawing?.file_name || activeDrawing?.title || "drawing.pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    await presentRemoteFile({
+      url,
+      filename: activeDrawing?.file_name || activeDrawing?.title || "drawing.pdf",
+      title: activeDrawing?.sheet_number || activeDrawing?.title || "Drawing",
+    });
   };
 
   return (

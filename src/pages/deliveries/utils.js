@@ -4,6 +4,7 @@
  */
 
 import { PHASE_RANK } from "./constants";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 export const isSameDay = (d1, d2) =>
   d1.getFullYear() === d2.getFullYear() &&
@@ -91,10 +92,5 @@ export function exportDeliveriesCSV(
     .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename, title: "Deliveries export" });
 }

@@ -6,18 +6,32 @@ document is the end-to-end runbook: what is already wired up in this repo, and
 the remaining steps — most of which **require a Mac with Xcode** and cannot be
 done in CI/Linux.
 
-> Legal note: public-facing/store work (marketing copy, signup, billing) was
-> cleared for the S&H Steel conflict before this was started (see `CLAUDE.md`).
-> If that clearance changes, stop and re-check before submitting.
+> **Status (2026-09-26): not submittable yet.** The items marked **Action** and
+> **Not handled** below are blocking. See MOB-1 … MOB-10 in
+> [`../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md).
+>
+> There is no legal hold or conflict blocking store, marketing, signup or
+> billing work (owner, 2026-09-11; see `CLAUDE.md` → Workflow rules).
 
 ---
 
 ## Already done in this repo
 
 - **Capacitor iOS wrapper** — `capacitor.config.ts` (appId `com.steelbuildpro.app`,
-  `webDir: dist`), plugins installed (`app`, `status-bar`, `splash-screen`,
-  `keyboard`, `haptics`, `camera`, `share`, `preferences`), npm scripts
+  `webDir: dist`), plugins **installed** (`app`, `status-bar`, `splash-screen`,
+  `keyboard`, `haptics`, `camera`, `share`, `filesystem`, `file-transfer`,
+  `preferences`), npm scripts
   (`cap:add:ios`, `cap:sync`, `cap:open`, `ios`).
+  - ✅ `camera`, `haptics`, and `share` are wired to field-photo uploads and
+    project-aware report-link sharing. `preferences` is installed but remains
+    unused.
+  - ✅ **The `ios/` Xcode project is committed.** `npm run cap:sync` and a
+    signed generic-device Debug build passed on 2026-09-26 with all ten native
+    plugins. The build installed and launched on a physical iPhone 17 Pro.
+    Signed-in workflow checks are still required before submission.
+  - ⚠️ **No Android platform exists at all** — `@capacitor/android` is not a
+    dependency and there is no `android/` directory. Google Play is a
+    from-scratch effort (MOB-1), not covered by this runbook.
 - **Native bootstrap** — `src/lib/native/capacitor.ts`, loaded only inside the
   native shell (guarded in `src/main.jsx`): status-bar theming, splash hide,
   keyboard classes, deep-link routing, safe-area root class. The web bundle and
@@ -25,9 +39,12 @@ done in CI/Linux.
 - **PWA / iOS web hardening** — real `public/manifest.json` icons + metadata,
   `apple-mobile-web-app-*` meta tags, PNG `apple-touch-icon`, safe-area-inset
   CSS (`src/styles/base.css`, active only in standalone/native).
-- **Privacy manifest template** — `mobile/ios/PrivacyInfo.xcprivacy`.
-- **Info.plist usage strings** — `mobile/ios/Info.plist.snippet.xml` (camera /
-  photo library — required by `@capacitor/camera`).
+- **Privacy manifest** — committed at `ios/App/App/PrivacyInfo.xcprivacy` and
+  included in the App target; `mobile/ios/PrivacyInfo.xcprivacy` is its source
+  template.
+- **Info.plist usage strings** — camera and photo-library purpose strings plus
+  `ITSAppUsesNonExemptEncryption = NO` are committed in
+  `ios/App/App/Info.plist`.
 
 ## Requires a Mac (cannot run here)
 
@@ -38,8 +55,8 @@ capturing screenshots, and uploading to App Store Connect.
 
 ## 0. Prerequisites
 
-- **Apple Developer Program** membership ($99/yr) — enroll as the S&H Steel org
-  or as an individual, per the legal decision.
+- **Apple Developer Program** membership for the individual or business that
+  owns SteelBuild Pro.
 - **Mac + Xcode 16.1 or newer** (required by Capacitor 8).
 - **CocoaPods**: `brew install cocoapods` (or `sudo gem install cocoapods`).
 - Repo installed: `npm ci`.
@@ -122,9 +139,10 @@ must serve the bundled offline assets, not a dev URL.
 | Guideline | What it requires | Status / action |
 |---|---|---|
 | **2.1 Completeness** | Reviewer can actually use the app | **Action:** create a demo login with seeded data; put it in App Review Information. |
-| **4.2 Minimum functionality** | Not "just a repackaged website" | **Handled:** native camera capture, haptics, share sheet, native status bar/splash, offline-capable bundled assets. Keep leaning on native capabilities. |
+| **4.2 Minimum functionality** | Not "just a repackaged website" | ✅ **Implemented in code (MOB-2); signed-in real-device verification remains.** Native users can take a camera photo through the existing Daily Log/Punchlist photo uploader, share a project-aware link to any report through the iOS share sheet, and receive haptic confirmation after successful photo uploads and report-link sharing. These workflows use `src/lib/native/capabilities.ts` and remain hidden or inert in a regular web browser. **Before submission:** verify camera permission, upload completion, share-sheet presentation, and haptics on a signed-in physical iPhone. |
+| **2.1 Export completeness** | Advertised actions work in the submitted build | ✅ **Implemented in code (MOB-5); signed-in real-device verification remains.** Generated CSV/PDF/calendar/JSON/PNG exports and existing drawing/document/photo downloads use `src/lib/native/fileExport.ts`: web builds retain browser downloads, while Capacitor writes generated files with `@capacitor/filesystem`, downloads remote files directly to native cache with `@capacitor/file-transfer`, and opens `Share.share({ files })`. Fab Release, backcharge packages, and selected documents each open one grouped share sheet. Cache files are cleaned after sharing, failure, or cancellation; closing the sheet produces no success or error message. **Before submission:** verify representative CSV, PDF, grouped package, and a large remote-document export on a signed-in physical iPhone. |
 | **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ✅ **Implemented — see §6.1** (self-service "Delete my account" in Settings → Profile). Needs staging deploy + test before submission. |
-| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ✅ **Sign-in-only — see §6.2.** The native build hides all in-app purchase UI (plans, checkout, portal, upgrade upsells); subscriptions are managed on the web. |
+| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ✅ **Handled — see §6.2 (MOB-4).** Native signed-out users go directly to a non-dismissible sign-in surface; marketing, pricing, signup, Billing navigation, checkout, portal and upgrade prompts remain web-only. |
 | **5.1.1 / 5.1.2 Data & privacy** | Privacy policy linked; data use disclosed | **Handled:** legal pages exist; link them and complete nutrition labels. |
 | **4.8 / 5.1.1 Sign in with Apple** | If you offer a third-party social login (e.g. Google), you must also offer Sign in with Apple (with narrow exceptions) | **Check:** if only email/password is offered, this does not apply. Confirm the auth methods enabled in Supabase. |
 | **2.3 Accurate metadata** | Store listing matches the app | Keep marketing copy truthful; no hidden/unfinished features. |
@@ -168,7 +186,10 @@ carries no in-app purchase surface, so Apple IAP is not required and there's no
 - `src/config/moduleRegistry.js` — the **Billing** nav entry is stripped from
   the menus natively (the route still resolves for the read-only page).
 - Plan-limit **"Upgrade"** upsells are hidden natively (the limit messages still
-  show): `OrgMembers.jsx`, `team/TeamControlCenter.tsx`, `Projects.jsx`.
+  show): `OrgMembers.jsx`, `team/TeamControlCenter.tsx`. (`Projects.jsx` no
+  longer carries an upgrade upsell, so there is nothing to gate there.)
+- `src/pages/Landing.jsx` — native signed-out users open directly to sign-in;
+  marketing, pricing, account creation and all dismissal paths are hidden.
 
 **Adding IAP later** is a clean, additive change (see the discussion on
 migration direction): you'd add StoreKit as an option without stranding anyone.

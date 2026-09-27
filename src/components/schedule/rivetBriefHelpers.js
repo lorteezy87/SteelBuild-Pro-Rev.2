@@ -23,7 +23,7 @@ export function isOpenTask(task) {
   return !CLOSED_STATUSES.some((closed) => status.includes(closed));
 }
 
-// Delegates to the canonical predicate (src/lib/schedule/summaryTasks.js) so
+// Delegates to the canonical predicate (src/lib/schedule/summaryTasks.ts) so
 // this and every other surface share one definition of "summary/parent row".
 export function isSummaryTask(task, parentIds = new Set()) {
   return isSummaryTaskCanonical(task, parentIds);

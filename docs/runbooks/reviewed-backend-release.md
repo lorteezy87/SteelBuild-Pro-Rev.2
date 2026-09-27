@@ -6,6 +6,10 @@ function, modify the shared database, copy production secrets to staging, or
 publish another application's `sheets-api`. All other functions still require
 their own source/contract review before joining this release path.
 
+The CI job named `Release Edge Function typecheck` checks **every** repository
+`supabase/functions/*/index.ts` entrypoint, including maintenance and staging
+functions. This broader build check does not expand the deployment allowlist.
+
 ## One-time owner setup
 
 Create GitHub environments `staging-backend` and `production-backend`. Restrict
