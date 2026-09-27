@@ -15,6 +15,7 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { supabase } from "@/lib/supabase";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import {
   bulkUpdateProductionStage,
   listPieceProduction,
@@ -53,12 +54,7 @@ function exportProductionCSV(rows) {
     .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "production-status.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename: "production-status.csv", title: "Production status" });
 }
 
 export default function ProductionStatus() {

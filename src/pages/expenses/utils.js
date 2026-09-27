@@ -3,6 +3,8 @@
  * computation, safe-number coercion.
  */
 
+import { presentGeneratedFile } from "@/lib/native/fileExport";
+
 export const safeNum = (v) => Number(v) || 0;
 
 /**
@@ -69,10 +71,9 @@ export function exportExpensesCSV(filtered, projectName) {
     .map((r) => r.map((c) => `"${c ?? ""}"`).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${projectName || "Project"}_Expenses_${new Date().toISOString().split("T")[0]}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `${projectName || "Project"}_Expenses_${new Date().toISOString().split("T")[0]}.csv`,
+    title: "Expenses export",
+  });
 }

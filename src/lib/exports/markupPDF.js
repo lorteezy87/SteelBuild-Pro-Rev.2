@@ -169,7 +169,7 @@ export function suggestMarkupPdfFilename({ scope = "drawing", label = "", now = 
 
 /**
  * Generate the markup summary PDF as a jsPDF instance. The caller is
- * responsible for `.save(filename)` (or `.output(...)` for tests).
+ * responsible for presenting `.output("blob")` through the platform export flow.
  *
  * @param {object} opts
  * @param {object} opts.project        { id, name }

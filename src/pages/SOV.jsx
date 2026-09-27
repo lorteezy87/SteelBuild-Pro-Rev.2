@@ -19,6 +19,7 @@ import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button as DsButton } from "@/components/design-system";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import { SovNoProjectGuard } from "./sov/components";
 import {
   buildSovCsvRows,
@@ -290,12 +291,7 @@ export default function SOV() {
     const rows = buildSovCsvRows(filtered, calc);
     const csv = [SOV_CSV_HEADERS, ...rows].map(r => r.map(c => `"${c ?? ""}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sov.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    void presentGeneratedFile({ blob, filename: "sov.csv", title: "Schedule of values" });
   };
 
   const nextSovId = "";
