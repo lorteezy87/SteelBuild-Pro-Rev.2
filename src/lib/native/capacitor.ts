@@ -20,13 +20,53 @@ function currentTheme(): 'light' | 'dark' {
   return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'
 }
 
+type Rgb = [number, number, number]
+
+function parseRgb(value: string): { rgb: Rgb; alpha: number } | null {
+  const m = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)(?:[\s,/]+([\d.]+))?\s*\)/.exec(value)
+  if (!m) return null
+  return { rgb: [Number(m[1]), Number(m[2]), Number(m[3])], alpha: m[4] === undefined ? 1 : Number(m[4]) }
+}
+
+/**
+ * The color the page shows along its top edge: the first opaque background
+ * under the top-center point, walking up from the element there (the top bar
+ * is transparent and shows the shell behind it). Null before layout.
+ */
+export function topEdgeColor(): Rgb | null {
+  const fromPoint = typeof document.elementFromPoint === 'function'
+    ? document.elementFromPoint(window.innerWidth / 2, 1)
+    : null
+  for (let el: Element | null = fromPoint ?? document.body; el; el = el.parentElement) {
+    const parsed = parseRgb(getComputedStyle(el).backgroundColor)
+    if (parsed && parsed.alpha >= 0.99) return parsed.rgb
+  }
+  return null
+}
+
+const toHex = (rgb: Rgb): string =>
+  `#${rgb.map((n) => n.toString(16).padStart(2, '0')).join('')}`.toUpperCase()
+
+// Perceived brightness (0-255); above this, dark status bar glyphs read best.
+const isLight = ([r, g, b]: Rgb): boolean => 0.299 * r + 0.587 * g + 0.114 * b > 150
+
+let paintedStrip = ''
+
 async function applyStatusBar(): Promise<void> {
   try {
-    // Style.Dark = light (white) content for dark backgrounds; Style.Light =
-    // dark content for light backgrounds. Match the active theme.
-    await StatusBar.setStyle({ style: currentTheme() === 'light' ? Style.Light : Style.Dark })
     // We do not draw behind the status bar — the OS insets the webview below it.
     await StatusBar.setOverlaysWebView({ overlay: false })
+    // The strip behind the status bar is then a native view, black unless told
+    // otherwise, so the light theme got dark glyphs on black (MOB-10). Paint it
+    // the color along the page's top edge and pick glyphs that read on it.
+    // Style.Dark = light (white) glyphs; Style.Light = dark glyphs.
+    const rgb = topEdgeColor()
+    const light = rgb ? isLight(rgb) : currentTheme() === 'light'
+    const hex = rgb ? toHex(rgb) : light ? '#F2F4F5' : '#0B0E11'
+    if (hex === paintedStrip) return
+    paintedStrip = hex
+    await StatusBar.setBackgroundColor({ color: hex })
+    await StatusBar.setStyle({ style: light ? Style.Light : Style.Dark })
   } catch { /* status bar unavailable — non-fatal */ }
 }
 
@@ -40,6 +80,14 @@ function observeThemeForStatusBar(): void {
   try {
     const observer = new MutationObserver(() => { void applyStatusBar() })
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    // Screens change color too (the dark legal pages, sign-in vs the app
+    // shell), so re-check the top edge once the page settles after a change.
+    let pending: ReturnType<typeof setTimeout> | undefined
+    const settle = new MutationObserver(() => {
+      clearTimeout(pending)
+      pending = setTimeout(() => { void applyStatusBar() }, 250)
+    })
+    settle.observe(document.body, { childList: true, subtree: true })
   } catch { /* MutationObserver is always present on iOS WKWebView */ }
 }
 
