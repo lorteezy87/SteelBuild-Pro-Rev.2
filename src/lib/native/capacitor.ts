@@ -70,6 +70,19 @@ async function applyStatusBar(): Promise<void> {
   } catch { /* status bar unavailable — non-fatal */ }
 }
 
+/**
+ * iOS zooms the page in whenever an input with text under 16px takes focus,
+ * and the app's inputs are 11-13px, so opening the project picker or any form
+ * left the whole screen zoomed and cut off. Capping the scale stops that inside
+ * the app shell; web browsers keep pinch zoom, since this only runs natively.
+ */
+export function lockViewportScale(): void {
+  const meta = document.querySelector('meta[name="viewport"]')
+  const content = meta?.getAttribute('content') ?? ''
+  if (!meta || /maximum-scale/i.test(content)) return
+  meta.setAttribute('content', content ? `${content}, maximum-scale=1` : 'maximum-scale=1')
+}
+
 function markPlatformOnRoot(): void {
   const root = document.documentElement
   root.classList.add('capacitor-native')
@@ -152,6 +165,7 @@ export async function initNativePlatform(): Promise<void> {
 
   try {
     markPlatformOnRoot()
+    lockViewportScale()
     void applyStatusBar()
     observeThemeForStatusBar()
     wireKeyboardClasses()
