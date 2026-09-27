@@ -80,3 +80,8 @@ export function useOrg() {
   if (!ctx) throw new Error("useOrg must be used within an OrgProvider");
   return ctx;
 }
+
+/** The org context, or undefined outside an OrgProvider — for pages that also render standalone. */
+export function useOptionalOrg() {
+  return useContext(OrgContext);
+}

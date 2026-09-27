@@ -29,9 +29,9 @@ export default function TransmittalModal({
 
   if (!open) return null;
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!issuerName) return;
-    generateTransmittal({
+    const presentation = await generateTransmittal({
       project: project || {},
       docs: selectedDocs,
       issuedTo: form.issuedTo,
@@ -44,6 +44,7 @@ export default function TransmittalModal({
       // producing an unattributed record.
       issuer: { name: issuerName },
     });
+    if (presentation !== "downloaded" && presentation !== "shared") return;
     onGenerated();
   };
 

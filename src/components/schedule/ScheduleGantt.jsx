@@ -215,7 +215,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // reorders it as a sibling. The reparent is delegated to the parent via
   // onReparent (Schedule.tsx's reparentMut), which validates cycles, writes
   // sort_order, audits, and invalidates the cache. The pure zone math +
-  // cycle filtering live in useTaskRowDnD / hierarchy.js so this surface
+  // cycle filtering live in useTaskRowDnD / hierarchy.ts so this surface
   // can't drift from the drawer picker or bulk reparent.
   const { dragId, dropTarget, onDragStart, onDragOverRow, onDropRow, onDragEnd } = useTaskRowDnD({
     tasks: allTasks,

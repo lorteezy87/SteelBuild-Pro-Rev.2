@@ -1,0 +1,146 @@
+/**
+ * dateMath.ts — shared date arithmetic, one convention.
+ *
+ * Every user-visible "due date" in the app lives in a Postgres DATE column,
+ * which is timezone-naive. The user thinks of the date in their local
+ * timezone (a PDT user looking at 2025-01-15 means "the day that is
+ * Jan 15 in Phoenix," not "UTC midnight 2025-01-15"). We therefore do
+ * ALL day-math against **local midnight** — otherwise the user sees an
+ * item flip between "due today" and "due tomorrow" depending on the
+ * hour of day.
+ *
+ * Historical bug: urgencyEngine parsed 'YYYY-MM-DD' as UTC midnight
+ * (`T00:00:00Z`) while todayView parsed it as local midnight
+ * (`T00:00:00`). In the morning hours of negative-UTC timezones, the
+ * two disagreed about what "today" was, causing items to land in the
+ * wrong 48h / 10-day window.
+ *
+ * Anything that does day-math should import from here. Display
+ * formatting can still use toLocaleDateString / shared formatters.
+ */
+
+const MS_PER_DAY = 86_400_000;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Anything the helpers below accept as "a day". */
+export type DateInput = Date | string | number | null | undefined;
+
+/**
+ * Parse any value into a Date anchored to **local midnight** of the
+ * corresponding day. Returns null on invalid input.
+ *
+ * Accepts:
+ *   - 'YYYY-MM-DD' → local midnight of that day (most common case)
+ *   - Full ISO timestamp → local midnight of that instant's local day
+ *   - Date object → local midnight of its local day
+ *   - number (ms) → local midnight of that instant's local day
+ */
+export function toLocalMidnight(value: DateInput): Date | null {
+  if (value == null || value === "") return null;
+
+  let d: Date;
+  if (value instanceof Date) {
+    d = new Date(value.getTime());
+  } else if (typeof value === "number") {
+    d = new Date(value);
+  } else if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (DATE_ONLY_RE.test(trimmed)) {
+      const [y, m, dd] = trimmed.split("-").map(Number);
+      // Constructing via (year, monthIndex, day) uses local TZ — exactly
+      // what we want. No string parsing, no UTC conversion.
+      return new Date(y, m - 1, dd, 0, 0, 0, 0);
+    }
+    d = new Date(trimmed);
+  } else {
+    return null;
+  }
+  if (Number.isNaN(d.getTime())) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** Local midnight of today. */
+export function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Integer day difference using local midnights.
+ * Positive if `to` is later than `from`.
+ */
+export function daysBetween(from: DateInput, to: DateInput): number {
+  const a = toLocalMidnight(from);
+  const b = toLocalMidnight(to);
+  if (!a || !b) return 0;
+  return Math.round((b.getTime() - a.getTime()) / MS_PER_DAY);
+}
+
+/**
+ * Days from today until the given date.
+ * Positive if the date is in the future, negative if in the past,
+ * 0 if today. Returns `Infinity` on a null/invalid input (preserves
+ * urgencyEngine's existing "no date" sentinel behavior).
+ */
+export function daysUntil(value: DateInput): number {
+  const target = toLocalMidnight(value);
+  if (!target) return Infinity;
+  return Math.round((target.getTime() - startOfToday().getTime()) / MS_PER_DAY);
+}
+
+/**
+ * Days since the given date.
+ * Positive if the date is in the past, negative if in the future,
+ * 0 if today. Returns 0 on null/invalid (preserves urgencyEngine's
+ * existing `|| 0` fallback).
+ */
+export function daysSince(value: DateInput): number {
+  const source = toLocalMidnight(value);
+  if (!source) return 0;
+  return Math.round((startOfToday().getTime() - source.getTime()) / MS_PER_DAY);
+}
+
+/** True if the given value is today in local time. */
+export function isToday(value: DateInput): boolean {
+  return daysUntil(value) === 0;
+}
+
+/**
+ * YYYY-MM-DD string for today in local time.
+ *
+ * `now` is injectable so the timezone behaviour is testable: the vitest runner
+ * is pinned to TZ=UTC, where local and UTC agree and the §2.5 bug is invisible,
+ * and Node caches the zone before a test file can switch it.
+ */
+export function todayLocalISO(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+/**
+ * Today's LOCAL calendar date, anchored at UTC midnight.
+ *
+ * For code that compares "today" against task dates parsed with
+ * `parseDateUTC` (which reads a stored 'YYYY-MM-DD' as `T00:00:00Z`). Those
+ * comparisons need both sides on the same UTC-midnight anchor — that part of
+ * the Gantt's design is correct and this preserves it.
+ *
+ * What was wrong (audit §2.5) is taking the UTC *calendar date* of "now":
+ *
+ *   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+ *
+ * Arizona is UTC-7, so from 5 PM local onward `getUTCDate()` is already
+ * tomorrow. The today line jumped a day early, overdue flipped a day early,
+ * and the 6-week look-ahead window slid forward.
+ *
+ * Local getters, UTC constructor: the date is the user's actual today, the
+ * anchor is still UTC midnight. Do NOT "simplify" this to all-UTC or
+ * all-local getters — each breaks one of the two halves.
+ */
+export function todayUtcMidnightFromLocal(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+}
