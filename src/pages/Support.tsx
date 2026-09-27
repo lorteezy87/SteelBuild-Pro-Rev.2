@@ -75,7 +75,7 @@ export default function Support() {
         .support-body li::marker { color: var(--sbd-accent); }
         .support-body li { line-height: 1.7; margin-bottom: 6px; }
         .support-body a:hover { color: var(--sbd-accent-light); }
-        .support-nav-link { color: var(--sbd-text-secondary); text-decoration: none; font-size: 14px; transition: color 0.15s; }
+        .support-nav-link { display: inline-flex; align-items: center; color: var(--sbd-text-secondary); text-decoration: none; font-size: 14px; transition: color 0.15s; }
         .support-nav-link:hover { color: var(--sbd-accent-light); }
         @media (max-width: 620px) {
           .support-wrap { padding: 0 20px !important; }

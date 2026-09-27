@@ -101,6 +101,7 @@ npm run cap:open   # opens ios/App/App.xcworkspace
   - Primary language: English (U.S.).
   - Bundle ID: `com.steelbuildpro.app`.
   - SKU: any unique value.
+- **Listing text:** name, subtitle, promotional text, keywords and description are ready to paste in [`LISTING.md`](./LISTING.md). A test keeps them within App Store Connect's limits.
 - **Category:** Business. Secondary: Productivity.
 - **Price:** Free. There are no in-app purchases.
 - **URLs**
