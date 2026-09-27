@@ -46,6 +46,7 @@ export default function ProjectsHub() {
       <div
         role="tablist"
         aria-label="Projects"
+        className="hub-tabstrip"
         style={{
           display: "flex",
           gap: 6,
