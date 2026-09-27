@@ -151,12 +151,33 @@
   [data-skin="command"] .cmd-panels { grid-template-columns: 1fr; }
 }
 @media (max-width: 680px) {
-  [data-skin="command"] .cmd-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  /* minmax(0, 1fr), not 1fr: a bare 1fr track's minimum is its widest card's
+     min-content, so one long unbreakable KPI value or panel row can push the
+     grid past the phone's right edge, where main's overflow-x: hidden clips
+     it. The wrap rules below keep that text inside its card instead. */
+  [data-skin="command"] .cmd-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-skin="command"] .cmd-panels { grid-template-columns: minmax(0, 1fr); }
+  [data-skin="command"] .cmd-kpi,
+  [data-skin="command"] .cmd-panel { min-width: 0; }
+  [data-skin="command"] .cmd-kpi__value,
+  [data-skin="command"] .cmd-kpi__label,
+  [data-skin="command"] .cmd-kpi__sub { overflow-wrap: anywhere; }
+  /* The row's text column wraps; its trailing pill/date keeps its shape. */
+  [data-skin="command"] .cmd-row > :first-child { min-width: 0; overflow-wrap: anywhere; }
   [data-skin="command"] .cmd-hero { flex-direction: column; align-items: flex-start; gap: 16px; padding: 18px; }
   [data-skin="command"] .cmd-hero--photo { background-image: none; }
   [data-skin="command"] .cmd-hero__left { width: 100%; min-width: 0; }
+  [data-skin="command"] .cmd-hero__left > :not(.cmd-hero__icon) { flex: 1 1 auto; min-width: 0; }
+  [data-skin="command"] .cmd-hero__title,
+  [data-skin="command"] .cmd-hero__subtitle { overflow-wrap: anywhere; }
   [data-skin="command"] .cmd-hero__right { width: 100%; flex-wrap: wrap; }
   [data-skin="command"] .cmd-statcard { flex: 1 1 140px; min-width: 0; }
+  /* Filter bar: search, filter chips and actions each take their own row
+     instead of squeezing the chips into a one-chip-wide column. */
+  [data-skin="command"] .cmd-filterbar { flex-wrap: wrap; }
+  [data-skin="command"] .cmd-search,
+  [data-skin="command"] .cmd-filterbar__filters { flex: 1 1 100%; min-width: 0; }
+  [data-skin="command"] .cmd-filterbar__actions { flex-wrap: wrap; }
 }
 
 /* Dual theme — command dark maps onto SteelBuild Dark (Phase 4).
