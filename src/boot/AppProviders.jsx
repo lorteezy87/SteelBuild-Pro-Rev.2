@@ -28,7 +28,7 @@ export default function AppProviders({ children }) {
         <AuthProvider>
           <QueryClientProvider client={queryClientInstance}>
             <OutboxProvider>
-              <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <Router useTransitions>
                 {children}
               </Router>
             </OutboxProvider>

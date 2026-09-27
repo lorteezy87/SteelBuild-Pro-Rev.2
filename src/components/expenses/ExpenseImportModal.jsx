@@ -5,6 +5,7 @@ import { COST_CODES } from '../shared/costCodes';
 import { toast } from 'sonner';
 import { withProjectId } from '@/lib/mutations/standardMutation';
 import { readFileText } from '@/lib/textDecoding';
+import { presentGeneratedFile } from '@/lib/native/fileExport';
 
 const EXPENSE_TYPES = ['Labor', 'Materials', 'Equipment', 'Subcontractor', 'Misc.', 'Overhead'];
 const PAYMENT_STATUSES = ['Unpaid', 'Paid', 'Pending Approval', 'Disputed', 'Voided'];
@@ -77,12 +78,11 @@ function buildTemplateCSV() {
 function downloadTemplate() {
   const csv = buildTemplateCSV();
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `expense_import_template.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: 'expense_import_template.csv',
+    title: 'Expense import template',
+  });
 }
 
 function normalizeHeader(h) {
