@@ -4,8 +4,9 @@
  *
  * In the native App Store build the page must show NO in-app purchase surface:
  * no plan/upgrade cards (Stripe Checkout) and no "Manage billing" (Stripe
- * portal) button — only the read-only current plan plus a "managed on the web"
- * note. The org is given a stripe_customer_id and an owner role so the purchase
+ * portal) button — only the read-only current plan plus a note that plan changes
+ * aren't available in the app. The note must not point at where plans ARE sold
+ * (the website): that is a call to action to buy outside the app (3.1.1). The org is given a stripe_customer_id and an owner role so the purchase
  * UI WOULD render if it weren't gated.
  */
 import React from 'react';
@@ -42,12 +43,14 @@ function renderBilling() {
 }
 
 describe('Billing native sign-in-only gating', () => {
-  it('hides all purchase UI and shows a manage-on-web note', () => {
+  it('hides all purchase UI and says plan changes are not available in the app', () => {
     renderBilling();
     // Read-only current plan still shown.
     expect(screen.getByText(/current plan/i)).toBeInTheDocument();
-    // Manage-on-web note present.
-    expect(screen.getByText(/managed on the web/i)).toBeInTheDocument();
+    // Neutral note, with no pointer to the website.
+    expect(screen.getByText(/aren.t available in the iOS app/i)).toBeInTheDocument();
+    expect(screen.queryByText(/steelbuild-pro\.com/i)).toBeNull();
+    expect(screen.queryByText(/managed on the web|sign in at/i)).toBeNull();
     // No Stripe portal button, no plan-card purchase buttons.
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
     expect(screen.queryByText(/choose |switch to /i)).toBeNull();

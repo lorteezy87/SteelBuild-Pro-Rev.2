@@ -58,8 +58,9 @@ export default function OrgMembers() {
   // enforces the same limit when an invitation is accepted.
   const { plan } = usePlan();
   const navigate = useNavigate();
-  // Sign-in-only native build: hide the "Upgrade" (→ billing) upsells; plans are
-  // managed on the web. The seat/plan-limit messages themselves still show.
+  // Sign-in-only native build: hide the "Upgrade" (→ billing) upsells, in
+  // buttons and in toast text alike; plans are managed on the web. The
+  // seat/plan-limit messages themselves still show.
   const native = isNativePlatform();
   const memberLimit = plan.limits.members;
   const cap = seatCapacity(members.length, invites.length, memberLimit);
@@ -116,7 +117,7 @@ export default function OrgMembers() {
   const sendStaged = async () => {
     if (sendingStaged || staged.length === 0 || !orgId) return;
     if (atMemberLimit) {
-      toast.error(`Your ${plan.name} plan includes ${memberLimit} member${memberLimit === 1 ? "" : "s"}. Upgrade to add more.`);
+      toast.error(`Your ${plan.name} plan includes ${memberLimit} member${memberLimit === 1 ? "" : "s"}.${native ? "" : " Upgrade to add more."}`);
       return;
     }
     setSendingStaged(true);
@@ -154,7 +155,7 @@ export default function OrgMembers() {
     const addr = email.trim().toLowerCase();
     if (!addr || !orgId || busy) return;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) { toast.error("Enter a valid email"); return; }
-    if (atMemberLimit) { toast.error(`Your ${plan.name} plan includes ${memberLimit} member${memberLimit === 1 ? "" : "s"}. Upgrade to add more.`); return; }
+    if (atMemberLimit) { toast.error(`Your ${plan.name} plan includes ${memberLimit} member${memberLimit === 1 ? "" : "s"}.${native ? "" : " Upgrade to add more."}`); return; }
     setBusy(true);
     try {
       const inv = await createInvitation(orgId, addr, role, user.id);
