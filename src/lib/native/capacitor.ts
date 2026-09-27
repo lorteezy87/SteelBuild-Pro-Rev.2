@@ -53,12 +53,12 @@ function wireKeyboardClasses(): void {
   } catch { /* keyboard events optional */ }
 }
 
-function extractInAppPath(url: string): string | null {
+export function extractInAppPath(url: string): string | null {
   try {
     const u = new URL(url)
-    // Only follow Universal Links to our own site. Custom-scheme URLs (e.g. auth
-    // callbacks) are handled by their own flows and must not be hijacked here.
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null
+    // Only route verified Universal Links. An external URL delivered through
+    // appUrlOpen must never be translated into an in-app route.
+    if (u.protocol !== 'https:' || !['steelbuild-pro.com', 'www.steelbuild-pro.com'].includes(u.hostname) || u.port) return null
     const path = `${u.pathname}${u.search}${u.hash}`
     return path && path !== '/' ? path : null
   } catch {
