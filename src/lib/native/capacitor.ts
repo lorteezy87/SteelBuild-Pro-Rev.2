@@ -12,6 +12,7 @@ import { Capacitor } from '@capacitor/core'
 import { Keyboard } from '@capacitor/keyboard'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { StatusBar, Style } from '@capacitor/status-bar'
+import * as Sentry from '@sentry/react'
 
 function currentTheme(): 'light' | 'dark' {
   // index.html stamps data-theme on <html> before first paint (see the inline
@@ -80,6 +81,21 @@ function wireDeepLinks(): void {
 }
 
 /**
+ * Tag crash reports with the platform and the native app's version and build,
+ * so iOS errors can be told apart from the web's and traced to a TestFlight or
+ * App Store build. The web release comes from VITE_APP_VERSION in CI; a Mac
+ * `cap:sync` build has none, so these tags are what identify it.
+ */
+async function tagCrashReports(): Promise<void> {
+  try {
+    Sentry.setTag('platform', Capacitor.getPlatform())
+    const info = await App.getInfo()
+    Sentry.setTag('app_version', info.version)
+    Sentry.setTag('app_build', info.build)
+  } catch { /* crash tags are optional */ }
+}
+
+/**
  * Idempotent entry point. Safe to call on any platform — returns immediately
  * unless running inside the native shell.
  */
@@ -92,6 +108,7 @@ export async function initNativePlatform(): Promise<void> {
     observeThemeForStatusBar()
     wireKeyboardClasses()
     wireDeepLinks()
+    void tagCrashReports()
   } catch { /* never let native setup break app boot */ }
 
   // Splash auto-hide is disabled in capacitor.config.ts so there is no flash of
