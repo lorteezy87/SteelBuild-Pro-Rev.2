@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
+import { readEdgeFunctionErrorBody } from '@/lib/edgeFunctionError';
 import { toast } from 'sonner';
 
 /**
@@ -11,16 +12,30 @@ import { toast } from 'sonner';
  * Unlike DangerZone (owner-only WORKSPACE deletion), this is available to every
  * authenticated user regardless of role, and is NOT gated behind a feature flag.
  * It calls the `account-delete` edge function in `mode: 'account'`, which erases
- * the caller's account and PII, removes them from their workspaces, and — per
- * product policy — permanently deletes any workspace the caller SOLELY owns
- * (taking its projects, files, and other members' access with it). On success
- * the user is signed out.
+ * the caller's account and PII, removes them from their workspaces, and
+ * permanently deletes any workspace where they are the ONLY member. It refuses
+ * (409 SOLE_OWNER_WITH_MEMBERS) while the caller is the only owner of a
+ * workspace that has other members: one person's deletion never takes other
+ * people's workspace or logins, so they must make someone else an owner first.
+ * On success the user is signed out.
  */
+
+// The function's JSON error (code, detail, workspaces) → what to tell the user.
+function deletionErrorMessage(body, error) {
+  if (body?.error === 'SOLE_OWNER_WITH_MEMBERS') {
+    const names = Array.isArray(body.workspaces) ? body.workspaces : [];
+    const which = names.length > 1 ? `${names.join(', ')}, which have` : `${names[0] || 'a workspace'}, which has`;
+    return `You're the only owner of ${which} other members. On the Team page, make one of them an owner (or remove them), then delete your account.`;
+  }
+  if (typeof body?.detail === 'string' && body.detail) return body.detail;
+  return error?.message || 'Could not delete your account. Please contact support@steelbuild-pro.com.';
+}
 export default function DeleteAccountZone() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [errorText, setErrorText] = useState('');
 
   if (!user) return null;
 
@@ -32,17 +47,23 @@ export default function DeleteAccountZone() {
   const handleDelete = async () => {
     if (!canConfirm) return;
     setBusy(true);
+    setErrorText('');
     try {
       const { data, error } = await supabase.functions.invoke('account-delete', {
         body: { mode: 'account' },
       });
       if (error || !data?.ok) {
-        throw new Error(data?.detail || error?.message || 'Deletion failed');
+        // A non-2xx response arrives as a generic FunctionsHttpError; the
+        // function's own JSON (error code, detail, workspaces) is on its context.
+        const body = error ? await readEdgeFunctionErrorBody(error) : data;
+        throw new Error(deletionErrorMessage(body, error));
       }
       toast.success('Your account has been permanently deleted. Signing you out…');
       setTimeout(() => { logout(); }, 1500);
     } catch (err) {
-      toast.error(err?.message || 'Could not delete your account. Please contact support.');
+      const message = err?.message || 'Could not delete your account. Please contact support@steelbuild-pro.com.';
+      setErrorText(message);
+      toast.error(message);
       setBusy(false);
     }
   };
@@ -58,12 +79,13 @@ export default function DeleteAccountZone() {
         </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: 12.5, lineHeight: 1.55, margin: '0 0 12px', maxWidth: 620 }}>
           Permanently deletes your account and personal data and removes you from every workspace.
-          <strong> Any workspace where you are the only owner is permanently deleted for all of its
-          members</strong> — including every project, drawing, file, and financial record. This
+          <strong> Any workspace where you are the only member is permanently deleted with it</strong>
+          {' '}— including every project, drawing, file, and financial record. If you are the only owner
+          of a workspace that has other members, make one of them an owner first. This
           <strong> cannot be undone</strong>. Export anything you need first.
         </p>
         <button
-          onClick={() => { setOpen(true); setConfirmText(''); }}
+          onClick={() => { setOpen(true); setConfirmText(''); setErrorText(''); }}
           style={{ background: 'var(--danger, #b42318)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}
         >
           Delete my account…
@@ -88,7 +110,7 @@ export default function DeleteAccountZone() {
             </h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.55, margin: '0 0 14px' }}>
               To confirm, type your email <strong>{confirmTarget}</strong> below. Your account will be
-              erased immediately and irreversibly, along with any workspace you solely own.
+              erased immediately and irreversibly, along with any workspace where you are the only member.
             </p>
             <label htmlFor="delete-account-confirm" style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 5 }}>
               Your email
@@ -101,6 +123,11 @@ export default function DeleteAccountZone() {
               placeholder={confirmTarget}
               style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '9px 12px', color: 'var(--text-primary)', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 16 }}
             />
+            {errorText && (
+              <p role="alert" style={{ color: 'var(--danger, #b42318)', fontSize: 12.5, lineHeight: 1.5, margin: '-6px 0 14px' }}>
+                {errorText}
+              </p>
+            )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => setOpen(false)} disabled={busy} style={{ background: 'var(--bg-surface-low)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Cancel
