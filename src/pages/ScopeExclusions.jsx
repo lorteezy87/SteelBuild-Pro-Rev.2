@@ -307,8 +307,9 @@ export default function ScopeExclusions() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-        {/* Type Filter — segmented control */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        {/* Type Filter — segmented control. On a narrow phone the control
+            scrolls sideways (like Category below) instead of overflowing. */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, maxWidth: "100%" }}>
           <span
             style={{
               fontFamily: "var(--font-mono)",
@@ -328,6 +329,8 @@ export default function ScopeExclusions() {
               borderRadius: 8,
               padding: 2,
               gap: 2,
+              maxWidth: "100%",
+              overflowX: "auto",
             }}
           >
             {["all", ...types].map((type) => {
@@ -354,6 +357,8 @@ export default function ScopeExclusions() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 4,
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {Icon && <Icon size={10} strokeWidth={3} />}

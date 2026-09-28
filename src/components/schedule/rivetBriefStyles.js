@@ -41,6 +41,7 @@ export const collapsedMetricsStyle = {
 
 export const headerStyle = {
   display: "flex",
+  flexWrap: "wrap",
   justifyContent: "space-between",
   alignItems: "center",
   gap: 14,

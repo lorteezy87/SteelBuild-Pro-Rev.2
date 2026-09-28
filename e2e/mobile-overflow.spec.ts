@@ -20,6 +20,14 @@ const PAGES = [
   { name: "Projects", path: "/ProjectsHub" },
   { name: "RFIs", path: "/RFIs" },
   { name: "Drawings", path: "/DrawingSubmittalHub?hub_tab=drawings" },
+  // Pages that overflowed once the shell was fixed; each had its own cause.
+  { name: "Documents", path: "/Documents" },
+  { name: "Photos", path: "/Photos" },
+  { name: "Schedule", path: "/ScheduleHub" },
+  { name: "Work Packages", path: "/WorkPackages" },
+  { name: "Scope & Exclusions", path: "/ScopeExclusions" },
+  { name: "Calculators", path: "/CalculatorsHub" },
+  { name: "Feet & Inches calculator", path: "/FeetInchesCalculator" },
 ];
 
 const WIDTHS = [393, 360, 430];
