@@ -14,14 +14,23 @@
 //                     (service role, auth admin API).
 //
 // B) { mode: "account" } — the CALLER deletes THEIR OWN account (App Store
-//    Guideline 5.1.1(v): any account-creating user must be able to self-delete):
-//   1. Any workspace where the caller is the SOLE owner is erased in full
-//      (reusing the org path above) — per product policy, a sole owner's
-//      deletion takes the whole workspace with it.
-//   2. The caller's auth.users row is deleted; FK cascades remove their
-//      remaining memberships, their `user_profiles` PII, and `user_projects`;
-//      authorship columns (created_by, author_id, …) are ON DELETE SET NULL.
-//   3. Co-members of erased workspaces who now belong to NO org are removed too.
+//    Guideline 5.1.1(v): any account-creating user must be able to self-delete).
+//    Every workspace is planned first (plan.ts), before anything is destroyed:
+//   1. If the caller is the only OWNER of a workspace that has other members,
+//      nothing happens: the request is refused (409 SOLE_OWNER_WITH_MEMBERS,
+//      naming the workspaces) until they make another member an owner. Deleting
+//      one person's account never takes other people's workspace or logins.
+//   2. Workspaces where the caller is the ONLY member are erased with the
+//      account: live projects are archived (soft_delete_project, the step
+//      hard_delete_organization's ARCHIVE_FIRST guard requires), then the org
+//      is erased as in mode A.
+//   3. The caller's auth.users row is deleted; FK cascades remove their
+//      remaining memberships, their `user_profiles` PII, and `user_projects`.
+//      Some authorship columns are NO ACTION rather than SET NULL; if the
+//      caller created such rows in a workspace that is not being erased (one
+//      they are a member of, or co-own), the auth delete fails (409
+//      RECORDS_REFERENCE_ACCOUNT). A migration that clears those references
+//      is a follow-up.
 //
 // Irreversible. Deploy WITH JWT verify.
 //   supabase functions deploy account-delete --project-ref <ref>
@@ -31,6 +40,13 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@^2.47";
+import {
+  ACCOUNT_ERASURE_REASON,
+  WORKSPACE_ERASURE_REASON,
+  eraseOrgArgs,
+  planAccountDeletion,
+  type OrgRoster,
+} from "./plan.ts";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -95,10 +111,12 @@ async function deleteOrphanedUsers(admin: any, ids: Iterable<string>, skip?: str
 // Erase one organization the caller OWNS: DB rows (caller-scoped RPC, which
 // self-verifies owner) + Storage (service role). Returns storage objects removed
 // and the org's member ids (so the caller can sweep now-orphaned auth users).
+// `reason` is required by the RPC (see plan.ts).
 async function eraseOwnedOrg(
   admin: any,
   userClient: any,
   orgId: string,
+  reason: string,
 ): Promise<{ storageRemoved: number; memberIds: string[]; projectsDeleted: number }> {
   // Snapshot project + member ids BEFORE the DB rows are erased.
   const { data: projects } = await admin.from("projects").select("id").eq("org_id", orgId);
@@ -107,7 +125,7 @@ async function eraseOwnedOrg(
   const memberIds: string[] = (members ?? []).map((m: { user_id: string }) => m.user_id);
 
   // DB erasure via the caller-scoped RPC (self-verifies owner).
-  const { error: rpcErr } = await userClient.rpc("hard_delete_organization", { p_org_id: orgId });
+  const { error: rpcErr } = await userClient.rpc("hard_delete_organization", eraseOrgArgs(orgId, reason));
   if (rpcErr) throw new Error(`db_erasure_failed:${orgId}:${rpcErr.message}`);
 
   // Storage purge (best-effort; DB rows are already gone).
@@ -134,7 +152,7 @@ async function handleOrgDeletion(admin: any, userClient: any, callerId: string, 
 
   let erased;
   try {
-    erased = await eraseOwnedOrg(admin, userClient, orgId);
+    erased = await eraseOwnedOrg(admin, userClient, orgId, WORKSPACE_ERASURE_REASON);
   } catch (e) {
     return json({ error: "db_erasure_failed", detail: String((e as Error)?.message ?? e) }, 400);
   }
@@ -151,58 +169,86 @@ async function handleOrgDeletion(admin: any, userClient: any, callerId: string, 
 
 // Mode B — the caller deletes their OWN account.
 async function handleAccountDeletion(admin: any, userClient: any, callerId: string): Promise<Response> {
-  // Enumerate the caller's memberships.
-  const { data: memberships } = await admin
+  // Every workspace the caller belongs to, with its full roster, so the plan is
+  // made before anything is destroyed.
+  const { data: memberships, error: membershipsErr } = await admin
     .from("organization_members")
-    .select("org_id, role")
+    .select("org_id")
     .eq("user_id", callerId);
-  const rows: Array<{ org_id: string; role: string }> = memberships ?? [];
+  if (membershipsErr) return json({ error: "account_deletion_failed", step: "plan", detail: membershipsErr.message }, 400);
+  const orgIds: string[] = [...new Set<string>((memberships ?? []).map((m: { org_id: string }) => m.org_id))];
 
-  // Identify workspaces where the caller is the SOLE owner (only one owner row).
-  const soleOwnerOrgs: string[] = [];
-  for (const m of rows) {
-    if (m.role !== "owner") continue;
-    const { count } = await admin
-      .from("organization_members")
-      .select("*", { count: "exact", head: true })
-      .eq("org_id", m.org_id)
-      .eq("role", "owner");
-    if ((count ?? 0) <= 1) soleOwnerOrgs.push(m.org_id);
+  const rosters: OrgRoster[] = [];
+  for (const orgId of orgIds) {
+    const [{ data: org }, { data: members, error: membersErr }] = await Promise.all([
+      admin.from("organizations").select("name").eq("id", orgId).maybeSingle(),
+      admin.from("organization_members").select("user_id, role").eq("org_id", orgId),
+    ]);
+    if (membersErr) return json({ error: "account_deletion_failed", step: "plan", detail: membersErr.message }, 400);
+    rosters.push({
+      orgId,
+      orgName: org?.name ?? "Unnamed workspace",
+      members: (members ?? []).map((m: { user_id: string; role: string }) => ({ userId: m.user_id, role: m.role })),
+    });
   }
 
-  // Erase each sole-owned workspace in full (must happen while the caller's JWT
-  // is still valid — i.e. before deleting the caller's auth user below).
-  const affected = new Set<string>();
+  const plan = planAccountDeletion(callerId, rosters);
+  if (plan.blocked.length > 0) {
+    return json({
+      error: "SOLE_OWNER_WITH_MEMBERS",
+      workspaces: plan.blocked.map((o) => o.orgName),
+      detail: "Make another member an owner of these workspaces, then delete your account.",
+    }, 409);
+  }
+
+  // Erase each workspace where the caller is the only member (while the
+  // caller's JWT is still valid, i.e. before deleting their auth user below).
+  // hard_delete_organization refuses to erase live projects (ARCHIVE_FIRST),
+  // so they are archived first, as reset_org_data does.
   let storageRemoved = 0;
   let orgsDeleted = 0;
-  for (const orgId of soleOwnerOrgs) {
-    let erased;
-    try {
-      erased = await eraseOwnedOrg(admin, userClient, orgId);
-    } catch (e) {
-      return json({ error: "account_deletion_failed", detail: String((e as Error)?.message ?? e) }, 400);
+  for (const org of plan.erase) {
+    const { data: live, error: liveErr } = await admin
+      .from("projects")
+      .select("id")
+      .eq("org_id", org.orgId)
+      .eq("is_deleted", false);
+    if (liveErr) return json({ error: "account_deletion_failed", step: "archive", detail: liveErr.message }, 400);
+    for (const project of (live ?? []) as Array<{ id: string }>) {
+      const { error: archiveErr } = await userClient.rpc("soft_delete_project", { p_project_id: project.id });
+      if (archiveErr) return json({ error: "account_deletion_failed", step: "archive", detail: archiveErr.message }, 400);
     }
-    storageRemoved += erased.storageRemoved;
-    for (const uid of erased.memberIds) affected.add(uid);
+    try {
+      const erased = await eraseOwnedOrg(admin, userClient, org.orgId, ACCOUNT_ERASURE_REASON);
+      storageRemoved += erased.storageRemoved;
+    } catch (e) {
+      return json({ error: "account_deletion_failed", step: "erase", detail: String((e as Error)?.message ?? e) }, 400);
+    }
     orgsDeleted++;
   }
 
   // Delete the caller's auth user. FK cascades remove their remaining
-  // memberships, `user_profiles` PII, and `user_projects`; authorship refs are
-  // ON DELETE SET NULL.
+  // memberships, `user_profiles` PII, and `user_projects`.
   const { error: delErr } = await admin.auth.admin.deleteUser(callerId);
-  if (delErr) return json({ error: "account_deletion_failed", detail: delErr.message }, 400);
-
-  // Sweep co-members of erased workspaces who now belong to NO org (the caller
-  // is already gone and is skipped).
-  const coMembersDeleted = await deleteOrphanedUsers(admin, affected, callerId);
+  if (delErr) {
+    // A NO ACTION foreign key to auth.users (a record the caller created in a
+    // workspace that was not erased) blocks the delete.
+    const blockedByRecords = /database error deleting user/i.test(delErr.message);
+    return json(blockedByRecords
+      ? {
+          error: "RECORDS_REFERENCE_ACCOUNT",
+          detail: "Records you created in a shared workspace still reference your account, so it couldn't be removed. Contact support@steelbuild-pro.com and we'll complete the deletion.",
+        }
+      : { error: "account_deletion_failed", step: "delete_user", detail: delErr.message },
+    blockedByRecords ? 409 : 400);
+  }
 
   return json({
     ok: true,
     mode: "account",
     orgs_deleted: orgsDeleted,
     storage_objects_removed: storageRemoved,
-    users_deleted: coMembersDeleted + 1, // + the caller
+    users_deleted: 1,
   });
 }
 
