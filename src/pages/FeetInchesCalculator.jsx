@@ -216,7 +216,7 @@ export default function FeetInchesCalculator() {
         </div>
 
         {/* Main grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
+        <div className="sbd-calc-layout" style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
           {/* ── Left: calc pad ─────────────────────────── */}
           <div className="sbd-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Device display */}

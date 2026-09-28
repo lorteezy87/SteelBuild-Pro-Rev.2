@@ -535,8 +535,12 @@ export default function Documents() {
       />
     );
 
+    // One row that scrolls sideways on a phone instead of running off the
+    // edge. The divider is an inset shadow, not a border, so the active tab's
+    // underline paints over it inside the scroll box (a -1px overlap onto a
+    // border would be clipped).
     const statusTabs = (
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)", marginBottom: 12, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 0, boxShadow: "inset 0 -1px 0 var(--border-default)", marginBottom: 12, flexShrink: 0, overflowX: "auto", overflowY: "hidden" }}>
         {STATUS_TABS.map((tab) => {
           const count = tab.key === "all"
             ? allDocuments.length
@@ -551,7 +555,7 @@ export default function Documents() {
                 color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
                 border: "none",
                 borderBottom: statusTab === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
-                marginBottom: -1,
+                flexShrink: 0,
                 fontFamily: "var(--font-mono)", fontSize: 9,
                 fontWeight: statusTab === tab.key ? 700 : 500,
                 letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
