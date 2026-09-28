@@ -310,7 +310,9 @@ export default function Layout({ children, currentPageName }) {
                 )}
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              {/* On phone this group may shrink (minWidth 0) so the compact
+                  project pill ellipsizes instead of pushing past the edge. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: isPhone ? 1 : 0, minWidth: 0 }}>
                 <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isPhone} />
                 {!isPhone && <DensityToggle />}
                 {!isPhone && <ThemeToggleButton />}
@@ -346,6 +348,7 @@ export default function Layout({ children, currentPageName }) {
                   tabIndex={-1}
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     overflowY: "auto",
                     padding: 0,
                     background: "var(--bg-base)",

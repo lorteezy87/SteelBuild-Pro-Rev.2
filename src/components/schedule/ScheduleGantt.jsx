@@ -712,14 +712,17 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     <div ref={containerRef} data-gantt-export-root style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: GANTT_BG_VAR, overflow: "hidden" }}>
 
       {/* ── Toolbar ─────────────────────────────────────────────────── */}
-      <div data-gantt-export-exclude style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: `1px solid ${GANTT_GRID_STRONG_VAR}`, background: GANTT_PANEL_VAR }}>
+      {/* Wraps when it runs out of room (phones): this root clips overflow,
+          so an unwrapped row hid Set Baseline, Update Scheduled Dates and
+          the zoom switch past the right edge. */}
+      <div data-gantt-export-exclude style={{ flexShrink: 0, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: `1px solid ${GANTT_GRID_STRONG_VAR}`, background: GANTT_PANEL_VAR }}>
         {/* Stats */}
         <GanttStatsBar
           totalTasks={totalTasks} completeTasks={completeTasks} inProgressTasks={inProgressTasks}
           overdueTasks={overdueTasks} criticalTasks={criticalTasks}
           shiftedTasks={shiftedTasks} unscheduledTasks={unscheduledTasks}
         />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 360 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, minWidth: "min(360px, 100%)" }}>
           <input
             type="search"
             value={searchText}
@@ -728,6 +731,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             aria-label="Search Gantt tasks"
             style={{
               width: 260,
+              maxWidth: "100%",
               height: 28,
               borderRadius: 8,
               border: "1px solid var(--border-default)",
