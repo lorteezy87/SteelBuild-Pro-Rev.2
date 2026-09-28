@@ -243,6 +243,23 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   background: transparent;
 }
 
+/* Phones (the shell's phone band, <=767px) get one side gutter, not two.
+   A Control Center inside (a *-cc root or .sbp-command-page) and a hub
+   shell's tab strip and child page each bring their own, which stacked on
+   this wrapper's to 38-44px. Otherwise the wrapper's gutter drops to 16px;
+   that rule has the base rule's weight, so a page's own padding still wins. */
+@media (max-width: 767px) {
+  .sb-dashboard-reference-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .sb-dashboard-reference-page:has([class$="-cc"], .sbp-command-page, > .hub-tabstrip) {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
 .dashboard-reference-shell .sb-dashboard-topbar {
   background: color-mix(in srgb, var(--bg-surface) 96%, transparent) !important;
   border-bottom: 1px solid var(--border-default) !important;

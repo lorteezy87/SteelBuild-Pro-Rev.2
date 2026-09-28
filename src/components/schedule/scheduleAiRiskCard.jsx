@@ -177,10 +177,12 @@ export function ScheduleAiRiskCard({ insight }) {
 
       <p style={aiRiskSummaryStyle}>{insight.summary}</p>
 
-      <div style={aiRiskColumnsStyle}>
+      <div className="rivet-ai-risk-columns" style={aiRiskColumnsStyle}>
         <div style={aiRiskSectionStyle}>
           <div style={aiRiskSectionTitleStyle}>At-Risk Tasks ({insight.atRisk.length})</div>
-          <div style={{ display: "grid", gap: 9 }}>
+          {/* minmax(0, 1fr), not the implicit auto track: a nowrap task name
+              would otherwise widen the column past its card. */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 9 }}>
             {insight.atRisk.length ? insight.atRisk.map((entry) => (
               <div key={entry.task?.id || entry.label} style={aiRiskTaskStyle}>
                 <div style={taskNameStyle}>{entry.label}</div>
