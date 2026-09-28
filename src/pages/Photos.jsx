@@ -118,7 +118,7 @@ export default function Photos() {
       {/* Filters */}
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         {/* Category Filter */}
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <span
             style={{
               fontFamily: "var(--font-mono)",
@@ -155,7 +155,7 @@ export default function Photos() {
         </div>
 
         {/* Date Range Filter */}
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <span
             style={{
               fontFamily: "var(--font-mono)",

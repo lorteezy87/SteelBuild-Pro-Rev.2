@@ -15,7 +15,7 @@ import { computeFloat } from "@/services/scheduleFloat";
 import { useProjectCalendar } from "@/hooks/useProjectCalendar";
 import { computePhaseWbs } from "./schedule/wbs";
 import { computeBulkParentOptions } from "./schedule/scheduleTaskHelpers";
-import { normalizeSchedulePhase } from "./schedule/schedulePageHelpers";
+import { defaultScheduleView, normalizeSchedulePhase } from "./schedule/schedulePageHelpers";
 import type { ScheduleTask } from "./schedule/types";
 import ScheduleCommandCenter from "./schedule/ScheduleCommandCenter";
 import ScheduleBody from "./schedule/ScheduleBody";
@@ -29,7 +29,7 @@ import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 export default function Schedule() {
   const [searchParams] = useSearchParams();
   const projectId = useProjectId();
-  const [view, setView] = useState("gantt");
+  const [view, setView] = useState<string>(() => defaultScheduleView());
   const [expandedTask, setExpandedTask] = useState<any>(null);
   // Seed the phase filter from the URL if a caller (e.g. the Portfolio
   // mini-Gantt) deep-linked with ?phase=Detailing. If the incoming

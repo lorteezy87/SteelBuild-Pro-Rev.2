@@ -152,7 +152,11 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
       data-compact={compact ? "true" : "false"}
       data-variant={variant}
       data-name-limit={projectNameLimit}
-      style={{ position: "relative", minWidth: 0 }}
+      // Compact (phone top bar): the width cap sits on this wrapper, not the
+      // button, so the wrapper never outgrows the pill, and the top bar can
+      // shrink it below the cap (minWidth 0). The button fills it and
+      // ellipsizes the name. The <=480px cap is in responsive.css.
+      style={{ position: "relative", minWidth: 0, maxWidth: compact ? "min(44vw, 190px)" : undefined }}
     >
       {/* Pill trigger */}
       <button
@@ -185,7 +189,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
           transition: "all 0.15s",
           userSelect: "none",
           width: isDashboardVariant ? 230 : undefined,
-          maxWidth: isDashboardVariant ? 230 : compact ? "min(44vw, 190px)" : 280,
+          maxWidth: isDashboardVariant ? 230 : compact ? "100%" : 280,
           overflow: "hidden",
           textOverflow: "ellipsis",
           boxShadow: isDashboardVariant ? "var(--shadow-card)" : undefined,
