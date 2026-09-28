@@ -552,6 +552,12 @@ export const RESPONSIVE_CSS = `
 }
 
 @media (max-width: 760px) {
+  /* Phones: the 300px exceptions rail stacks above the list instead of
+     squeezing it to a ~40px column. (.wp-content-grid above predates the
+     body's rename to .wp-cc__body and no longer matches it.) */
+  .wp-cc__body {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
   .wp-hero {
     grid-template-columns: 1fr !important;
   }

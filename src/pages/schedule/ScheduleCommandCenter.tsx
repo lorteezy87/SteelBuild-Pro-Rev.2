@@ -240,7 +240,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
         <div
           className="sched-cc__action-group"
           aria-label="Import and export actions"
-          style={{ display: "flex", gap: 6, alignItems: "center", paddingRight: 10, borderRight: "1px solid var(--divider)", marginRight: 4 }}
+          style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", paddingRight: 10, borderRight: "1px solid var(--divider)", marginRight: 4 }}
         >
           <button
             type="button"
@@ -279,7 +279,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
             <Download size={14} /> {exportingPdf ? "Exporting..." : "Export PDF"}
           </button>
         </div>
-        <div className="sched-cc__action-group" aria-label="Task actions" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div className="sched-cc__action-group" aria-label="Task actions" style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
           <button
             type="button"
             className="cmd-btn cmd-btn--ghost"
