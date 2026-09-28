@@ -92,6 +92,7 @@ export default function ResourceHub() {
       <div
         role="tablist"
         aria-label="Resources"
+        className="hub-tabstrip"
         style={{
           display: "flex",
           gap: 6,
