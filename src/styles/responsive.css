@@ -198,6 +198,53 @@ body {
     flex: 0 0 auto;
     white-space: nowrap;
   }
+
+  /* Schedule's Rivet brief: its desktop grid is six columns at least 104px
+     wide, with panels spanning 3 or 6 of them, which is wider than any
+     phone. Two metric columns here, every other panel full width. */
+  .rivet-brief-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .rivet-brief-grid > * {
+    grid-column: 1 / -1 !important;
+  }
+
+  .rivet-brief-grid > .rivet-brief-metric {
+    grid-column: auto !important;
+  }
+
+  /* The brief's AI risk card and 14-day handoff: their three sections stack
+     instead of sharing a phone's width at ~70px each. */
+  .rivet-ai-risk-columns,
+  .rivet-handoff-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Phase pressure rows: the phase name takes its own line and the four
+     counts wrap under it, instead of a 90px + 4-column grid. */
+  .rivet-phase-row {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 4px 8px !important;
+  }
+
+  .rivet-phase-row > :first-child {
+    flex-basis: 100%;
+  }
+
+  /* Schedule Task List, the phone default view: each phase panel scrolls
+     sideways and its rows keep room for the ten columns (640px of them are
+     fixed), instead of crushing the task name to ~26px and clipping Finish
+     through Status. Same idea as the .sbp-table min-width rule above. */
+  .sched-task-list-panel {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sched-task-list-panel > .sched-task-list-row {
+    min-width: 960px;
+  }
 }
 
 @media (max-width: 480px) {

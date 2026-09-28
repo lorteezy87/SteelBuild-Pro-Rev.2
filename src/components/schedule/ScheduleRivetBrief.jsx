@@ -123,12 +123,13 @@ export default function ScheduleRivetBrief({ tasks = [], brief: briefProp, proje
       <div style={headerStyle}>
         <div style={titleWrapStyle}>
           <span style={avatarStyle}><Sparkles size={15} /></span>
-          <div>
+          {/* minWidth 0 lets the nowrap project title ellipsize. */}
+          <div style={{ minWidth: 0 }}>
             <div style={eyebrowStyle}>Rivet Schedule Brief</div>
             <div style={titleStyle}>{project?.name || "Selected Project"}</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div style={riskPillStyle(healthTone)}>
             <span style={{ width: 8, height: 8, borderRadius: 999, background: healthTone, boxShadow: `0 0 12px ${healthTone}` }} />
             {brief.riskScore}% pressure
@@ -170,7 +171,7 @@ export default function ScheduleRivetBrief({ tasks = [], brief: briefProp, proje
           transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1), ease",
         }}
       >
-      <div ref={contentRef} style={{ ...gridStyle, paddingTop: 12 }}>
+      <div ref={contentRef} className="rivet-brief-grid" style={{ ...gridStyle, paddingTop: 12 }}>
         <ScheduleAiRiskCard insight={brief.aiNarrative} />
 
         <Metric icon={AlertTriangle} label="Delayed" value={brief.delayed.length} tone={brief.delayed.length ? "var(--status-error)" : "var(--status-success)"} />
@@ -239,11 +240,12 @@ export default function ScheduleRivetBrief({ tasks = [], brief: briefProp, proje
 
         <div style={phasePanelStyle}>
           <div style={miniLabelStyle}>Phase pressure</div>
-          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, marginTop: 10 }}>
             {brief.phaseRows.length ? brief.phaseRows.map((row) => (
               <button
                 key={row.phase}
                 type="button"
+                className="rivet-phase-row"
                 onClick={() => onSetPhaseFilter?.(row.phase)}
                 style={phaseRowStyle(phaseFilter === row.phase)}
               >
@@ -280,7 +282,7 @@ export default function ScheduleRivetBrief({ tasks = [], brief: briefProp, proje
               Open in Gantt
             </button>
           </div>
-          <div style={handoffGridStyle}>
+          <div className="rivet-handoff-grid" style={handoffGridStyle}>
             <div>
               <div style={handoffHeadingStyle}>Active now</div>
               <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
@@ -454,7 +456,7 @@ export default function ScheduleRivetBrief({ tasks = [], brief: briefProp, proje
 
 function Metric({ icon: Icon, label, value, tone }) {
   return (
-    <div style={metricStyle(tone)}>
+    <div className="rivet-brief-metric" style={metricStyle(tone)}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <span style={miniLabelStyle}>{label}</span>
         <Icon size={14} color={tone} />

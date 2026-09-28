@@ -95,8 +95,9 @@ npm run test:e2e:ui        # interactive runner (debug selectors)
 
 `mobile-overflow.spec.ts` is read-only. At 393x852 (iPhone 17 Pro portrait,
 the Capacitor iOS shell) and at 360 and 430 wide, it loads Dashboard,
-Projects, RFIs and Drawings and fails if anything sticks out past the right
-edge. The phone shell clips over-wide content (`main` is `overflow-x: hidden`)
+Projects, RFIs and Drawings, plus Documents, Photos, Schedule, Work Packages,
+Scope & Exclusions and the calculators, and fails if anything sticks out past
+the right edge. The phone shell clips over-wide content (`main` is `overflow-x: hidden`)
 instead of scrolling the document, so the spec checks `main`, the top bar and
 every visible element, not just `document.documentElement.scrollWidth`. It
 also checks that the Projects hero sits in one symmetric 12-16px gutter.
