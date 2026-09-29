@@ -148,7 +148,7 @@ function AddTicketRow({ onAdd, busy }) {
   const num = (k, ph) => <input style={{ ...input, fontSize: 11 }} type="number" value={t[k]} onChange={(e) => set(k, e.target.value)} placeholder={ph} />;
   return (
     <div style={{ ...card, padding: 12, marginTop: 8, background: "var(--bg-surface-low)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
         <div><span style={labelCss}>Ticket #</span><input style={{ ...input, fontSize: 11 }} value={t.ticket_number} onChange={(e) => set("ticket_number", e.target.value)} /></div>
         <div><span style={labelCss}>Date</span><input style={{ ...input, fontSize: 11 }} type="date" value={t.ticket_date} onChange={(e) => set("ticket_date", e.target.value)} /></div>
         <div style={{ gridColumn: "span 2" }}><span style={labelCss}>Description</span><input style={{ ...input, fontSize: 11 }} value={t.description} onChange={(e) => set("description", e.target.value)} /></div>
