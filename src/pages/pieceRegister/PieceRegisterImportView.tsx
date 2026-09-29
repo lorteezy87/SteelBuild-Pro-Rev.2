@@ -26,6 +26,20 @@ import type {
 import type { PieceRegisterWorkPackageOption } from "./PieceRegisterRegisterView";
 import { presentImportReconciliationText } from "./registerHelpers";
 
+export function pieceImportAccept(sourceType: PieceImportSourceType): string {
+  switch (sourceType) {
+    case "powerfab_xml":
+    case "fabsuite_xml":
+      return ".xml,text/xml,application/xml";
+    case "ifc":
+      return ".ifc,.csv,.json,application/json,text/csv";
+    case "kiss":
+      return ".kss,.kiss,.csv,.txt,text/plain,text/csv";
+    default:
+      return ".csv,.json,text/csv,application/json";
+  }
+}
+
 export type PieceRegisterImportViewProps = {
   sourceType: PieceImportSourceType;
   setSourceType: (value: PieceImportSourceType) => void;
@@ -114,9 +128,9 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
             <FileUp size={18} />
           </span>
           <p>
-            Download the standard CSV template, fill piece marks / WP / drawing
-            sheet in one file, then stage for review. Staging makes no direct
-            changes to the active register.
+            Choose the source before selecting a file. CSV, IFC, KISS, and
+            PowerFab/FabSuite XML are parsed locally, then staged for review;
+            staging makes no direct changes to the active register.
           </p>
         </div>
         <div className="piece-command-form">
@@ -133,9 +147,14 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
             <select
               id="piece-import-source"
               value={sourceType}
-              onChange={(event) =>
-                setSourceType(event.target.value as PieceImportSourceType)
-              }
+              onChange={(event) => {
+                const nextSourceType = event.target.value as PieceImportSourceType;
+                if (nextSourceType === sourceType) return;
+                // A staged preview is valid only for the source parser that
+                // produced it. Clearing prevents an XML/CSV source mismatch.
+                setSourceType(nextSourceType);
+                handleFile(null);
+              }}
               className="piece-command-control"
             >
               {PIECE_IMPORT_SOURCE_OPTIONS.map((option) => (
@@ -150,7 +169,7 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
             <input
               id="piece-import-file"
               type="file"
-              accept=".csv,.json,text/csv,application/json"
+              accept={pieceImportAccept(sourceType)}
               onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
               className="piece-command-control piece-command-control--file"
             />

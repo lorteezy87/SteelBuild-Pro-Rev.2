@@ -93,6 +93,24 @@ describe("buildRevisionImpactRows", () => {
     expect(row.rfiCount).toBe(0);
     expect(row.affectedPieces).toBeNull();
   });
+
+  it("keeps a changed sheet review-required when the model roster has not loaded", () => {
+    const [row] = buildRevisionImpactRows(
+      [{ revisionId: "r1", drawingId: "d1", severity: "unknown" }],
+      {
+        drawings: [{ id: "d1", drawing_set_id: "set1" }],
+        drawingSets: [{ id: "set1", linked_work_package_ids: [] }],
+        modelElements: [],
+        modelRosterCount: 664,
+        modelRosterLoaded: false,
+        comparisonByRevisionId: { r1: { status: "complete" } },
+      },
+    );
+
+    expect(row.affectedPieces).toBeNull();
+    expect(row.revisionControl.status).toBe("review_required");
+    expect(row.revisionControl.reasons.map((reason) => reason.code)).toContain("MODEL_ROSTER_NOT_LOADED");
+  });
 });
 
 // ── Linked-RFI join + fab hold (§4/§5) ───────────────────────────────────────

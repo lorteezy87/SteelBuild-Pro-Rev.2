@@ -35,6 +35,7 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 import {
   generateRevisionDiff,
+  recordVisualRevisionReview,
   setDeltaDismissed,
   sortDeltasBySeverity,
 } from "@/lib/revisionSnapshotDiff";
@@ -210,7 +211,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   // surfaces can never disagree about what red and blue mean.
   const {
     mode, setMode, wipePct, setWipePct, offset, nudge, resetOffset,
-    zoom, zoomBy, rendering, renderError,
+    zoom, zoomBy, rendering, renderError, rastersReady, retryRender,
     displayRef, sideOldRef, sideNewRef, rastersRef,
   } = useRasterCompare({ open, oldPage: oldSel, newPage: newSel });
 
@@ -233,6 +234,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   const [aiRetryMsg, setAiRetryMsg] = useState("");
   const [aiCached, setAiCached] = useState(false);
   const [rfiDraft, setRfiDraft] = useState(null); // { deltaId, prefill } | null
+  const [visualReviewStatus, setVisualReviewStatus] = useState("idle"); // idle | saving | complete | error
 
   // A new selection pair invalidates stale results (don't clobber a live run).
   useEffect(() => {
@@ -243,6 +245,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
     setAiError("");
     setAiRetryMsg("");
     setAiCached(false);
+    setVisualReviewStatus("idle");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [oldKey, newKey]);
 
@@ -271,7 +274,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   }, [revisionRows, drawing, user, qc]);
 
   const runAiDiff = async (force = false) => {
-    if (!oldSel || !newSel) return;
+    if (!rastersReady || renderError || !oldSel || !newSel) return;
     setAiStatus("running");
     setAiError("");
     setAiRetryMsg("");
@@ -307,6 +310,25 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
     }
   };
 
+  const markVisualReviewComplete = async () => {
+    if (!rastersReady || renderError || !oldSel || !newSel || visualReviewStatus === "saving") return;
+    setVisualReviewStatus("saving");
+    try {
+      const [fromRevisionId, toRevisionId] = await Promise.all([
+        resolveRevisionId(oldSel),
+        resolveRevisionId(newSel),
+      ]);
+      if (!fromRevisionId || !toRevisionId) throw new Error("Couldn't resolve the two revisions for these selections.");
+      if (fromRevisionId === toRevisionId) throw new Error("Pick two different revisions to compare.");
+      await recordVisualRevisionReview({ drawingId: drawing?.id, fromRevisionId, toRevisionId });
+      setVisualReviewStatus("complete");
+      toast.success("Visual revision review recorded");
+    } catch (error) {
+      setVisualReviewStatus("error");
+      toast.error(error?.message || "Could not record the visual review.");
+    }
+  };
+
   const toggleDismiss = async (delta) => {
     const next = !delta.dismissed;
     setAiDeltas((list) => list.map((d) => (d.id === delta.id ? { ...d, dismissed: next } : d)));
@@ -331,7 +353,8 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
     }
   };
 
-  const aiBusyDisabled = rendering || isLoading || notEnough || !oldSel || !newSel;
+  const comparisonActionsDisabled = !rastersReady || !!renderError || rendering || isLoading || notEnough || !oldSel || !newSel;
+  const aiBusyDisabled = comparisonActionsDisabled;
 
   // SP4: under canonical presentation, tag this portaled Radix dialog `.detailing-cc` so
   // the header/controls/AI-rail chrome inherits the shell's light token-alias.
@@ -487,19 +510,39 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
               <span className="sbd-num" style={{ fontFamily: mono, fontSize: 10, color: "var(--text-muted)", minWidth: 34, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
               <button type="button" className="sbd-btn-ghost" style={{ minHeight: 28, padding: "2px 7px" }} onClick={() => zoomBy(1)} title="Zoom in"><ZoomIn size={13} /></button>
 
+              <button
+                type="button"
+                className="sbd-btn-ghost"
+                disabled={comparisonActionsDisabled || visualReviewStatus === "saving" || visualReviewStatus === "complete"}
+                onClick={markVisualReviewComplete}
+                title="Record a completed human visual comparison after both sheets render"
+                style={{
+                  minHeight: 28, padding: "2px 8px", fontFamily: mono, fontSize: 9,
+                  opacity: comparisonActionsDisabled || visualReviewStatus === "saving" || visualReviewStatus === "complete" ? 0.5 : 1,
+                  cursor: comparisonActionsDisabled || visualReviewStatus === "saving" || visualReviewStatus === "complete" ? "not-allowed" : "pointer",
+                }}
+              >
+                {visualReviewStatus === "saving"
+                  ? "Recording visual review…"
+                  : visualReviewStatus === "complete"
+                    ? "Visual review complete"
+                    : "Mark visual review complete"}
+              </button>
+
               {aiEnabled && (
                 <>
                   <span style={{ width: 1, height: 22, background: "var(--border-default)", margin: "0 2px" }} />
                   <button
                     type="button"
                     onClick={() => setAiOpen((v) => !v)}
+                    disabled={aiBusyDisabled}
                     title="AI: what changed between these revisions?"
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 5,
-                      minHeight: 30, padding: "4px 10px", borderRadius: 7, cursor: "pointer",
+                      minHeight: 30, padding: "4px 10px", borderRadius: 7, cursor: aiBusyDisabled ? "not-allowed" : "pointer",
                       border: `1px solid ${aiOpen ? "var(--accent)" : "var(--border-default)"}`,
                       background: aiOpen ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent",
-                      color: aiOpen ? "var(--accent)" : "var(--text-muted)",
+                      color: aiOpen ? "var(--accent)" : "var(--text-muted)", opacity: aiBusyDisabled ? 0.5 : 1,
                       fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
                     }}
                   >
@@ -538,8 +581,12 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                 </div>
               )}
               {renderError ? (
-                <div style={{ padding: 24, color: "var(--status-error)", fontFamily: "var(--font-body)", fontSize: 12 }}>
-                  {renderError}
+                <div role="alert" style={{ padding: 24, color: "var(--status-error)", fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.5 }}>
+                  <div>{renderError}</div>
+                  <p style={{ margin: "8px 0" }}>This comparison is incomplete. AI analysis and visual completion stay disabled until both sheets render.</p>
+                  <button type="button" className="sbd-btn-ghost" onClick={retryRender}>
+                    <RotateCw size={13} style={{ marginRight: 6 }} /> Retry rendering
+                  </button>
                 </div>
               ) : mode === "side" ? (
                 <div style={{ display: "flex", gap: 8, padding: 10, alignItems: "flex-start" }}>
