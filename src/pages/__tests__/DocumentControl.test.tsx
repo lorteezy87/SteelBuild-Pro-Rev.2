@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
@@ -44,7 +45,7 @@ import DocumentControl from "../DocumentControl";
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
 }
 
 /** Drop a PDF on the zone the way a user does. */
@@ -94,6 +95,7 @@ describe("DocumentControl page", () => {
 
     fireEvent.click(screen.getByText("S-101"));
     expect(screen.getByText(/Matches live register sheet S-101 at revision 1/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start revision upload" })).toBeTruthy();
   });
 
   it("excludes superseded rows from the register it checks against", async () => {
