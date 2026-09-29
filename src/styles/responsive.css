@@ -145,7 +145,11 @@ body {
     min-height: 40px;
   }
 
-  [role="dialog"],
+  /* Keep dialog panels inside the screen. Many dialogs put role="dialog" on
+     their full-screen backdrop (position: fixed; inset: 0) instead of the
+     panel; capping that shrank the backdrop 24px short of the right and
+     bottom edges, so exempt anything that is inset to the viewport. */
+  [role="dialog"]:not([style*="inset: 0"]),
   [data-radix-dialog-content] {
     max-width: calc(100vw - 24px) !important;
     max-height: calc(100dvh - 24px) !important;

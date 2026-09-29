@@ -546,8 +546,12 @@ export const RESPONSIVE_CSS = `
   .wp-content-grid {
     grid-template-columns: 1fr !important;
   }
+  /* Two phase columns where two 260px columns fit, one where they don't. The
+     300px exceptions rail stays beside the list up to 760px (the rule above
+     targets the body's pre-rename class), which leaves the list ~400px at iPad
+     portrait widths: a fixed repeat(2, minmax(260px, 1fr)) overflowed it. */
   .wp-phase-flow {
-    grid-template-columns: repeat(2, minmax(260px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)) !important;
   }
 }
 
