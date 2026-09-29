@@ -21,18 +21,20 @@
 //      naming the workspaces) until they make another member an owner. Deleting
 //      one person's account never takes other people's workspace or logins.
 //   2. Workspaces where the caller is the ONLY member are erased with the
-//      account: live projects are archived (soft_delete_project, the step
-//      hard_delete_organization's ARCHIVE_FIRST guard requires), then the org
-//      is erased as in mode A.
+//      account, in one database transaction: `erase_my_sole_member_workspaces`
+//      archives their live projects (hard_delete_organization's ARCHIVE_FIRST
+//      guard) and erases each org as in mode A. If any step fails, nothing is
+//      archived or erased. Their Storage is purged afterwards.
 //   3. The caller's auth.users row is deleted; FK cascades remove their
 //      remaining memberships, their `user_profiles` PII, and `user_projects`.
-//      Some authorship columns are NO ACTION rather than SET NULL; if the
-//      caller created such rows in a workspace that is not being erased (one
-//      they are a member of, or co-own), the auth delete fails (409
-//      RECORDS_REFERENCE_ACCOUNT). A migration that clears those references
-//      is a follow-up.
+//      Rows they created in workspaces that stay lose the author link, and
+//      audit and sign-off rows keep their id (20260927160000). Anything else
+//      that still references the account makes the delete fail (409
+//      RECORDS_REFERENCE_ACCOUNT).
 //
-// Irreversible. Deploy WITH JWT verify.
+// Irreversible. Deploy WITH JWT verify, and only after migrations
+// 20260927150000 and 20260927160000 are applied: mode B calls the RPC the
+// second one adds, and erasing a workspace with projects needs the first.
 //   supabase functions deploy account-delete --project-ref <ref>
 //
 // Secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
@@ -44,6 +46,8 @@ import {
   ACCOUNT_ERASURE_REASON,
   WORKSPACE_ERASURE_REASON,
   eraseOrgArgs,
+  eraseSoleWorkspacesArgs,
+  erasedWorkspaceIds,
   planAccountDeletion,
   type OrgRoster,
 } from "./plan.ts";
@@ -128,14 +132,20 @@ async function eraseOwnedOrg(
   const { error: rpcErr } = await userClient.rpc("hard_delete_organization", eraseOrgArgs(orgId, reason));
   if (rpcErr) throw new Error(`db_erasure_failed:${orgId}:${rpcErr.message}`);
 
-  // Storage purge (best-effort; DB rows are already gone).
-  let storageRemoved = 0;
-  try {
-    storageRemoved += await removeAll(admin, "app-files", orgId);
-    for (const pid of projectIds) storageRemoved += await removeAll(admin, "email-attachments", pid);
-  } catch (_) { /* best-effort; report what we managed */ }
-
+  const storageRemoved = await purgeWorkspaceStorage(admin, [orgId], projectIds);
   return { storageRemoved, memberIds, projectsDeleted: projectIds.length };
+}
+
+// Storage purge for erased workspaces: app-files under `<org_id>/…` and
+// email-attachments under each `<project_id>/…`. Best-effort; the DB rows are
+// already gone.
+async function purgeWorkspaceStorage(admin: any, orgIds: string[], projectIds: string[]): Promise<number> {
+  let removed = 0;
+  try {
+    for (const orgId of orgIds) removed += await removeAll(admin, "app-files", orgId);
+    for (const pid of projectIds) removed += await removeAll(admin, "email-attachments", pid);
+  } catch (_) { /* best-effort; report what we managed */ }
+  return removed;
 }
 
 // Mode A — erase an organization. Caller must be the org OWNER.
@@ -201,38 +211,27 @@ async function handleAccountDeletion(admin: any, userClient: any, callerId: stri
     }, 409);
   }
 
-  // Erase each workspace where the caller is the only member (while the
-  // caller's JWT is still valid, i.e. before deleting their auth user below).
-  // hard_delete_organization refuses to erase live projects (ARCHIVE_FIRST),
-  // so they are archived first, as reset_org_data does.
-  let storageRemoved = 0;
-  let orgsDeleted = 0;
-  for (const org of plan.erase) {
-    const { data: live, error: liveErr } = await admin
-      .from("projects")
-      .select("id")
-      .eq("org_id", org.orgId)
-      .eq("is_deleted", false);
-    if (liveErr) return json({ error: "account_deletion_failed", step: "archive", detail: liveErr.message }, 400);
-    for (const project of (live ?? []) as Array<{ id: string }>) {
-      const { error: archiveErr } = await userClient.rpc("soft_delete_project", { p_project_id: project.id });
-      if (archiveErr) return json({ error: "account_deletion_failed", step: "archive", detail: archiveErr.message }, 400);
-    }
-    try {
-      const erased = await eraseOwnedOrg(admin, userClient, org.orgId, ACCOUNT_ERASURE_REASON);
-      storageRemoved += erased.storageRemoved;
-    } catch (e) {
-      return json({ error: "account_deletion_failed", step: "erase", detail: String((e as Error)?.message ?? e) }, 400);
-    }
-    orgsDeleted++;
-  }
+  // Erase every workspace where the caller is the only member, in one
+  // database transaction: the RPC archives their live projects (the
+  // ARCHIVE_FIRST step hard_delete_organization requires) and erases each org,
+  // so a failure leaves nothing half-archived. It picks the workspaces itself,
+  // by the same rule as plan.erase, and runs with the caller's JWT, so it has
+  // to happen before their auth user is deleted below.
+  const { data: erasedBody, error: eraseErr } = await userClient.rpc(
+    "erase_my_sole_member_workspaces",
+    eraseSoleWorkspacesArgs(ACCOUNT_ERASURE_REASON),
+  );
+  if (eraseErr) return json({ error: "account_deletion_failed", step: "erase", detail: eraseErr.message }, 400);
+  const erased = erasedWorkspaceIds(erasedBody);
+  const storageRemoved = await purgeWorkspaceStorage(admin, erased.orgIds, erased.projectIds);
 
   // Delete the caller's auth user. FK cascades remove their remaining
-  // memberships, `user_profiles` PII, and `user_projects`.
+  // memberships, `user_profiles` PII, and `user_projects`, and release their
+  // authorship of rows in the workspaces that stay (20260927160000).
   const { error: delErr } = await admin.auth.admin.deleteUser(callerId);
   if (delErr) {
-    // A NO ACTION foreign key to auth.users (a record the caller created in a
-    // workspace that was not erased) blocks the delete.
+    // A foreign key to auth.users that still has no ON DELETE rule (one not
+    // covered by 20260927160000) blocks the delete.
     const blockedByRecords = /database error deleting user/i.test(delErr.message);
     return json(blockedByRecords
       ? {
@@ -246,7 +245,7 @@ async function handleAccountDeletion(admin: any, userClient: any, callerId: stri
   return json({
     ok: true,
     mode: "account",
-    orgs_deleted: orgsDeleted,
+    orgs_deleted: erased.orgIds.length,
     storage_objects_removed: storageRemoved,
     users_deleted: 1,
   });

@@ -4,6 +4,8 @@ import {
   ACCOUNT_ERASURE_REASON,
   WORKSPACE_ERASURE_REASON,
   eraseOrgArgs,
+  eraseSoleWorkspacesArgs,
+  erasedWorkspaceIds,
   planAccountDeletion,
   type OrgRoster,
 } from '../plan';
@@ -75,5 +77,32 @@ describe('hard_delete_organization arguments', () => {
     const params = (block?.[1] ?? '').split(';').map((p) => p.trim()).filter(Boolean);
     const required = params.filter((p) => !p.includes('?:')).map((p) => p.split(':')[0].trim()).sort();
     expect(required).toEqual(Object.keys(eraseOrgArgs('org-1', ACCOUNT_ERASURE_REASON)).sort());
+  });
+});
+
+describe('erase_my_sole_member_workspaces', () => {
+  it('passes exactly the parameters the migration declares', () => {
+    const sql = readFileSync(
+      new URL('../../../migrations/20260927160000_account_deletion_releases_authorship.sql', import.meta.url),
+      'utf8',
+    );
+    const signature = sql.match(/function public\.erase_my_sole_member_workspaces\(([^)]*)\)/);
+    expect(signature, 'erase_my_sole_member_workspaces is missing from the migration').not.toBeNull();
+    const params = (signature?.[1] ?? '').split(',').map((p) => p.trim().split(/\s+/)[0]).filter(Boolean).sort();
+    expect(params).toEqual(Object.keys(eraseSoleWorkspacesArgs(ACCOUNT_ERASURE_REASON)).sort());
+    expect(eraseSoleWorkspacesArgs(ACCOUNT_ERASURE_REASON).p_reason.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('reads the erased ids for the Storage purge', () => {
+    expect(erasedWorkspaceIds({ org_ids: ['o1'], project_ids: ['p1', 'p2'] })).toEqual({
+      orgIds: ['o1'],
+      projectIds: ['p1', 'p2'],
+    });
+  });
+
+  it('purges nothing it cannot read as an id', () => {
+    for (const body of [null, undefined, 'x', {}, { org_ids: 'o1' }, { org_ids: [1, null, ''], project_ids: [{}] }]) {
+      expect(erasedWorkspaceIds(body)).toEqual({ orgIds: [], projectIds: [] });
+    }
   });
 });
