@@ -521,6 +521,18 @@
       "owner": "shared-production/kjrwqagyeswwoxpjkcko",
       "lifecycle": "required",
       "evidence": "Authenticated production ledger source archived at supabase/migrations_external/20260910044641_m30_scope_items.sql, SHA-256 942871f2a0f9c04659c54d25d418eac57f4cb639505865c9779c4830d8eb29c5. Four function bodies, six columns, constraints/indexes/triggers and RLS/grants match production. Original author/repository commit unproven; see migrations_external/provenance.json. Already applied; do not rerun its data backfill"
+    },
+    {
+      "version": "20260927004958",
+      "owner": "shared-production/kjrwqagyeswwoxpjkcko",
+      "lifecycle": "required",
+      "evidence": "Authenticated production ledger SQL recovered 2026-10-05 at supabase/migrations_external/20260927004958_blueline_pwa_backend.sql; SHA-256 743bb7064dc844d26eeb130a2c10b2c9353746323ade1a90c66dc6d4a266878b. See migrations_external/blueline-provenance.json for exact bytes and server hashes. Original repository/author/commit unproven. Already applied Blueline backend/storage configuration; archive is not deployment input. Preserve live records, files and migration history."
+    },
+    {
+      "version": "20260927005727",
+      "owner": "shared-production/kjrwqagyeswwoxpjkcko",
+      "lifecycle": "required",
+      "evidence": "Authenticated production ledger SQL recovered 2026-10-05 at supabase/migrations_external/20260927005727_blueline_storage_limit.sql; SHA-256 0ceb1a0b25e66c5a24d8aec1a39645a6e4785277e1f8c13895f94ed05690ed61. See migrations_external/blueline-provenance.json for exact bytes and server hashes. Original repository/author/commit unproven. Already applied Blueline backend/storage configuration; archive is not deployment input. Preserve live records, files and migration history."
     }
   ],
   "functions": [
