@@ -24,5 +24,18 @@ describe("piece_events integrity hardening migration", () => {
     expect(sql).toMatch(/DROP INDEX IF EXISTS public\.idx_piece_events_piece/);
     expect(sql).not.toMatch(/DROP INDEX IF EXISTS public\.piece_events_piece_created_at_idx/);
     expect(sql).not.toMatch(/DROP INDEX IF EXISTS public\.piece_events_project_created_at_idx/);
+    expect(sql).toMatch(/IF v_redundant_index IS NOT NULL AND v_retained_index IS NOT NULL THEN/);
+    expect(sql).toMatch(/v_usable_index := coalesce\(v_retained_index, v_redundant_index\)/);
+    expect(sql).not.toMatch(/'public\.piece_events_piece_created_at_idx'::regclass/);
+  });
+
+  it("does not discard uniqueness or retain an unusable index", () => {
+    const sql = readFileSync(resolve(migrationsDir, migrationName), "utf8");
+
+    expect(sql).toMatch(/retained\.indisunique = redundant\.indisunique/);
+    expect(sql).toMatch(/retained\.indnullsnotdistinct = redundant\.indnullsnotdistinct/);
+    expect(sql).toMatch(/retained\.indisvalid AND retained\.indisready AND retained\.indislive/);
+    expect(sql).toMatch(/No usable piece_events \(piece_id, created_at DESC\) index/);
+    expect(sql).toMatch(/primary key other than id; refusing to change its identity/);
   });
 });

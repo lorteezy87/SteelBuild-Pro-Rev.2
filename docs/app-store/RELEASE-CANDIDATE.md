@@ -82,6 +82,39 @@ database function exists. Never use `supabase db push`, MCP `apply_migration`,
 or ledger repair against the shared production project. A client build alone
 does not deploy or verify these backend changes.
 
+## Evidence and remaining handoff
+
+The merged #495 candidate passed 7,190 unit tests in 756 files, the lint/type
+and JavaScript-file gates, production build, Capacitor iOS sync, and hosted
+18-test desktop/mobile foundation coverage. Final account-deletion corrections
+and the pending piece-events migration compatibility fix are tracked in #492.
+The final combined candidate passed 7,235 tests in 760 files and all eight
+local gates, plus the account-deletion PGlite gate. Tests use CI placeholders;
+local full-suite runs deny IPv4/IPv6 sockets.
+
+The revision retry and index migration rehearsals are recorded in
+[BACKEND-REHEARSAL-2026-10-05.md](BACKEND-REHEARSAL-2026-10-05.md). They are
+rollback-only evidence, not deployed migrations or ledger stamps. Account
+cleanup tests and the remaining authenticated HTTP timeout/concurrency checks
+are documented in [the account-deletion verification guide](../../supabase/tests/account-deletion/README.md).
+
+App Store Connect presented its Apple sign-in page in this session. No Apple
+credentials were entered, app record changed, signed archive produced, build
+uploaded, or review submission made. The remaining sequence is:
+
+1. Restore the CI Supabase token and complete the documented staging backend
+   checks. Apply and record the exact reviewed SQL using the repository's
+   manual protocol, then deploy the matching Edge Function through the
+   reviewed backend workflow. Verify all four production gates pass.
+2. Supply Apple Developer/App Store Connect access and configure the
+   `app-store` environment secrets above. Confirm the existing app record or
+   create it for the exact bundle identifier; do not create a duplicate.
+3. Run the signed export/upload workflow. Test the resulting build on iPhone
+   and iPad using a disposable demo workspace provisioned for this purpose.
+4. Supply real screenshots, working reviewer credentials and the owner legal,
+   privacy, age-rating and distribution answers; select the processed build
+   and submit for App Review.
+
 ## Store listing draft
 
 **Name:** SteelBuild Pro

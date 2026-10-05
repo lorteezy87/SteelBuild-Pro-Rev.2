@@ -31,7 +31,7 @@ for (let attempt = 0; attempt < 30; attempt++) {
 if (!build) throw new Error('Upload receipt is not yet visible. Verify App Store Connect before retrying with a new build number.');
 const state = build.attributes.processingState;
 if (!['PROCESSING', 'VALID'].includes(state)) throw new Error(`Apple processing state: ${state}.`);
-const whatsNew = 'Verify sign-in and project access; offline field progress and replay; drawings and revision reviews; camera upload; CSV/PDF and grouped file sharing; account deletion using disposable staging accounts. Check iPhone and iPad layouts, keyboard editing, light and dark themes. Do not delete a production workspace during testing.';
+const whatsNew = 'Verify sign-in and project access; offline field progress and replay; drawings and revision reviews; camera upload; CSV/PDF and grouped file sharing. Check iPhone and iPad layouts, keyboard editing, light and dark themes. This build uses the production service. Test in-app account deletion only with a disposable demo account and workspace explicitly provisioned for that purpose; backend erasure regression tests run separately in staging. Never delete customer workspaces during testing.';
 const localizations = await request(`builds/${build.id}/betaBuildLocalizations`);
 const existing = localizations.data?.find(row => row.attributes.locale === 'en-US');
 await request(existing ? `betaBuildLocalizations/${existing.id}` : 'betaBuildLocalizations', existing ? 'PATCH' : 'POST', {
