@@ -51,6 +51,9 @@ export function resolveE2EEnvironment(env: Environment = process.env): E2EEnviro
     if (supabaseRef !== expectedRef) {
       throw new Error("Staging E2E Supabase URL does not match E2E_EXPECTED_SUPABASE_REF.");
     }
+    if (supabase.hostname === "kjrwqagyeswwoxpjkcko.supabase.co") {
+      throw new Error("Staging E2E refuses to run against the production database.");
+    }
   }
 
   return {

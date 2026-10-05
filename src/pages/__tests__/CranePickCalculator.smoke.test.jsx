@@ -19,6 +19,8 @@ import CranePickCalculator from "../CranePickCalculator";
 
 // The page toasts via sonner on the "Save to Project" stub; stub it out.
 vi.mock("sonner", () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }));
+// jsdom has no WebGL; the 3D view is presentation-only and tested separately.
+vi.mock("@/components/calculators/CranePick3D", () => ({ default: () => null }));
 
 describe("CranePickCalculator (device-kit reskin smoke)", () => {
   it("renders the PLANNING TOOL ONLY disclaimer", () => {
@@ -50,5 +52,72 @@ describe("CranePickCalculator (device-kit reskin smoke)", () => {
 
     // Sanity: the legs are 2 by default, so the row labels per-leg tension.
     expect(screen.getByText(/Tension per Leg/i)).toBeInTheDocument();
+  });
+});
+
+describe("CranePickCalculator (audit fixes + new features)", () => {
+  const set = (placeholder, value) =>
+    fireEvent.change(screen.getByPlaceholderText(placeholder), { target: { value } });
+
+  // parseFloat("12,500") is 12 — a comma-grouped entry used to be read as 12 lb.
+  it("reads comma-grouped weights as thousands", () => {
+    render(<CranePickCalculator />);
+    set(/e\.g\. 12,500/, "12,500");
+    set(/e\.g\. 180,000/, "25,000");
+    expect(screen.getByText("50.0%")).toBeInTheDocument();
+  });
+
+  it("reports an unparseable weight instead of computing with part of it", () => {
+    render(<CranePickCalculator />);
+    set(/e\.g\. 12,500/, "12k");
+    set(/e\.g\. 180,000/, "20000");
+    expect(screen.getByRole("alert").textContent).toMatch(/Piece weight isn't a number/);
+    expect(screen.queryByText(/%$/)).not.toBeInTheDocument();
+  });
+
+  it("includes the hook block in the gross load compared to the chart", () => {
+    render(<CranePickCalculator />);
+    set(/e\.g\. 12,500/, "10000");
+    set(/e\.g\. 1,200/, "2000");
+    set(/e\.g\. 180,000/, "20000");
+    // (10,000 + 2,000) / 20,000 = 60%. Sling tension still uses 10,000 only.
+    expect(screen.getByText("60.0%")).toBeInTheDocument();
+  });
+
+  it("computes the heavier leg for an offset centre of gravity", () => {
+    const { container } = render(<CranePickCalculator />);
+    set(/e\.g\. 12,500/, "12000");
+    set(/e\.g\. 180,000/, "100000");
+    fireEvent.click(screen.getByRole("button", { name: /offset toward one pick point/i }));
+    set(/e\.g\. 8$/, "8");
+    set(/e\.g\. 4$/, "4");
+    set(/e\.g\. 12$/, "12");
+    // T1 = 12000·12·√80 / (8·16) ≈ 10,062.3 lb (hand check in cranePickMath.test.ts)
+    expect(screen.getByText(/Max Leg Tension/i)).toBeInTheDocument();
+    expect(container.textContent).toMatch(/10,062\.3\s*lb/);
+  });
+
+  it("applies the 50% personnel-platform limit", () => {
+    render(<CranePickCalculator />);
+    set(/e\.g\. 12,500/, "11000");
+    set(/e\.g\. 180,000/, "20000");
+    fireEvent.click(screen.getByRole("button", { name: /personnel platform lift/i }));
+    expect(screen.getByText("55.0%")).toBeInTheDocument();
+    expect(screen.getByText(/may not exceed 50% of rated capacity/i)).toBeInTheDocument();
+  });
+
+  it("flags an overloaded sling against its WLL", () => {
+    render(<CranePickCalculator />);
+    set(/e\.g\. 12,500/, "10000");
+    set(/e\.g\. 180,000/, "20000");
+    set(/from the tag/, "5000"); // 5,773.5 lb per leg at 60° → 115.5%
+    expect(screen.getByText(/Sling OVERLOADED/)).toBeInTheDocument();
+  });
+
+  it("rejects a radius longer than the boom", () => {
+    render(<CranePickCalculator />);
+    set(/e\.g\. 110/, "50");
+    set(/e\.g\. 45/, "80");
+    expect(screen.getByRole("alert").textContent).toMatch(/radius must be less than the boom length/i);
   });
 });

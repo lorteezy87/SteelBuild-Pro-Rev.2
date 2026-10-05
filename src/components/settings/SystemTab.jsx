@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/components/shared/OrgContext';
-import { exportWorkspace, downloadWorkspaceExport } from '@/lib/workspaceExport';
+import { exportWorkspace, downloadWorkspaceExport, fetchWorkspaceProjects } from '@/lib/workspaceExport';
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -40,16 +39,13 @@ export default function SystemTab({ user }) {
     setIsExporting(true);
     setExportMsg('Gathering projects…');
     try {
-      let query = supabase
-        .from('projects')
-        .select('id, name')
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false });
       // currentOrg should always be set; if a transient null slips through, RLS
       // still limits the result to projects the user can access.
-      if (currentOrg?.id) query = query.eq('org_id', currentOrg.id);
-      const { data: projects, error } = await query;
-      if (error) throw error;
+      // Paged to completeness in workspaceExport — this read used to stop at
+      // PostgREST's 1000-row ceiling, which dropped projects before
+      // exportWorkspace could record them as `failures` and made the success
+      // toast below report a project count the backup never contained.
+      const projects = await fetchWorkspaceProjects(currentOrg?.id);
       if (!projects?.length) {
         toast.error('No projects to export yet.');
         return;
@@ -59,7 +55,8 @@ export default function SystemTab({ user }) {
         onProgress: (done, total, name) =>
           setExportMsg(name ? `Exporting ${Math.min(done + 1, total)} of ${total}: ${name}…` : 'Packaging backup…'),
       });
-      downloadWorkspaceExport(bundle);
+      const presentation = await downloadWorkspaceExport(bundle);
+      if (presentation !== 'downloaded' && presentation !== 'shared') return;
       const skipped = bundle.failures.length;
       toast.success(
         `Exported ${bundle.project_count} project${bundle.project_count === 1 ? '' : 's'} · ` +

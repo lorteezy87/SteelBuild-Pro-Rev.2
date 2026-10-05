@@ -39,6 +39,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
 import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
 import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 /* ─────────────────────────────────────────────
    Variance helpers
@@ -290,7 +291,7 @@ function PresetDialog({ open, onClose, onPick }) {
           border: "1px solid var(--border-default)",
           borderRadius: 12,
           padding: 22,
-          minWidth: 460,
+          minWidth: "min(460px, calc(100vw - 24px))",
           maxWidth: 560,
         }}
       >
@@ -759,12 +760,7 @@ export default function BudgetHours() {
       ]);
       const csv = [headers, ...exportRows].map((row) => row.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "budget_hours.csv";
-      a.click();
-      URL.revokeObjectURL(url);
+      void presentGeneratedFile({ blob, filename: "budget_hours.csv", title: "Budget hours" });
     };
 
     return (

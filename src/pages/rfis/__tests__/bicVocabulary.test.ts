@@ -92,10 +92,11 @@ describe("BicPill colour map", () => {
     expect(BIC_COLOR).not.toHaveProperty("Engineer");
   });
 
-  it("gives each party a distinct hue", () => {
-    // Two parties sharing a hue defeats the point of the chip.
-    const hues = BALL_IN_COURT_PARTIES.map((p) => BIC_COLOR[p]);
-    expect(new Set(hues).size).toBe(hues.length);
+  it("uses theme tokens for every canonical party", () => {
+    // Semantic colors may be shared; both themes must remain authoritative.
+    for (const party of BALL_IN_COURT_PARTIES) {
+      expect(BIC_COLOR[party]).toMatch(/^var\(--[a-z-]+\)$/);
+    }
   });
 
   it("agrees with the DetailPanel map on which parties exist", () => {

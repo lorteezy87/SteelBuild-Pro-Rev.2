@@ -19,6 +19,7 @@
 
 import { parseCsv as parseCsvRaw } from "@/lib/importRfiCsv";
 import { readFileText } from "@/lib/textDecoding";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import { PHASES } from "@/utils/phases";
 import type { ParsedMppTask } from "@/pages/schedule/types";
 
@@ -44,14 +45,11 @@ export const SCHEDULE_CSV_TEMPLATE = [
 
 export function downloadScheduleCsvTemplate(): void {
   const blob = new Blob([SCHEDULE_CSV_TEMPLATE], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "steelbuild-schedule-import-template.csv";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: "steelbuild-schedule-import-template.csv",
+    title: "Schedule import template",
+  });
 }
 
 // ── Column aliases ─────────────────────────────────

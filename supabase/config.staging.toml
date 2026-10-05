@@ -1,0 +1,20 @@
+# Copy to <temporary directory>/supabase/config.toml and use --workdir there.
+# Declares only the staging settings that should be changed by config push.
+project_id = "SteelBuild-Pro-staging"
+
+[auth]
+site_url = "https://steelbuild-pro-staging.n-lortz1987.workers.dev"
+additional_redirect_urls = ["https://steelbuild-pro-staging.n-lortz1987.workers.dev/**", "http://127.0.0.1:3000/**", "http://localhost:3000/**"]
+
+[auth.email]
+enable_confirmations = true
+double_confirm_changes = true
+max_frequency = "1m"
+otp_length = 8
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.sms]
+enable_signup = false

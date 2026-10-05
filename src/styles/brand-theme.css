@@ -13,6 +13,19 @@
   --brand-orange-light:        #FF7442;
   --brand-orange-muted:        rgba(255, 90, 31, 0.11);
   --brand-orange-border:       rgba(255, 90, 31, 0.38);
+
+  /* Identity palette from the SteelBuild-Pro brand sheet. These are the logo's
+     own colors — they are deliberately NOT wired into --accent, which stays on
+     --brand-orange for the product UI. Use them for the mark, brand lockups and
+     brand-surface treatments only. */
+  --sbp-foundry-black:         #0D1117;
+  --sbp-structural-graphite:   #19212B;
+  --sbp-signal-amber:          #F5BB00;
+  --sbp-steel-gray:            #64748B;
+  --sbp-blueprint-white:       #F5F7FA;
+
+  /* The hex-S mark's fill. SteelBuildMark and BrandLogo both read this. */
+  --brand-amber:               var(--sbp-signal-amber);
 }
 
 :root,

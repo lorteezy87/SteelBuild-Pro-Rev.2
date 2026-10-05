@@ -179,7 +179,7 @@ export function ballInCourtSummary(rfis: RfiRecord[]): BicSummaryRow[] {
   const groups = new Map<string, RfiRecord[]>();
   for (const rfi of rfis) {
     if (!OPEN_STATUSES.has(rfi.status || "Open")) continue;
-    const company = rfi.ball_in_court || "Contractor";
+    const company = rfi.ball_in_court || "Unassigned";
     const bucket = groups.get(company);
     if (bucket) bucket.push(rfi);
     else groups.set(company, [rfi]);

@@ -5,7 +5,7 @@
  */
 
 import React from "react";
-import { mono, statusColumns, PRIORITY_CFG, BIC_COLORS } from "./constants";
+import { mono, statusColumns, PRIORITY_CFG, BIC_COLORS, UNASSIGNED_BIC_COLORS } from "./constants";
 import { isOverdue, daysOpen } from "./utils";
 import { Pill } from "./subcomponents";
 import { formatLocalDate } from "@/utils/dates";
@@ -23,7 +23,7 @@ export default function BoardView({ filtered, onSelect }) {
             <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8, overflowY: "auto" }}>
               {col.map((r) => {
                 const pr = PRIORITY_CFG[r.priority] || PRIORITY_CFG.Medium;
-                const bic = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
+                const bic = BIC_COLORS[r.ball_in_court || "Unassigned"] || UNASSIGNED_BIC_COLORS;
                 const overdue = isOverdue(r);
                 return (
                   <div
@@ -45,7 +45,7 @@ export default function BoardView({ filtered, onSelect }) {
                     </div>
                     {r.drawing_reference && <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)" }}>{r.drawing_reference}</div>}
                     <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
-                      <Pill label={r.ball_in_court || "Contractor"} color={bic.text} bg={bic.bg} />
+                      <Pill label={r.ball_in_court || "Unassigned"} color={bic.text} bg={bic.bg} />
                       <span style={{ ...mono, fontSize: 8, color: overdue ? "var(--status-error)" : "var(--text-muted)", fontWeight: overdue ? 700 : 500 }}>
                         {r.date_required ? formatLocalDate(r.date_required + "T00:00:00", "en-US", { month: "short", day: "numeric" }) : "—"}
                       </span>

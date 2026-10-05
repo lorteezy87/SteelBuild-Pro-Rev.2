@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const textCalls = [];
-const saveCalls = [];
+const { presentGeneratedFile } = vi.hoisted(() => ({ presentGeneratedFile: vi.fn() }));
+
+vi.mock("@/lib/native/fileExport", () => ({ presentGeneratedFile }));
 const rectCalls = [];
 
 vi.mock("jspdf", () => {
@@ -25,7 +27,7 @@ vi.mock("jspdf", () => {
     addPage() { this._pages += 1; }
     setPage() {}
     text(t) { textCalls.push(Array.isArray(t) ? t.join(" ") : String(t)); }
-    save(name) { saveCalls.push(name); }
+    output() { return new Blob(["pdf"], { type: "application/pdf" }); }
   }
   return { jsPDF: FakePdf };
 });
@@ -60,7 +62,8 @@ const TASKS = [
 describe("buildGanttPdf", () => {
   beforeEach(() => {
     textCalls.length = 0;
-    saveCalls.length = 0;
+    presentGeneratedFile.mockReset();
+    presentGeneratedFile.mockResolvedValue("downloaded");
     rectCalls.length = 0;
   });
 
@@ -94,12 +97,15 @@ describe("buildGanttPdf", () => {
     expect(textCalls.join(" | ")).toContain("Installation");
   });
 
-  it("downloads a locally dated filename", async () => {
+  it("presents a locally dated filename", async () => {
     await exportGanttToPdf({
       project: { project_number: "26012" },
       tasks: TASKS,
       now: new Date(2026, 7, 30),
     });
-    expect(saveCalls).toEqual(["schedule-26012-2026-08-30.pdf"]);
+    expect(presentGeneratedFile).toHaveBeenCalledWith(expect.objectContaining({
+      filename: "schedule-26012-2026-08-30.pdf",
+      title: "Schedule PDF",
+    }));
   });
 });

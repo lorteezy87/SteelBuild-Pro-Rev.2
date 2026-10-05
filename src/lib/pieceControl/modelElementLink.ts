@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import {
   isMissingSchemaObjectError,
   normalizeThrownQueryError,
@@ -193,14 +194,11 @@ export function downloadModelGuidCsv(
 ): void {
   const csv = buildModelGuidCsv(rows);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `model-guids-${projectId || "export"}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `model-guids-${projectId || "export"}.csv`,
+    title: "Model GUID export",
+  });
 }
 
 /**

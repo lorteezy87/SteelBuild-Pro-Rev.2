@@ -67,19 +67,14 @@ export const STATUS_COLOR = {
  * tokenized surfaces, not as chrome colors. // semantic stage — allowlisted
  */
 export const BIC_COLOR = {
-  // Our side of the handoff.
-  Contractor:    "#C89B20", // gold
-  Subcontractor: "#F59E0B", // amber
-  Detailer:      "#E879F9", // fuchsia
-  // Approver class.
-  EOR:           "#14B8A6", // teal -- the key "Engineer" held; EOR is the
-                            // party it was a synonym for, so the hue carries
-                            // over unchanged.
-  Architect:     "#0EA5A4", // darker teal
-  AOR:           "#818CF8", // indigo
-  // Downstream.
-  GC:            "#3B82F6", // blue
-  Owner:         "#22C55E", // green
+  Contractor:    "var(--accent)",
+  Subcontractor: "var(--status-info)",
+  Detailer:      "var(--secondary)",
+  GC:            "var(--status-info)",
+  EOR:           "var(--status-warning)",
+  AOR:           "var(--status-review)",
+  Architect:     "var(--status-success)",
+  Owner:         "var(--status-error)",
 };
 
 /**

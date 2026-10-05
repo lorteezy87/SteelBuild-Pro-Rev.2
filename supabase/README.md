@@ -17,11 +17,11 @@ SUPABASE_AUTH_SITE_URL=http://127.0.0.1:3000
 | Environment | Value |
 |---|---|
 | local | `http://127.0.0.1:3000` |
-| staging branch | `https://<branch-ref>.supabase.co` |
+| staging branch | the staging frontend URL (not the Supabase API URL) |
 | production | `https://steelbuild-pro.com` |
 
-If it is unset the CLI substitutes an empty string, auth redirects break, and
-`supabase start` will not sign you in. That is the first thing to check.
+Keep it set to the frontend origin for the environment so confirmation and
+password-reset links return to the right app. See `.env.example`.
 
 > `.env.example` should carry this line too. It is not added there yet.
 

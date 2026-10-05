@@ -34,5 +34,6 @@ function defineTestSuite() {
     expect(source).not.toContain(retiredFlag);
     expect(source).not.toContain(retiredCamel);
     expect(source).not.toContain(`useFlag("${retiredFlag}")`);
-  });
+    // This scans every runtime source file; Windows filesystem scans exceed 5s.
+  }, 30_000);
 }

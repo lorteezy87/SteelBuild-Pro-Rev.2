@@ -112,6 +112,7 @@ export default function PortfolioHub() {
       <div
         role="tablist"
         aria-label="Portfolio"
+        className="hub-tabstrip"
         style={{
           display: "flex",
           gap: 6,

@@ -1,0 +1,143 @@
+name: Deploy reviewed Supabase function
+run-name: Deploy ${{ inputs.function }} to ${{ inputs.target }}
+
+# Manual and narrow: no database migrations, secrets copying, shared functions,
+# maintenance endpoints, deprecated slugs, or all-functions deployment.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment environment (production requires this commit on staging first)
+        type: choice
+        required: true
+        options: [staging, production]
+      function:
+        description: Reviewed function
+        type: choice
+        required: true
+        options: [llm-proxy, project-export, stripe-billing]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: supabase-reviewed-${{ inputs.target }}-${{ inputs.function }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require passing CI and matching staging evidence
+        uses: actions/github-script@v8
+        env:
+          TARGET: ${{ inputs.target }}
+          FUNCTION: ${{ inputs.function }}
+        with:
+          script: |
+            const target = process.env.TARGET;
+            const slug = process.env.FUNCTION;
+            if (!['staging', 'production'].includes(target) || !['llm-proxy', 'project-export', 'stripe-billing'].includes(slug)) {
+              throw new Error('Unsupported deployment selection');
+            }
+            if (target === 'production' && context.ref !== 'refs/heads/main') {
+              throw new Error('Production releases must run from main');
+            }
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              ...context.repo, workflow_id: 'ci.yml', head_sha: context.sha, per_page: 100,
+            });
+            const required = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck'];
+            if (target === 'production') required.push('Supabase drift check');
+            let verified = false;
+            for (const run of runs) {
+              if (run.head_sha !== context.sha || run.event !== 'push' || run.status !== 'completed') continue;
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: run.id, per_page: 100 });
+              if (required.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) {
+                verified = true; break;
+              }
+            }
+            if (!verified) throw new Error('Required checks have not passed together for this commit');
+            if (target === 'production') {
+              const stagingRuns = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                ...context.repo, workflow_id: 'supabase-deploy-reviewed.yml', head_sha: context.sha, status: 'success', per_page: 100,
+              });
+              if (!stagingRuns.some(run => run.head_sha === context.sha && run.event === 'workflow_dispatch' && run.display_title === `Deploy ${slug} to staging`)) {
+                throw new Error('Deploy this exact commit and function to staging, verify it, then release production');
+              }
+            }
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Configure production-backend to allow main only, with owner review.
+    # Use distinct environment-scoped tokens; never fall back to the broad
+    # repository SUPABASE_ACCESS_TOKEN used by legacy inventory workflows.
+    environment: ${{ inputs.target }}-backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.6'
+      - name: Typecheck selected source
+        env:
+          FUNCTION: ${{ inputs.function }}
+        run: |
+          case "$FUNCTION" in llm-proxy|project-export|stripe-billing) ;; *) exit 1 ;; esac
+          deno check --node-modules-dir=none --no-config --no-lock "supabase/functions/$FUNCTION/index.ts"
+      - name: Preserve existing deployment before replacement
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_BACKEND_ACCESS_TOKEN }}
+          TARGET: ${{ inputs.target }}
+          FUNCTION: ${{ inputs.function }}
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo 'Missing environment-scoped backend deployment token'; exit 1; }
+          case "$TARGET" in
+            staging) project=ndyfjffsulfbwpmwdmic ;;
+            production) project=kjrwqagyeswwoxpjkcko ;;
+            *) exit 1 ;;
+          esac
+          case "$FUNCTION" in llm-proxy|project-export|stripe-billing) ;; *) exit 1 ;; esac
+          mkdir -p "$RUNNER_TEMP/backend-before/supabase"
+          cp supabase/config.toml "$RUNNER_TEMP/backend-before/supabase/config.toml"
+          curl --fail --silent --show-error -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$project/functions" > "$RUNNER_TEMP/backend-before/inventory.json"
+          if jq -e --arg slug "$FUNCTION" 'any(.[]; .slug == $slug)' "$RUNNER_TEMP/backend-before/inventory.json" > /dev/null; then
+            npx --yes supabase@2.117.0 functions download "$FUNCTION" --project-ref "$project" --use-api --workdir "$RUNNER_TEMP/backend-before"
+            test -s "$RUNNER_TEMP/backend-before/supabase/functions/$FUNCTION/index.ts"
+          elif [ "$TARGET" = production ]; then
+            echo 'Reviewed production function is missing; investigate before replacing it'; exit 1
+          fi
+      - name: Retain rollback source and JWT inventory before publishing
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-before-${{ inputs.target }}-${{ inputs.function }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/backend-before
+          if-no-files-found: error
+          retention-days: 30
+      - name: Deploy one function with its reviewed JWT mode
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_BACKEND_ACCESS_TOKEN }}
+          TARGET: ${{ inputs.target }}
+          FUNCTION: ${{ inputs.function }}
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo 'Missing environment-scoped backend deployment token'; exit 1; }
+          case "$TARGET" in
+            staging) project=ndyfjffsulfbwpmwdmic ;;
+            production) project=kjrwqagyeswwoxpjkcko ;;
+            *) exit 1 ;;
+          esac
+          case "$FUNCTION" in
+            llm-proxy|stripe-billing) flags=(--no-verify-jwt) ;;
+            project-export) flags=() ;;
+            *) exit 1 ;;
+          esac
+          npx --yes supabase@2.117.0 functions deploy "$FUNCTION" --project-ref "$project" --use-api "${flags[@]}"
+          printf 'Released `%s` from `%s` to `%s`.\n' "$FUNCTION" "$GITHUB_SHA" "$project" >> "$GITHUB_STEP_SUMMARY"

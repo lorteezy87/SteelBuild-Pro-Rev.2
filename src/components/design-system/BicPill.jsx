@@ -1,13 +1,7 @@
 /**
- * BicPill — ball-in-court chip. One chip per BALL_IN_COURT_PARTIES member,
- * each with a distinct semantic hue from BIC_COLOR.
- *
- * The map used to hold only five parties, including "Engineer", which no row
- * can store. The four parties rows CAN hold but it lacked — Subcontractor,
- * Detailer, EOR, AOR — fell through to the `var(--text-muted)` default below,
- * so on an RFI row and in the agenda they rendered as neutral grey: readable,
- * and indistinguishable from "nobody in particular". A test asserts the map
- * stays complete against the vocabulary.
+ * BicPill — ball-in-court chip. Canonical parties use the semantic
+ * theme colors defined in BIC_COLOR. Mono uppercase like StatusPill
+ * but slightly smaller (8pt).
  */
 
 import React from "react";

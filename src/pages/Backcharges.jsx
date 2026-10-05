@@ -10,6 +10,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { presentGeneratedFiles } from "@/lib/native/fileExport";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { formatLocalDate, localToday } from "@/utils/dates";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -147,7 +148,7 @@ function AddTicketRow({ onAdd, busy }) {
   const num = (k, ph) => <input style={{ ...input, fontSize: 11 }} type="number" value={t[k]} onChange={(e) => set(k, e.target.value)} placeholder={ph} />;
   return (
     <div style={{ ...card, padding: 12, marginTop: 8, background: "var(--bg-surface-low)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
         <div><span style={labelCss}>Ticket #</span><input style={{ ...input, fontSize: 11 }} value={t.ticket_number} onChange={(e) => set("ticket_number", e.target.value)} /></div>
         <div><span style={labelCss}>Date</span><input style={{ ...input, fontSize: 11 }} type="date" value={t.ticket_date} onChange={(e) => set("ticket_date", e.target.value)} /></div>
         <div style={{ gridColumn: "span 2" }}><span style={labelCss}>Description</span><input style={{ ...input, fontSize: 11 }} value={t.description} onChange={(e) => set("description", e.target.value)} /></div>
@@ -325,8 +326,18 @@ export default function Backcharges() {
       const bc = withLinkNumbers(bc0);
       const [tks, evs] = await Promise.all([listTmTickets(bc.id), listEvents(bc.id)]);
       const stem = suggestDefenseFilename(bc, activeProject);
-      buildDefensePdf({ backcharge: bc, tickets: tks, events: evs, project: activeProject }).save(`${stem}.pdf`);
-      downloadTextFile(buildDefenseManifestCsv(bc, tks, evs), `${stem}_manifest.csv`, "text/csv;charset=utf-8");
+      const pdf = buildDefensePdf({ backcharge: bc, tickets: tks, events: evs, project: activeProject });
+      const presentation = await presentGeneratedFiles({
+        title: "Backcharge defense package",
+        files: [
+          { blob: pdf.output("blob"), filename: `${stem}.pdf` },
+          {
+            blob: new Blob([buildDefenseManifestCsv(bc, tks, evs)], { type: "text/csv;charset=utf-8" }),
+            filename: `${stem}_manifest.csv`,
+          },
+        ],
+      });
+      if (presentation !== "downloaded" && presentation !== "shared") return;
       toast.success("Defense package exported (PDF + CSV)");
     } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };

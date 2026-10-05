@@ -95,12 +95,20 @@ export async function listPayAppChangeOrders(projectId: string): Promise<PayAppC
 export async function createPayApplication(
   input: { projectId: string; periodFrom?: string | null; periodTo?: string | null; retainagePercent?: number; notes?: string | null },
 ): Promise<PayApplication> {
+  // The generated Args type cannot express a NULLABLE argument: supabase's
+  // generator types each parameter from the SQL signature, so a defaulted one
+  // becomes `string | undefined` and an undefaulted one plain `string` — there
+  // is no "or null". Both are wrong here. `generate_pay_application` is
+  // proisstrict=false with `p_notes text DEFAULT NULL`, and p_period_from /
+  // p_period_to are dates the caller legitimately has none of, so NULL is the
+  // value to send. Cast rather than swap null for undefined: omitting a key
+  // makes Postgres apply the DEFAULT, which is a different call.
   const { data, error } = await supabase.rpc("generate_pay_application", {
     p_project_id: input.projectId,
     p_period_from: input.periodFrom ?? null,
     p_period_to: input.periodTo ?? null,
     p_notes: input.notes ?? null,
-  });
+  } as unknown as Parameters<typeof supabase.rpc<"generate_pay_application">>[1]);
   if (error) throw error;
   const app = data as unknown as PayApplication;
 
@@ -202,13 +210,17 @@ export async function updatePayApplication(id: string, patch: Partial<PayApplica
     // re-refreshes every LATER draft application, whose "less previous
     // certificates" depends on this one. None of that is reproducible from a
     // table UPDATE, which is why the guard rejects one.
+    // Same cast, same reason as createPayApplication above. Note especially
+    // that `p_date` is `DEFAULT CURRENT_DATE`: this call sends an explicit
+    // NULL, and dropping the key to satisfy the type would silently start
+    // stamping today's date instead. The cast preserves the payload exactly.
     const { data, error } = await supabase.rpc("move_pay_application", {
       p_id: id,
       p_status: String((patch as Record<string, unknown>).status ?? ""),
       p_notes: (patch.void_reason ?? patch.notes ?? null) as string | null,
       p_actor: null,
       p_date: null,
-    });
+    } as unknown as Parameters<typeof supabase.rpc<"move_pay_application">>[1]);
     if (error) throw error;
     return data as unknown as PayApplication;
   }

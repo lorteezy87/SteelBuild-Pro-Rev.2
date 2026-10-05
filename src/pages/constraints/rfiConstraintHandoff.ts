@@ -10,6 +10,7 @@ export type RfiLike = {
   question?: string | null;
   description?: string | null;
   due_date?: string | null;
+  date_required?: string | null;
   assigned_to?: string | null;
   project_id?: string | null;
 };
@@ -25,7 +26,7 @@ export function buildConstraintPrefillFromRfi(
     constraint_type: "Design",
     meeting_reference: label,
     project_id: projectId || rfi.project_id || "",
-    due_date: rfi.due_date || "",
+    due_date: rfi.date_required ?? rfi.due_date ?? "",
     assigned_to: rfi.assigned_to || "",
     priority: "High",
     status: "Open",

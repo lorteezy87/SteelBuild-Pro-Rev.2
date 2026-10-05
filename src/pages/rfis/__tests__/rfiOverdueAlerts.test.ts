@@ -53,13 +53,13 @@ describe("title / description builders", () => {
     expect(buildRfiOverdueAlertTitle("RFI #012", false, 0)).toBe("RFI #012 due in ≤3 days");
   });
 
-  it("truncates title and defaults BIC", () => {
+  it("truncates title and reports an unassigned BIC", () => {
     const long = "x".repeat(80);
     expect(buildRfiOverdueAlertDescription({
       rfi_number: "RFI #1",
       title: long,
       priority: "High",
-    })).toBe(`RFI #1: "${"x".repeat(60)}" · BIC: Contractor · Priority: High`);
+    })).toBe(`RFI #1: "${"x".repeat(60)}" · BIC: Unassigned · Priority: High`);
   });
 });
 

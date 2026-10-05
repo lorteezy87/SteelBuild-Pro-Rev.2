@@ -38,7 +38,7 @@ const CONTACT = {
   support: "support@steelbuild-pro.com",
 };
 
-const LAST_UPDATED = "July 1, 2026";
+const LAST_UPDATED = "September 21, 2026";
 
 /* The current set of sub-processors. Purpose is the reason customer data may be
    handled; Location/Region is where the provider operates + stores data. */
@@ -50,34 +50,58 @@ const SUBPROCESSORS = [
     region: "AWS us-east-1",
   },
   {
-    name: "Vercel",
-    purpose: "Web frontend hosting and content delivery (CDN).",
-    location: "United States",
-    region: "US",
+    name: "Cloudflare",
+    purpose: "Web frontend hosting, content delivery, security, and Web Analytics.",
+    location: "Global network",
+    region: "Processing may occur outside the US",
+  },
+  {
+    name: "Resend",
+    purpose: "Email delivery when the Resend provider is configured; recipients, message content and attachments.",
+    location: "Provider infrastructure",
+    region: "Subject to service configuration and terms",
+  },
+  {
+    name: "Microsoft Graph",
+    purpose: "Microsoft mailbox integration and email delivery when configured by the workspace.",
+    location: "Microsoft 365 infrastructure",
+    region: "Depends on the connected tenant configuration",
+  },
+  {
+    name: "Open-Meteo",
+    purpose: "Geocoding and weather forecasts using project locations or coordinates.",
+    location: "Provider infrastructure",
+    region: "Subject to provider service terms",
+  },
+  {
+    name: "Google Fonts",
+    purpose: "Font delivery; receives network information including IP address and browser headers.",
+    location: "Global network",
+    region: "Subject to Google's privacy terms",
   },
   {
     name: "Stripe",
     purpose: "Subscription billing and payment processing.",
     location: "United States",
-    region: "US",
+    region: "Depends on provider configuration and applicable terms",
   },
   {
     name: "Sentry",
     purpose: "Error monitoring and performance (masked session replay — text masked, media blocked).",
     location: "United States",
-    region: "US",
+    region: "Depends on provider configuration and applicable terms",
   },
   {
     name: "OpenAI",
     purpose: "AI-assisted document analysis (drawing revision comparison, sheet extraction, email classification, RFI drafting). API data is not used to train their models.",
     location: "United States",
-    region: "US · no-training API terms",
+    region: "Depends on API service configuration and terms",
   },
   {
     name: "Anthropic",
     purpose: "AI-assisted document analysis (drawing revision comparison, sheet extraction, email classification, RFI drafting). API data is not used to train their models.",
     location: "United States",
-    region: "US · no-training API terms",
+    region: "Depends on API service configuration and terms",
   },
 ];
 
@@ -102,15 +126,14 @@ export default function Subprocessors() {
       <p>
         SteelBuild Pro LLC ("SteelBuild Pro LLC," "we," "us," or "our"), the
         operator of SteelBuild Pro (the "Service"), relies on a small set of
-        trusted third-party sub-processors to operate the Service. These
-        sub-processors act on our behalf, are bound to protect your information,
-        and may handle customer data only as needed to provide the Service. This
-        page lists our current sub-processors, what each one does, and where it
-        operates. It supplements our{" "}
+        third-party infrastructure and service providers to operate the Service.
+        Their roles and processing locations depend on the services used and
+        applicable agreements. This page lists the providers, their purposes,
+        and known hosting information. It supplements our{" "}
         <Link to="/privacy" style={inlineLink}>Privacy Policy</Link>.
       </p>
 
-      <Section title="Current sub-processors">
+      <Section title="Sub-processors and service providers">
         <div style={{ overflowX: "auto", margin: "16px 0 6px" }}>
           <table style={tableStyle}>
             <thead>
@@ -140,13 +163,13 @@ export default function Subprocessors() {
 
       <Section title="Where your data lives">
         <p>
-          Customer data is stored and processed in the{" "}
-          <strong style={strong}>United States</strong>. Primary storage —
+          Primary storage for customer data —
           database, authentication, and uploaded files — is hosted on Supabase
           running on AWS in the <strong style={strong}>us-east-1</strong> region
-          (a single region). All other sub-processors above operate in the US. We
-          do not store customer data outside the United States, and we do not
-          currently offer an EU or other regional data-residency option.
+          in the United States. Cloudflare and other providers use infrastructure
+          that may process information in additional countries. A provider's
+          headquarters does not establish its processing location. We do not
+          guarantee US-only processing or offer selectable regional residency.
         </p>
       </Section>
 

@@ -17,6 +17,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { InkCanvas, setInkPaper } from "@/components/notes/InkCanvas";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import {
   acceptPointer,
   deserializeInk,
@@ -198,13 +199,16 @@ export default function Notes() {
     lastPenTap.current = tap;
   };
 
-  const exportPng = () => {
+  const exportPng = async () => {
     const canvas = document.querySelector("canvas[aria-label='Ink canvas']");
     if (!canvas) return;
-    const a = document.createElement("a");
-    a.href = canvas.toDataURL("image/png");
-    a.download = `${(active?.title || "note").replace(/[^\w.-]+/g, "_")}-ink.png`;
-    a.click();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) return;
+    await presentGeneratedFile({
+      blob,
+      filename: `${(active?.title || "note").replace(/[^\w.-]+/g, "_")}-ink.png`,
+      title: "Ink note",
+    });
   };
 
   return (

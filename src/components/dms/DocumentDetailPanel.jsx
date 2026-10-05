@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatLocalDate } from "@/utils/dates";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { presentRemoteFile } from "@/lib/native/fileExport";
 
 const STATUS_COLORS = {
   "Draft":                   { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
@@ -66,12 +67,11 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
     try {
       const url = await resolveFileUrl(doc.fileUrl || doc.file_url);
       if (!url) { toast.error("No file URL available"); return; }
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = doc.fileName || doc.file_name || "download";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      await presentRemoteFile({
+        url,
+        filename: doc.fileName || doc.file_name || "download",
+        title: doc.displayName || doc.title || "Document",
+      });
     } catch (err) {
       toast.error(toUserErrorMessage(err, "Download failed"));
     }
