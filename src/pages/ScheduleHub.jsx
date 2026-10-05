@@ -48,6 +48,7 @@ export default function ScheduleHub() {
       <div
         role="tablist"
         aria-label="Schedule"
+        className="hub-tabstrip"
         style={{
           display: "flex",
           gap: 6,
