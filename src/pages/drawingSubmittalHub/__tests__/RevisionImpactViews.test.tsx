@@ -43,9 +43,9 @@ const UNLOADED_ROW = {
   revisionControl: {
     status: "review_required",
     reasons: [{ code: "MODEL_ROSTER_NOT_LOADED", message: "Model roster is not loaded.", severity: "review_required" }],
-    model: { state: "not_loaded", affectedPieces: null, reasonCode: "MODEL_ROSTER_NOT_LOADED" },
+    model: { state: "not_loaded", affectedPieces: null as number | null, reasonCode: "MODEL_ROSTER_NOT_LOADED" },
   },
-  modelScope: { state: "not_loaded", affectedPieces: null, reasonCode: "MODEL_ROSTER_NOT_LOADED" },
+  modelScope: { state: "not_loaded", affectedPieces: null as number | null, reasonCode: "MODEL_ROSTER_NOT_LOADED" },
 };
 
 function LocationProbe() {

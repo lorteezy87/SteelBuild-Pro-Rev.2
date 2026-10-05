@@ -228,6 +228,16 @@
         "version": "20260919120000",
         "lifecycle": "intentionally-frozen",
         "evidence": "Applied out of band and current, on the owner's explicit 2026-09-19 instruction to build Rev.2's GC Documents register on the sibling SteelBuild-Pro-2026 app's gc_drawing_sets/gc_drawings tables (created by 20260909033138_m3_6_gc_drawings_register.sql, declared 2026-owned above). That instruction is the CLAUDE.md \"Sibling app\" say-so; the migration header records it too. ONLY the additive half of the file was executed against kjrwqagyeswwoxpjkcko: gc_drawing_sets gained doc_type/doc_number/received_date/steel_impact/impact_notes and gc_drawings gained is_superseded/superseded_by_id, plus gc_drawing_sets_doc_type_check, gc_drawing_sets_steel_impact_check, gc_drawings_superseded_by_id_fkey, gc_drawings_superseded_by_not_self (all four convalidated=true) and four indexes. Every column is defaulted or nullable, so the sibling app's writes are unaffected; verified before/after that all 4 live sets kept their sheet_count (2/20/9/0, each equal to their live sheet count) and category, that all 31 sheets survived with is_superseded=false, and that the new columns defaulted to doc_type='gc_drawing' / steel_impact='unknown'. The file's leading adopt block (CREATE TABLE IF NOT EXISTS for both tables, their indexes, trigger bindings, RLS policies and grants) was deliberately NOT executed: it exists so a fresh supabase db reset has tables this repo holds no DDL for, and against production every statement is a verified no-op except the DROP POLICY/CREATE POLICY pairs, which were left alone rather than briefly dropping live policies on a shared database - their text was transcribed from pg_policies on 2026-09-19 and matches what is live. Frozen rather than required because it will never be stamped under this version; ledger holds no row for it."
+      },
+      {
+        "version": "20260922015713",
+        "lifecycle": "required",
+        "evidence": "Prepared in PR #465: piece_events primary-key and redundant-index hardening. Pending the reviewed backend release and matching ledger stamp; no production application is claimed. Remains required, so the drift gate must report it missing until authorized application is verified."
+      },
+      {
+        "version": "20261005100745",
+        "lifecycle": "required",
+        "evidence": "Prepared in PR #465: PM-authorized retry_revision_comparison RPC. Pending the reviewed backend release and matching ledger stamp; no production application is claimed. Remains required, so the drift gate must report it missing until authorized application is verified."
       }
     ]
   },

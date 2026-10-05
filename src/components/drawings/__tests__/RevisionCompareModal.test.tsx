@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const useRasterCompare = vi.hoisted(() => vi.fn());
 const recordVisualRevisionReview = vi.hoisted(() => vi.fn());
+const generateRevisionDiff = vi.hoisted(() => vi.fn());
+const invalidateQueries = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({
@@ -13,7 +15,7 @@ vi.mock("@tanstack/react-query", () => ({
     ],
     isLoading: false,
   }),
-  useQueryClient: () => ({}),
+  useQueryClient: () => ({ invalidateQueries }),
 }));
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children }: { children: unknown }) => children,
@@ -25,15 +27,15 @@ vi.mock("@/api/supabaseClient", () => ({ entities: { DrawingRevision: { filter: 
 vi.mock("@/hooks/useRasterCompare", () => ({ useRasterCompare }));
 vi.mock("@/hooks/useFeatureFlag", () => ({ useFlag: () => true }));
 vi.mock("@/components/shared/useAppSecurity", () => ({ useAppSecurity: () => ({ user: { id: "u1" } }) }));
-vi.mock("@/components/drawings/RevisionDeltaCard", () => ({ default: () => null }));
-vi.mock("@/components/rfis/RFIFormModal", () => ({ default: () => null }));
+vi.mock("@/components/drawings/RevisionDeltaCard", () => ({ default: (): null => null }));
+vi.mock("@/components/rfis/RFIFormModal", () => ({ default: (): null => null }));
 vi.mock("@/lib/pdfRasterize", () => ({ RASTER_TARGET_WIDTH: 1200, canvasToPngBase64: vi.fn(() => "image") }));
 vi.mock("@/lib/rasterCompare", () => ({ OLD_TINT: "#f00", NEW_TINT: "#00f" }));
 vi.mock("@/lib/drawingHub", () => ({ ensureCurrentRevision: vi.fn() }));
 vi.mock("@/services/cacheRegistry", () => ({ invalidateEntity: vi.fn() }));
 vi.mock("@/lib/rfiFromDelta", () => ({ buildRfiPrefillFromDelta: vi.fn(), createRfiAndLink: vi.fn() }));
 vi.mock("@/lib/revisionSnapshotDiff", () => ({
-  generateRevisionDiff: vi.fn(),
+  generateRevisionDiff,
   recordVisualRevisionReview,
   setDeltaDismissed: vi.fn(),
   sortDeltasBySeverity: (deltas: unknown[]) => deltas,
@@ -67,9 +69,9 @@ function rasterState(overrides: Record<string, unknown> = {}) {
     renderError: "",
     rastersReady: true,
     retryRender: vi.fn(),
-    displayRef: { current: null },
-    sideOldRef: { current: null },
-    sideNewRef: { current: null },
+    displayRef: { current: null as HTMLCanvasElement | null },
+    sideOldRef: { current: null as HTMLCanvasElement | null },
+    sideNewRef: { current: null as HTMLCanvasElement | null },
     rastersRef: { current: { old: {}, new: {} } },
     ...overrides,
   };
@@ -83,6 +85,8 @@ describe("RevisionCompareModal", () => {
   beforeEach(() => {
     useRasterCompare.mockReset();
     recordVisualRevisionReview.mockReset();
+    generateRevisionDiff.mockReset();
+    invalidateQueries.mockReset().mockResolvedValue(undefined);
   });
 
   it("keeps AI and visual completion disabled on a render failure and provides retry", async () => {
@@ -109,5 +113,55 @@ describe("RevisionCompareModal", () => {
       fromRevisionId: "r1",
       toRevisionId: "r2",
     }));
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-revision-comparisons", "p1"] }));
+  });
+
+  it("presents a cached visual attestation without claiming AI found no changes", async () => {
+    useRasterCompare.mockReturnValue(rasterState());
+    generateRevisionDiff.mockResolvedValue({
+      comparison: { model: "visual-review", ai_summary: "Human visual comparison completed." },
+      deltas: [], cached: true,
+    });
+    renderModal();
+    fireEvent.click(await screen.findByRole("button", { name: "AI Diff" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate diff" }));
+    expect(await screen.findByText("HUMAN REVIEW")).toBeInTheDocument();
+    expect(screen.getByText(/does not establish that the revisions are unchanged/)).toBeInTheDocument();
+    expect(screen.queryByText(/No material changes detected/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-revision-comparisons", "p1"] });
+  });
+
+  it("keeps a pending AI review from competing with visual completion or pair changes", async () => {
+    useRasterCompare.mockReturnValue(rasterState());
+    let finish!: (value: unknown) => void;
+    generateRevisionDiff.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    renderModal();
+    fireEvent.click(await screen.findByRole("button", { name: "AI Diff" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate diff" }));
+    await waitFor(() => expect(generateRevisionDiff).toHaveBeenCalledOnce());
+    expect(screen.getByRole("button", { name: "Mark visual review complete" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Old revision" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "New revision" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Swap old/new" })).toBeDisabled();
+    await act(async () => finish({ comparison: { model: "ai", ai_summary: "A connection changed." }, deltas: [{}] }));
+    expect(screen.getByText("A connection changed.")).toBeInTheDocument();
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-revision-comparisons", "p1"] });
+  });
+
+  it("does not label a newly selected sheet complete when an older visual save finishes", async () => {
+    useRasterCompare.mockReturnValue(rasterState());
+    let finish!: (value: unknown) => void;
+    recordVisualRevisionReview.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const view = renderModal();
+    fireEvent.click(await screen.findByRole("button", { name: "AI Diff" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark visual review complete" }));
+    await waitFor(() => expect(recordVisualRevisionReview).toHaveBeenCalledOnce());
+    expect(screen.getByRole("button", { name: "Generate diff" })).toBeDisabled();
+    view.rerender(<RevisionCompareModal open onClose={vi.fn()} drawing={{ ...drawing, id: "d2", project_id: "p2" }} />);
+    await act(async () => finish({ compare_status: "complete", model: "visual-review" }));
+    expect(screen.queryByRole("button", { name: "Visual review complete" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark visual review complete" })).toBeEnabled();
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-revision-comparisons", "p1"] });
   });
 });

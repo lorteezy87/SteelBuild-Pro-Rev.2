@@ -163,6 +163,13 @@ describe('the real manifest', () => {
     expect(unaccounted).toEqual([]);
   });
 
+  it.each(['20260922015713', '20261005100745'])('keeps pending PR 465 migration %s required by the live drift gate', (version) => {
+    const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
+    expect(entry?.lifecycle).toBe('required');
+    const report = compareDrift(manifest, local, [...LEDGER].map(version => ({ version })), []);
+    expect(report.missingMigrations).toContain(version);
+  });
+
   it('never silently allowlists: a frozen lineage must say how it was settled', () => {
     // The runbook's lifecycle contract: an identifier with uncertain source or
     // lineage is recorded as unresolved and never silently allowlisted.

@@ -1,5 +1,29 @@
 export type RevisionControlStatus = "clear" | "review_required" | "blocked";
 
+export interface RevisionComparisonEvidenceRow {
+  id: string;
+  from_revision_id: string | null;
+  to_revision_id: string | null;
+  compare_status: string | null;
+  is_deleted: boolean | null;
+}
+
+/** Only the active comparison of a revision's immediate predecessor is evidence. */
+export function comparisonEvidenceByRevision(
+  revisions: Array<{ id?: string; supersedes_revision_id?: string | null }>,
+  comparisons: RevisionComparisonEvidenceRow[],
+): Record<string, { status: string | null }> {
+  const predecessorByRevision = new Map(revisions.map((revision) => [revision.id, revision.supersedes_revision_id]));
+  const evidence: Record<string, { status: string | null }> = {};
+  for (const comparison of comparisons) {
+    const to = comparison.to_revision_id;
+    if (comparison.is_deleted !== false || !to || !comparison.from_revision_id) continue;
+    if (predecessorByRevision.get(to) !== comparison.from_revision_id) continue;
+    evidence[to] = { status: comparison.compare_status };
+  }
+  return evidence;
+}
+
 export type ModelScopeState =
   | "exact"
   | "sequence_estimate"

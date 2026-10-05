@@ -92,6 +92,9 @@ describe("public/_headers", () => {
     expect(csp, "Supabase REST/auth/storage").toContain("https://*.supabase.co");
     expect(csp, "Supabase realtime websockets").toContain("wss://*.supabase.co");
     expect(csp, "Stripe billing").toContain("https://js.stripe.com");
+    // Daily Log address lookup falls back to Nominatim when Open-Meteo fails.
+    const connectSources = csp.split(";").find((directive) => directive.trim().startsWith("connect-src "));
+    expect(connectSources, "Daily Log fallback geocoding").toContain("https://nominatim.openstreetmap.org");
     // web-ifc compiles WebAssembly at runtime; without this the 3D viewer dies.
     expect(csp, "web-ifc WebAssembly").toContain("'wasm-unsafe-eval'");
     // Violations are only useful if they are actually reported somewhere.

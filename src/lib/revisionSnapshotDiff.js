@@ -247,6 +247,7 @@ async function fetchDeltas(comparisonId) {
 export async function findOrCreateComparison({ drawingId, fromRevisionId, toRevisionId }) {
   const matchPair = (q) =>
     q.eq("source", "revision")
+      .eq("is_deleted", false)
       .eq("drawing_id", drawingId)
       .eq("from_revision_id", fromRevisionId)
       .eq("to_revision_id", toRevisionId);
@@ -255,7 +256,18 @@ export async function findOrCreateComparison({ drawingId, fromRevisionId, toRevi
     supabase.from("drawing_revision_comparisons").select("*"),
   ).maybeSingle();
   if (error && error.code !== "PGRST116") throw error;
-  if (existing) return existing;
+  if (existing) {
+    if (existing.compare_status !== "error") return existing;
+    // A terminal error cannot be recorded again. Reopen only through the
+    // role-checked RPC; completed and archived reviews remain immutable.
+    const { data: retried, error: retryError } = await supabase.rpc("retry_revision_comparison", {
+      p_comparison_id: existing.id,
+    });
+    if (retryError) throw retryError;
+    const comparison = Array.isArray(retried) ? retried[0] : retried;
+    if (!comparison) throw new Error("The comparison could not be reopened. Try again.");
+    return comparison;
+  }
 
   // A direct insert is rejected by trg_a_enforce_revision_comparison_guards
   // ("Open a comparison through create_revision_comparison()", SQLSTATE 42501,
@@ -288,6 +300,7 @@ export async function loadComparisonWithDeltas({ drawingId, fromRevisionId, toRe
     .from("drawing_revision_comparisons")
     .select("*")
     .eq("source", "revision")
+    .eq("is_deleted", false)
     .eq("drawing_id", drawingId)
     .eq("from_revision_id", fromRevisionId)
     .eq("to_revision_id", toRevisionId)
@@ -315,7 +328,7 @@ export async function recordVisualRevisionReview({ drawingId, fromRevisionId, to
   const { data, error } = await supabase.rpc("record_revision_comparison", {
     p_comparison_id: comparison.id,
     p_status: "complete",
-    p_summary: "Visual revision comparison reviewed.",
+    p_summary: "Human visual comparison completed. This records review, not a finding that the revisions are unchanged.",
     p_model: "visual-review",
     p_deltas: [],
     p_raw: { review_type: "visual" },
@@ -324,7 +337,9 @@ export async function recordVisualRevisionReview({ drawingId, fromRevisionId, to
   return (Array.isArray(data) ? data[0] : data) || {
     ...comparison,
     compare_status: "complete",
-    ai_summary: "Visual revision comparison reviewed.",
+    ai_summary: "Human visual comparison completed. This records review, not a finding that the revisions are unchanged.",
+    model: "visual-review",
+    raw_ai_response: { review_type: "visual" },
   };
 }
 

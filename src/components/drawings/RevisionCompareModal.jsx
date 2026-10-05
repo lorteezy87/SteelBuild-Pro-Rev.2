@@ -13,7 +13,7 @@
  *
  * Rendering is local pdfjs — the PDFs never leave the browser.
  */
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -47,7 +47,7 @@ const mono = "var(--font-mono)";
 // ── AI Revision Impact panel (review-only) ──────────────────────────────
 
 function RevisionAiPanel({
-  status, summary, deltas, error, retryMsg, cached, downstream,
+  status, summary, deltas, error, retryMsg, cached, downstream, visualReview = false,
   disabled, light = false, onGenerate, onRegenerate, onToggleDismiss, onCreateRfi, onClose,
 }) {
   const kept = deltas.filter((d) => !d.dismissed).length;
@@ -67,7 +67,7 @@ function RevisionAiPanel({
         <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
           Revision Impact
         </span>
-        <span style={{ fontFamily: mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>AI</span>
+        <span style={{ fontFamily: mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>{visualReview ? "HUMAN REVIEW" : "AI"}</span>
         <span style={{ flex: 1 }} />
         <button type="button" className="sbd-btn-ghost" style={{ minHeight: 26, padding: "2px 6px" }} onClick={onClose} title="Close panel"><X size={13} /></button>
       </div>
@@ -114,7 +114,7 @@ function RevisionAiPanel({
         {status === "error" && (
           <>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--status-error)", lineHeight: 1.5 }}>{error}</div>
-            <button type="button" className="sbd-btn-ghost" onClick={() => onGenerate(false)} style={{ alignSelf: "flex-start" }}>
+            <button type="button" className="sbd-btn-ghost" disabled={disabled} onClick={() => onGenerate(false)} style={{ alignSelf: "flex-start" }}>
               <RotateCw size={13} style={{ marginRight: 6 }} /> Try again
             </button>
           </>
@@ -124,20 +124,25 @@ function RevisionAiPanel({
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", color: "var(--text-primary)" }}>
-                {kept} CHANGE{kept === 1 ? "" : "S"}
+                {visualReview ? "VISUAL REVIEW RECORDED" : `${kept} CHANGE${kept === 1 ? "" : "S"}`}
               </span>
               {cached && <span style={{ fontFamily: mono, fontSize: 8, color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>CACHED</span>}
               <span style={{ flex: 1 }} />
-              <button type="button" className="sbd-btn-ghost" style={{ minHeight: 26, padding: "2px 8px", fontSize: 10 }} onClick={() => onRegenerate()} title="Re-run the AI diff">
+              {!visualReview && <button type="button" className="sbd-btn-ghost" disabled={disabled} style={{ minHeight: 26, padding: "2px 8px", fontSize: 10 }} onClick={() => onRegenerate()} title="Re-run the AI diff">
                 <RotateCw size={11} style={{ marginRight: 4 }} /> Regenerate
-              </button>
+              </button>}
             </div>
 
             {summary && (
               <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary, var(--text-muted))", lineHeight: 1.6, margin: 0 }}>{summary}</p>
             )}
 
-            {deltas.length === 0 && (
+            {visualReview && (
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                A person recorded a visual review. No AI analysis or structured change findings were recorded. This does not establish that the revisions are unchanged.
+              </p>
+            )}
+            {!visualReview && deltas.length === 0 && (
               <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", padding: 8 }}>
                 No material changes detected between these two revisions.
               </div>
@@ -233,21 +238,26 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   const [aiError, setAiError] = useState("");
   const [aiRetryMsg, setAiRetryMsg] = useState("");
   const [aiCached, setAiCached] = useState(false);
+  const [aiVisualReview, setAiVisualReview] = useState(false);
   const [rfiDraft, setRfiDraft] = useState(null); // { deltaId, prefill } | null
   const [visualReviewStatus, setVisualReviewStatus] = useState("idle"); // idle | saving | complete | error
+  const reviewBusy = aiStatus === "running" || visualReviewStatus === "saving";
+  const reviewPairKey = JSON.stringify([open, drawingId, oldKey, newKey]);
+  const reviewPairRef = useRef(reviewPairKey);
+  reviewPairRef.current = reviewPairKey;
 
-  // A new selection pair invalidates stale results (don't clobber a live run).
+  // A result belongs only to the selected pair that started it.
   useEffect(() => {
-    if (aiStatus === "running") return;
     setAiStatus("idle");
     setAiDeltas([]);
     setAiSummary(null);
     setAiError("");
     setAiRetryMsg("");
     setAiCached(false);
+    setAiVisualReview(false);
     setVisualReviewStatus("idle");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [oldKey, newKey]);
+  }, [reviewPairKey]);
 
   // Is THIS sheet already downstream? Same fields/semantics as
   // detailingRevisionImpact — a change here means potential rework.
@@ -274,11 +284,14 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   }, [revisionRows, drawing, user, qc]);
 
   const runAiDiff = async (force = false) => {
-    if (!rastersReady || renderError || !oldSel || !newSel) return;
+    if (reviewBusy || !rastersReady || renderError || !oldSel || !newSel) return;
+    const requestedPair = reviewPairKey;
     setAiStatus("running");
     setAiError("");
     setAiRetryMsg("");
     try {
+      const fromImageB64 = canvasToPngBase64(rastersRef.current.old);
+      const toImageB64 = canvasToPngBase64(rastersRef.current.new);
       const [fromRevisionId, toRevisionId] = await Promise.all([
         resolveRevisionId(oldSel),
         resolveRevisionId(newSel),
@@ -290,28 +303,34 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
         drawingId: drawing?.id,
         fromRevisionId,
         toRevisionId,
-        fromImageB64: canvasToPngBase64(rastersRef.current.old),
-        toImageB64: canvasToPngBase64(rastersRef.current.new),
+        fromImageB64,
+        toImageB64,
         fromLabel: oldSel?.label,
         toLabel: newSel?.label,
         sheetNumber: drawing?.sheet_number,
         requestedBy: user?.email || null,
         force,
-        onRetry: ({ attempt, maxAttempts, delay }) =>
-          setAiRetryMsg(`Rate-limited — retry ${attempt}/${maxAttempts - 1} in ${Math.round(delay / 1000)}s…`),
+        onRetry: ({ attempt, maxAttempts, delay }) => {
+          if (reviewPairRef.current === requestedPair) setAiRetryMsg(`Rate-limited — retry ${attempt}/${maxAttempts - 1} in ${Math.round(delay / 1000)}s…`);
+        },
       });
+      await qc.invalidateQueries({ queryKey: ["drawing-revision-comparisons", drawing?.project_id] });
+      if (reviewPairRef.current !== requestedPair) return;
       setAiSummary(res.comparison?.ai_summary || null);
       setAiDeltas(sortDeltasBySeverity(res.deltas || []));
       setAiCached(!!res.cached);
+      setAiVisualReview(res.comparison?.model === "visual-review" || res.comparison?.raw_ai_response?.review_type === "visual");
       setAiStatus("done");
     } catch (e) {
+      if (reviewPairRef.current !== requestedPair) return;
       setAiError(e?.message || "The diff failed. Try again.");
       setAiStatus("error");
     }
   };
 
   const markVisualReviewComplete = async () => {
-    if (!rastersReady || renderError || !oldSel || !newSel || visualReviewStatus === "saving") return;
+    if (reviewBusy || !rastersReady || renderError || !oldSel || !newSel) return;
+    const requestedPair = reviewPairKey;
     setVisualReviewStatus("saving");
     try {
       const [fromRevisionId, toRevisionId] = await Promise.all([
@@ -321,9 +340,12 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
       if (!fromRevisionId || !toRevisionId) throw new Error("Couldn't resolve the two revisions for these selections.");
       if (fromRevisionId === toRevisionId) throw new Error("Pick two different revisions to compare.");
       await recordVisualRevisionReview({ drawingId: drawing?.id, fromRevisionId, toRevisionId });
+      await qc.invalidateQueries({ queryKey: ["drawing-revision-comparisons", drawing?.project_id] });
+      if (reviewPairRef.current !== requestedPair) return;
       setVisualReviewStatus("complete");
       toast.success("Visual revision review recorded");
     } catch (error) {
+      if (reviewPairRef.current !== requestedPair) return;
       setVisualReviewStatus("error");
       toast.error(error?.message || "Could not record the visual review.");
     }
@@ -353,7 +375,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
     }
   };
 
-  const comparisonActionsDisabled = !rastersReady || !!renderError || rendering || isLoading || notEnough || !oldSel || !newSel;
+  const comparisonActionsDisabled = reviewBusy || !rastersReady || !!renderError || rendering || isLoading || notEnough || !oldSel || !newSel;
   const aiBusyDisabled = comparisonActionsDisabled;
 
   // SP4: under canonical presentation, tag this portaled Radix dialog `.detailing-cc` so
@@ -429,13 +451,14 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                 value={oldKey || ""}
                 onChange={(e) => setOldKey(e.target.value)}
                 aria-label="Old revision"
+                disabled={reviewBusy}
                 style={{ fontFamily: mono, fontSize: 10, padding: "5px 8px", maxWidth: 220 }}
               >
                 {candidates.filter((c) => c.key !== newKey).map((c) => (
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
               </select>
-              <button type="button" className="sbd-btn-ghost" onClick={swap} title="Swap old/new"
+              <button type="button" className="sbd-btn-ghost" onClick={swap} title="Swap old/new" disabled={reviewBusy}
                 style={{ minHeight: 30, padding: "4px 8px", display: "inline-flex", alignItems: "center" }}>
                 <ArrowLeftRight size={13} />
               </button>
@@ -445,6 +468,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                 value={newKey || ""}
                 onChange={(e) => setNewKey(e.target.value)}
                 aria-label="New revision"
+                disabled={reviewBusy}
                 style={{ fontFamily: mono, fontSize: 10, padding: "5px 8px", maxWidth: 220 }}
               >
                 {candidates.filter((c) => c.key !== oldKey).map((c) => (
@@ -623,6 +647,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                 error={aiError}
                 retryMsg={aiRetryMsg}
                 cached={aiCached}
+                visualReview={aiVisualReview}
                 downstream={downstream}
                 disabled={aiBusyDisabled}
                 light

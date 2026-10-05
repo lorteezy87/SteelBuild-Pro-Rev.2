@@ -167,6 +167,7 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
           <label htmlFor="piece-import-file" className="piece-command-field">
             File
             <input
+              key={sourceType}
               id="piece-import-file"
               type="file"
               accept={pieceImportAccept(sourceType)}
