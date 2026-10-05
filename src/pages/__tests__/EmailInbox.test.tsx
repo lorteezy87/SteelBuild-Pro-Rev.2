@@ -3,7 +3,13 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { nativeState } = vi.hoisted(() => ({ nativeState: { enabled: false } }));
+
+vi.mock("@/lib/native/platform", () => ({
+  isNativePlatform: () => nativeState.enabled,
+}));
 
 vi.mock("@/hooks/useProjectId", () => ({
   useProjectId: () => "project-1",
@@ -40,21 +46,35 @@ vi.mock("sonner", () => ({
 
 import EmailInbox from "@/pages/EmailInbox";
 
-describe("EmailInbox page", () => {
-  it("renders the inbox heading and Email Settings affordance", () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+function renderInbox() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
 
-    render(
-      <MemoryRouter>
-        <QueryClientProvider client={queryClient}>
-          <EmailInbox />
-        </QueryClientProvider>
-      </MemoryRouter>,
-    );
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <EmailInbox />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe("EmailInbox page", () => {
+  afterEach(() => { nativeState.enabled = false; });
+
+  it("renders the inbox heading and Email Settings affordance", () => {
+    renderInbox();
 
     expect(screen.getByRole("heading", { name: "Email Inbox" })).toBeInTheDocument();
     expect(screen.getByTitle("Email Settings")).toBeInTheDocument();
+  });
+
+  it("drops the Email Settings shortcut in the native app, where Integrations is web-only", () => {
+    nativeState.enabled = true;
+    renderInbox();
+
+    expect(screen.getByRole("heading", { name: "Email Inbox" })).toBeInTheDocument();
+    expect(screen.queryByTitle("Email Settings")).not.toBeInTheDocument();
   });
 });
