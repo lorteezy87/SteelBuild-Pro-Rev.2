@@ -72,73 +72,85 @@ const TabBar = ({ tabs, active, onSelect }) => (
 
 // ─── Table Builder ──────────────────────────────────────────────────────────
 
+// Narrower than this, the table scrolls sideways instead of cutting off its
+// last columns: every fixed column keeps its width, each flexible (fr) column
+// keeps at least 120px, plus the 16px row padding on each side.
+function minTableWidth(columns) {
+  return columns.reduce((sum, c) => {
+    const px = /^(\d+(?:\.\d+)?)px$/.exec(c.width || "");
+    return sum + (px ? Number(px[1]) : 120);
+  }, 32);
+}
+
 function DataTable({ columns, rows, rowKey, rowStyle }) {
   const gridCols = columns.map((c) => c.width || "1fr").join(" ");
 
   return (
-    <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
-      {/* Header */}
-      <div style={{ display: "grid", gridTemplateColumns: gridCols, padding: "10px 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-secondary)" }}>
-        {columns.map((col) => (
-          <div
-            key={col.key}
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-              textAlign: col.right ? "right" : "left",
-            }}
-          >
-            {col.label}
-          </div>
-        ))}
-      </div>
+    <div className="sbd-card" style={{ padding: 0, overflowX: "auto", overflowY: "hidden" }}>
+      <div style={{ minWidth: minTableWidth(columns) }}>
+        {/* Header */}
+        <div style={{ display: "grid", gridTemplateColumns: gridCols, padding: "10px 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-secondary)" }}>
+          {columns.map((col) => (
+            <div
+              key={col.key}
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+                textAlign: col.right ? "right" : "left",
+              }}
+            >
+              {col.label}
+            </div>
+          ))}
+        </div>
 
-      {/* Rows */}
+        {/* Rows */}
+        {rows.map((row, idx) => {
+          const extraStyle = rowStyle ? rowStyle(row) : {};
+          return (
+            <div
+              key={rowKey ? row[rowKey] : idx}
+              style={{
+                display: "grid",
+                gridTemplateColumns: gridCols,
+                padding: "10px 16px",
+                borderBottom: "1px solid var(--divider)",
+                transition: "background 0.1s",
+                ...extraStyle,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = extraStyle.background || "transparent")}
+            >
+              {columns.map((col) => (
+                <div
+                  key={col.key}
+                  style={{
+                    fontFamily: col.mono !== false ? "var(--font-mono)" : "var(--font-body)",
+                    fontSize: col.fontSize || 11,
+                    color: col.color ? col.color(row) : "var(--text-primary)",
+                    fontWeight: col.bold ? 600 : 400,
+                    textAlign: col.right ? "right" : "left",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {col.render ? col.render(row) : row[col.key]}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
       {rows.length === 0 && (
         <div style={{ padding: "32px 16px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
           No data available
         </div>
       )}
-      {rows.map((row, idx) => {
-        const extraStyle = rowStyle ? rowStyle(row) : {};
-        return (
-          <div
-            key={rowKey ? row[rowKey] : idx}
-            style={{
-              display: "grid",
-              gridTemplateColumns: gridCols,
-              padding: "10px 16px",
-              borderBottom: "1px solid var(--divider)",
-              transition: "background 0.1s",
-              ...extraStyle,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = extraStyle.background || "transparent")}
-          >
-            {columns.map((col) => (
-              <div
-                key={col.key}
-                style={{
-                  fontFamily: col.mono !== false ? "var(--font-mono)" : "var(--font-body)",
-                  fontSize: col.fontSize || 11,
-                  color: col.color ? col.color(row) : "var(--text-primary)",
-                  fontWeight: col.bold ? 600 : 400,
-                  textAlign: col.right ? "right" : "left",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {col.render ? col.render(row) : row[col.key]}
-              </div>
-            ))}
-          </div>
-        );
-      })}
     </div>
   );
 }
