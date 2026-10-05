@@ -25,6 +25,8 @@
  * unit-tested without a clock or a browser.
  */
 
+import { captureDayFromTimestamp } from "@/lib/field/progressSync";
+
 const STORAGE_KEY = "sbp:field:outbox:v1";
 
 /** Op type for an idempotent schedule-task progress write. */
@@ -109,7 +111,10 @@ function inheritedStartDay(superseded) {
   const prior = superseded?.payload;
   if (!prior) return null;
   if (prior.startCaptureDay) return prior.startCaptureDay;
-  return Number(prior.pct) > 0 ? (prior.captureDay ?? null) : null;
+  if (!(Number(prior.pct) > 0)) return null;
+  // Legacy ops have no captureDay. Recover their local day before coalescing
+  // discards createdAt, using the same fallback as direct outbox replay.
+  return prior.captureDay || captureDayFromTimestamp(superseded.createdAt) || null;
 }
 
 /**

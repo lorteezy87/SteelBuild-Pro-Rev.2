@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { enqueueOp, makeProgressOp } from "@/lib/field/offlineQueue";
 import { persistScheduleProgress } from "@/lib/field/progressSync";
 import type { ScheduleProgressTask } from "@/lib/field/progressSync";
@@ -44,6 +44,58 @@ const TUE = "2026-09-22";
 const WED = "2026-09-23";
 
 describe("a progress op keeps the day work started", () => {
+  it("recovers a legacy start day before coalescing discards its timestamp", async () => {
+    // The UTC day is Tuesday, but the device's local calendar still says Monday.
+    // Stub local getters so this cannot pass vacuously on the UTC test runner.
+    const year = vi.spyOn(Date.prototype, "getFullYear").mockReturnValue(2026);
+    const month = vi.spyOn(Date.prototype, "getMonth").mockReturnValue(8);
+    const day = vi.spyOn(Date.prototype, "getDate").mockReturnValue(21);
+    try {
+      const legacy = {
+        ...makeProgressOp("t1", 25, Date.parse("2026-09-22T00:30:00Z")),
+        payload: { id: "t1", pct: 25 },
+      };
+      const [op] = enqueueOp([legacy], makeProgressOp("t1", 100, 2, TUE));
+      const { gateway, writes } = gatewayFor({
+        status: "Not Started",
+        percent_complete: 0,
+        actual_start_date: null,
+        actual_finish_date: null,
+      });
+      await persistScheduleProgress({
+        gateway,
+        id: "t1",
+        pct: op.payload.pct,
+        capturedDay: op.payload.captureDay,
+        startCapturedDay: op.payload.startCaptureDay,
+      });
+      expect(writes[0].actual_start_date).toBe(MON);
+      expect(writes[0].actual_finish_date).toBe(TUE);
+    } finally {
+      year.mockRestore();
+      month.mockRestore();
+      day.mockRestore();
+    }
+  });
+
+  it("does not inherit a timestamp from legacy zero-percent work", () => {
+    const legacy = {
+      ...makeProgressOp("t1", 0, Date.parse("2026-09-21T12:00:00Z")),
+      payload: { id: "t1", pct: 0 },
+    };
+    const [op] = enqueueOp([legacy], makeProgressOp("t1", 100, 2, TUE));
+    expect(op.payload.startCaptureDay).toBeNull();
+  });
+
+  it("leaves an invalid legacy timestamp unknown", () => {
+    const legacy = {
+      ...makeProgressOp("t1", 25, Number.NaN),
+      payload: { id: "t1", pct: 25 },
+    };
+    const [op] = enqueueOp([legacy], makeProgressOp("t1", 100, 2, TUE));
+    expect(op.payload.startCaptureDay).toBeNull();
+  });
+
   it("inherits the earlier capture day when a later op supersedes it", () => {
     // Monday 25%, then Tuesday 100% — the Tuesday op replaces the Monday one.
     let queue = enqueueOp([], makeProgressOp("t1", 25, 1, MON));
