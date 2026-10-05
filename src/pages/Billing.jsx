@@ -131,12 +131,13 @@ export default function Billing() {
       )}
 
       {/* Plan cards + checkout — hidden in the native (sign-in-only) build; the
-          App Store app doesn't sell subscriptions, they're managed on the web. */}
+          App Store app doesn't sell subscriptions, they're managed on the web.
+          The native note doesn't say where plans are sold either: sending iOS
+          users to the website to change their subscription is a call to action
+          to buy outside the app (App Store guideline 3.1.1). */}
       {native ? (
         <div className="sbd-card" style={{ padding: 16, color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.55 }}>
-          Your subscription is managed on the web. Sign in at{" "}
-          <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>steelbuild-pro.com</span>{" "}
-          to view plans or change your subscription.
+          Plan and billing changes aren&apos;t available in the iOS app.
         </div>
       ) : (
       <>

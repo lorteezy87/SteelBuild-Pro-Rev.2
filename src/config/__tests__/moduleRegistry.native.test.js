@@ -1,9 +1,10 @@
 /**
  * moduleRegistry — native (sign-in-only) nav gating.
  *
- * The billing/subscription page must not appear in the nav menus of the native
- * App Store build (Guideline 3.1.x — plans are managed on the web), while the
- * web build keeps it. The filter runs at module-eval time, so each direction is
+ * The billing/subscription page (Guideline 3.1.x — plans are managed on the web)
+ * and the Integrations page (web admin setup, mostly "coming soon" connectors —
+ * Guideline 2.1) must not appear in the nav menus of the native App Store
+ * build, while the web build keeps them. The filter runs at module-eval time, so each direction is
  * exercised with a fresh import under a different isNativePlatform() mock.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -18,9 +19,10 @@ describe('moduleRegistry native nav gating', () => {
   beforeEach(() => { vi.resetModules(); });
   afterEach(() => { vi.doUnmock('@/lib/native/platform'); vi.resetModules(); });
 
-  it('hides Billing from nav menus when running natively', async () => {
+  it('hides Billing and Integrations from nav menus when running natively', async () => {
     const pages = await navPagesWhenNative(true);
     expect(pages).not.toContain('Billing');
+    expect(pages).not.toContain('Integrations');
     // The rest of the ADMINISTRATION group survives.
     expect(pages).toContain('OrgMembers');
     expect(pages).toContain('Settings');
@@ -29,5 +31,19 @@ describe('moduleRegistry native nav gating', () => {
   it('keeps Billing in the nav menus on the web', async () => {
     const pages = await navPagesWhenNative(false);
     expect(pages).toContain('Billing');
+  });
+
+  it('isHiddenOnNative flags only the web-only pages, and only natively', async () => {
+    vi.doMock('@/lib/native/platform', () => ({ isNativePlatform: () => true }));
+    const native = await import('@/config/moduleRegistry');
+    expect(native.isHiddenOnNative('Billing')).toBe(true);
+    expect(native.isHiddenOnNative('Integrations')).toBe(true);
+    expect(native.isHiddenOnNative('Settings')).toBe(false);
+
+    vi.resetModules();
+    vi.doMock('@/lib/native/platform', () => ({ isNativePlatform: () => false }));
+    const web = await import('@/config/moduleRegistry');
+    expect(web.isHiddenOnNative('Billing')).toBe(false);
+    expect(web.isHiddenOnNative('Integrations')).toBe(false);
   });
 });
