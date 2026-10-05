@@ -43,7 +43,7 @@ export function useOutbox() {
 function makeGlobalHandlers(queryClient) {
   const invalidate = (queryKey) => queryClient.invalidateQueries({ queryKey });
   return {
-    [OP_SCHEDULE_PROGRESS]: async ({ id, pct, captureDay }, op) => {
+    [OP_SCHEDULE_PROGRESS]: async ({ id, pct, captureDay, startCaptureDay }, op) => {
       // New ops persist their original local work day explicitly. The timestamp
       // fallback keeps already-queued v1 ops replayable after this deployment.
       const capturedDay = captureDay || captureDayFromTimestamp(op?.createdAt);
@@ -52,6 +52,10 @@ function makeGlobalHandlers(queryClient) {
         id,
         pct,
         capturedDay,
+        // Set only when this op swallowed an earlier one that had already
+        // started the task, so a start and a finish captured on different
+        // offline days are not both stamped with the finish day.
+        startCapturedDay: startCaptureDay || null,
       });
       invalidate(["schedule-tasks"]);
       invalidate(["field-plan-tasks"]);

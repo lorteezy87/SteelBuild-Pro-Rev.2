@@ -222,6 +222,22 @@ function renderHub({ entries = ["/DrawingSubmittalHub"], ctx = {}, seed } = {}) 
   );
 }
 
+describe("Revision Impact mapping evidence retry", () => {
+  it("issues another roster read after the first request fails", async () => {
+    const user = userEvent.setup();
+    rosterFetch.mockRejectedValueOnce(new Error("Temporary roster failure"));
+    renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=revimpact"] });
+    const load = await screen.findByRole("button", { name: "Load mapping evidence" });
+    expect(rosterFetch).not.toHaveBeenCalled();
+    await user.click(load);
+    const retry = await screen.findByRole("button", { name: "Retry mapping evidence" });
+    expect(rosterFetch).toHaveBeenCalledTimes(1);
+    await user.click(retry);
+    await waitFor(() => expect(rosterFetch).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/Model roster loaded/)).toBeInTheDocument();
+  });
+});
+
 describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
   it("boots and renders the tab strip", async () => {
     renderHub();

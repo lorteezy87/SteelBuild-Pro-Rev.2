@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 // Capacitor wraps the built web app (dist/) in a native iOS shell for App Store
-// distribution. The web deploy on Vercel is untouched by this file — it is read
+// distribution. The web deploy is untouched by this file — it is read
 // only by the `@capacitor/cli` when syncing/opening the native project.
 //
 //  - appId  MUST equal the Bundle Identifier you register in App Store Connect
@@ -25,9 +25,9 @@ const config: CapacitorConfig = {
     // matches the default theme so there is no white flash on rotation/keyboard.
     backgroundColor: '#0B0E11',
     contentInset: 'never',
-    // Links to http(s) URLs open in the system browser rather than navigating
-    // the app's webview away from the SPA.
-    limitsNavigationsToAppBoundDomains: true,
+    // App-bound domains require a matching WKAppBoundDomains list in Info.plist.
+    // The WebView delegation handler opens external links in the system browser.
+    limitsNavigationsToAppBoundDomains: false,
   },
   plugins: {
     SplashScreen: {

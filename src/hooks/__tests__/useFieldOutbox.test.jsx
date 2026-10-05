@@ -51,11 +51,15 @@ describe("useFieldOutbox", () => {
     });
 
     await waitFor(() => expect(result.current.pending).toBe(0));
+    // startCaptureDay is null on a standalone op: it is filled in only when
+    // this op supersedes an earlier one that had already started the task
+    // (see progressCoalesceStartDay.test.ts). Null here means "nothing was
+    // superseded", not "work started today".
     expect(handler).toHaveBeenCalledWith(
-      { id: "t1", pct: 75, captureDay: null },
+      { id: "t1", pct: 75, captureDay: null, startCaptureDay: null },
       expect.objectContaining({
         type: OP_SCHEDULE_PROGRESS,
-        payload: { id: "t1", pct: 75, captureDay: null },
+        payload: { id: "t1", pct: 75, captureDay: null, startCaptureDay: null },
       }),
     );
     expect(loadQueue()).toHaveLength(0);

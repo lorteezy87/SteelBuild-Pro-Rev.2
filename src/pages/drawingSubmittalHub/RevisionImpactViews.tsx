@@ -14,6 +14,7 @@
 import { Suspense } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import RevisionImpactPanel from "./RevisionImpactPanel";
+import type { RosterState } from "./RevisionImpactPanel";
 import { HubViewToggle } from "./HubViewToggle";
 import type { HubViewOption } from "./HubViewToggle";
 import { useHubView } from "./useHubView";
@@ -40,7 +41,9 @@ export interface RevisionImpactViewsProps {
   rows?: any[];
   onCompareRevision?: (drawingId: string) => void;
   isLoading?: boolean;
-  rosterLoaded?: boolean;
+  rosterState?: RosterState;
+  onLoadMappingEvidence?: () => void;
+  rosterLoadedAt?: string | null;
 }
 
 export default function RevisionImpactViews({ projectId, ...computedProps }: RevisionImpactViewsProps) {

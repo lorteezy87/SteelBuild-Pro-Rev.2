@@ -287,6 +287,7 @@ export default function PieceRegister() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importRows, setImportRows] = useState<ImportPayload[]>([]);
   const [importNotice, setImportNotice] = useState<string | null>(null);
+  const importReadVersion = useRef(0);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [importTargetWorkPackageId, setImportTargetWorkPackageId] = useState("");
@@ -1102,12 +1103,15 @@ export default function PieceRegister() {
   };
 
   const handleFile = async (file: File | null) => {
+    // Changing the source or file invalidates any parser still reading the old file.
+    const readVersion = ++importReadVersion.current;
     setImportFile(file);
     setImportRows([]);
     setImportNotice(null);
     if (!file) return;
     try {
       const { rows, nulsRemoved } = await readPieceImportFile(file, sourceType);
+      if (readVersion !== importReadVersion.current) return;
       if (rows.length === 0) throw new Error("No import rows were found");
       setImportRows(rows);
       if (nulsRemoved > 0) {
@@ -1116,6 +1120,7 @@ export default function PieceRegister() {
         );
       }
     } catch (error) {
+      if (readVersion !== importReadVersion.current) return;
       setImportFile(null);
       toast.error(error instanceof Error ? error.message : "Unable to read import file");
     }
