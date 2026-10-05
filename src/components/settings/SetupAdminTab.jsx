@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { isHiddenOnNative } from "@/config/moduleRegistry";
 
 /**
  * SetupAdminTab — the "Setup & Admin" panel in Settings. Surfaces the
@@ -19,7 +20,7 @@ const ITEMS = [
 
 export default function SetupAdminTab({ isAdmin = false }) {
   const navigate = useNavigate();
-  const items = ITEMS.filter((i) => !i.adminOnly || isAdmin);
+  const items = ITEMS.filter((i) => (!i.adminOnly || isAdmin) && !isHiddenOnNative(i.page));
 
   return (
     <div>
