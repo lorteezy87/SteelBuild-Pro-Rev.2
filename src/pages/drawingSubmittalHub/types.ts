@@ -1,4 +1,5 @@
 import type { HubTabKey } from "./hubLinks";
+import type { ModelScopeEvidence, RevisionControlEvidence } from "@/lib/revisionControlEvidence";
 
 export interface DueInfo {
   label: string;
@@ -175,6 +176,8 @@ export interface RevisionImpactViewRow {
   inField?: boolean;
   downstreamKnown?: boolean;
   severity: "critical" | "high" | "medium" | "low" | "unknown" | string;
+  modelScope?: ModelScopeEvidence;
+  revisionControl?: RevisionControlEvidence;
 }
 
 export interface ModelElementViewRow {
@@ -187,6 +190,7 @@ export interface ModelElementViewRow {
   erection_area?: string | null;
   drawing_id?: string | null;
   drawing_no?: string | null;
+  drawing_set_id?: string | null;
   fab_status?: string | null;
   is_deleted?: boolean | null;
 }

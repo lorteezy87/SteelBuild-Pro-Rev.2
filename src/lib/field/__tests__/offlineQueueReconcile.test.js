@@ -66,8 +66,8 @@ describe("reconcileAfterFlush", () => {
   it("preserves a coalesced re-enqueue of an already-synced task", () => {
     // Progress ops carry `now` in their id, so a re-enqueue during the flush
     // is a DIFFERENT id and must survive.
-    const first = makeProgressOp("task-1", 40, 1000);
-    const second = makeProgressOp("task-1", 75, 2000);
+    const first = makeProgressOp("task-1", 40, 1000, "2026-09-21");
+    const second = makeProgressOp("task-1", 75, 2000, "2026-09-22");
     expect(second.id).not.toBe(first.id);
 
     const snapshot = [first];
@@ -75,7 +75,10 @@ describe("reconcileAfterFlush", () => {
 
     const merged = reconcileAfterFlush(persisted, snapshot, []);
 
-    expect(merged).toEqual([second]);
+    expect(merged).toEqual([{
+      ...second,
+      payload: { ...second.payload, startCaptureDay: "2026-09-21" },
+    }]);
   });
 
   it("returns [] for a corrupt persisted queue", () => {

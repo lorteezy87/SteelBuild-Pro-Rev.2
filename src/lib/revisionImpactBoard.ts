@@ -14,6 +14,12 @@
 
 import { isRfiOpen } from "@/lib/entityPredicates";
 import { linkedRfiNumbers, normNum } from "@/lib/fabReleaseGate";
+import {
+  deriveRevisionControlEvidence,
+  modelScopeEvidence,
+  type ModelScopeEvidence,
+  type RevisionControlEvidence,
+} from "@/lib/revisionControlEvidence";
 
 /**
  * Is fabrication held on this RFI? The flag has NO top-level column — `rfis`
@@ -50,6 +56,9 @@ export interface RevisionImpactSources {
   rfis?: any[];
    
   modelElements?: any[];
+  modelRosterCount?: number | null;
+  modelRosterLoaded?: boolean;
+  comparisonByRevisionId?: Record<string, { status?: string | null } | null | undefined>;
 }
 
 export interface RevisionImpactRow {
@@ -63,6 +72,8 @@ export interface RevisionImpactRow {
   openRfiCount: number;
   fabBlocked: boolean;
   affectedPieces: number | null;
+  modelScope: ModelScopeEvidence;
+  revisionControl: RevisionControlEvidence;
 }
 
 /**
@@ -74,6 +85,8 @@ export function buildRevisionImpactRows(
   sources: RevisionImpactSources = {},
 ): RevisionImpactRow[] {
   const { drawings = [], drawingSets = [], workPackages = [], rfis = [], modelElements = [] } = sources;
+  const rosterLoaded = sources.modelRosterLoaded ?? Object.prototype.hasOwnProperty.call(sources, "modelElements");
+  const rosterCount = sources.modelRosterCount ?? (rosterLoaded ? modelElements.length : null);
 
    
   const drawingsById = new Map<string, any>();
@@ -87,19 +100,6 @@ export function buildRevisionImpactRows(
    
   const rfiByNum = new Map<string, any>();
   for (const r of rfis || []) if (r && !r.is_deleted) rfiByNum.set(normNum(r.rfi_number), r);
-
-  // Piece-count indexes: exact (by set FK) + heuristic (by sequence).
-  const elemBySet = new Map<string, number>();
-  const elemBySeq = new Map<string, number>();
-  for (const e of modelElements || []) {
-    if (!e || e.is_deleted) continue;
-    if (e.drawing_set_id) {
-      const k = String(e.drawing_set_id);
-      elemBySet.set(k, (elemBySet.get(k) || 0) + 1);
-    }
-    const seq = e.sequence_number != null && e.sequence_number !== "" ? String(e.sequence_number) : "";
-    if (seq) elemBySeq.set(seq, (elemBySeq.get(seq) || 0) + 1);
-  }
 
   return (revisionImpact || []).map((imp) => {
     const dwg = drawingsById.get(String(imp?.drawingId)) || null;
@@ -117,17 +117,24 @@ export function buildRevisionImpactRows(
     const openRfis = linkedRfis.filter(isOpenRfi);
     const fabBlocked = openRfis.some(isFabHeld);
 
-    // Affected pieces: exact via drawing_set_id, else heuristic via WP sequence.
-    let affectedPieces: number | null = null;
     const setId = set?.id ? String(set.id) : (dwg?.drawing_set_id ? String(dwg.drawing_set_id) : null);
-    if (setId && elemBySet.has(setId)) {
-      affectedPieces = elemBySet.get(setId) ?? null;
-    } else {
-      for (const w of wps) {
-        const seq = wpSequenceOf(w);
-        if (seq && elemBySeq.has(seq)) affectedPieces = (affectedPieces || 0) + (elemBySeq.get(seq) || 0);
-      }
-    }
+    const modelScope = modelScopeEvidence({
+      rosterCount,
+      rosterLoaded,
+      drawingSetId: setId,
+      workPackageSequences: wps.map(wpSequenceOf),
+      elements: modelElements,
+    });
+    const comparisonKey = imp?.revisionId ? String(imp.revisionId) : String(imp?.drawingId || "");
+    const revisionControl = deriveRevisionControlEvidence({
+      isChanged: true,
+      comparison: sources.comparisonByRevisionId?.[comparisonKey] ?? null,
+      downstreamSeverity: imp?.severity,
+      model: modelScope,
+      hardBlockers: fabBlocked
+        ? [{ code: "OPEN_FAB_HOLD", message: "An open linked RFI holds fabrication." }]
+        : [],
+    });
 
     return {
       ...imp,
@@ -136,7 +143,9 @@ export function buildRevisionImpactRows(
       rfiCount: linkedRfis.length,
       openRfiCount: openRfis.length,
       fabBlocked,
-      affectedPieces,
+      affectedPieces: modelScope.affectedPieces,
+      modelScope,
+      revisionControl,
     };
   });
 }

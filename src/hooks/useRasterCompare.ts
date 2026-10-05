@@ -51,6 +51,8 @@ export interface UseRasterCompareResult {
   zoomBy: (direction: 1 | -1) => void;
   rendering: boolean;
   renderError: string;
+  rastersReady: boolean;
+  retryRender: () => void;
   displayRef: React.RefObject<HTMLCanvasElement>;
   sideOldRef: React.RefObject<HTMLCanvasElement>;
   sideNewRef: React.RefObject<HTMLCanvasElement>;
@@ -69,6 +71,7 @@ export function useRasterCompare({
   const [zoom, setZoom] = useState(1);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState("");
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const bufferCacheRef = useRef<Map<string, ArrayBuffer>>(new Map());
   const rastersRef = useRef<{ old: Raster | null; new: Raster | null }>({ old: null, new: null });
@@ -85,6 +88,7 @@ export function useRasterCompare({
   // costs more than re-fetching them on the next compare.
   useEffect(() => {
     if (!open) {
+      renderSeqRef.current += 1;
       bufferCacheRef.current = new Map();
       rastersRef.current = { old: null, new: null };
       setOffset({ x: 0, y: 0 });
@@ -114,11 +118,13 @@ export function useRasterCompare({
   const oldPdfPage = oldPage?.pdfPage;
   const newFileUrl = newPage?.fileUrl;
   const newPdfPage = newPage?.pdfPage;
+  const retryRender = useCallback(() => setRetryNonce((value) => value + 1), []);
 
   // Rasterize when the selected pair changes.
   useEffect(() => {
     if (!open || !oldFileUrl || !newFileUrl) return;
     const seq = ++renderSeqRef.current;
+    rastersRef.current = { old: null, new: null };
     setRendering(true);
     setRenderError("");
     (async () => {
@@ -146,7 +152,7 @@ export function useRasterCompare({
     // the rasters it just stored, and including it would re-fetch on every
     // mode/offset change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, oldFileUrl, oldPdfPage, newFileUrl, newPdfPage]);
+  }, [open, oldFileUrl, oldPdfPage, newFileUrl, newPdfPage, retryNonce]);
 
   // Re-compose (no re-raster) on mode / offset / wipe changes.
   useEffect(() => {
@@ -165,6 +171,9 @@ export function useRasterCompare({
       return next ?? 1;
     });
   }, []);
+  const rastersReady = Boolean(rastersRef.current.old && rastersRef.current.new)
+    && !rendering
+    && !renderError;
 
   return {
     mode,
@@ -178,6 +187,8 @@ export function useRasterCompare({
     zoomBy,
     rendering,
     renderError,
+    rastersReady,
+    retryRender,
     displayRef,
     sideOldRef,
     sideNewRef,

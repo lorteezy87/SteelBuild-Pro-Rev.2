@@ -4,7 +4,12 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  buildBudgetHourDeletePatch,
+  buildBudgetHoursCsv,
+  buildBudgetHourTableRows,
   buildBudgetHoursSummary,
+  buildScopeItemCreate,
+  filterBudgetHourRows,
   variancePct,
   fmtPct,
   varianceTone,
@@ -221,5 +226,125 @@ describe("buildBudgetHoursSummary", () => {
     const s = buildBudgetHoursSummary(rows);
     expect(s.standardCount).toBe(2);
     expect(s.specialtyCount).toBe(1);
+  });
+});
+
+describe("budget-hours view model", () => {
+  it("uses linked work-package actuals in enriched table rows", () => {
+    const rows = [
+      makeRow({
+        metadata: { linked_work_package_ids: ["wp-1"] },
+        shop_hours_actual: 999,
+        field_hours_actual: 999,
+      }),
+    ];
+    const tableRows = buildBudgetHourTableRows(
+      rows,
+      new Map([
+        [
+          "wp-1",
+          { id: "wp-1", shop_hours_actual: 125, field_hours_actual: 25 },
+        ],
+      ]),
+    );
+
+    expect(tableRows[0]).toMatchObject({
+      _shopActual: 125,
+      _fieldActual: 25,
+      _totalActual: 150,
+      _totalBudget: 150,
+      _totalVarPct: 0,
+      _isLinked: true,
+    });
+  });
+
+  it("preserves the manual-actual over-budget filter semantics", () => {
+    const linked = makeRow({
+      id: "linked",
+      scope_item: "Linked",
+      shop_hours_budget: 100,
+      field_hours_budget: 0,
+      shop_hours_actual: 0,
+      field_hours_actual: 0,
+      metadata: { linked_work_package_ids: ["wp-1"] },
+    });
+    const manual = makeRow({
+      id: "manual",
+      scope_item: "Manual",
+      shop_hours_budget: 100,
+      shop_hours_actual: 101,
+      field_hours_budget: 0,
+      field_hours_actual: 0,
+    });
+
+    expect(
+      filterBudgetHourRows([linked, manual], {
+        search: "",
+        category: "All",
+        overBudgetOnly: true,
+      }).map((row) => row.id),
+    ).toEqual(["manual"]);
+  });
+
+  it("filters by category and case-insensitive scope or notes", () => {
+    const rows = [
+      makeRow({ id: "standard", scope_item: "Columns" }),
+      makeRow({
+        id: "specialty",
+        category: "Specialty",
+        is_specialty: true,
+        scope_item: "Stairs",
+        notes: "North tower",
+      }),
+      makeRow({ id: "misses", category: "Misses" }),
+    ];
+
+    expect(
+      filterBudgetHourRows(rows, {
+        search: "NORTH",
+        category: "Specialty",
+        overBudgetOnly: false,
+      }).map((row) => row.id),
+    ).toEqual(["specialty"]);
+  });
+
+  it("shapes create and soft-delete payloads without changing defaults", () => {
+    expect(
+      buildScopeItemCreate("project-1", [makeRow({ sort_order: 20 })], {
+        scope_item: "Joists",
+        category: "Specialty",
+        is_specialty: true,
+      }),
+    ).toEqual({
+      project_id: "project-1",
+      scope_item: "Joists",
+      category: "Specialty",
+      is_specialty: true,
+      sort_order: 30,
+      metadata: {},
+    });
+    expect(buildBudgetHourDeletePatch("2026-09-27T12:00:00.000Z")).toEqual({
+      is_deleted: true,
+      deleted_at: "2026-09-27T12:00:00.000Z",
+    });
+  });
+
+  it("preserves the existing CSV columns, ordering, and raw actual values", () => {
+    const csv = buildBudgetHoursCsv([
+      makeRow({
+        scope_item: "Columns",
+        category: "Standard",
+        shop_hours_budget: 10,
+        shop_hours_actual: 8,
+        field_hours_budget: 5,
+        field_hours_actual: 4,
+        notes: "North",
+      }),
+    ]);
+
+    expect(csv).toBe(
+      '"Scope Item","Category","Shop Budget","Shop Actual","Field Budget","Field Actual","Notes"\n' +
+        '"Columns","Standard","10","8","5","4","North"',
+    );
   });
 });

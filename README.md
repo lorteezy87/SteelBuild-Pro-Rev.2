@@ -289,15 +289,12 @@ reconciliation against current `main` — is
 
 **The product ships as a web app today.** Neither store build exists yet.
 
-- **iOS** — Capacitor 8 is wired up in `capacitor.config.ts` (appId
-  `com.steelbuildpro.app`, `webDir: dist`) with the `app`, `status-bar`,
-  `splash-screen`, `keyboard`, `haptics`, `camera`, `share` and `preferences`
-  plugins installed, plus `cap:add:ios` / `cap:sync` / `cap:open` scripts. **No
-  `ios/` project is committed** — it is generated on a Mac by `npm run
-  cap:add:ios`, and everything after that (signing, capabilities, archive,
-  App Store Connect) requires Xcode and cannot run in CI/Linux. The runbook is
-  [`docs/app-store/SUBMISSION.md`](./docs/app-store/SUBMISSION.md); known gaps
-  are MOB-1 … MOB-10 in the production-readiness audit.
+- **iOS** — a sign-in-only Capacitor 8 shell (`capacitor.config.ts`, appId
+  `com.steelbuildpro.app`, `webDir: dist`). The `ios/` Xcode project is
+  committed: `npm run cap:sync` copies the web build into it, and
+  `npm run cap:open` opens it in Xcode. Signing, archiving and App Store
+  Connect need a Mac with Xcode and can't run in CI/Linux. The runbook, including what's left before submission, is
+  [`docs/app-store/SUBMISSION.md`](./docs/app-store/SUBMISSION.md).
 - **Android / Google Play** — **no platform exists**: `@capacitor/android` is
   not a dependency and there is no `android/` directory. Play submission is a
   from-scratch task, not a configuration change.
