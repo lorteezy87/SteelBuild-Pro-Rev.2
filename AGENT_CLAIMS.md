@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-10-05 | codex-pr465-review-followup | Revision review evidence and async correctness | src/components/drawings/RevisionCompareModal.jsx; src/lib/revisionSnapshotDiff.js; src/pages/PieceRegister.tsx; focused tests | Distinguish visual attestations from AI findings, refresh evidence, and prevent stale async completion. |
 | 2026-10-05 | codex-pr-465-resolution | PR #465 conflict and review resolution | Files already changed by PR #465; focused regression tests | Reconcile current main and resolve the owner's requested PR without changing deployment or live data. |
 | 2026-09-21 | codex-register-security-hardening | Register panel and release hardening | src/pages/pieceRegister/PieceDigitalThread.tsx; src/pages/pieceRegister/__tests__/PieceDigitalThread.test.tsx; src/styles/piece-control-command.css; public/_headers; scripts/__tests__/deployHeaders.test.ts; docs/superpowers/{specs,plans}/2026-09-21-register-security-hardening* | Restore a bounded Piece Digital Thread panel and prepare separately reviewable hardening changes without mutating shared infrastructure until targets and evidence are verified. |
 | 2026-09-21 | codex-revision-control-safety | Revision-control safety contract | docs/superpowers/specs/2026-09-21-revision-control-safety-design.md; then scoped drawing/revision/model/release files and tests | Define and implement a fail-closed revision-control boundary without duplicating existing release or document-control workflows. |
