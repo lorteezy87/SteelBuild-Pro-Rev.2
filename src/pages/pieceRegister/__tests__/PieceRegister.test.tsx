@@ -2,7 +2,7 @@
 
 import { File as NodeFile } from "node:buffer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -554,7 +554,7 @@ describe("Piece Register command shell", () => {
 
     renderPieceRegister("/PieceRegister?view=impact&piece=p1");
 
-    expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /^Piece digital thread:/ })).toBeInTheDocument();
   });
 
   it("places a selected affected piece on hold through the canonical RPC wrapper", async () => {
@@ -645,7 +645,7 @@ describe("Piece Register command shell", () => {
       seedRevisionWithPiece();
       renderPieceRegister("/PieceRegister?view=impact&revision=r4&piece=p1");
 
-      expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+      expect(await screen.findByRole("dialog", { name: /^Piece digital thread:/ })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Place hold" }) !== null)
         .toBe(holdVisible);
       expect(screen.queryByRole("button", { name: "Add drawing impact" }) !== null)
@@ -1038,7 +1038,7 @@ describe("Piece Register command shell", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: /open P1 · A/i }));
-    expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /^Piece digital thread:/ })).toBeInTheDocument();
     expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
       "?view=impact&embed=1&revision=r4&piece=p1",
     );
@@ -1049,7 +1049,7 @@ describe("Piece Register command shell", () => {
 
     renderPieceRegister("/PieceRegister?view=register&piece=p1");
 
-    expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /^Piece digital thread:/ })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Piece impact" }))
       .not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Model & drawing" }))
@@ -1077,7 +1077,7 @@ describe("Piece Register command shell", () => {
       "/PieceRegister?view=impact&revision=other-project&piece=p1&embed=1",
     );
 
-    expect(await screen.findByLabelText("Piece digital thread")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /^Piece digital thread:/ })).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
         "?view=impact&piece=p1&embed=1",
@@ -1156,7 +1156,7 @@ describe("Piece Register command shell", () => {
       projectContext.projectId = "project-1";
       rerenderPieceRegister();
 
-      expect(await screen.findByLabelText("Piece digital thread"))
+      expect(await screen.findByRole("dialog", { name: /^Piece digital thread:/ }))
         .toBeInTheDocument();
       expect(screen.getByTestId("piece-register-search")).toHaveTextContent(
         "?view=impact&piece=p1&revision=r4&embed=1",
@@ -1209,7 +1209,7 @@ describe("Piece Register command shell", () => {
       "/PieceRegister?view=impact&focus=revision&piece=piece-a&revision=r4&embed=1",
     );
 
-    expect(await screen.findByLabelText("Piece digital thread"))
+    expect(await screen.findByRole("dialog", { name: /^Piece digital thread:/ }))
       .toBeInTheDocument();
 
     projectContext.projectId = "project-b";
@@ -1813,6 +1813,22 @@ describe("Piece Register command shell", () => {
 
   // Sentry JAVASCRIPT-REACT-2C: a UTF-16 export decoded as UTF-8 staged
   // p_i_e_c_e_m_a_r_k keys and U+0000 into jsonb p_rows (Postgres 22P05).
+  it("discards a pending parse after its import source changes", async () => {
+    const file = importFileFromBytes(new TextEncoder().encode("piece_mark,quantity\nOLD,2\n"), "old.csv");
+    const bytes = await file.arrayBuffer();
+    let finish!: (value: ArrayBuffer) => void;
+    vi.spyOn(file, "arrayBuffer").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    renderPieceRegister();
+    fireEvent.click(screen.getByRole("button", { name: "Imports" }));
+    fireEvent.change(screen.getByLabelText("File"), { target: { files: [file] } });
+    await waitFor(() => expect(file.arrayBuffer).toHaveBeenCalledOnce());
+    fireEvent.change(screen.getByLabelText("Source"), { target: { value: "powerfab_xml" } });
+    await act(async () => finish(bytes));
+    expect(screen.getByRole("button", { name: "Stage for review" })).toBeDisabled();
+    expect(screen.queryByText("old.csv")).not.toBeInTheDocument();
+    expect(stagePieceImportBatch).not.toHaveBeenCalled();
+  });
+
   it("stages a UTF-16LE CSV without a BOM as its real rows", async () => {
     vi.mocked(stagePieceImportBatch).mockResolvedValue({ batch_id: "batch-9" });
     const csv = "piece_mark,quantity,profile\r\nB1,2,W12X26\r\nC2,1,W10X33\r\n";

@@ -1,224 +1,169 @@
-# SteelBuild Pro — Apple App Store submission runbook
+# SteelBuild Pro — App Store submission runbook
 
-SteelBuild Pro is a Vite/React web app. To ship it on the App Store it is
-wrapped in a native iOS shell with [Capacitor](https://capacitorjs.com/). This
-document is the end-to-end runbook: what is already wired up in this repo, and
-the remaining steps — most of which **require a Mac with Xcode** and cannot be
-done in CI/Linux.
+SteelBuild Pro is a Vite/React web app wrapped in a native iOS shell with
+[Capacitor](https://capacitorjs.com/). The iOS app is **sign-in only**: companies
+set up their workspace and billing on the web, and their staff sign in on iOS.
+The `ios/` Xcode project is committed, and it builds and runs on a physical
+iPhone (checked 2026-09-26).
 
-> **Status (2026-09-26): not submittable yet.** The items marked **Action** and
-> **Not handled** below are blocking. See MOB-1 … MOB-10 in
+> **Status (2026-09-27): not submittable yet.** The remaining code work is in
+> open PRs (§1). Everything after that is an owner step, in order (§2–§7).
+> Findings MOB-1 … MOB-10 come from
 > [`../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](../audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md).
->
-> There is no legal hold or conflict blocking store, marketing, signup or
-> billing work (owner, 2026-09-11; see `CLAUDE.md` → Workflow rules).
 
 ---
 
-## Already done in this repo
+## 1. Code status
 
-- **Capacitor iOS wrapper** — `capacitor.config.ts` (appId `com.steelbuildpro.app`,
-  `webDir: dist`), plugins **installed** (`app`, `status-bar`, `splash-screen`,
-  `keyboard`, `haptics`, `camera`, `share`, `filesystem`, `file-transfer`,
-  `preferences`), npm scripts
-  (`cap:add:ios`, `cap:sync`, `cap:open`, `ios`).
-  - ✅ `camera`, `haptics`, and `share` are wired to field-photo uploads and
-    project-aware report-link sharing. `preferences` is installed but remains
-    unused.
-  - ✅ **The `ios/` Xcode project is committed.** `npm run cap:sync` and a
-    signed generic-device Debug build passed on 2026-09-26 with all ten native
-    plugins. The build installed and launched on a physical iPhone 17 Pro.
-    Signed-in workflow checks are still required before submission.
-  - ⚠️ **No Android platform exists at all** — `@capacitor/android` is not a
-    dependency and there is no `android/` directory. Google Play is a
-    from-scratch effort (MOB-1), not covered by this runbook.
-- **Native bootstrap** — `src/lib/native/capacitor.ts`, loaded only inside the
-  native shell (guarded in `src/main.jsx`): status-bar theming, splash hide,
-  keyboard classes, deep-link routing, safe-area root class. The web bundle and
-  test suite are unaffected.
-- **PWA / iOS web hardening** — real `public/manifest.json` icons + metadata,
-  `apple-mobile-web-app-*` meta tags, PNG `apple-touch-icon`, safe-area-inset
-  CSS (`src/styles/base.css`, active only in standalone/native).
-- **Privacy manifest** — committed at `ios/App/App/PrivacyInfo.xcprivacy` and
-  included in the App target; `mobile/ios/PrivacyInfo.xcprivacy` is its source
-  template.
-- **Info.plist usage strings** — camera and photo-library purpose strings plus
-  `ITSAppUsesNonExemptEncryption = NO` are committed in
-  `ios/App/App/Info.plist`.
+| Area | Guideline | PR | State |
+|---|---|---|---|
+| Sign-in-only native shell: no marketing, pricing or sign-up on iOS (MOB-4) | 3.1.1 | #476 | merged |
+| Camera photos, report share sheet, haptics (MOB-2) | 4.2 | #482 | merged |
+| Exports and downloads through Files / the share sheet (MOB-5) | 2.1 | #483 | merged |
+| Phone layouts: nothing clipped at 360–430 px; phones open Schedule on the Task List | 4.0 | #487, #488 | merged |
+| Branded icon and splash; privacy manifest declares collected data (MOB-7) | 2.3, 5.1.2 | #489 | open |
+| Privacy and Terms links in the app; no buy-on-web or "coming soon" prompts; Billing and Integrations hidden | 5.1.1, 3.1.1 | #490 | open |
+| Account deletion: sole-owner rule, working erase call | 5.1.1(v) | #491 | open |
+| Account deletion: release authored records, erase in one transaction (two migrations) | 5.1.1(v) | #492 | open, draft |
+| Deep links limited to SteelBuild domains; app-bound domains off (MOB-8) | — | #486 | open: revert its `AGENT_CLAIMS.md` separator row first (it drops a column and breaks the table) |
+| Support page for the Support URL; Support & legal links for every user in Settings → Profile; crash reports tagged with platform, version and build (MOB-6); status bar matches the page in both themes (MOB-10); no zoom when an input takes focus; dialog backdrops cover the full phone screen; listing copy | 5.1.1, 2.3 | #493 | open |
 
-## Requires a Mac (cannot run here)
+Merge #491 before #492. The rest can go in any order.
 
-Generating the Xcode project, `pod install`, code signing, building the `.ipa`,
-capturing screenshots, and uploading to App Store Connect.
+Not covered here: Google Play (MOB-1, no `android/` platform yet).
 
----
+## 2. Backend and web (owner, before a review build)
 
-## 0. Prerequisites
+- [ ] **Apply #492's two migrations**, after the read-only pre-check in that PR, then deploy the function:
+  ```bash
+  supabase functions deploy account-delete --project-ref kjrwqagyeswwoxpjkcko
+  ```
+  Don't deploy it before the migrations; see #492.
+- [ ] **Allowlist the password-reset link.** In Supabase, go to Authentication → URL Configuration → Redirect URLs. It must include `https://steelbuild-pro.com/update-password`. The app's "Forgot password?" email sends users there (MOB-3; see `docs/runbooks/owner-checklist.md`).
+- [ ] **Unblock the web deploy.**
+  - Production deploys wait on the Supabase drift check.
+  - The check fails because production has migrations `20260927004958` and `20260927005727` that aren't in the repo.
+  - `/support`, the legal pages and the new deletion dialog reach steelbuild-pro.com only through that deploy.
+  - App Review opens the Support and Privacy URLs.
+- [ ] **Monitor the support mailboxes.** `support@steelbuild-pro.com` and `security@steelbuild-pro.com` must be real, monitored mailboxes. The app and the support page point people to them.
 
-- **Apple Developer Program** membership for the individual or business that
-  owns SteelBuild Pro.
-- **Mac + Xcode 16.1 or newer** (required by Capacitor 8).
-- **CocoaPods**: `brew install cocoapods` (or `sudo gem install cocoapods`).
-- Repo installed: `npm ci`.
+## 3. Demo account for App Review (owner)
 
-## 1. One-time native project setup (Mac)
+Reviewers can't create a company workspace, so they need a working login (guideline 2.1).
 
-```bash
-npm run cap:add:ios        # generates ios/ (commit it, or keep local — see .gitignore)
-```
+- [ ] Email and password, with **no two-factor authentication**. A reviewer can't pass a TOTP prompt.
+- [ ] Make it an **admin (not an owner)** of a demo workspace that belongs to a different account.
+  - Reviewers often test account deletion.
+  - As a non-owner, deleting it removes only the reviewer's login, and the demo workspace survives.
+  - If it were the only owner, deletion would be refused by design, which a reviewer could read as broken.
+- [ ] Put the workspace on a plan that includes everything in the screenshots.
+- [ ] Seed a realistic sample project: RFIs, drawings and submittals, a schedule, daily logs with photos, deliveries.
+- [ ] Sign in with it once on a device.
+- [ ] If a reviewer deletes it, create a fresh one before resubmitting.
 
-Then, in the generated project:
+## 4. Build and upload (Mac)
 
-1. **Privacy manifest** — copy `mobile/ios/PrivacyInfo.xcprivacy` to
-   `ios/App/App/PrivacyInfo.xcprivacy`, then in Xcode: *File ▸ Add Files to "App"…*
-   and check *Add to target: App*.
-2. **Usage strings** — paste the keys from `mobile/ios/Info.plist.snippet.xml`
-   into `ios/App/App/Info.plist`.
-3. **Bundle Identifier** — set to `com.steelbuildpro.app` (must match
-   `capacitor.config.ts` `appId` and the App Store Connect record).
-4. **Signing** — select your Team, enable *Automatically manage signing*.
-5. **Deployment target** — iOS 15.0+.
-6. **Encryption compliance** — add `ITSAppUsesNonExemptEncryption = NO` to
-   `Info.plist` (standard HTTPS only; skips the export-compliance prompt each
-   upload).
+Needs a released Xcode 26 or newer with the iOS 26 SDK or newer, and a signing team (`36MYCVT3XU` is set in the project). Apple requires these SDKs for uploads from April 28, 2026; check the [current submission requirements](https://developer.apple.com/news/upcoming-requirements/) before archiving.
 
-## 2. App icon, splash & launch screen
-
-Fastest path — generate every size from one source image:
+The build reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (production values) from the environment or a local `.env` file (see `.env.example`). Without them, the app stops at launch with a configuration error.
 
 ```bash
-npm i -D @capacitor/assets
-# place a 1024×1024 icon at assets/icon.png and a splash at assets/splash.png
-#   (source: public/steelbuild-pro-icon-512.png upscaled, or the master art)
-npx capacitor-assets generate --ios
+npm ci
+npm run cap:sync   # vite build, then copy the web assets into ios/
+npm run cap:open   # opens ios/App/App.xcworkspace
 ```
 
-Set the launch-screen background to `#0B0E11` (matches the web loading shell and
-`SplashScreen.backgroundColor`) so there is no white flash on cold start.
+- **Version and build.**
+  - Keep **Version** (`MARKETING_VERSION`) at `1.0` for the first release.
+  - Raise **Build** (`CURRENT_PROJECT_VERSION`) for every upload. It's in Xcode under the App target → General → Identity.
+  - Crash reports from the app carry `app_version` and `app_build` tags, so an error can be matched to its build.
+- **Upload.** Product → Archive, then Distribute App → App Store Connect → Upload.
+- **TestFlight.** Install the build on an iPhone and an iPad.
+- **Dev-server builds must not ship.** For live reload during development, use `CAP_SERVER_URL=http://<LAN-ip>:5173 npm run cap:sync` with `npm run dev`. Unset `CAP_SERVER_URL` and re-sync before archiving: release builds must serve the bundled assets.
 
-## 3. Build & run loop
+## 5. Device checks (TestFlight build, iPhone and iPad)
 
-```bash
-npm run cap:sync     # vite build → copy web assets into the native project
-npm run cap:open     # open ios/App/App.xcworkspace in Xcode
-# or: npm run ios     # sync + open in one step
+- [ ] Sign in and out.
+- [ ] "Forgot password?" sends an email. Its link sets a new password in the browser, and signing in with it works.
+- [ ] A camera photo on a Daily Log or Punchlist item uploads, with a haptic on success.
+- [ ] A report link opens the share sheet.
+- [ ] These exports open the share sheet: a CSV, a PDF, a grouped package, and one large drawing or document.
+- [ ] Settings → Profile → Support & legal: Privacy Policy, Terms of Service and Help & support open, and "Back to home" returns to the app.
+- [ ] No pricing, plans, upgrade or buy prompts anywhere. Billing and Integrations aren't in the menus.
+- [ ] Delete a throwaway account whose workspace has a project. It signs you out, and the login no longer works.
+- [ ] iPad: portrait and landscape, and Split View at ½ and ⅓ width. The ⅓ width uses the phone layout.
+
+## 6. App Store Connect
+
+- **App record**
+  - Platform: iOS.
+  - Name: SteelBuild Pro.
+  - Primary language: English (U.S.).
+  - Bundle ID: `com.steelbuildpro.app`.
+  - SKU: any unique value.
+- **Listing text:** name, subtitle, promotional text, keywords and description are ready to paste in [`LISTING.md`](./LISTING.md). A test keeps them within App Store Connect's limits.
+- **Category:** Business. Secondary: Productivity.
+- **Price:** Free. There are no in-app purchases.
+- **URLs**
+  - Support: `https://steelbuild-pro.com/support`.
+  - Privacy Policy: `https://steelbuild-pro.com/privacy`.
+  - Marketing (optional): `https://steelbuild-pro.com`.
+- **Screenshots**
+  - Take them from the TestFlight build, using the demo workspace.
+  - iPhone 6.9": 1320 × 2868 portrait.
+  - iPad 13": 2064 × 2752 portrait. **Required**, because the app supports iPad.
+  - Show real screens: Dashboard, Projects, RFIs, Drawings, Schedule, and a field photo. Nothing about pricing.
+- **App Privacy.** Answer to match `ios/App/App/PrivacyInfo.xcprivacy`. Every type below is *linked to the user* and *not used for tracking*:
+
+  | Category | Data type | Purpose |
+  |---|---|---|
+  | Contact Info | Name, Email Address, Phone Number | App Functionality |
+  | Identifiers | User ID | App Functionality |
+  | User Content | Emails or Text Messages, Photos or Videos, Other User Content | App Functionality |
+  | Usage Data | Product Interaction | App Functionality, Analytics |
+  | Diagnostics | Crash Data, Performance Data, Other Diagnostic Data | App Functionality |
+
+  Phone numbers are saved in profile metadata. Email Inbox stores composed messages. Masked Sentry replay still captures interaction events, so masking does not remove the Product Interaction disclosure.
+
+  If the app starts collecting something new, update the manifest and these answers together.
+- **Age rating:** answer the questionnaire.
+- **Export compliance:** already answered in the binary. `ITSAppUsesNonExemptEncryption` is `NO`, since the app uses standard HTTPS only.
+- **App Review Information:** add the demo account, a contact, and the notes in §7.
+
+## 7. Notes for App Review
+
+Adapt and paste into App Review Information → Notes. The first paragraph assumes SteelBuild Pro is sold to companies, not to individual consumers (guideline 3.1.3(c)). If that changes, revisit it before submitting.
+
+```text
+SteelBuild Pro is project-management software for steel fabrication and
+erection companies. It is sold to companies: a company sets up its workspace
+on our website and invites its staff, who then sign in with this app. The app
+has no account sign-up, purchasing or subscription features, and doesn't link
+to any.
+
+Demo account: see Sign-In Information. It is an admin of a sample company
+workspace with example projects.
+
+To try the iOS features:
+- Daily Log or Punchlist: add a photo with the camera.
+- Any report: Share opens the iOS share sheet. Exports open in the share
+  sheet, so you can save them to Files.
+
+Account deletion: Settings > Profile > "Delete my account…", then type the
+account's email to confirm. The demo workspace belongs to another account, so
+it stays.
+
+Privacy Policy and Terms of Service are linked on the sign-in screen. Both,
+plus our support page and email, are in Settings > Profile > Support & legal.
 ```
 
-Run on a simulator and a real device. **Live-reload** against the dev server
-(faster iteration, no rebuild per change):
+## 8. Later
 
-```bash
-CAP_SERVER_URL=http://<your-LAN-ip>:5173 npm run cap:sync
-npm run dev   # in another terminal
-```
-
-Unset `CAP_SERVER_URL` and re-sync before archiving a release — release builds
-must serve the bundled offline assets, not a dev URL.
-
-## 4. App Store Connect
-
-1. Create the app record (bundle id `com.steelbuildpro.app`, SKU, primary
-   language).
-2. **Screenshots** (upload at least the required device sizes):
-   - 6.9" iPhone (16 Pro Max) — 1320 × 2868
-   - 6.5" iPhone — 1242 × 2688
-   - 13" iPad Pro — 2064 × 2752 (only if the app supports iPad)
-3. **App Privacy ("nutrition labels")** — declare what is collected. For this
-   app that is typically: *Contact Info* (name, email), *User Content* (photos,
-   documents, messages), *Identifiers* (user/org id), *Diagnostics* (Sentry
-   crash/telemetry). Keep `mobile/ios/PrivacyInfo.xcprivacy`
-   `NSPrivacyCollectedDataTypes` consistent with this.
-4. **Age rating** questionnaire.
-5. **App Review Information** — provide a working **demo account** (see §5,
-   guideline 2.1). Reviewers cannot self-provision a B2B workspace.
-6. Link the existing legal pages: Privacy (`/privacy`), Terms (`/terms`),
-   Security (`/security`), Subprocessors (`/subprocessors`).
-
-## 5. App Review Guidelines — the parts that get apps rejected
-
-| Guideline | What it requires | Status / action |
-|---|---|---|
-| **2.1 Completeness** | Reviewer can actually use the app | **Action:** create a demo login with seeded data; put it in App Review Information. |
-| **4.2 Minimum functionality** | Not "just a repackaged website" | ✅ **Implemented in code (MOB-2); signed-in real-device verification remains.** Native users can take a camera photo through the existing Daily Log/Punchlist photo uploader, share a project-aware link to any report through the iOS share sheet, and receive haptic confirmation after successful photo uploads and report-link sharing. These workflows use `src/lib/native/capabilities.ts` and remain hidden or inert in a regular web browser. **Before submission:** verify camera permission, upload completion, share-sheet presentation, and haptics on a signed-in physical iPhone. |
-| **2.1 Export completeness** | Advertised actions work in the submitted build | ✅ **Implemented in code (MOB-5); signed-in real-device verification remains.** Generated CSV/PDF/calendar/JSON/PNG exports and existing drawing/document/photo downloads use `src/lib/native/fileExport.ts`: web builds retain browser downloads, while Capacitor writes generated files with `@capacitor/filesystem`, downloads remote files directly to native cache with `@capacitor/file-transfer`, and opens `Share.share({ files })`. Fab Release, backcharge packages, and selected documents each open one grouped share sheet. Cache files are cleaned after sharing, failure, or cancellation; closing the sheet produces no success or error message. **Before submission:** verify representative CSV, PDF, grouped package, and a large remote-document export on a signed-in physical iPhone. |
-| **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ✅ **Implemented — see §6.1** (self-service "Delete my account" in Settings → Profile). Needs staging deploy + test before submission. |
-| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ✅ **Handled — see §6.2 (MOB-4).** Native signed-out users go directly to a non-dismissible sign-in surface; marketing, pricing, signup, Billing navigation, checkout, portal and upgrade prompts remain web-only. |
-| **5.1.1 / 5.1.2 Data & privacy** | Privacy policy linked; data use disclosed | **Handled:** legal pages exist; link them and complete nutrition labels. |
-| **4.8 / 5.1.1 Sign in with Apple** | If you offer a third-party social login (e.g. Google), you must also offer Sign in with Apple (with narrow exceptions) | **Check:** if only email/password is offered, this does not apply. Confirm the auth methods enabled in Supabase. |
-| **2.3 Accurate metadata** | Store listing matches the app | Keep marketing copy truthful; no hidden/unfinished features. |
-
-## 6. Compliance action items — do BEFORE first submit
-
-### 6.1 Account deletion — ✅ implemented (verify on staging before submit)
-
-Self-service account deletion now ships in the app:
-- **UI:** `src/components/settings/DeleteAccountZone.jsx`, rendered in
-  Settings → Profile (`UserSettingsTab.jsx`). Available to **every**
-  authenticated user regardless of role, **not** behind a feature flag, with a
-  type-your-email confirmation.
-- **Backend:** the `account-delete` edge function gained a `mode: "account"`
-  path. It erases any workspace the caller **solely owns** (product policy —
-  takes the whole workspace and its members' access with it), deletes the
-  caller's `auth.users` row (FK-cascading their memberships, `user_profiles`
-  PII, and `user_projects`; authorship columns are `ON DELETE SET NULL`), and
-  removes co-members who are left in no workspace.
-
-**Before relying on this for submission:**
-1. Deploy the updated function: `supabase functions deploy account-delete --project-ref <ref>`.
-2. On staging, verify all three cases: (a) a member of a shared workspace,
-   (b) a co-owner (workspace survives), (c) a **sole owner** (workspace is
-   fully erased). Confirm the `auth.users` row and `user_profiles` PII are gone.
-3. Note: a pure account deletion that erases no workspace writes no
-   `account_deletions` audit row (that table is org-scoped). Add a dedicated
-   account-deletion audit if your compliance program requires one.
-
-### 6.2 In-app purchase — ✅ sign-in-only (decided + implemented)
-
-Decision: the iOS app is **sign-in only**. Accounts and subscriptions are
-created and managed on the **web** (existing Stripe flow); the native build
-carries no in-app purchase surface, so Apple IAP is not required and there's no
-15–30% cut. This is gated at runtime via `isNativePlatform()`
-(`src/lib/native/platform.ts`), so the web app is completely unchanged:
-
-- `src/pages/Billing.jsx` — plan cards (Stripe Checkout) and the "Manage
-  billing" (Stripe portal) button are hidden natively; a read-only current-plan
-  view + "managed on the web" note render instead.
-- `src/config/moduleRegistry.js` — the **Billing** nav entry is stripped from
-  the menus natively (the route still resolves for the read-only page).
-- Plan-limit **"Upgrade"** upsells are hidden natively (the limit messages still
-  show): `OrgMembers.jsx`, `team/TeamControlCenter.tsx`. (`Projects.jsx` no
-  longer carries an upgrade upsell, so there is nothing to gate there.)
-- `src/pages/Landing.jsx` — native signed-out users open directly to sign-in;
-  marketing, pricing, account creation and all dismissal paths are hidden.
-
-**Adding IAP later** is a clean, additive change (see the discussion on
-migration direction): you'd add StoreKit as an option without stranding anyone.
-The reverse (starting with IAP, moving to web) is the messy direction because
-Apple-billed subscribers can't be migrated to Stripe. Starting sign-in-only
-keeps both doors open.
-
-**Reviewer note:** because purchase happens on the web, give App Review a
-**demo account that already has a usable plan** so they can exercise the app
-without needing to sign up or pay (Guideline 2.1).
-
-### 6.3 Other
-
-- Demo reviewer account with representative data.
-- Privacy nutrition labels filled in and consistent with the privacy manifest.
-- App icon, launch screen, and screenshots produced.
-
-## 7. Deep links / Universal Links (optional)
-
-`src/lib/native/capacitor.ts` already routes incoming `https` Universal Links
-into the SPA router. To activate them, host an
-`apple-app-site-association` file at `https://steelbuild-pro.com/.well-known/`
-and add the Associated Domains capability (`applinks:steelbuild-pro.com`) in
-Xcode.
-
-## 8. Push notifications (optional / future)
-
-Not included. When needed: add `@capacitor/push-notifications`, enable the Push
-Notifications capability + an APNs key, and register device tokens server-side.
+- **Universal Links.** `src/lib/native/capacitor.ts` already routes `https` links into the app. To have reset and share links open the app instead of Safari:
+  - host `apple-app-site-association` at `https://steelbuild-pro.com/.well-known/`;
+  - add the Associated Domains capability (`applinks:steelbuild-pro.com`).
+- **Push notifications.** Add `@capacitor/push-notifications`, the Push Notifications capability and an APNs key.
+- **Smaller native items (MOB-10).** Self-hosted fonts for offline cold starts, and Keychain-backed session storage.
 
 ---
 
@@ -226,8 +171,7 @@ Notifications capability + an APNs key, and register device tokens server-side.
 
 | Script | Purpose |
 |---|---|
-| `npm run cap:add:ios` | One-time: generate the `ios/` project (Mac). |
-| `npm run cap:sync` | `vite build` + copy web assets into the native project. |
+| `npm run cap:sync` | `vite build`, then copy web assets and update native dependencies. |
 | `npm run cap:copy` | Copy web assets only (no native dependency update). |
 | `npm run cap:open` | Open the project in Xcode. |
-| `npm run ios` | `cap:sync` then open Xcode. |
+| `npm run ios` | `cap:sync`, then open Xcode. |

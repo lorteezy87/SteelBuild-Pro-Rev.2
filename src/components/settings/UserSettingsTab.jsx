@@ -5,6 +5,7 @@ import { formatLocalDate } from "@/utils/dates";
 import { useAuth } from "@/lib/AuthContext";
 import MfaSection from "./MfaSection.jsx";
 import DeleteAccountZone from "./DeleteAccountZone.jsx";
+import SupportLegalSection from "./SupportLegalSection";
 
 const S = {
   input: { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box' },
@@ -152,6 +153,8 @@ export default function UserSettingsTab({ user, workspaceRole }) {
       <button onClick={handleSave} disabled={isSaving} style={{ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 8, padding: '9px 20px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: isSaving ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: isSaving ? 0.6 : 1 }}>
         {isSaving ? 'Saving...' : 'Save Profile'}
       </button>
+
+      <SupportLegalSection />
 
       {/* Self-service account deletion — App Store Guideline 5.1.1(v). */}
       <DeleteAccountZone />

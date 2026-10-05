@@ -20,6 +20,11 @@ export interface PersistScheduleProgressInput {
   id: string;
   pct: unknown;
   capturedDay?: string;
+  /**
+   * The day work first went underway, when it differs from `capturedDay` —
+   * carried by a queued op that superseded an earlier, still-unreplayed one.
+   */
+  startCapturedDay?: string | null;
 }
 
 /**
@@ -35,9 +40,19 @@ export async function persistScheduleProgress({
   id,
   pct,
   capturedDay,
+  startCapturedDay,
 }: PersistScheduleProgressInput): Promise<unknown> {
   const current = await gateway.get(id);
   const patch = progressUpdatePatch(current, pct, capturedDay);
+
+  // `deriveActualsPatch` knows only one day, so a task that both started and
+  // finished during one offline stretch gets the completion day for both. Only
+  // the queue knows the earlier day, and only when it stamped a start just now:
+  // an actual_start_date the server already holds is left exactly as it is.
+  if (startCapturedDay && patch.actual_start_date && startCapturedDay < patch.actual_start_date) {
+    patch.actual_start_date = startCapturedDay;
+  }
+
   return gateway.update(id, patch as Record<string, unknown>);
 }
 

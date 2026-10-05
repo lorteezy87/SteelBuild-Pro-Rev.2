@@ -304,6 +304,7 @@ function LegalShell({ title, lastUpdated, children }) {
             <Link to="/terms" className="legal-topbar-link">Terms</Link>
             <Link to="/security" className="legal-topbar-link">Security</Link>
             <Link to="/subprocessors" className="legal-topbar-link">Subprocessors</Link>
+            <Link to="/support" className="legal-topbar-link">Support</Link>
           </div>
         </div>
       </footer>

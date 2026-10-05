@@ -63,6 +63,7 @@ const EXPECTED = [
   { piece_mark: "B1", quantity: "2", profile: "W12X26" },
   { piece_mark: "C2", quantity: "1", profile: "W10X33" },
 ];
+const ZIP_BYTES = new Uint8Array([0x50, 0x4b, 0x03, 0x04, ...new TextEncoder().encode("package")]);
 
 describe("readPieceImportFile text encodings", () => {
   const utf16Encodings: Encoding[] = ["utf16le", "utf16lebom", "utf16be", "utf16bebom"];
@@ -146,6 +147,15 @@ describe("readPieceImportFile text encodings", () => {
     );
     expect(rows[0]?.piece_mark).toBe("B1");
     expect(hasNul(rows)).toBe(false);
+  });
+
+  it("tells XML users to extract an EPM package instead of suggesting CSV", async () => {
+    await expect(
+      readPieceImportFile(file(ZIP_BYTES, "Tekla-EPM.zip"), "fabsuite_xml"),
+    ).rejects.toThrow(/ZIP.*package.*extract.*-EPM\.xml/i);
+    await expect(
+      readPieceImportFile(file(ZIP_BYTES, "Tekla-EPM.zip"), "fabsuite_xml"),
+    ).rejects.not.toThrow(/CSV UTF-8/);
   });
 
   it("rejects a UTF-32 file with re-save guidance", async () => {

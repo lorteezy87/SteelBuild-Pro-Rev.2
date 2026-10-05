@@ -150,7 +150,7 @@ export function ModelMappingSection({
             disabled={rosterLoading || !onLoadRoster}
             style={{ fontSize: 12 }}
           >
-            {rosterLoading ? "Loading members…" : "Load mapping"}
+            {rosterLoading ? "Loading members for mapping evidence…" : "Load mapping evidence"}
           </button>
           <span style={{ fontFamily: mono, fontSize: 9, color: textMuted }}>
             large rosters load on demand
@@ -514,8 +514,6 @@ export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanel
     </div>
   );
 }
-
-
 
 
 

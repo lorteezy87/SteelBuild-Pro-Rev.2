@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Require passing CI and matching staging evidence
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TARGET: ${{ inputs.target }}
           FUNCTION: ${{ inputs.function }}

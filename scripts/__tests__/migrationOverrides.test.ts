@@ -163,6 +163,13 @@ describe('the real manifest', () => {
     expect(unaccounted).toEqual([]);
   });
 
+  it.each(['20260922015713', '20261005100745'])('keeps pending PR 465 migration %s required by the live drift gate', (version) => {
+    const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
+    expect(entry?.lifecycle).toBe('required');
+    const report = compareDrift(manifest, local, [...LEDGER].map(version => ({ version })), []);
+    expect(report.missingMigrations).toContain(version);
+  });
+
   it('keeps pending account deletion migrations required by the drift gate', () => {
     const pending = ['20260927150000', '20260927160000'].filter((version) => !LEDGER.has(version));
     const entries = pending.map((version) =>

@@ -21,6 +21,7 @@ vi.mock('@/pages/Terms', () => ({ default: () => {
 } }));
 vi.mock('@/pages/Security', () => ({ default: () => <h1>Security</h1> }));
 vi.mock('@/pages/Subprocessors', () => ({ default: () => <h1>Subprocessors</h1> }));
+vi.mock('@/pages/Support', () => ({ default: () => <h1>Support</h1> }));
 vi.mock('@sentry/react', () => ({ captureException: vi.fn() }));
 vi.mock('@/lib/telemetry', () => ({ logError: vi.fn() }));
 
@@ -82,6 +83,13 @@ describe('public page boot recovery', () => {
     await act(async () => navigate('/security'));
     expect(await screen.findByRole('heading', { name: 'Security' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+
+  it('serves the support page (the App Store Support URL) without signing in', async () => {
+    window.history.replaceState({}, '', '/support');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Support' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument();
   });
 
   it('matches case and trailing slash while leaving other routes to authentication', async () => {
