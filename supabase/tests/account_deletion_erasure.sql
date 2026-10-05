@@ -101,6 +101,10 @@ insert into public.backcharges (project_id, title, created_by) values (:PX, 'Sol
 -- 0. project_row_counts (20260927150000): the owner can census an archived
 --    project; someone outside the workspace still cannot.
 savepoint s0;
+-- Removal from a workspace leaves explicit user_projects rows behind. That
+-- stale admin role must not restore either live or archived census access.
+insert into public.user_projects (user_id, project_id, role) values
+  (:B, :PX, 'admin'), (:B, :PX2, 'admin');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated"}', true);
 do $$ begin
@@ -119,6 +123,13 @@ do $$ begin
     raise exception 'FAIL 0c: outsider read a live project census';
   exception when insufficient_privilege then raise notice 'OK 0c: outsider denied, live (%)', sqlerrm;
   end;
+end $$;
+reset role;
+insert into public.organization_members (org_id, user_id, role) values (:OX, :B, 'member');
+set local role authenticated;
+do $$ begin
+  perform public.project_row_counts('0b000000-0000-4000-8000-000000000005');
+  raise notice 'OK 0d: current project admin reads an archived project census';
 end $$;
 rollback to savepoint s0;
 

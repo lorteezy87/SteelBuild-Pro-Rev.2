@@ -163,11 +163,17 @@ returns jsonb
 language plpgsql
 security definer
 set search_path to ''
+-- PostgREST 14 hoists this catalog setting before starting the RPC statement,
+-- overriding authenticated's 8s timer for this RPC only. SET LOCAL inside the
+-- body would be too late. Stay within the API's 60s maximum; do not widen the
+-- authenticated role's limit. Reload the schema cache after applying below.
+set statement_timeout to '60s'
 as $function$
 declare
   v_uid uuid := (select auth.uid());
   v_org uuid;
   v_project uuid;
+  v_locked_org_ids uuid[];
   v_todo uuid[];
   v_live uuid[];
   v_org_ids uuid[] := '{}';
@@ -176,6 +182,22 @@ begin
   if v_uid is null then
     raise exception 'Not signed in' using errcode = '42501';
   end if;
+
+  -- Membership writes lock the parent organization in enforce_org_member_guard.
+  -- Take that same lock before deciding an org is sole-member; an invitation
+  -- accepted between a stale roster read and erasure must never erase a team.
+  -- Materialize the locked ids before trigger-toggling erasure begins below.
+  -- A workspace created concurrently is not part of this locked snapshot.
+  select coalesce(array_agg(locked.id), '{}') into v_locked_org_ids
+  from (
+    select o.id from public.organizations o
+    where exists (
+      select 1 from public.organization_members m
+      where m.org_id = o.id and m.user_id = v_uid and m.role = 'owner'
+    )
+    order by o.id
+    for update
+  ) locked;
 
   -- Workspaces where the caller is the only member and an owner. Shared
   -- workspaces are never touched here; the Edge Function refuses deletion
@@ -189,6 +211,7 @@ begin
     into v_todo
   from public.organization_members m
   where m.user_id = v_uid
+    and m.org_id = any(v_locked_org_ids)
     and m.role = 'owner'
     and not exists (
       select 1 from public.organization_members o
@@ -218,3 +241,7 @@ $function$;
 
 revoke all on function public.erase_my_sole_member_workspaces(text) from public, anon;
 grant execute on function public.erase_my_sole_member_workspaces(text) to authenticated;
+
+-- PostgREST reads the function's timeout from the schema cache before executing
+-- it. Direct SQL callers must set their timeout before the SELECT themselves.
+notify pgrst, 'reload schema';

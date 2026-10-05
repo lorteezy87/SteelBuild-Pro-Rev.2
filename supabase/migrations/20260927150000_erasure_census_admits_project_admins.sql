@@ -14,10 +14,12 @@
 -- (reproduced on the drift-replay database with main's migrations).
 --
 -- The check now also admits the authority hard_delete_project itself
--- requires: user_has_project_role_at_least(project, 'admin'), which covers
--- the workspace's owners and admins and project admins, archived or not.
--- Someone outside the workspace passes neither check, so the leak stays
--- closed. The body is otherwise unchanged, and CREATE OR REPLACE keeps the
+-- requires: user_has_project_role_at_least(project, 'admin'), together with
+-- current workspace membership. The role helper alone accepts stale
+-- user_projects rows after a member is removed, so it cannot establish the
+-- organization boundary. This covers owners, workspace admins and current
+-- project admins, archived or not. The body is otherwise unchanged, and
+-- CREATE OR REPLACE keeps the
 -- existing EXECUTE grants.
 create or replace function public.project_row_counts(p_project_id uuid)
 returns jsonb
@@ -29,7 +31,14 @@ declare v_table text; v_n bigint; v_out jsonb := '{}'::jsonb;
 begin
   if (select auth.uid()) is not null
      and not public.user_has_project_access(p_project_id)
-     and not public.user_has_project_role_at_least(p_project_id, 'admin') then
+     and not (
+       public.user_has_project_role_at_least(p_project_id, 'admin')
+       and exists (
+         select 1 from public.projects p
+         join public.organization_members m on m.org_id = p.org_id
+         where p.id = p_project_id and m.user_id = (select auth.uid())
+       )
+     ) then
     raise exception 'Not authorized to read this project' using errcode = '42501';
   end if;
   for v_table in

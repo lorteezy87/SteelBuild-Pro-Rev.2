@@ -15,17 +15,14 @@ function projectRowCounts(sql: string): string {
 
 const before = projectRowCounts(read("20260914010000_close_viewer_write_and_definer_gaps.sql"));
 const after = projectRowCounts(read("20260927150000_erasure_census_admits_project_admins.sql"));
-const ADMIT_ADMINS = " and not public.user_has_project_role_at_least(p_project_id, 'admin')";
-
 describe("project_row_counts census for archived projects", () => {
-  it("only adds the project-admin check to the 20260914010000 definition", () => {
-    expect(after).toContain(ADMIT_ADMINS);
-    expect(after.replace(ADMIT_ADMINS, "")).toBe(before);
+  it("preserves the census and only changes its authorization guard", () => {
+    expect(after.slice(after.indexOf("for v_table in"))).toBe(before.slice(before.indexOf("for v_table in")));
   });
 
-  it("still refuses an end user who is neither a member with access nor a project admin", () => {
+  it("requires current workspace membership for the archived-admin fallback", () => {
     expect(after).toMatch(
-      /if \(select auth\.uid\(\)\) is not null and not public\.user_has_project_access\(p_project_id\) and not public\.user_has_project_role_at_least\(p_project_id, 'admin'\) then raise exception 'Not authorized to read this project' using errcode = '42501';/,
+      /and not \( public\.user_has_project_role_at_least\(p_project_id, 'admin'\) and exists \( select 1 from public\.projects p join public\.organization_members m on m\.org_id = p\.org_id where p\.id = p_project_id and m\.user_id = \(select auth\.uid\(\)\) \) \)/,
     );
   });
 

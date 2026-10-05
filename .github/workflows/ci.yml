@@ -194,6 +194,11 @@ jobs:
           npm ci --prefix supabase/tests/function-search-path --ignore-scripts
           npm test --prefix supabase/tests/function-search-path
 
+      - name: Verify account deletion authorization
+        run: |
+          npm ci --prefix supabase/tests/account-deletion --ignore-scripts
+          npm test --prefix supabase/tests/account-deletion
+
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
