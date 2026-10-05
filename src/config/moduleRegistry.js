@@ -4,7 +4,17 @@
 
 import { isNativePlatform } from "@/lib/native/platform";
 
-const NATIVE_HIDDEN_PAGES = new Set(["Billing"]);
+// Web-only pages in the sign-in-only App Store build. Billing: plans are sold
+// on the web (guideline 3.1.1). Integrations: connector setup is web admin
+// work, and the page is largely a roadmap of "coming soon" connectors, which
+// App Review treats as incomplete features (guideline 2.1).
+const NATIVE_HIDDEN_PAGES = new Set(["Billing", "Integrations"]);
+
+/** True when `page` is kept out of the native app (see NATIVE_HIDDEN_PAGES). */
+export function isHiddenOnNative(page) {
+  return NATIVE_HIDDEN_PAGES.has(page) && isNativePlatform();
+}
+
 function hideNativePages(groups) {
   if (!isNativePlatform()) return groups;
   return groups

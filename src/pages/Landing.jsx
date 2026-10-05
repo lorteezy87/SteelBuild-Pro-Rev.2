@@ -1,5 +1,6 @@
 /** Approved public marketing design with the existing account handlers. */
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { SteelBuildMark } from "@/components/brand/SteelBuildMark";
 import MarketingLanding from "@/components/landing/MarketingLanding";
 import { isNativePlatform } from "@/lib/native/platform";
@@ -192,6 +193,16 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
                   {authMode === "signup" ? <>Already have an account? <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Sign in</button></> : authMode === "forgot" ? <>Remembered it? <button type="button" onClick={() => { setAuthMode("signin"); setForgotError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Back to sign in</button></> : native ? null : <>New to SteelBuild Pro? <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Create an account</button></>}
                 </div>
               </>
+            )}
+            {/* The native app has no signup screen, where the legal links
+                otherwise live, and Apple requires the privacy policy to be
+                reachable in the app (guideline 5.1.1). Router links, not
+                target="_blank": the iOS shell drops new-window navigations. */}
+            {native && (
+              <nav aria-label="Legal" style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 16, fontSize: 12.5 }}>
+                <Link to="/privacy" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Privacy Policy</Link>
+                <Link to="/terms" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Terms of Service</Link>
+              </nav>
             )}
           </div>
         </div>
