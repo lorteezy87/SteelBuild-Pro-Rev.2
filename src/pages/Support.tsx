@@ -153,8 +153,10 @@ export default function Support() {
 
             <Section title="Your data">
               <p>
-                Workspace owners and admins can download a complete backup of every project in
-                {" "}<strong style={strong}>Settings → System → Export Data</strong>.
+                Workspace owners and admins can download a JSON export of supported project records in
+                {" "}<strong style={strong}>Settings → System → Export Data</strong>. This export
+                does not include uploaded files or every type of project record. Download any files
+                you need separately before deleting an account or workspace.
               </p>
             </Section>
 

@@ -63,7 +63,7 @@ Reviewers can't create a company workspace, so they need a working login (guidel
 
 ## 4. Build and upload (Mac)
 
-Needs Xcode 16.1 or newer, a released version rather than a beta, and a signing team (`36MYCVT3XU` is set in the project).
+Needs a released Xcode 26 or newer with the iOS 26 SDK or newer, and a signing team (`36MYCVT3XU` is set in the project). Apple requires these SDKs for uploads from April 28, 2026; check the [current submission requirements](https://developer.apple.com/news/upcoming-requirements/) before archiving.
 
 The build reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (production values) from the environment or a local `.env` file (see `.env.example`). Without them, the app stops at launch with a configuration error.
 
@@ -113,14 +113,17 @@ npm run cap:open   # opens ios/App/App.xcworkspace
   - iPhone 6.9": 1320 × 2868 portrait.
   - iPad 13": 2064 × 2752 portrait. **Required**, because the app supports iPad.
   - Show real screens: Dashboard, Projects, RFIs, Drawings, Schedule, and a field photo. Nothing about pricing.
-- **App Privacy.** Answer to match `ios/App/App/PrivacyInfo.xcprivacy`. Every type below is *linked to the user*, *not used for tracking*, and collected for *App Functionality*:
+- **App Privacy.** Answer to match `ios/App/App/PrivacyInfo.xcprivacy`. Every type below is *linked to the user* and *not used for tracking*:
 
-  | Category | Data type |
-  |---|---|
-  | Contact Info | Name, Email Address |
-  | Identifiers | User ID |
-  | User Content | Photos or Videos, Other User Content |
-  | Diagnostics | Crash Data, Performance Data, Other Diagnostic Data |
+  | Category | Data type | Purpose |
+  |---|---|---|
+  | Contact Info | Name, Email Address, Phone Number | App Functionality |
+  | Identifiers | User ID | App Functionality |
+  | User Content | Emails or Text Messages, Photos or Videos, Other User Content | App Functionality |
+  | Usage Data | Product Interaction | App Functionality, Analytics |
+  | Diagnostics | Crash Data, Performance Data, Other Diagnostic Data | App Functionality |
+
+  Phone numbers are saved in profile metadata. Email Inbox stores composed messages. Masked Sentry replay still captures interaction events, so masking does not remove the Product Interaction disclosure.
 
   If the app starts collecting something new, update the manifest and these answers together.
 - **Age rating:** answer the questionnaire.
