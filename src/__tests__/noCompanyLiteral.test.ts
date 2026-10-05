@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -67,8 +68,11 @@ function sourceFiles(dir: string): string[] {
 }
 
 /** Strip comments so prose describing the old defects does not trip the guard. */
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+function stripComments(src: string, filename = "source.tsx"): string {
+  // Parsing distinguishes comments from // or /* inside strings, templates,
+  // regular expressions and JSX text. Regex removal silently hid the PRODID.
+  const source = ts.createSourceFile(filename, src, ts.ScriptTarget.Latest, false);
+  return ts.createPrinter({ removeComments: true }).printFile(source);
 }
 
 const rel = (f: string) => f.replace(/.*\/src\//, "src/");
@@ -83,7 +87,10 @@ describe("no company literal in executable source", () => {
 
   it.each(COMPANY_LITERAL)("names the company nowhere in code (%s)", (_label, pattern) => {
     const offenders = files
-      .filter((f) => pattern.test(stripComments(readFileSync(f, "utf8"))))
+      .filter((f) => {
+        const source = readFileSync(f, "utf8");
+        return pattern.test(source) && pattern.test(stripComments(source, f));
+      })
       .map(rel);
     expect(
       offenders,
@@ -95,10 +102,19 @@ describe("no company literal in executable source", () => {
     // A guard that matches nothing passes forever after a typo. These are the
     // three real defects, as they were written.
     const [amp, initialism, domain] = COMPANY_LITERAL.map(([, p]) => p);
-    expect(amp.test('{ value: "S&H", label: "S&H" },')).toBe(true);
-    expect(amp.test('lines.push("PRODID:-//S&H Steel Co//SteelBuild Pro//EN");')).toBe(true);
-    expect(initialism.test('placeholder="SHS Steel Projects"')).toBe(true);
-    expect(domain.test('placeholder="projects@shsteelaz.com"')).toBe(true);
+    expect(amp.test(stripComments('{ value: "S&H", label: "S&H" },'))).toBe(true);
+    expect(amp.test(stripComments('lines.push("PRODID:-//S&H Steel Co//SteelBuild Pro//EN");'))).toBe(true);
+    expect(initialism.test(stripComments('const input = <input placeholder="SHS Steel Projects" />;'))).toBe(true);
+    expect(domain.test(stripComments('const input = <input placeholder="projects@shsteelaz.com" />;'))).toBe(true);
+  });
+
+  it.each([
+    'const label = "/* S&H */";',
+    'const label = `PRODID:-//S&H Steel Co//EN`;',
+    'const label = `prefix ${"/* S&H */"}`;',
+    'const label = <span>PRODID:-//S&H Steel Co//EN</span>;',
+  ])("preserves executable literals containing comment delimiters: %s", (source) => {
+    expect(COMPANY_LITERAL[0][1].test(stripComments(source))).toBe(true);
   });
 
   it("does not flag what it must leave alone", () => {
@@ -118,5 +134,7 @@ describe("no company literal in executable source", () => {
     // stay legal, or the next reader loses the reason the vocabulary is closed.
     const commented = '// "S&H" was the other live bug.\nconst parties = ["GC"];';
     expect(COMPANY_LITERAL[0][1].test(stripComments(commented))).toBe(false);
+    expect(COMPANY_LITERAL[0][1].test(stripComments('const label = "// retained"; // S&H removed'))).toBe(false);
+    expect(COMPANY_LITERAL[0][1].test(stripComments('const label = <span>{/* S&H removed */}GC</span>;'))).toBe(false);
   });
 });
