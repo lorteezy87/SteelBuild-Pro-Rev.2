@@ -344,7 +344,7 @@ export default function RegularCalculator() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
+        <div className="sbd-calc-layout" style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
           {/* ── Calc pad ───────────────────────────── */}
           <div className="sbd-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
             {/* Display */}

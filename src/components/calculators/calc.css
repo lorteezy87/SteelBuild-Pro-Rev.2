@@ -294,3 +294,18 @@
   font-weight: 500;
   white-space: nowrap;
 }
+
+/* ── Phones (<=767px, the app shell's phone band) ───────────── */
+@media (max-width: 767px) {
+  /* The pad and its 260px tape column can't sit side by side on a phone,
+     so the tape stacks under the pad. */
+  .sbd-calc-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Inside the Calculators hub the calculator page already sits in the
+     shell's padded card, so its own 24px page padding is dropped. */
+  .sbd-calc-shell__body > .sb-dashboard-reference-page {
+    padding: 0 !important;
+  }
+}

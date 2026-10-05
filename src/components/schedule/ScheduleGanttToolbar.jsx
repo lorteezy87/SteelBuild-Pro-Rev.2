@@ -40,7 +40,7 @@ export function GanttStatsBar({ totalTasks, completeTasks, inProgressTasks, over
     ...(unscheduledTasks > 0 ? [{ label: "TBD", val: unscheduledTasks, color: "var(--status-warning)" }] : []),
   ];
   return (
-    <div style={{ display: "flex", gap: 16, flex: 1 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", flex: 1, minWidth: 0 }}>
       {stats.map(s => (
         <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.val}</span>
