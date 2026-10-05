@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,6 +32,16 @@ const landingProps = {
   loginError: null as string | null,
 };
 
+// The native card links to the legal pages with router Links, so render
+// inside a router like the app does (AppProviders' BrowserRouter).
+function renderLanding() {
+  return render(
+    <MemoryRouter>
+      <Landing {...landingProps} />
+    </MemoryRouter>,
+  );
+}
+
 describe("Landing native sign-in-only flow", () => {
   beforeEach(() => {
     nativeState.enabled = true;
@@ -38,7 +49,7 @@ describe("Landing native sign-in-only flow", () => {
   });
 
   it("opens directly to a non-dismissible sign-in surface without marketing or account creation", async () => {
-    render(<Landing {...landingProps} />);
+    renderLanding();
 
     const dialog = screen.getByRole("dialog", { name: "Sign in" });
     const overlay = dialog.parentElement;
@@ -61,7 +72,7 @@ describe("Landing native sign-in-only flow", () => {
   it("keeps the existing marketing and account-creation entry points on web", async () => {
     nativeState.enabled = false;
     const user = userEvent.setup();
-    render(<Landing {...landingProps} />);
+    renderLanding();
 
     expect(screen.getByTestId("marketing-landing")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -72,10 +83,37 @@ describe("Landing native sign-in-only flow", () => {
     expect(screen.getByRole("button", { name: "Create an account" })).toBeInTheDocument();
   });
 
+  it("links the privacy policy and terms from the native sign-in surface", async () => {
+    const user = userEvent.setup();
+    renderLanding();
+
+    const legal = screen.getByRole("navigation", { name: "Legal" });
+    const privacy = screen.getByRole("link", { name: "Privacy Policy" });
+    const terms = screen.getByRole("link", { name: "Terms of Service" });
+    expect(legal).toContainElement(privacy);
+    expect(privacy).toHaveAttribute("href", "/privacy");
+    expect(terms).toHaveAttribute("href", "/terms");
+    // In-app navigation: the iOS shell ignores target="_blank".
+    expect(privacy).not.toHaveAttribute("target");
+    expect(terms).not.toHaveAttribute("target");
+
+    // Still reachable after switching to password recovery.
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toBeInTheDocument();
+  });
+
+  it("leaves the web sign-in card without the native legal row", async () => {
+    nativeState.enabled = false;
+    const user = userEvent.setup();
+    renderLanding();
+    await user.click(screen.getByRole("button", { name: "Marketing sign in" }));
+    expect(screen.queryByRole("navigation", { name: "Legal" })).not.toBeInTheDocument();
+  });
+
   it("submits password recovery from the native sign-in surface", async () => {
     const user = userEvent.setup();
     landingProps.onForgotPassword.mockResolvedValueOnce({ success: true });
-    render(<Landing {...landingProps} />);
+    renderLanding();
 
     await user.click(screen.getByRole("button", { name: "Forgot password?" }));
     await user.type(screen.getByLabelText("Email"), "field@example.com");
