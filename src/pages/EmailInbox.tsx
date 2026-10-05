@@ -34,6 +34,7 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { isHiddenOnNative } from "@/config/moduleRegistry";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { DEFAULT_LABELS, FOLDERS, getLabelColor, useWindowWidth } from "./emailInbox/constants";
 import { EmailBodyContent, EmailDetail, EmailRow, MobileDetailFooter } from "./emailInbox/components";
@@ -303,17 +304,21 @@ export default function EmailInbox() {
             <PenSquare size={12} strokeWidth={2} />
             Compose
           </button>
-          <button
-            onClick={() => navigate(createPageUrl("Integrations"))}
-            title="Email Settings"
-            style={{
-              height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center",
-              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-              borderRadius: 8, cursor: "pointer", color: "var(--text-muted)", flexShrink: 0,
-            }}
-          >
-            <Settings size={13} strokeWidth={2} />
-          </button>
+          {/* Email settings live on the Integrations page, which is web-only
+              in the native app (see NATIVE_HIDDEN_PAGES). */}
+          {!isHiddenOnNative("Integrations") && (
+            <button
+              onClick={() => navigate(createPageUrl("Integrations"))}
+              title="Email Settings"
+              style={{
+                height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center",
+                background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+                borderRadius: 8, cursor: "pointer", color: "var(--text-muted)", flexShrink: 0,
+              }}
+            >
+              <Settings size={13} strokeWidth={2} />
+            </button>
+          )}
         </div>
         <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
           <KpiTile compact label="Inbox" value={stats.total} icon={<Inbox size={14} />} color="var(--accent)"
