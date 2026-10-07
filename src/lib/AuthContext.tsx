@@ -107,6 +107,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
+  const signOutInFlightRef = useRef(false);
   // Kept for API compatibility with components that read this flag
   const [isLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
@@ -203,6 +206,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // state whenever the signed-in identity changes or clears (M38).
   const syncIdentity = (nextUserId: string | null): void => {
     const prevUserId = currentUserIdRef.current;
+    if (prevUserId !== nextUserId) setSignOutFailed(false);
     if (nextUserId) {
       if (prevUserId && prevUserId !== nextUserId) {
         // Different user signed in on this device — drop the old tenant's data.
@@ -502,10 +506,31 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    // Invalidate pending identity checks and clear tenant caches together.
-    clearSessionUser();
+  const logout = async (): Promise<void> => {
+    if (signOutInFlightRef.current) return;
+    signOutInFlightRef.current = true;
+    setIsSigningOut(true);
+    const signingOutUserId = currentUserIdRef.current;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      // The SDK clears its persisted session only after a successful sign-out.
+      // Do not erase a different identity that arrived while this request ran.
+      if (currentUserIdRef.current === signingOutUserId) {
+        clearSessionUser();
+        setSignOutFailed(false);
+      }
+    } catch {
+      // Both returned and thrown failures leave the SDK session intact. Keep
+      // the app and tenant data intact too, and show a retryable, honest state.
+      // This message is generic: never expose server errors or session values.
+      if (signingOutUserId && currentUserIdRef.current === signingOutUserId) {
+        setSignOutFailed(true);
+      }
+    } finally {
+      signOutInFlightRef.current = false;
+      setIsSigningOut(false);
+    }
   };
 
   const retryMfaStatus = async (): Promise<void> => {
@@ -575,6 +600,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       checkAppState,
     }}>
       {children}
+      {signOutFailed && (
+        <section
+          role="alert"
+          aria-label="Sign-out failed"
+          style={{
+            position: 'fixed', insetInlineEnd: 16, bottom: 16, zIndex: 2000,
+            width: 'min(420px, calc(100vw - 32px))', padding: 16,
+            border: '1px solid var(--border-strong, var(--border-default))',
+            borderRadius: 12, background: 'var(--bg-elevated, var(--bg-surface))',
+            color: 'var(--text-primary)', boxShadow: 'var(--shadow-lg)',
+          }}
+        >
+          <p style={{ margin: '0 0 12px', lineHeight: 1.5 }}>
+            Sign-out did not complete. You are still signed in. Check your connection and try again.
+          </p>
+          <button
+            type="button"
+            className="sbd-btn sbd-btn-primary"
+            disabled={isSigningOut}
+            aria-busy={isSigningOut}
+            onClick={() => { void logout(); }}
+          >
+            {isSigningOut ? 'Signing out…' : 'Retry sign out'}
+          </button>
+        </section>
+      )}
     </AuthContext.Provider>
   );
 };

@@ -14,8 +14,15 @@ vi.mock("@/lib/org/repository", () => ({
 }));
 const renders: Array<{ org: string | undefined; loading: boolean; cached: unknown }> = [];
 let client: QueryClient;
+type OrgTestValue = {
+  currentOrg: { id: string; name: string } | null;
+  isLoadingOrgs: boolean;
+  setCurrentOrg: (id: string) => void;
+};
 function Probe() {
-  const { currentOrg, isLoadingOrgs, setCurrentOrg } = useOrg();
+  // The JSX context starts as undefined; describe the provider's runtime
+  // value explicitly at this test boundary instead of its empty inference.
+  const { currentOrg, isLoadingOrgs, setCurrentOrg } = useOrg() as unknown as OrgTestValue;
   renders.push({ org: currentOrg?.id, loading: isLoadingOrgs, cached: client.getQueryData(["projects"]) });
   if (isLoadingOrgs) return <span>Resolving workspace</span>;
   return <button onClick={() => setCurrentOrg("org-b")}>{currentOrg?.name}</button>;
