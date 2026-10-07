@@ -189,6 +189,15 @@ jobs:
       - name: Verify shell recovery (desktop and mobile, no backend)
         run: npm run test:e2e:foundation
 
+      - name: Preserve browser acceptance evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-acceptance-evidence
+          path: test-results/foundation/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Verify database helper search paths
         run: |
           npm ci --prefix supabase/tests/function-search-path --ignore-scripts
@@ -243,6 +252,13 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "24"
+
+      - name: Inspect published Capacitor security patch
+        if: ${{ github.ref == 'refs/heads/codex/steel-executive-hardening' }}
+        run: |
+          npm view @capacitor/core@8.5.1 --json
+          npm view @capacitor/cli@8.5.1 --json
+          npm view @capacitor/ios@8.5.1 --json
 
       - name: Audit production dependencies (moderate+, waivers reviewed in-repo)
         run: node scripts/audit-gate.mjs
