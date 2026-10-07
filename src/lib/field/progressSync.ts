@@ -1,5 +1,6 @@
 import { todayLocalISO } from "@/lib/dateMath";
 import { progressUpdatePatch } from "@/lib/field/fieldToday";
+import type { EntityRequestOptions } from "@/api/client/supabaseTypes";
 
 export interface ScheduleProgressTask {
   id?: string;
@@ -11,8 +12,8 @@ export interface ScheduleProgressTask {
 }
 
 export interface ScheduleTaskProgressGateway {
-  get(id: string): Promise<ScheduleProgressTask>;
-  update(id: string, patch: Record<string, unknown>): Promise<unknown>;
+  get(id: string, options?: EntityRequestOptions): Promise<ScheduleProgressTask>;
+  update(id: string, patch: Record<string, unknown>, options?: EntityRequestOptions): Promise<unknown>;
 }
 
 export interface PersistScheduleProgressInput {
@@ -25,6 +26,9 @@ export interface PersistScheduleProgressInput {
    * carried by a queued op that superseded an earlier, still-unreplayed one.
    */
   startCapturedDay?: string | null;
+  /** Outbox replay must still own the identity after its asynchronous read. */
+  assertActive?: () => void;
+  requestOptions?: EntityRequestOptions;
 }
 
 /**
@@ -41,8 +45,12 @@ export async function persistScheduleProgress({
   pct,
   capturedDay,
   startCapturedDay,
+  assertActive = () => {},
+  requestOptions,
 }: PersistScheduleProgressInput): Promise<unknown> {
-  const current = await gateway.get(id);
+  assertActive();
+  const current = await (requestOptions ? gateway.get(id, requestOptions) : gateway.get(id));
+  assertActive();
   const patch = progressUpdatePatch(current, pct, capturedDay);
 
   // `deriveActualsPatch` knows only one day, so a task that both started and
@@ -53,7 +61,9 @@ export async function persistScheduleProgress({
     patch.actual_start_date = startCapturedDay;
   }
 
-  return gateway.update(id, patch as Record<string, unknown>);
+  return requestOptions
+    ? gateway.update(id, patch as Record<string, unknown>, requestOptions)
+    : gateway.update(id, patch as Record<string, unknown>);
 }
 
 /**

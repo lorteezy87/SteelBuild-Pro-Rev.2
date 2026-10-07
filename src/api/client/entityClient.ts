@@ -222,8 +222,8 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
    * surfaces as a normal "row not found" error — callers already handle
    * SupabaseOperationError, so no call-site changes are needed.
    */
-  get: async (id) => {
-    let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+  get: async (id, options) => {
+    let q: QueryBuilder = (sbFrom(tableName, options?.client)).select(projectScopedSelect(tableName as string));
     q = applyLiveProjectScope(q, tableName as string).eq('id', id);
     if (SOFT_DELETE_TABLES.has(tableName as string)) {
       q = q.eq('is_deleted', false);
@@ -241,12 +241,12 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
    * left open and re-submitted as a create) can't trigger a primary-key
    * collision. The DB assigns id/timestamps via its defaults.
    */
-  create: async (record) => {
+  create: async (record, options) => {
     const clean = cleanRecord(record as Record<string, unknown>);
     delete clean.id;
     delete clean.created_at;
     delete clean.updated_at;
-    const { data, error } = await (sbFrom(tableName))
+    const { data, error } = await (sbFrom(tableName, options?.client))
       .insert(clean)
       .select()
       .single();
@@ -257,14 +257,14 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
   /**
    * Update an existing record by id.
    */
-  update: async (id, updates) => {
+  update: async (id, updates, options) => {
     const clean = cleanRecord(updates as Record<string, unknown>);
     // Never send primary key or server timestamps in the update body
     delete clean.id;
     delete clean.created_at;
     // updated_at is now handled by the DB trigger (trg_updated_at),
     // but we keep the client-side set for backwards compat
-    const { data, error } = await (sbFrom(tableName))
+    const { data, error } = await (sbFrom(tableName, options?.client))
       .update({ ...clean, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()

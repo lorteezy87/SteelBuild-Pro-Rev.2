@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { readOnlyTest as test, acceptanceOptions, visitRegister } from "./acceptance";
 
 /**
  * Boot smoke: the seeded session lands us in the authenticated app shell, not
@@ -7,14 +7,5 @@ import { test, expect } from "@playwright/test";
  * and the shell mounted.
  */
 test("authenticated shell loads on a protected route", async ({ page }) => {
-  const fatal: string[] = [];
-  page.on("pageerror", (e) => fatal.push(String(e)));
-
-  await page.goto("/Submittals");
-
-  // Auth held — we did NOT get redirected away from the protected route.
-  await expect(page).toHaveURL(/\/Submittals\/?$/);
-  // Authenticated content rendered (the register), not the landing CTA.
-  await expect(page.locator("body")).toContainText(/submittal/i);
-  expect(fatal, `uncaught errors:\n${fatal.join("\n")}`).toEqual([]);
+  await visitRegister(page, "submittals", acceptanceOptions("submittals"));
 });

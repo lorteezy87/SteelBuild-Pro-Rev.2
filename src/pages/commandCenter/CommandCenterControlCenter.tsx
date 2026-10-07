@@ -20,11 +20,14 @@ import type {
 } from "./commandCenterControlCenter.derive";
 import { deriveCommandHorizons } from "./commandCenterHorizons";
 import type { CommandHorizon, CommandHorizonKey } from "./commandCenterHorizons";
+import CommandExecutionBrief from "./CommandExecutionBrief";
 
 export interface CommandCenterControlCenterProps {
   sources: CommandCenterSources;
   projectName?: string;
   projectCount?: number;
+  dataUpdatedAt?: number;
+  isRefreshing?: boolean;
   search: string;
   onSearch: (v: string) => void;
   typeFilter: string;
@@ -253,6 +256,12 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
       />
 
       <OperationalSummary metrics={metrics} ariaLabel="Command Center operational summary" />
+
+      <CommandExecutionBrief
+        actionItems={summary.actionItems} horizons={horizons}
+        dataUpdatedAt={props.dataUpdatedAt} isRefreshing={props.isRefreshing}
+        onOpenItem={onOpenItem}
+      />
 
       <div className="sbp-horizons" aria-label="Project control horizons">
         {horizons.map((horizon) => (

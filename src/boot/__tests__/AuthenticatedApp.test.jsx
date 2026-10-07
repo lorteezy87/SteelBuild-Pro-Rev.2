@@ -26,6 +26,7 @@ vi.mock("@/pages/MfaChallenge", () => ({ default: () => <div>MFA_CHALLENGE</div>
 vi.mock("@/boot/AppRoutes", () => ({ default: () => <div>APP_ROUTES</div> }));
 vi.mock("@/pages/OrgOnboarding", () => ({ default: () => <div>ONBOARDING</div> }));
 vi.mock("@/components/shared/ProjectContext", () => ({ ProjectProvider: ({ children }) => <>{children}</> }));
+vi.mock("@/lib/field/OutboxContext", () => ({ OutboxProvider: ({ children }) => <>{children}</> }));
 
 import AuthenticatedApp from "@/boot/AuthenticatedApp";
 

@@ -50,6 +50,28 @@ afterEach(() => {
 });
 
 describe("Command Center register drilldowns", () => {
+  it("opens the exact brief source and exposes missing evidence alongside calendar windows", () => {
+    const onOpenItem = vi.fn();
+    const hold = { id: "held-wp", name: "Erect sequence 2", status: "On Hold", project_id: "p1" };
+    render(<CommandCenterControlCenter
+      sources={{
+        rfis: [{ id: "unknown-rfi", title: "Unassigned connection", status: "Open", project_id: "p1" }],
+        submittals: [], changeOrders: [], deliveries: [], workPackages: [hold],
+        projects: [{ id: "p1" }], scheduleTasks: [],
+      }}
+      search="unrelated filter" onSearch={vi.fn()} typeFilter="TASK" onTypeChange={vi.fn()}
+      onOpenItem={onOpenItem} onForwardLook={vi.fn()} dataUpdatedAt={Date.now()} isRefreshing
+    />);
+    const brief = screen.getByRole("region", { name: "Execution brief" });
+    expect(brief).toHaveTextContent("Local calendar days");
+    expect(brief).toHaveTextContent("1 without an owner · 1 without a valid required date");
+    expect(brief).toHaveTextContent("Refreshing sources");
+    fireEvent.click(within(brief).getByRole("button", { name: /Erect sequence 2/ }));
+    expect(onOpenItem).toHaveBeenCalledWith(expect.objectContaining({ id: "held-wp", projectId: "p1", raw: hold }));
+    fireEvent.click(within(brief).getByRole("button", { name: /Unassigned connection/ }));
+    expect(onOpenItem).toHaveBeenLastCalledWith(expect.objectContaining({ id: "unknown-rfi" }));
+  });
+
   it("opens all rows from an overflowing horizon and can restore the complete register", () => {
     const onSearch = vi.fn();
     const onTypeChange = vi.fn();

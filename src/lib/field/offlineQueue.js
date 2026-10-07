@@ -95,6 +95,12 @@ export function saveQueue(queue, storage = localStorageAdapter()) {
   storage.write(JSON.stringify(Array.isArray(queue) ? queue : []));
 }
 
+/** Legacy ownerless captures stay persisted, but cannot be adopted on login. */
+export function belongsToOutboxOwner(op, owner) {
+  return Boolean(owner?.userId && owner?.orgId &&
+    op?.owner?.userId === owner.userId && op?.owner?.orgId === owner.orgId);
+}
+
 /**
  * The day work first went underway in a coalesce chain, or null.
  *
@@ -244,21 +250,21 @@ export function isUniqueViolation(error) {
  * everything after it. Unknown op types are dropped (forward-compat). Returns
  * { remaining, synced, failed, error } — never throws.
  */
-export async function flushQueue(queue, handlers) {
+export async function flushQueue(queue, handlers, assertActive = () => {}, client = undefined) {
   const remaining = [...(Array.isArray(queue) ? queue : [])];
   let synced = 0;
 
   while (remaining.length > 0) {
     const op = remaining[0];
     const handler = handlers?.[op?.type];
-
-    if (typeof handler !== "function") {
-      remaining.shift(); // unknown/retired op type — discard, don't wedge the queue
-      continue;
-    }
-
     try {
-      await handler(op.payload, op);
+      assertActive();
+      if (typeof handler !== "function") {
+        remaining.shift(); // unknown/retired op type — discard, don't wedge the queue
+        continue;
+      }
+      await handler(op.payload, op, assertActive, client);
+      assertActive();
       remaining.shift();
       synced += 1;
     } catch (error) {

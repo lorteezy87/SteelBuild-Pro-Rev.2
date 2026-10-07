@@ -12,14 +12,15 @@ type AalResult = {
 };
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(), refreshSession: vi.fn(), aal: vi.fn(), clear: vi.fn(), signOut: vi.fn(),
+  profile: vi.fn(), challengeAndVerify: vi.fn(),
   onChange: null as ((event: AuthChangeEvent, session: Session | null) => void) | null,
 }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async (): Promise<{ data: { role: string }; error: Error | null }> => ({ data: { role: "user" }, error: null }) }) }) }),
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.profile }) }) }),
     auth: {
       getSession: mocks.getSession, refreshSession: mocks.refreshSession, signOut: mocks.signOut,
-      mfa: { getAuthenticatorAssuranceLevel: mocks.aal },
+      mfa: { getAuthenticatorAssuranceLevel: mocks.aal, challengeAndVerify: mocks.challengeAndVerify },
       onAuthStateChange: (callback: (event: AuthChangeEvent, session: Session | null) => void) => {
         mocks.onChange = callback;
         return { data: { subscription: { unsubscribe: vi.fn() } } };
@@ -59,6 +60,8 @@ beforeEach(() => {
   mocks.refreshSession.mockResolvedValue({ data: { session: null }, error: null });
   mocks.aal.mockResolvedValue(satisfied);
   mocks.signOut.mockReset().mockResolvedValue({ error: null });
+  mocks.profile.mockReset().mockResolvedValue({ data: { role: "user" }, error: null });
+  mocks.challengeAndVerify.mockReset().mockResolvedValue({ error: null });
 });
 afterEach(cleanup);
 
@@ -71,6 +74,34 @@ it("keeps MFA pending until the AAL result is known, then requires the enrolled 
   await act(async () => { lookup.resolve({ data: { currentLevel: "aal1", nextLevel: "aal2" }, error: null }); });
   await waitFor(() => expect(result.current.isCheckingMfa).toBe(false));
   expect(result.current.mfaRequired).toBe(true);
+});
+
+it("reloads the verified profile before opening the app after an AAL1 profile denial", async () => {
+  const verifiedProfile = deferred<{ data: { role: string }; error: null }>();
+  mocks.profile.mockResolvedValueOnce({ data: null, error: new Error("MFA_REQUIRED") })
+    .mockReturnValue(verifiedProfile.promise);
+  mocks.aal.mockResolvedValueOnce({ data: { currentLevel: "aal1", nextLevel: "aal2" }, error: null });
+  const { result } = mount();
+  await waitFor(() => expect(result.current.mfaRequired).toBe(true));
+  expect(result.current.isAuthenticated).toBe(true);
+
+  const verifiedSession = sessionFor("a", "verified-aal2-token");
+  mocks.getSession.mockResolvedValue({ data: { session: verifiedSession }, error: null });
+  mocks.challengeAndVerify.mockImplementationOnce(async () => {
+    mocks.onChange?.("MFA_CHALLENGE_VERIFIED", verifiedSession);
+    return { data: verifiedSession, error: null };
+  });
+  let challenge!: ReturnType<AuthContextValue["verifyMfaFactor"]>;
+  await act(async () => { challenge = result.current.verifyMfaFactor("factor-a", "123456"); });
+  await waitFor(() => expect(mocks.profile.mock.calls.length).toBeGreaterThanOrEqual(2));
+  expect(result.current.isCheckingMfa || result.current.isLoadingAuth || result.current.mfaRequired).toBe(true);
+  await act(async () => {
+    verifiedProfile.resolve({ data: { role: "admin" }, error: null });
+    await challenge;
+  });
+  await waitFor(() => expect(result.current.user?.role).toBe("admin"));
+  expect(result.current.mfaRequired).toBe(false);
+  expect(result.current.isCheckingMfa).toBe(false);
 });
 
 it.each(["returned", "thrown"] as const)("fails closed on a %s AAL error", async (kind) => {

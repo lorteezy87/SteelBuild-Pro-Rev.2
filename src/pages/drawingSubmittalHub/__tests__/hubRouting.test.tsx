@@ -5,7 +5,7 @@
  * <Routes>) can't model. Also covers the wiring behind owner decision 3:
  * board clicks open records inside the hub.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -185,7 +185,7 @@ describe("hub under real routes", () => {
     const row = await screen.findByRole("button", { name: "board-row" });
     expect(row).toHaveAttribute("data-wired", "function");
     await user.click(row);
-    expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals&recordId=sub-1");
+    await waitFor(() => expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals&recordId=sub-1"));
     expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
     expect(await screen.findByText("submittal-register")).toBeInTheDocument();
   });

@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { OrgProvider, useOrg } from "@/components/shared/OrgContext";
 import AppLoader from "@/boot/AppLoader";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { OutboxProvider } from "@/lib/field/OutboxContext";
 
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
 const DesktopConnectSignIn = lazyWithRetry(() => import("@/pages/DesktopConnectSignIn"));
@@ -159,7 +160,9 @@ export default function AuthenticatedApp() {
 
   return (
     <OrgProvider>
-      <OrgGate />
+      <OutboxProvider>
+        <OrgGate />
+      </OutboxProvider>
     </OrgProvider>
   );
 }

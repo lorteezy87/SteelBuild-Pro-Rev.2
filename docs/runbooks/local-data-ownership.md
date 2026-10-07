@@ -1,4 +1,4 @@
-# Browser-local notes and audit ownership
+# Browser-local notes, audit and field capture ownership
 
 Notes and destructive-action history use versioned keys scoped to the authenticated user ID and active workspace ID:
 
@@ -20,3 +20,13 @@ After ownership is confirmed, review each note with its author. Copy only confir
 The original `sbp_audit_log` remains unchanged. Its `userId` is historical recorded metadata, not verified authorship: older callers could overwrite details and browser storage is editable. Matching it is a privacy filter, not proof that an action occurred. Its rows are eligible for display only when their recorded `userId` exactly matches the authenticated user. A recorded `orgId` must also match the selected workspace. Rows without a workspace are marked `legacyWorkspaceUnknown: true`; they are user-attributed historical records, not evidence of membership in the current workspace. Ownerless rows are never exposed.
 
 New audit entries use the current scoped key and authoritative user/workspace fields; caller-supplied details cannot replace them. Each scope keeps at most 200 new entries. Clearing a scope writes an empty scoped view and hides legacy rows for that scope; it does not remove or alter the legacy store or another user's/workspace's data. No legacy audit rows are automatically copied into a workspace store.
+
+## Offline field captures
+
+New queued operations carry both the authenticated user ID and active workspace ID. Replay requires an exact match, completed authentication/MFA checks, and a resolved workspace. A replay client holds that user's original access token; it cannot acquire a replacement user's token while waiting for an SDK authentication lock. Workspace-generation changes and unmount cancel the transport, including delayed upload retries. Cancellation cannot undo a request already accepted by the server.
+
+The pre-upgrade queue has no trustworthy ownership metadata. Ownerless operations and their pending photo blobs remain quarantined in place; they are not adopted by the next user, shown in that user's pending count, or replayed automatically. As with notes, an administrator and original author must establish ownership and intended workspace before inspecting or recovering captures on a trusted device. Do not infer ownership from a shared project ID.
+
+Deployment preparation must preserve any confirmed legacy captures **before signing out or switching accounts**. Existing successful logout/account-switch cleanup still removes the old field queue and pending photo blobs. This release does not add a migration/export interface or change that purge policy. Keep an authorized backup of legacy localStorage and IndexedDB data before recovery; do not expose it to another device user. A failed sign-out retains the session and drafts and reports failure.
+
+Photo, daily-log and punch rows retain their existing `client_op_id` deduplication keys. A lost response after photo-row creation can still leave an extra uploaded Storage object on a later replay: uploads and record creation are separate operations with a newly generated upload path. Record deduplication is not proof of exactly-once file storage. Do not delete presumed orphan objects automatically; reconcile references and apply the established storage retention/backup policy before cleanup.

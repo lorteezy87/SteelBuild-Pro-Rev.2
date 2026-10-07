@@ -25,7 +25,7 @@ import {
   normalizeJsonbArray,
 } from './fieldMapping';
 import { createEntityClient } from './entityClient';
-import type { Insert, RowWithAliases, TableName, Update } from './supabaseTypes';
+import type { EntityRequestOptions, Insert, RowWithAliases, TableName, Update } from './supabaseTypes';
 import type { Json } from '@/types/supabase';
 
 /**
@@ -375,10 +375,10 @@ export const entities = {
       list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
       filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
       get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
-      create:     (record: Insert<'schedule_tasks'>) =>
-        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'schedule_tasks'>),
-      update:     (id: string, updates: Update<'schedule_tasks'>) =>
-        base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'schedule_tasks'>),
+      create:     (record: Insert<'schedule_tasks'>, options?: EntityRequestOptions) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'schedule_tasks'>, options),
+      update:     (id: string, updates: Update<'schedule_tasks'>, options?: EntityRequestOptions) =>
+        base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'schedule_tasks'>, options),
       bulkCreate: (records: Insert<'schedule_tasks'>[]) =>
         base.bulkCreate(
           (records || []).map((r) => normalizeFields(r as Record<string, unknown>) as Insert<'schedule_tasks'>)
@@ -618,8 +618,8 @@ export const entities = {
       list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
       filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
       get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
-      create:     (record: Insert<'daily_logs'>) =>
-        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'daily_logs'>),
+      create:     (record: Insert<'daily_logs'>, options?: EntityRequestOptions) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'daily_logs'>, options),
       update:     (id: string, updates: Update<'daily_logs'>) =>
         base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'daily_logs'>),
       bulkCreate: (records: Insert<'daily_logs'>[]) =>
@@ -662,8 +662,8 @@ export const entities = {
       list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
       filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
       get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
-      create:     (record: Insert<'punchlist_items'>) =>
-        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'punchlist_items'>),
+      create:     (record: Insert<'punchlist_items'>, options?: EntityRequestOptions) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'punchlist_items'>, options),
       update:     (id: string, updates: Update<'punchlist_items'>) =>
         base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'punchlist_items'>),
       bulkCreate: (records: Insert<'punchlist_items'>[]) =>

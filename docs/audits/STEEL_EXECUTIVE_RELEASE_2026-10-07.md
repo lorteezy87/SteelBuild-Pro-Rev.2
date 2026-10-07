@@ -3,6 +3,22 @@
 Date: 2026-10-07. Base: `948c7de7342539a95450d1c014c9991e88ba9be0`.
 Branch: `codex/steel-executive-hardening`.
 
+## Continuation: security and the first intelligence increment
+
+The continuation adds a calculated execution brief to the live Command Center. All six source families must load completely, remain in the selected project, and stay below the pagination safety cap. The brief uses the existing calendar horizons, links to source records, reports owner/date gaps, and distinguishes refreshing/error states from a complete snapshot. It adds no model connection or autonomous action. [Intelligence delivery sequence](../roadmaps/STEELBUILD_INTELLIGENCE.md).
+
+Offline field replay now binds captures to the original user/workspace, holds the original token, and checks cancellation at the actual SDK transport boundary. Account changes, workspace-generation changes and unmount stop later requests, retries, queue reconciliation and stale success messages. The existing client_op_id deduplication remains intact. Legacy ownerless captures require recovery before the existing sign-out purge; see [local ownership and retention](../runbooks/local-data-ownership.md).
+
+The server MFA candidate covers authenticated REST/RPC, private Storage operations, currently published Realtime tables, and seven user-facing Edge endpoints. The browser challenge also waits for the verified profile before opening the app. The candidate has isolated PostgreSQL, real-handler and Deno checks; hosted enforcement remains pending the reviewed release. [Exact backend candidate and observed deployed versions](BACKEND_RELEASE_CANDIDATE_2026-10-07.md).
+
+The complete dependency audit improves from 16 findings to five inherited from one unpatched upstream Braces vulnerability. Production dependencies remain at zero advisories and zero waivers. [Compatibility and audit evidence](DEPENDENCY_TOOLCHAIN_2026-10-07.md).
+
+Browser acceptance now requires authenticated main content, complete project context, successful scoped API responses and actual fixture rows. Login pages, error states and forbidden data writes cannot count as success. Synthetic checks are separate from real authenticated staging acceptance.
+
+![Calculated execution brief, synthetic desktop records](evidence/command-center-brief-dark-desktop.png)
+
+[Field-phone light-theme brief](evidence/command-brief-light-mobile.png). These captures show the shipped component with synthetic records; they do not establish backend deployment or live-account acceptance.
+
 ## Product scope
 
 This release keeps SteelBuild Pro focused on structural-steel subcontractors. The project dashboard emphasizes engineering approvals, fabrication and logistics, field readiness, and commercial exposure. It retains the canonical piece-control panel and fabrication-release rules.
@@ -28,7 +44,7 @@ The executive presentation uses the existing light/dark theme and accent prefere
 - Compatible locked security updates also cover brace-expansion, DOMPurify, smol-toml, and source-map-js.
 - Capacitor core/iOS and the CLI minimum move to 8.5.1. The committed Swift package pin matches the official 8.5.1 tag.
 
-## Verification record
+## Original verification record
 
 Application source commit `50bf16059315b48fac77c8c4f555244e805c9580` passed the complete application job in [run 37586115974](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37586115974/job/112676512617):
 
@@ -66,10 +82,10 @@ Local process execution and interactive browser control were unavailable because
 This is an application improvement release, not an enterprise certification or authorization to deploy. Keep the following holds visible:
 
 1. **Production database compatibility:** the existing drift gate identifies required versions `20260922015713`, `20260927150000`, `20260927160000`, and `20261005100745` as missing remotely. Follow the repository's reviewed, manually stamped backend-release process. Do not bypass the gate or run an automatic migration push against shared production.
-2. **Dependency audit:** after compatible patches, the production dependency audit reports zero advisories. The all-dependency audit still reports 16 findings (11 high, 5 moderate) through build/native tooling such as Tailwind, Wrangler/Miniflare, and depcheck. Their suggested forced changes require separate compatibility validation; none are waived here.
-3. **Server MFA:** browser gating is not authorization. Verify protected database, Storage, and Edge operations reject an enrolled user's AAL1 token and allow AAL2 through a separately reviewed server enforcement change.
+2. **Dependency audit:** the continuation reduces the complete audit to five high findings in the unpatched Braces/Tailwind development dependency chain; production remains at zero. None are waived. A framework upgrade requires its own compatibility validation.
+3. **Server MFA:** the tested candidate migration `20261007073051` and seven guarded Edge functions require reviewed staging application and hosted AAL1/AAL2 verification before production release. The new version is a fifth required missing migration; browser gating alone is not authorization.
 4. **Active-workspace acceptance:** the three portfolio entry points are now scoped and have regression coverage. Run authenticated staging acceptance with a real two-workspace member, including related records and upload destination.
-5. **Legacy local content and offline sessions:** existing ownerless notes require the documented owner-reviewed recovery process. New content is isolated by account/workspace. Failed offline sign-out is reported honestly; offline credential eviction is not implemented, and local storage is not encrypted or a substitute for server audit/backup.
+5. **Legacy local content and offline sessions:** existing ownerless notes and field captures require the documented owner-reviewed recovery process. New replay is isolated by account/workspace and original token. Recover confirmed legacy captures before the existing logout/account-switch purge. Failed offline sign-out is reported honestly; offline credential eviction is not implemented, and local storage is not encrypted or a substitute for server audit/backup. Photo record deduplication can still leave an extra uploaded object after a lost response; cleanup requires reference/retention review.
 6. **Native release:** resolve Swift dependencies and build/test the iOS app on macOS after syncing Capacitor. A web build does not validate native delivery or distribute the security patch to installed apps.
 7. **Operational acceptance:** verify staging role boundaries, representative project volumes, monitoring alerts, backup restoration, and business-owner acceptance of drawing release, piece progress, billing, and change-order workflows.
 

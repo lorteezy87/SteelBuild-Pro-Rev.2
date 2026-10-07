@@ -208,6 +208,11 @@ jobs:
           npm ci --prefix supabase/tests/account-deletion --ignore-scripts
           npm test --prefix supabase/tests/account-deletion
 
+      - name: Verify enrolled MFA database boundaries
+        run: |
+          npm ci --prefix supabase/tests/server-mfa --ignore-scripts
+          npm test --prefix supabase/tests/server-mfa
+
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
@@ -813,6 +818,9 @@ jobs:
         run: npm run test:e2e
         env:
           E2E_BASE_URL: https://steelbuild-pro.com
+          E2E_PROJECT_ID: ${{ vars.E2E_PROJECT_ID }}
+          E2E_DRAWING_FIXTURE_TEXT: ${{ vars.E2E_DRAWING_FIXTURE_TEXT }}
+          E2E_SUBMITTAL_FIXTURE_TEXT: ${{ vars.E2E_SUBMITTAL_FIXTURE_TEXT }}
           # Sign-in: global-setup (browser session) + the API fixtures. The
           # passwords are secrets; the anon key is browser-public but stored as a
           # secret for one consistent place.

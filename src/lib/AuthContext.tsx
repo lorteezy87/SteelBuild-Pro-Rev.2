@@ -476,9 +476,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // aal2, so recompute the gate.
   const verifyMfaFactor = async (factorId: string, code: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
+      const { data, error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
       if (error) throw error;
-      await refreshMfaRequired();
+      if (!data?.user || !data.access_token || currentUserIdRef.current !== data.user.id) {
+        throw new Error('Your session changed. Please sign in again.');
+      }
+      // AAL1 profile reads are denied by the server MFA hook. Publish the
+      // verified profile before releasing the gate; a separate AAL refresh
+      // could otherwise outrun the MFA_CHALLENGE_VERIFIED profile lookup.
+      await publishSessionUser(data.user, data.access_token);
       return { success: true };
     } catch (error: unknown) {
       const err = error as { message?: string } | undefined;

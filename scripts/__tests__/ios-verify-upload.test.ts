@@ -4,6 +4,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const script = resolve('scripts/ios-verify-upload.mjs');
 const directories: string[] = [];
@@ -86,7 +87,7 @@ globalThis.fetch = async (input, options = {}) => {
 // Exercise the bounded not-found polling branch without waiting ten minutes.
 globalThis.setTimeout = callback => { queueMicrotask(callback); return 0; };
 `);
-  const result = spawnSync(process.execPath, ['--import', preloadPath, script], {
+  const result = spawnSync(process.execPath, ['--import', pathToFileURL(preloadPath).href, script], {
     cwd, encoding: 'utf8', timeout: 5000,
     // Do not inherit real credentials or NODE_OPTIONS from the parent process.
     env: {

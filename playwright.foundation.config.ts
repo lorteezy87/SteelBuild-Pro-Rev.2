@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // data. The development-only entry mounts the shipped shell primitives.
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['foundation.spec.ts', 'executive.spec.ts'],
+  testMatch: ['foundation.spec.ts', 'executive.spec.ts', 'command-brief.spec.ts', 'acceptance-contract.spec.ts'],
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
