@@ -18,6 +18,7 @@ BEGIN;
 \ir ../migrations/20260927150000_erasure_census_admits_project_admins.sql
 \ir ../migrations/20260927160000_account_deletion_releases_authorship.sql
 \ir ../migrations/20261007084117_permit_authorship_cleanup_through_immutable_guards.sql
+\ir ../migrations/20261007090057_acquire_erasure_relation_locks_before_rows.sql
 
 do $$ begin
   assert not exists (select 1 from auth.users where id in ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') or email in ('a@example.invalid','b@example.invalid'))

@@ -39,6 +39,12 @@ The same push run passed the secret scan, every Edge Function entrypoint typeche
 
 The final evidence update changes only this report, backend candidate SQL hashes and coordination metadata. Application code remains the verified source. No live staging acceptance or backend deployment is implied by fixture checks.
 
+## Approved staging continuation
+
+The owner subsequently approved the exact five-migration/seven-function backend package for staging. All five SQL payloads and six function deployments are verified in staging; account-delete remains held for defects found by real erasure tests. The [staging acceptance report](STAGING_ACCEPTANCE_2026-10-07.md) records deployed versions, exact hashes, actual hosted MFA/Storage/Realtime/browser evidence, configuration holds, and unapplied forward corrections. Production and `main` remain unchanged.
+
+Hosted testing also exposed the missing workspace-switching control and stale browser route assumptions. The shell now exposes workspaces next to projects, removes stale project deep links when switching companies, and passes actual desktop/mobile workspace isolation and field-photo destination checks. The foundation suite is now 76 cases. These newer changes supersede the earlier statement that this continuation changed only evidence.
+
 ## Product scope
 
 This release keeps SteelBuild Pro focused on structural-steel subcontractors. The project dashboard emphasizes engineering approvals, fabrication and logistics, field readiness, and commercial exposure. It retains the canonical piece-control panel and fabrication-release rules.
@@ -103,13 +109,13 @@ This is an application improvement release, not an enterprise certification or a
 
 1. **Production database compatibility:** the existing drift gate identifies required versions `20260922015713`, `20260927150000`, `20260927160000`, and `20261005100745` as missing remotely. Follow the repository's reviewed, manually stamped backend-release process. Do not bypass the gate or run an automatic migration push against shared production.
 2. **Dependency audit:** the continuation reduces the complete audit to five high findings in the unpatched Braces/Tailwind development dependency chain; production remains at zero. None are waived. A framework upgrade requires its own compatibility validation.
-3. **Server MFA:** the tested candidate migration `20261007073051` and seven guarded Edge functions require reviewed staging application and hosted AAL1/AAL2 verification before production release. The new version is a fifth required missing migration; browser gating alone is not authorization.
-4. **Active-workspace acceptance:** the three portfolio entry points are now scoped and have regression coverage. Run authenticated staging acceptance with a real two-workspace member, including related records and upload destination.
+3. **Server MFA and erasure:** the five approved migrations and six guarded functions are verified in staging. Hosted REST/Storage/Realtime and four Edge boundary checks passed; two Edge handlers have configuration holds. Account-delete remains held for newly exposed erasure defects and separately reviewed forward corrections. Production MFA release remains unapproved; browser gating alone is not authorization.
+4. **Active-workspace acceptance:** actual two-workspace browser switching, related drawing isolation, account replacement, and field-photo upload destination passed against hosted staging. The current frontend runs locally for acceptance and has not replaced the staging/production Worker.
 5. **Legacy local content and offline sessions:** existing ownerless notes and field captures require the documented owner-reviewed recovery process. New replay is isolated by account/workspace and original token. Recover confirmed legacy captures before the existing logout/account-switch purge. Failed offline sign-out is reported honestly; offline credential eviction is not implemented, and local storage is not encrypted or a substitute for server audit/backup. Photo record deduplication can still leave an extra uploaded object after a lost response; cleanup requires reference/retention review.
 6. **Native release:** resolve Swift dependencies and build/test the iOS app on macOS after syncing Capacitor. A web build does not validate native delivery or distribute the security patch to installed apps.
 7. **Operational acceptance:** verify staging role boundaries, representative project volumes, monitoring alerts, backup restoration, and business-owner acceptance of drawing release, piece progress, billing, and change-order workflows.
 
-The database, deployed Edge Functions, production site, and main branch were not modified by this release.
+The production database, production Edge Functions, production site, and main branch were not modified. Staging changes are documented separately above.
 
 ## Acceptance scenarios
 

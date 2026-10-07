@@ -1,6 +1,6 @@
 # Reviewed backend candidate — 2026-10-07
 
-Status: prepared for review, not deployed. Production `kjrwqagyeswwoxpjkcko` is shared with another application. This document records read-only catalog and deployed-source inspection; it is not authorization to change production.
+Status: owner approved staging release of exact candidate `1f475a4aaf2451b81456d8e3cb1cc2ecdad7a242`. All five migrations and six functions are now applied to staging `ndyfjffsulfbwpmwdmic`; account-delete is held after hosted erasure testing exposed defects. See [staging acceptance and follow-up evidence](STAGING_ACCEPTANCE_2026-10-07.md). Production `kjrwqagyeswwoxpjkcko` is shared with another application and remains unchanged/unapproved. The production observations below describe the original read-only review.
 
 ## Database evidence and application order
 
@@ -14,7 +14,7 @@ The production ledger contains 132 versions. The unmodified reconciliation plann
 | 4 / `20261005100745` | `retry_failed_revision_comparison.sql` | `retry_revision_comparison(uuid)` is absent. |
 | 5 / `20261007073051` | `enforce_enrolled_mfa_at_server_boundaries.sql` | The MFA helper and PostgREST request hook are absent. Existing verified-factor accounts currently lack this server boundary. |
 
-All SQL files are under `supabase/migrations/`. The new MFA version stays **required / pending**, never stamped as applied by these changes. The other four were already required on the base branch.
+All SQL files are under `supabase/migrations/`. These five versions remain **required / pending in production**; their exact payloads have been applied and stamped only in staging. The other four were already required on the base branch. Subsequent forward corrections are separate from this approved package.
 
 Candidate source commit: `2d9bf6e69827ecf471def2adbb7e31060b13d261`. SHA-256 below hashes the exact committed SQL blob bytes, before adding the reviewed atomic ledger stamp:
 
@@ -46,7 +46,7 @@ Every user-facing guard runs after Auth verifies the exact bearer token and befo
 
 ## Release sequence and acceptance
 
-Follow [Reviewed backend releases](../runbooks/reviewed-backend-release.md). Its instruction is: “Obtain approval for the named functions and exact database changes.” This shared-backend requirement is why local tests and this review package do not trigger a deployment.
+Follow [Reviewed backend releases](../runbooks/reviewed-backend-release.md). Its instruction is: “Obtain approval for the named functions and exact database changes.” The owner has now approved this exact package for staging. That approval does not authorize production or automatically include new forward migrations discovered during acceptance.
 
 1. Review the exact release commit and candidate SQL; inspect both applications' MFA compatibility and any PostgREST configuration outside the database catalog. Preserve current source bundles and JWT settings again immediately before deployment.
 2. Apply and stamp each approved migration atomically in staging, using its exact committed payload. Do not nest the existing `BEGIN`/`COMMIT` wrappers when constructing the approved transaction. Never use `db push`, migration repair, or an inventory-only stamp.

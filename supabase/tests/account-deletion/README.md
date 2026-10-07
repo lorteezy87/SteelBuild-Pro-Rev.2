@@ -34,6 +34,52 @@ erasure. The immutable report and frozen financial snapshots must survive the
 real Auth delete. Apply the forward fix before releasing the account-delete
 function; its four existing trigger functions expose no new callable helper.
 
+## Relation-lock ordering
+
+Staging overlapping HTTP requests exposed a real `40P01` deadlock: erasure held
+an organization row while a membership insert held the member relation's
+`ROW EXCLUSIVE` lock. The insert's normal guard waited for the organization;
+erasure's later `ALTER TABLE ... DISABLE TRIGGER` needed the relation's
+`SHARE ROW EXCLUSIVE` lock. A final HTTP 200 was insufficient evidence because
+the database client retried the deadlock victim. The approved original migration
+is unchanged; `20261007090057` replaces only the account-erasure RPC.
+
+The forward fix takes every potential trigger-toggle relation lock before any
+row locks. The set is the existing project erasure's public base tables with
+`project_id` (excluding `projects` and `data_erasure_log`), plus `projects` and
+the organization erasure's nine explicit tail tables. Every candidate must have
+an enabled ordinary user trigger, matching `erasure_toggle_user_triggers`.
+Empty project tables are included because a concurrent first insert can change
+the later census. On staging this set contained 104 relations on 2026-10-07.
+
+Each alphabetically ordered acquisition attempt uses `NOWAIT` inside one
+exception subtransaction. A conflict rolls back the whole partial set before
+50ms backoff. Acquisition stops after eight seconds with `55P03/ERASURE_BUSY`;
+the whole RPC retains its existing 60-second timeout and original grants.
+Accounts with no owned workspace return before acquiring these global locks.
+Ownership and sole membership are read again after successful acquisition.
+The candidate set is rechecked before row locks; deployment DDL still requires
+a quiet window because this does not guarantee safety against arbitrary schema
+changes after that final catalog read.
+
+This deliberately broadens each call from its nonempty census to the possible
+ALTER set and takes locks earlier. The existing trigger-toggle erasure already
+blocks writes to those relations across all workspaces. The fix closes that
+lock-order inversion; it is not an efficient concurrent erasure architecture.
+Do not generalize its guarantee to every possible row-lock conflict or to
+standalone `hard_delete_project`, `hard_delete_organization`, or `reset_org_data`
+calls, whose implementations are unchanged.
+
+`verify-lock-order.mjs` executes the real SQL and catalog/ACL checks. With only
+the lock boundary and clock instrumented, it deterministically checks partial
+attempt rollback, the eight-second deadline, changed membership/ownership,
+the no-owner fast path, and archival rollback after reason refusal. PGlite is
+single-session: hosted overlapping requests remain required to establish real
+lock release and writer progress. Test membership-first, erasure-first, normal
+organization creation, and project insertion with normal triggers. Record
+phase entry counts and safe database log SQLSTATEs to reject hidden retries or
+deadlocks; do not accept a final successful HTTP response alone.
+
 ## Deployment checks
 
 1. Land the two migration files before manually applying and stamping the exact

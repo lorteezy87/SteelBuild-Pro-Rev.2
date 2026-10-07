@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261007090057",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix for the relation-lock/parent-row deadlock confirmed during staging account-erasure overlap validation. Acquires the existing erasure chain's potential trigger-toggle relation set before row locks using atomic NOWAIT attempts, rollback of partial locks, and an eight-second acquisition budget; preserves fresh ownership/membership checks, grants and the 60-second RPC timeout. This deliberately broadens each call's global write-lock set and needs exact reviewed staging HTTP overlap validation before manual application/stamping. Keep visible in missingMigrations until its exact committed payload is applied."
+      },
+      {
         "version": "20261007084117",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix discovered by staging account-deletion validation. Permits only FK-driven author-to-NULL cleanup through immutable revision reports and frozen T&M ticket guards after the Auth parent is deleted; preserves report contents, financial totals and events, normal edit restrictions, and all trigger enablement. The existing applied migration files remain unchanged. Local real-FK regression covers direct and nested mixed-write refusal and all frozen ticket states; exact reviewed hosted rollback verification is required before manual application/stamping. Keep this required migration visible in missingMigrations until its exact committed payload is applied."
