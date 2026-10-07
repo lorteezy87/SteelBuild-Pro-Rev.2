@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "@/styles/command.css";
 import "@/styles/command-center-system.css";
 import {
@@ -19,7 +19,7 @@ import type {
   PanelTone,
 } from "./commandCenterControlCenter.derive";
 import { deriveCommandHorizons } from "./commandCenterHorizons";
-import type { CommandHorizon } from "./commandCenterHorizons";
+import type { CommandHorizon, CommandHorizonKey } from "./commandCenterHorizons";
 
 export interface CommandCenterControlCenterProps {
   sources: CommandCenterSources;
@@ -33,7 +33,7 @@ export interface CommandCenterControlCenterProps {
   onForwardLook: () => void;
 }
 
-const TYPE_CHIPS = ["All", "RFI", "SUB", "CO", "DEL", "WP"];
+const TYPE_CHIPS = ["All", "RFI", "SUB", "CO", "DEL", "WP", "TASK"];
 
 function urgencyTone(urgency: ActionItem["urgency"]): PanelTone {
   switch (urgency) {
@@ -58,7 +58,11 @@ function formatDue(item: ActionItem): string {
   return item.dueDate;
 }
 
-function HorizonPanel({ horizon, onOpenItem }: { horizon: CommandHorizon; onOpenItem: (item: ActionItem) => void }) {
+function HorizonPanel({ horizon, onOpenItem, onViewAll }: {
+  horizon: CommandHorizon;
+  onOpenItem: (item: ActionItem) => void;
+  onViewAll: () => void;
+}) {
   const tone = horizonTone(horizon);
   return (
     <section className={`sbp-horizon is-${tone}`} aria-labelledby={`sbp-horizon-${horizon.key}`}>
@@ -93,6 +97,17 @@ function HorizonPanel({ horizon, onOpenItem }: { horizon: CommandHorizon; onOpen
           ))
         )}
       </div>
+      {horizon.items.length > 7 ? (
+        <button
+          type="button"
+          className="cmd-btn cmd-btn--ghost"
+          style={{ margin: 12 }}
+          onClick={onViewAll}
+          aria-label={`View all ${horizon.items.length} items in ${horizon.label}`}
+        >
+          View all {horizon.items.length} items →
+        </button>
+      ) : null}
     </section>
   );
 }
@@ -114,9 +129,22 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
 
   const summary = useMemo(() => buildCommandCenterSummary(sources), [sources]);
   const horizons = useMemo(() => deriveCommandHorizons(summary.actionItems), [summary.actionItems]);
+  const [horizonFilter, setHorizonFilter] = useState<CommandHorizonKey | null>(null);
+  const registerHeading = useRef<HTMLHeadingElement>(null);
+  const projectScope = sources.projects.map((project) => project.id).join(":");
+  useEffect(() => setHorizonFilter(null), [projectScope]);
+  const activeHorizon = horizons.find((horizon) => horizon.key === horizonFilter);
+
+  const showHorizon = (key: CommandHorizonKey) => {
+    onSearch("");
+    onTypeChange("All");
+    setHorizonFilter(key);
+    registerHeading.current?.focus({ preventScroll: true });
+    registerHeading.current?.scrollIntoView?.({ block: "start" });
+  };
 
   const filteredItems = useMemo(() => {
-    let items = summary.actionItems;
+    let items = activeHorizon?.items ?? summary.actionItems;
     if (typeFilter !== "All") items = items.filter((item) => item.itemType === typeFilter);
     if (search) {
       const q = search.toLowerCase();
@@ -128,7 +156,7 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
       );
     }
     return items;
-  }, [summary.actionItems, typeFilter, search]);
+  }, [summary.actionItems, activeHorizon, typeFilter, search]);
 
   const projectTotal = sources.projects.length || projectCount;
   const metrics: OperationalMetric[] = [
@@ -228,17 +256,26 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
 
       <div className="sbp-horizons" aria-label="Project control horizons">
         {horizons.map((horizon) => (
-          <HorizonPanel key={horizon.key} horizon={horizon} onOpenItem={onOpenItem} />
+          <HorizonPanel key={horizon.key} horizon={horizon} onOpenItem={onOpenItem} onViewAll={() => showHorizon(horizon.key)} />
         ))}
       </div>
 
       <div className="sbp-command-register-head">
         <div>
           <div className="sbp-command-register-head__eyebrow">Complete Action Register</div>
-          <h2>All Action Items</h2>
+          <h2 ref={registerHeading} tabIndex={-1}>{activeHorizon ? `${activeHorizon.label} Action Items` : "All Action Items"}</h2>
         </div>
         <div className="sbp-command-register-head__count">{filteredItems.length} shown</div>
       </div>
+
+      {activeHorizon ? (
+        <div className="cmd-row" role="status">
+          <span className="cmd-row__meta">Showing the full {activeHorizon.label} horizon</span>
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={() => setHorizonFilter(null)}>
+            Show all horizons
+          </button>
+        </div>
+      ) : null}
 
       <FilterBar
         search={search}
@@ -255,6 +292,7 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
                 key={type}
                 type="button"
                 className={`cmd-chip-btn${typeFilter === type ? " is-active" : ""}`}
+                aria-pressed={typeFilter === type}
                 onClick={() => onTypeChange(type)}
               >
                 {type}

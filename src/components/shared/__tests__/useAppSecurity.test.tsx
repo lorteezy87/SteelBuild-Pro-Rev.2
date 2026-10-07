@@ -17,6 +17,7 @@ function authValue(partial: Partial<AuthContextValue>): AuthContextValue {
     // fields; the stub must satisfy the whole contract or every consumer test
     // fails to typecheck.
     mfaStatusDegraded: false,
+    isCheckingMfa: false,
     mfaStatusMessage: null,
     retryMfaStatus: async () => {},
     appPublicSettings: null,

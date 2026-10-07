@@ -253,19 +253,26 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Inspect published Capacitor security patch
-        if: ${{ github.ref == 'refs/heads/codex/steel-executive-hardening' }}
-        run: |
-          npm view @capacitor/core@8.5.1 --json
-          npm view @capacitor/cli@8.5.1 --json
-          npm view @capacitor/ios@8.5.1 --json
-
       - name: Audit production dependencies (moderate+, waivers reviewed in-repo)
         run: node scripts/audit-gate.mjs
 
       - name: Audit all dependencies (high+, including build and native tooling)
         if: ${{ !cancelled() }}
         run: npm audit --audit-level=high
+
+      - name: Inspect compatible dependency security updates
+        if: ${{ !cancelled() && github.ref == 'refs/heads/codex/steel-executive-hardening' }}
+        run: |
+          cp package-lock.json /tmp/steelbuild-lock-before.json
+          npm update brace-expansion dompurify smol-toml source-map-js --package-lock-only --ignore-scripts --no-audit
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const before = JSON.parse(fs.readFileSync('/tmp/steelbuild-lock-before.json', 'utf8'));
+          const after = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const changed = Object.fromEntries(Object.entries(after.packages).filter(([key, value]) => JSON.stringify(before.packages[key]) !== JSON.stringify(value)));
+          const removed = Object.keys(before.packages).filter(key => !(key in after.packages));
+          console.log('STEELBUILD_LOCK_DIFF=' + JSON.stringify({ changed, removed }));
+          NODE
 
   # ── Secret scanning (enforced) ──────────────────────────────────────────────
   # Closes the "no secret scanning" gap this file used to list under "What does

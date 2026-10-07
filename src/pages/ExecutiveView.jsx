@@ -1,7 +1,8 @@
 import React from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { buildExecutiveDistributions } from "./executive/executiveChartData";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatBudgetPercent } from "../components/shared/formatters";
 import { computeRevisedBudget, resolveProjectSpend } from "@/services/costRollup";
@@ -52,14 +53,7 @@ const CARD_TITLE = {
   marginBottom: 16,
 };
 
-const healthColors = [
-  "var(--status-success)",
-  "var(--status-warning)",
-  "var(--status-error)",
-];
-
 export default function ExecutiveView() {
-  const navigate = useNavigate();
   // Portfolio-wide rollup: listAll() pages through every row instead of the
   // capped list() read, so totals don't silently truncate as a tenant grows.
   // Keys sit under each entity's cacheRegistry primary prefix (so mutations
@@ -175,13 +169,7 @@ export default function ExecutiveView() {
     };
   });
 
-  const rfiSeverity = [
-    { name: "Critical", value: rfis.filter((r) => r.priority === "Critical").length },
-    { name: "High",     value: rfis.filter((r) => r.priority === "High").length },
-    { name: "Medium",   value: rfis.filter((r) => r.priority === "Medium").length },
-    { name: "Low",      value: rfis.filter((r) => r.priority === "Low").length },
-  ].filter((d) => d.value > 0);
-  const rfiSeverityColors = ["var(--status-error)", "var(--status-warning)", "var(--status-info)", "var(--text-muted)"];
+  const { health: healthData, severity: rfiSeverity } = buildExecutiveDistributions(projects, rfis);
 
   const laborData = projects.map((p) => {
     const pw = wps.filter((w) => w.project_id === p.id);
@@ -197,12 +185,6 @@ export default function ExecutiveView() {
     waterfallData.push({ name: c.co_number, value: Number(c.co_amount) || 0, fill: (Number(c.co_amount) || 0) >= 0 ? "var(--status-success)" : "var(--status-error)" });
   });
   waterfallData.push({ name: "Revised", value: revisedTotal, fill: "var(--phase-detailing)" });
-
-  const healthData = [
-    { name: "On Track", value: projects.filter((p) => p.health_status === "On Track").length },
-    { name: "Watch",    value: projects.filter((p) => p.health_status === "Watch").length },
-    { name: "At Risk",  value: projects.filter((p) => p.health_status === "At Risk").length },
-  ].filter((d) => d.value > 0);
 
   // Phase donut
   const phaseData = [
@@ -278,15 +260,15 @@ export default function ExecutiveView() {
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie data={healthData} cx="50%" cy="50%" innerRadius={50} outerRadius={72} dataKey="value" strokeWidth={0}>
-                    {healthData.map((_, i) => <Cell key={i} fill={healthColors[i]} />)}
+                    {healthData.map((category) => <Cell key={category.name} fill={category.color} />)}
                   </Pie>
                   <Tooltip {...TOOLTIP_STYLE} />
                 </PieChart>
               </ResponsiveContainer>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8, justifyContent: "center" }}>
-                {healthData.map((d, i) => (
+                {healthData.map((d) => (
                   <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: healthColors[i] }} />
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color }} />
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
                       {d.name} ({d.value})
                     </span>
@@ -351,15 +333,15 @@ export default function ExecutiveView() {
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie data={rfiSeverity} cx="50%" cy="50%" innerRadius={50} outerRadius={72} dataKey="value" strokeWidth={0}>
-                    {rfiSeverity.map((_, i) => <Cell key={i} fill={rfiSeverityColors[i]} />)}
+                    {rfiSeverity.map((category) => <Cell key={category.name} fill={category.color} />)}
                   </Pie>
                   <Tooltip {...TOOLTIP_STYLE} />
                 </PieChart>
               </ResponsiveContainer>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8, justifyContent: "center" }}>
-                {rfiSeverity.map((d, i) => (
+                {rfiSeverity.map((d) => (
                   <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: rfiSeverityColors[i] }} />
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color }} />
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{d.name} ({d.value})</span>
                   </div>
                 ))}
@@ -458,9 +440,10 @@ export default function ExecutiveView() {
             const pctSpend = budget > 0 ? actual / budget * 100 : 0;
             const projRFIs = rfis.filter((r) => r.project_id === p.id && isRfiOpen(r)).length;
             return (
-              <div key={p.id}
-                style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 14, cursor: "pointer", transition: "all 0.15s", background: "var(--bg-surface-low)" }}
-                onClick={() => navigate(`${createPageUrl("Dashboard")}?project=${p.id}`)}
+              <Link key={p.id}
+                aria-label={`Open project ${p.name || p.project_number || "details"}`}
+                style={{ display: "block", textDecoration: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 14, cursor: "pointer", transition: "all 0.15s", background: "var(--bg-surface-low)" }}
+                to={`${createPageUrl("Dashboard")}?project=${encodeURIComponent(p.id)}`}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.background = "var(--hover-bg)"; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "var(--bg-surface-low)"; }}
               >
@@ -507,7 +490,7 @@ export default function ExecutiveView() {
                     {projRFIs > 0 ? `${projRFIs} RFIs` : "—"}
                   </span>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

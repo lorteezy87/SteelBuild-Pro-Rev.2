@@ -1,3 +1,5 @@
+import { todayLocalISO } from "@/lib/dateMath";
+import { resolveDashboardNavigation } from "./dashboardCC/dashboardNavigation";
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
@@ -285,39 +287,8 @@ export default function Dashboard() {
     };
 
     const onNavigateDash = (target, opts = {}) => {
-      const paths = {
-        rfis: "/RFIs",
-        submittals: "/Submittals",
-        detailing: "/DrawingSubmittalHub",
-        "work-packages": "/WorkPackages",
-        deliveries: "/Deliveries",
-        "change-orders": "/ChangeOrders",
-        "field-reports": "/DailyLogs",
-        schedule: "/ScheduleHub",
-        "fab-release": "/FabRelease",
-        "budget-hours": "/BudgetHours",
-        "cost-hub": "/CostHub",
-        documents: "/Documents",
-        reports: "/ReportsHub",
-        procurement: "/Procurement",
-        field: "/FieldHub",
-        "daily-logs": "/DailyLogs",
-        photos: "/Photos",
-        punchlist: "/Punchlist",
-        inspections: "/Inspections",
-        safety: "/Safety",
-        "quality-control": "/QualityControl",
-        "piece-register": "/PieceRegister",
-        contracts: "/ContractManagement",
-      };
-      const path = paths[target];
-      if (!path) return;
-      const params = [];
-      if (opts.create) params.push("new=1");
-      if (opts.stage) params.push(`stage=${encodeURIComponent(opts.stage)}`);
-      if (opts.status) params.push(`status=${encodeURIComponent(opts.status)}`);
-      if (opts.id) params.push(`id=${encodeURIComponent(String(opts.id))}`);
-      navigate(params.length ? `${path}?${params.join("&")}` : path);
+      const path = resolveDashboardNavigation(target, opts);
+      if (path) navigate(path);
     };
     return (
       <ErrorBoundary label="Dashboard Control Center">
@@ -347,7 +318,7 @@ export default function Dashboard() {
               inspections={inspections}
               safetyIncidents={safetyIncidents}
               qualityRecords={qualityRecords}
-              todayIso={new Date().toISOString().slice(0, 10)}
+              todayIso={todayLocalISO()}
               rfiEvidenceLoaded={rfisSuccess}
               scheduleEvidenceLoaded={scheduleTasksSuccess}
               onNavigate={onNavigateDash}

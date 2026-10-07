@@ -30,6 +30,9 @@ export interface DashboardOperationalBand {
 
 export interface DashboardReferenceModel {
   attention: DashboardAttentionItem[];
+  /** Counts cover every attention item, including rows outside the preview. */
+  attentionTotal: number;
+  attentionCounts: Record<AttentionTone, number>;
   bands: DashboardOperationalBand[];
 }
 
@@ -46,6 +49,7 @@ export interface DashboardReferenceInput {
 const CLOSED_RFI = new Set(["closed", "answered", "void", "cancelled"]);
 const CLOSED_SUBMITTAL = new Set(["approved", "approved as noted", "released for fabrication", "void", "rejected"]);
 const CLOSED_CO = new Set(["approved", "rejected", "void"]);
+const CLOSED_DELIVERY = new Set(["delivered", "received", "cancelled", "canceled"]);
 
 function text(value: unknown): string {
   return String(value ?? "").trim();
@@ -139,6 +143,7 @@ function collectAttention(input: DashboardReferenceInput): DashboardAttentionIte
 
   for (const delivery of input.deliveries) {
     const status = normalize(delivery.status);
+    if (delivery.is_deleted || CLOSED_DELIVERY.has(status)) continue;
     const dueDays = daysFrom(input.todayIso, delivery.scheduled_date);
     const late = status === "delayed" || (dueDays !== null && dueDays < 0 && status !== "delivered" && status !== "received");
     if (!late) continue;
@@ -175,8 +180,7 @@ function collectAttention(input: DashboardReferenceInput): DashboardAttentionIte
 
   const rank: Record<AttentionTone, number> = { danger: 0, warn: 1, info: 2, neutral: 3, good: 4 };
   return items
-    .sort((a, b) => rank[a.tone] - rank[b.tone] || a.issue.localeCompare(b.issue))
-    .slice(0, 8);
+    .sort((a, b) => rank[a.tone] - rank[b.tone] || a.issue.localeCompare(b.issue));
 }
 
 function buildBands(input: DashboardReferenceInput, attention: DashboardAttentionItem[]): DashboardOperationalBand[] {
@@ -185,6 +189,7 @@ function buildBands(input: DashboardReferenceInput, attention: DashboardAttentio
   const heldWps = input.workPackages.filter((row) => normalize(row.status) === "on hold").length;
   const lateDeliveries = input.deliveries.filter((row) => {
     const status = normalize(row.status);
+    if (row.is_deleted || CLOSED_DELIVERY.has(status)) return false;
     const dueDays = daysFrom(input.todayIso, row.scheduled_date);
     return status === "delayed" || (dueDays !== null && dueDays < 0 && status !== "delivered" && status !== "received");
   }).length;
@@ -230,6 +235,15 @@ function buildBands(input: DashboardReferenceInput, attention: DashboardAttentio
 }
 
 export function buildDashboardReferenceModel(input: DashboardReferenceInput): DashboardReferenceModel {
-  const attention = collectAttention(input);
-  return { attention, bands: buildBands(input, attention) };
+  const allAttention = collectAttention(input);
+  const attentionCounts: Record<AttentionTone, number> = {
+    danger: 0, warn: 0, info: 0, neutral: 0, good: 0,
+  };
+  for (const item of allAttention) attentionCounts[item.tone] += 1;
+  return {
+    attention: allAttention.slice(0, 8),
+    attentionTotal: allAttention.length,
+    attentionCounts,
+    bands: buildBands(input, allAttention),
+  };
 }

@@ -330,3 +330,55 @@ describe("buildPortfolioSummary – late deliveries", () => {
     expect(allRows[0].lateDeliveries).toBe(2);
   });
 });
+
+describe("buildPortfolioSummary – reconciled cost exposure and revised budget", () => {
+  it("does not hide actual-only fabrication costs behind erection commitments", () => {
+    const related: PortfolioRelated = {
+      ...emptyRelated,
+      costCodes: [
+        { project_id: "p1", cost_code_number: "06", budget_amount: 1000, actual_cost: 900 },
+        { project_id: "p1", cost_code_number: "07", budget_amount: 500, committed_cost: 900 },
+      ],
+    };
+    const [row] = buildPortfolioSummary([makeProject({ id: "p1" })], related).allRows;
+    expect(row.budget).toBe(1500);
+    expect(row.committed).toBe(1800);
+    expect(row.reasons).toContain("Cost exposure over budget");
+  });
+
+  it("uses approved cost-code allocations for each project's revised budget", () => {
+    const related: PortfolioRelated = {
+      ...emptyRelated,
+      costCodes: [
+        { project_id: "p1", id: "shop-1", budget_amount: 1000, committed_cost: 1200 },
+        { project_id: "p2", id: "shop-2", budget_amount: 2000, committed_cost: 200 },
+      ],
+      changeOrders: [
+        { project_id: "p1", cost_code_id: "shop-1", status: " Approved ", co_amount: 500 },
+        { project_id: "p1", cost_code_id: "shop-1", status: "Submitted", co_amount: 9000 },
+        { project_id: "p1", cost_code_id: null, status: "Approved", co_amount: 250 },
+        { project_id: "p2", cost_code_id: "shop-2", status: "Approved", co_amount: 9000 },
+      ],
+    };
+    const [first, second] = buildPortfolioSummary(
+      [makeProject({ id: "p1" }), makeProject({ id: "p2" })],
+      related,
+    ).allRows;
+    expect(first.budget).toBe(1500);
+    expect(first.revisedContract).toBe(1000750);
+    expect(first.reasons).not.toContain("Cost exposure over budget");
+    expect(second.budget).toBe(11000);
+  });
+
+  it("recognizes over-budget exposure after an approved deductive change", () => {
+    const related: PortfolioRelated = {
+      ...emptyRelated,
+      costCodes: [{ project_id: "p1", id: "shop", budget_amount: 1000, actual_cost: 1000 }],
+      changeOrders: [{ project_id: "p1", cost_code_id: "shop", status: "Approved", co_amount: -200 }],
+    };
+    const [row] = buildPortfolioSummary([makeProject({ id: "p1" })], related).allRows;
+    expect(row.budget).toBe(800);
+    expect(row.committed).toBe(1000);
+    expect(row.reasons).toContain("Cost exposure over budget");
+  });
+});

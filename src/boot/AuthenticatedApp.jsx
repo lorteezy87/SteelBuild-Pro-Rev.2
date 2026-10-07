@@ -59,7 +59,7 @@ export default function AuthenticatedApp() {
     isAuthenticated,
     isLoadingAuth, isLoadingPublicSettings, authError, isLoggingIn,
     loginWithPassword, signUpWithPassword, sendPasswordReset, isPasswordRecovery, mfaRequired,
-    mfaStatusDegraded, mfaStatusMessage, retryMfaStatus,
+    mfaStatusDegraded, mfaStatusMessage, retryMfaStatus, isCheckingMfa,
     logout,
   } = useAuth();
 
@@ -80,6 +80,9 @@ export default function AuthenticatedApp() {
       </Suspense>
     );
   }
+
+  // Hold new or unverified sessions until their blocking AAL lookup resolves.
+  if (isAuthenticated && isCheckingMfa) return <AppLoader />;
 
   if (mfaStatusDegraded) {
     return (

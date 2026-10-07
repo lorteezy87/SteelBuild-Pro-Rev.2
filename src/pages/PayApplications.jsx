@@ -93,7 +93,7 @@ export default function PayApplications() {
   // Preserve the change-orders invalidation prefix, with a separate cache shape.
   const changesQuery = useQuery({ queryKey: ["change-orders", projectId, "payapp-evidence"], queryFn: () => listPayAppChangeOrders(projectId), enabled: !!projectId });
   const changeOrders = changesQuery.data || [];
-  const contractQuery = useQuery({ queryKey: ["projects", projectId, "payapp-contract"], queryFn: () => getPayAppContract(projectId), enabled: !!projectId });
+  const contractQuery = useQuery({ queryKey: ["projects", projectId, "payapp-contract"], queryFn: () => getPayAppContract(projectId), select: (contract) => contract, enabled: !!projectId });
   const sourcesReady = contractQuery.isSuccess && !contractQuery.isFetching && sovQuery.isSuccess && changesQuery.isSuccess && !sovQuery.isFetching && !changesQuery.isFetching;
 
   const contract = useMemo(() => ({

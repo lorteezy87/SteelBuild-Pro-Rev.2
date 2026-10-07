@@ -292,8 +292,8 @@ export function useRfiPageMutations(args: {
             pdfFiles,
           );
         } else {
-          const allocationProjectId = (data.project_id as string) || projectId;
-          if (!allocationProjectId) throw new Error("Select a project before creating an RFI.");
+          const scopedData = buildRfiCreatePayload(data, projectId);
+          const allocationProjectId = scopedData.project_id;
           const num =
             (data.rfi_number as string) ||
             (await getNextFormattedNumber({
@@ -305,10 +305,10 @@ export function useRfiPageMutations(args: {
             }));
           if (!num) throw new Error("RFI number allocation failed. The RFI was not saved.");
           const created = await createMut.mutateAsync({
-            ...data,
+            ...scopedData,
             rfi_number: num,
             project_name:
-              projects.find((p) => p.id === ((data.project_id as string) || projectId))?.name ||
+              projects.find((p) => p.id === allocationProjectId)?.name ||
               (data.project_name as string) ||
               "",
           });

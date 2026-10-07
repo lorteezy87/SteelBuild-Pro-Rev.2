@@ -263,3 +263,54 @@ describe("buildCommandCenterSummary", () => {
     expect(s.kpis.scheduleHealth).toBe("On Track");
   });
 });
+
+describe("Command Center evidence completeness", () => {
+  it("counts a delayed, overdue task once when classifying schedule risk", () => {
+    const summary = buildCommandCenterSummary(makeSources({
+      scheduleTasks: [
+        { id: "late", status: "Delayed", end_date: dateOffset(-1) },
+        ...Array.from({ length: 3 }, (_, i) => ({
+          id: `ok-${i}`, status: "In Progress", end_date: dateOffset(20),
+        })),
+      ],
+    }));
+    expect(summary.kpis.scheduleHealth).toBe("At Risk");
+    expect(summary.tones.scheduleHealth).toBe("warn");
+  });
+
+  it("includes loads on the full ten-day horizon and excludes day eleven", () => {
+    const summary = buildCommandCenterSummary(makeSources({
+      deliveries: [8, 9, 10, 11].map((days) => ({
+        id: `load-${days}`, status: "Scheduled", scheduled_date: dateOffset(days),
+      })),
+    }));
+    expect(summary.actionItems.map((item) => item.id)).toEqual(["load-8", "load-9", "load-10"]);
+  });
+
+  it("routes open leaf schedule tasks with the canonical owner and honest finish date", () => {
+    const summary = buildCommandCenterSummary(makeSources({
+      scheduleTasks: [
+        { id: "parent", task_name: "Erection", status: "In Progress", end_date: dateOffset(2) },
+        { id: "leaf", parent_task_id: "parent", task_name: "Area A steel", status: "In Progress",
+          resource_names: "Crew Alpha", assigned_to: "Old owner", end_date: dateOffset(2), project_id: "p1" },
+        { id: "done", task_name: "Finished", status: "Complete", end_date: dateOffset(-1) },
+        { id: "undated", task_name: "Plan connection work", status: "Not Started", start_date: dateOffset(-5) },
+      ],
+    }));
+    const taskItems = summary.actionItems.filter((item) => item.itemType === "TASK");
+    expect(taskItems.map((item) => item.id).sort()).toEqual(["leaf", "undated"]);
+    expect(taskItems.find((item) => item.id === "leaf")).toMatchObject({
+      owner: "Crew Alpha", urgency: "due-soon", dueDate: dateOffset(2), projectId: "p1",
+    });
+    expect(taskItems.find((item) => item.id === "undated")).toMatchObject({
+      dueDate: null, urgency: "normal",
+    });
+  });
+
+  it("recognizes aged change orders whose created_date is a timestamp", () => {
+    const summary = buildCommandCenterSummary(makeSources({
+      changeOrders: [{ id: "aged", status: "Submitted", created_date: `${dateOffset(-30)}T12:00:00Z` }],
+    }));
+    expect(summary.actionItems.find((item) => item.id === "aged")?.urgency).toBe("overdue");
+  });
+});
