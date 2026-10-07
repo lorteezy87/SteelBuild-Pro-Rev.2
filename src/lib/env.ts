@@ -47,9 +47,9 @@ export class EnvValidationError extends Error {
     super(
       "Invalid environment configuration:\n" +
         problems.map((p) => `  • ${p}`).join("\n") +
-        "\n\nSet these in .env.local (local dev) or the hosting provider's " +
-        "build environment (deployed — Vercel project env, and the " +
-        "VITE_SUPABASE_* repo secrets the Cloudflare deploy job builds with). " +
+        "\n\nFor local development, set these in .env.local and restart Vite. " +
+        "For Cloudflare deployments, set the environment-specific VITE_SUPABASE_* " +
+        "repository secrets used by the build job and rebuild. " +
         "See .env.example for the full list.",
     );
     this.name = "EnvValidationError";
