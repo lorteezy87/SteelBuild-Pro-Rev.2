@@ -30,11 +30,36 @@ The executive presentation uses the existing light/dark theme and accent prefere
 
 ## Verification record
 
-The unchanged application baseline passed the repository's lint/type gates, 7,235 unit tests in 760 files, 18 foundation browser checks, and a production build in [run 37580582816](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37580582816). This baseline result does not validate the changes above.
+Application source commit `50bf16059315b48fac77c8c4f555244e805c9580` passed the complete application job in [run 37586115974](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37586115974/job/112676512617):
 
-Validation of the assembled changes is pending. The release adds financial, navigation, query, account/workspace isolation, and MFA regressions, plus actual-dashboard browser checks in both themes at desktop and mobile widths, with an additional tablet check. Browser screenshots and failure traces are retained as CI artifacts. The development fixture uses synthetic records and does not establish authenticated-backend acceptance.
+| Check | Result |
+|---|---|
+| ESLint and new-source TypeScript policy | Passed |
+| TypeScript, JavaScript, strict-null, and implicit-any gates | All passed |
+| Vitest | 7,364 tests in 774 files passed |
+| Browser acceptance | 22 tests passed, desktop and mobile; executive cases also checked tablet width |
+| Database helper search paths | Eight helpers; 3,929 unchanged-result cases; isolation and rollback checks passed |
+| Account deletion authorization | Role, archive, removed-member, and timeout checks passed |
+| Production build | Passed |
+| Existing bundle budgets | Passed: initial 162.8 KB gzip / 320 KB limit; total 3,190.6 KB gzip / 3,600 KB limit |
+| Secret scan and Edge Function typecheck | Passed |
+| Production dependency audit | Zero advisories and zero waivers |
+| All-dependency audit and production drift | Failed on the existing release holds below |
 
-Local execution and interactive browser inspection were unavailable because the desktop sandbox failed before process startup. Repository CI is the executable validation environment for this work.
+The unchanged application baseline passed 7,235 tests in 760 files and 18 browser checks in [run 37580582816](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37580582816). The release adds 129 unit regressions and four browser scenarios without waiving checks.
+
+The actual executive dashboard was rendered with synthetic records in both themes at desktop and mobile widths, and at tablet width within the desktop scenarios. Keyboard actions resolved the command center, work-package, and RFI routes. No page errors, backend requests, or horizontal page overflow were observed. This fixture does not establish authenticated-backend acceptance.
+
+[Full-page screenshots and browser evidence](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37586115974/artifacts/11466532781) are retained by CI for seven days. The viewport captures below are also checked into this report's evidence folder. They were visually inspected; they show synthetic records and development preview controls.
+
+| Desktop | Field phone |
+|---|---|
+| [Dark theme](evidence/executive-dark-desktop.jpg) | [Dark theme](evidence/executive-dark-mobile.jpg) |
+| [Light theme](evidence/executive-light-desktop.jpg) | [Light theme](evidence/executive-light-mobile.jpg) |
+
+![Executive dashboard in dark mode](evidence/executive-dark-desktop.jpg)
+
+Local process execution and interactive browser control were unavailable because the desktop sandbox failed before startup. CI provided executable validation and rendered screenshots. After the successful run, the final evidence commit changes only this report, screenshot files, coordination metadata, and removal of the temporary screenshot-log export. Application code and permanent checks remain the verified versions.
 
 ## Release holds
 
