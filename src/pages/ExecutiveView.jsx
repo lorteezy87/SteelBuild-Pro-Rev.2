@@ -17,6 +17,8 @@ import { CommandBar, Button } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { isRfiOpen } from "@/lib/entityPredicates";
+import { useOrg } from "@/components/shared/OrgContext";
+import { projectsInWorkspace, readProjectRows } from "@/lib/portfolioScope";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -54,32 +56,43 @@ const CARD_TITLE = {
 };
 
 export default function ExecutiveView() {
-  // Portfolio-wide rollup: listAll() pages through every row instead of the
-  // capped list() read, so totals don't silently truncate as a tenant grows.
-  // Keys sit under each entity's cacheRegistry primary prefix (so mutations
-  // still invalidate them) but are distinct from the capped list() caches
-  // ("rfis-all", "expenses-all", …) so a full read is never served from — or
-  // overwritten by — a truncated one.
-  const projectsQ = useQuery({ queryKey: ["projects", "executive-all"], queryFn: () => entities.Project.listAll(), staleTime: 5 * 60 * 1000 });
-  const rfisQ = useQuery({ queryKey: ["rfis", "executive-all"], queryFn: () => entities.RFI.listAll() });
-  const cosQ = useQuery({ queryKey: ["change-orders", "executive-all"], queryFn: () => entities.ChangeOrder.listAll() });
-  const codesQ = useQuery({ queryKey: ["cost-codes", "executive-all"], queryFn: () => entities.CostCode.listAll() });
-  const wpsQ = useQuery({ queryKey: ["work-packages", "executive-all"], queryFn: () => entities.WorkPackage.listAll() });
-  const tasksQ = useQuery({ queryKey: ["schedule-tasks", "executive-all"], queryFn: () => entities.ScheduleTask.listAll() });
-  const expensesQ = useQuery({ queryKey: ["expenses", "executive-all"], queryFn: () => entities.Expense.listAll() });
+  const { currentOrg } = useOrg();
+  const orgId = currentOrg?.id;
+  // Page every record inside the active workspace. Query keys retain entity
+  // prefixes for mutation invalidation and include the workspace/project set.
+  const projectsQ = useQuery({
+    queryKey: ["projects", "executive-all", orgId],
+    queryFn: () => entities.Project.filterAll({ org_id: orgId }),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!orgId,
+  });
+  const projects = React.useMemo(
+    () => projectsInWorkspace(projectsQ.data ?? [], orgId),
+    [projectsQ.data, orgId],
+  );
+  const projectIds = React.useMemo(() => projects.map((p) => p.id).sort(), [projects]);
+  const canReadRows = !!orgId && projectsQ.isSuccess;
+  const rfisQ = useQuery({ queryKey: ["rfis", "executive-all", orgId, projectIds], queryFn: () => readProjectRows(entities.RFI, projectIds), enabled: canReadRows });
+  const cosQ = useQuery({ queryKey: ["change-orders", "executive-all", orgId, projectIds], queryFn: () => readProjectRows(entities.ChangeOrder, projectIds), enabled: canReadRows });
+  const codesQ = useQuery({ queryKey: ["cost-codes", "executive-all", orgId, projectIds], queryFn: () => readProjectRows(entities.CostCode, projectIds), enabled: canReadRows });
+  const wpsQ = useQuery({ queryKey: ["work-packages", "executive-all", orgId, projectIds], queryFn: () => readProjectRows(entities.WorkPackage, projectIds), enabled: canReadRows });
+  const tasksQ = useQuery({ queryKey: ["schedule-tasks", "executive-all", orgId, projectIds], queryFn: () => readProjectRows(entities.ScheduleTask, projectIds), enabled: canReadRows });
+  const expensesQ = useQuery({ queryKey: ["expenses", "executive-all", orgId, projectIds], queryFn: () => readProjectRows(entities.Expense, projectIds), enabled: canReadRows });
 
   const {
-    projects = [], rfis = [], cos = [], codes = [], wps = [], tasks = [], expenses = [],
+    rfis = [], cos = [], codes = [], wps = [], tasks = [], expenses = [],
   } = {
-    projects: projectsQ.data, rfis: rfisQ.data, cos: cosQ.data, codes: codesQ.data,
+    rfis: rfisQ.data, cos: cosQ.data, codes: codesQ.data,
     wps: wpsQ.data, tasks: tasksQ.data, expenses: expensesQ.data,
   };
 
   // An executive rollup must never present $0/empty as truth while loading or
   // after a failed fetch — gate on the queries the KPIs are computed from.
   const allQueries = [projectsQ, rfisQ, cosQ, codesQ, wpsQ, tasksQ, expensesQ];
-  const isLoading = allQueries.some((q) => q.isLoading);
   const failedQuery = allQueries.find((q) => q.isError);
+  const isLoading = !failedQuery && allQueries.some((q) => q.isPending);
+
+  if (!orgId) return <div role="status" style={{ padding: 24 }}>Choose a workspace to load the executive view.</div>;
 
   if (isLoading) {
     return (

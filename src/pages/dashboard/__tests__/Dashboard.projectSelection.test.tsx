@@ -20,8 +20,9 @@ vi.mock("@/api/supabaseClient", () => ({
     ].map((name) => [name, {
       list: vi.fn().mockResolvedValue([]),
       filter: vi.fn().mockResolvedValue([]),
+      filterAll: vi.fn().mockResolvedValue([]),
     }])),
-    Project: { list: mocks.listProjects },
+    Project: { filterAll: mocks.listProjects },
   },
 }));
 vi.mock("@/lib/supabase", () => ({
@@ -31,12 +32,13 @@ vi.mock("@/lib/supabase", () => ({
 }));
 vi.mock("@/components/shared/ProjectContext", () => ({
   useProjectContext: () => ({
-    activeProject: { id: "project-1", name: "Selected project" },
+    activeProject: { id: "project-1", org_id: "org-a", name: "Selected project" },
     setActiveProject: mocks.setActiveProject,
   }),
 }));
 vi.mock("react-router-dom", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("@/lib/dateMath", () => ({ todayLocalISO: () => "2026-10-06" }));
+vi.mock("@/components/shared/OrgContext", () => ({ useOrg: () => ({ currentOrg: { id: "org-a" } }) }));
 vi.mock("@/lib/AuthContext", () => ({ useAuth: (): { user: null } => ({ user: null }) }));
 vi.mock("@/hooks/useUserPrefs", () => ({
   useUserPrefs: () => ({ auto_refresh_secs: 0 }),
@@ -61,7 +63,7 @@ function renderDashboard() {
 
 describe("Dashboard project selection", () => {
   it("routes canonical attention targets and supplies the local calendar date", async () => {
-    mocks.listProjects.mockResolvedValueOnce([{ id: "project-1", name: "Selected project" }]);
+    mocks.listProjects.mockResolvedValueOnce([{ id: "project-1", org_id: "org-a", name: "Selected project" }]);
     renderDashboard();
     const button = await screen.findByRole("button", { name: "Open risk record" });
     expect(screen.getByText("2026-10-06")).toBeInTheDocument();
@@ -71,19 +73,19 @@ describe("Dashboard project selection", () => {
   it("retains the selected project when the initial project list request fails", async () => {
     mocks.listProjects.mockRejectedValueOnce(new Error("Network unavailable"));
     const client = renderDashboard();
-    await screen.findByText("Project dashboard");
-    await waitFor(() => expect(client.getQueryState(["projects"])?.status).toBe("error"));
+    await screen.findByText("Couldn’t load dashboard data");
+    await waitFor(() => expect(client.getQueryState(["projects", "dashboard-all", "org-a"])?.status).toBe("error"));
     expect(mocks.setActiveProject).not.toHaveBeenCalled();
   });
 
   it("clears the selected project when a successful list excludes it", async () => {
-    mocks.listProjects.mockResolvedValueOnce([{ id: "project-2", name: "Other project" }]);
+    mocks.listProjects.mockResolvedValueOnce([{ id: "project-2", org_id: "org-a", name: "Other project" }]);
     renderDashboard();
     await waitFor(() => expect(mocks.setActiveProject).toHaveBeenCalledWith(null));
   });
 
   it("retains the selected project when the successful list includes it", async () => {
-    mocks.listProjects.mockResolvedValueOnce([{ id: "project-1", name: "Selected project" }]);
+    mocks.listProjects.mockResolvedValueOnce([{ id: "project-1", org_id: "org-a", name: "Selected project" }]);
     renderDashboard();
     await screen.findByText("Project dashboard");
     expect(mocks.setActiveProject).not.toHaveBeenCalled();

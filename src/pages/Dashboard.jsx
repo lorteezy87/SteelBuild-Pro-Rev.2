@@ -8,6 +8,9 @@ import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { useAuth } from "@/lib/AuthContext";
+import { useOrg } from "@/components/shared/OrgContext";
+import { projectsInWorkspace, readProjectRows } from "@/lib/portfolioScope";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -41,13 +44,12 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { activeProject, setActiveProject } = useProjectContext();
   const { user } = useAuth();
+  const { currentOrg } = useOrg();
+  const orgId = currentOrg?.id;
   const pid = activeProject?.id;
   const [portfolioSearch, setPortfolioSearch] = useState("");
   const [portfolioHealthFilter, setPortfolioHealthFilter] = useState("All");
   const projectScope = pid || "portfolio";
-  // The canonical control-center surfaces are unconditional.
-  const listForDashboard = (entity, sortBy) =>
-    pid ? entity.filter({ project_id: pid }, sortBy) : entity.list(sortBy);
 
   // Honour the Settings → Dashboard → "Auto-Refresh Live Data" pref
   // on the most-volatile queries. The pref is saved per-user as
@@ -58,18 +60,30 @@ export default function Dashboard() {
   const refetchMs = refetchIntervalFromPref(auto_refresh_secs);
 
   /* ── Portfolio-wide queries (always loaded) ── */
-  const { data: projects = [], isLoading: projectsLoading, isSuccess: projectsSuccess } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => entities.Project.list(),
+  const projectsQ = useQuery({
+    queryKey: ["projects", "dashboard-all", orgId],
+    queryFn: () => entities.Project.filterAll({ org_id: orgId }),
     staleTime: 5 * 60 * 1000,
+    enabled: !!orgId,
   });
+  const { isLoading: projectsLoading, isSuccess: projectsSuccess } = projectsQ;
+  const projects = useMemo(
+    () => projectsInWorkspace(projectsQ.data ?? [], orgId),
+    [projectsQ.data, orgId],
+  );
   // Portfolio rollups must exclude on-hold projects (and their child entity
   // contributions); on-hold projects are visible only on the /Projects page.
   // `liveProjectIds` is the active (non-on-hold) id set used by every
   // portfolio aggregation downstream (scopePortfolioRows + PortfolioControlCenter).
   const portfolioProjects = useMemo(() => projects.filter((p) => !p.on_hold), [projects]);
   const liveProjectIds = useMemo(() => new Set(portfolioProjects.map((p) => p.id).filter(Boolean)), [portfolioProjects]);
-  const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
+  const activeProjectIsLive = !pid || liveProjectIds.has(pid);
+  const queryProjectIds = useMemo(
+    () => pid ? (liveProjectIds.has(pid) ? [pid] : []) : [...liveProjectIds].sort(),
+    [pid, liveProjectIds],
+  );
+  const canReadRows = !!orgId && projectsSuccess && activeProjectIsLive;
+  const listForDashboard = (entity, sortBy) => readProjectRows(entity, queryProjectIds, sortBy);
 
   useEffect(() => {
     if (pid && projectsSuccess && !activeProjectIsLive) {
@@ -82,70 +96,82 @@ export default function Dashboard() {
     [pid, liveProjectIds],
   );
 
-  const { data: allRFIs = [], isLoading: rfisLoading, isSuccess: rfisSuccess } = useQuery({
-    queryKey: ["rfis-dashboard", projectScope],
+  const allRFIsQ = useQuery({
+    queryKey: ["rfis-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.RFI),
     refetchInterval: refetchMs,
+    enabled: canReadRows,
   });
-  const { data: allCOs = [] } = useQuery({
-    queryKey: ["cos-dashboard", projectScope],
+  const { data: allRFIs = [], isSuccess: rfisSuccess } = allRFIsQ;
+  const allCOsQ = useQuery({
+    queryKey: ["cos-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.ChangeOrder),
+    enabled: canReadRows,
   });
-  const { data: allCodes = [] } = useQuery({
-    queryKey: ["codes-dashboard", projectScope],
+  const { data: allCOs = [] } = allCOsQ;
+  const allCodesQ = useQuery({
+    queryKey: ["codes-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.CostCode),
+    enabled: canReadRows,
   });
-  const { data: allWPs = [] } = useQuery({
-    queryKey: ["work-packages-dashboard", projectScope],
+  const { data: allCodes = [] } = allCodesQ;
+  const allWPsQ = useQuery({
+    queryKey: ["work-packages-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.WorkPackage),
     staleTime: 30000,
+    enabled: canReadRows,
   });
-  const { data: allDeliveries = [] } = useQuery({
-    queryKey: ["deliveries-dashboard", projectScope],
+  const { data: allWPs = [] } = allWPsQ;
+  const allDeliveriesQ = useQuery({
+    queryKey: ["deliveries-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.Delivery),
     refetchInterval: refetchMs,
+    enabled: canReadRows,
   });
-  const { data: allActionItems = [] } = useQuery({
-    queryKey: ["action-items-dashboard", projectScope],
+  const { data: allDeliveries = [] } = allDeliveriesQ;
+  const allActionItemsQ = useQuery({
+    queryKey: ["action-items-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.ActionItem),
     refetchInterval: refetchMs,
-    enabled: true,
+    enabled: canReadRows,
   });
+  const { data: allActionItems = [] } = allActionItemsQ;
   // Loaded in both modes: the project CC uses expenses for spend, and the
   // portfolio CC's resolveProjectSpend falls back to expenses so its totals
   // match PortfolioHub (which always passes expenses).
-  const { data: allExpenses = [] } = useQuery({
-    queryKey: ["expenses-dashboard", projectScope],
+  const allExpensesQ = useQuery({
+    queryKey: ["expenses-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.Expense),
+    enabled: canReadRows,
   });
+  const { data: allExpenses = [] } = allExpensesQ;
   // Portfolio timeline column needs schedule_tasks for every non-singleton
   // project portfolio view. Tiny payload —
-  // one row per task, a few date columns — so global fetch is cheaper than
-  // per-project drilldown round-trips.
-  const { data: allScheduleTasks = [], isSuccess: scheduleTasksSuccess } = useQuery({
-    queryKey: ["schedule-tasks-dashboard", projectScope],
+  // one row per task, a few date columns — fetched in bounded project batches.
+  const allScheduleTasksQ = useQuery({
+    queryKey: ["schedule-tasks-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.ScheduleTask, "-start_date"),
     staleTime: 60 * 1000,
-    enabled: true,
+    enabled: canReadRows,
   });
+  const { data: allScheduleTasks = [], isSuccess: scheduleTasksSuccess } = allScheduleTasksQ;
   // Used by the Document Hub submittal pipeline + Drawings count tile.
-  const { data: allSubmittals = [] } = useQuery({
-    queryKey: ["submittals-dashboard", projectScope],
+  const allSubmittalsQ = useQuery({
+    queryKey: ["submittals-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.Submittal),
     staleTime: 30 * 1000,
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
-  const { data: allDrawings = [] } = useQuery({
-    queryKey: ["drawings-dashboard", projectScope],
+  const { data: allSubmittals = [] } = allSubmittalsQ;
+  const allDrawingsQ = useQuery({
+    queryKey: ["drawings-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.Drawing),
     staleTime: 30 * 1000,
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
-  const {
-    data: hasRecordedFabRelease = false,
-    isSuccess: fabReleaseEvidenceLoaded,
-  } = useQuery({
-    queryKey: ["fab-release-evidence", pid],
+  const { data: allDrawings = [] } = allDrawingsQ;
+  const hasRecordedFabReleaseQ = useQuery({
+    queryKey: ["fab-release-evidence", pid, orgId],
     queryFn: async () => {
       if (!pid) return false;
       const { count, error } = await supabase
@@ -155,61 +181,69 @@ export default function Dashboard() {
       if (error) throw error;
       return (count ?? 0) > 0;
     },
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
+  const {
+    data: hasRecordedFabRelease = false,
+    isSuccess: fabReleaseEvidenceLoaded,
+  } = hasRecordedFabReleaseQ;
   // Cash-flow figures (total billed / collected / pending payment /
   // retention) on the Financial Controls section come from SOV items.
-  const { data: allSovItems = [] } = useQuery({
-    queryKey: ["sov-items-dashboard", projectScope],
+  const allSovItemsQ = useQuery({
+    queryKey: ["sov-items-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.SOVItem),
     staleTime: 60 * 1000,
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
+  const { data: allSovItems = [] } = allSovItemsQ;
   // Recent Activity feed pulls from drawing_activity (the only
   // activity surface that's actually populated — the generic
   // `activities` table is empty everywhere). Pull the latest 50
-  // events globally and project-scope them in the section.
-  const { data: allDrawingActivity = [] } = useQuery({
-    queryKey: ["drawing-activity-recent", projectScope],
+  // events for the verified active project.
+  const allDrawingActivityQ = useQuery({
+    queryKey: ["drawing-activity-recent", projectScope, orgId, queryProjectIds],
     queryFn: () =>
-      entities.DrawingActivity
-        ? pid
-          ? entities.DrawingActivity.filter({ project_id: pid }, "-created_at", 50)
-          : entities.DrawingActivity.list("-created_at", 50)
+      entities.DrawingActivity && pid && canReadRows
+        ? entities.DrawingActivity.filter({ project_id: pid }, "-created_at", 50)
         : Promise.resolve([]),
     staleTime: 30 * 1000,
     refetchInterval: refetchMs,
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
+  const { data: allDrawingActivity = [] } = allDrawingActivityQ;
   // ── Field activity rollup (added with the Field overhaul) ──
   // The field surfaces the control center actually reads (Punchlist /
   // Inspections / Safety / QC) feed the project dashboard. Daily logs and
   // photos are not consumed by DashboardControlCenter, so they are not fetched.
   // Pull per-project only to avoid portfolio-mode overhead.
-  const { data: allPunchlist = [] } = useQuery({
-    queryKey: ["punchlist-dashboard", projectScope],
+  const allPunchlistQ = useQuery({
+    queryKey: ["punchlist-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.PunchlistItem),
     staleTime: 60 * 1000,
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
-  const { data: allInspections = [] } = useQuery({
-    queryKey: ["inspections-dashboard", projectScope],
+  const { data: allPunchlist = [] } = allPunchlistQ;
+  const allInspectionsQ = useQuery({
+    queryKey: ["inspections-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.Inspection, "-inspection_date"),
     staleTime: 60 * 1000,
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
-  const { data: allSafetyIncidents = [] } = useQuery({
-    queryKey: ["safety-dashboard", projectScope],
+  const { data: allInspections = [] } = allInspectionsQ;
+  const allSafetyIncidentsQ = useQuery({
+    queryKey: ["safety-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.SafetyIncident, "-incident_date"),
     staleTime: 60 * 1000,
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
-  const { data: allQualityRecords = [] } = useQuery({
-    queryKey: ["qc-records-dashboard", projectScope],
+  const { data: allSafetyIncidents = [] } = allSafetyIncidentsQ;
+  const allQualityRecordsQ = useQuery({
+    queryKey: ["qc-records-dashboard", projectScope, orgId, queryProjectIds],
     queryFn: () => listForDashboard(entities.QualityControlRecord, "-test_date"),
     staleTime: 60 * 1000,
-    enabled: !!pid,
+    enabled: canReadRows && !!pid,
   });
+  const { data: allQualityRecords = [] } = allQualityRecordsQ;
 
   /* ── Project-scoped slices (derived from global data to avoid dupe queries) ── */
   const rfis       = useMemo(() => (pid ? allRFIs.filter((r)       => r.project_id === pid) : []), [allRFIs, pid]);
@@ -238,7 +272,11 @@ export default function Dashboard() {
   const safetyIncidents  = useMemo(() => (pid ? allSafetyIncidents.filter((r) => r.project_id === pid)  : []), [allSafetyIncidents, pid]);
   const qualityRecords   = useMemo(() => (pid ? allQualityRecords.filter((r) => r.project_id === pid)   : []), [allQualityRecords, pid]);
 
-  const isLoading = projectsLoading || rfisLoading;
+  const portfolioQueries = [allRFIsQ, allCOsQ, allCodesQ, allWPsQ, allDeliveriesQ, allActionItemsQ, allExpensesQ, allScheduleTasksQ];
+  const projectQueries = [allSubmittalsQ, allDrawingsQ, hasRecordedFabReleaseQ, allSovItemsQ, allDrawingActivityQ, allPunchlistQ, allInspectionsQ, allSafetyIncidentsQ, allQualityRecordsQ];
+  const allQueries = [projectsQ, ...portfolioQueries, ...(pid ? projectQueries : [])];
+  const failedQuery = allQueries.find((query) => query.isError);
+  const isLoading = allQueries.some((query) => query.isPending);
 
   const portfolioRelated = useMemo(
     () => ({
@@ -265,7 +303,19 @@ export default function Dashboard() {
     setActiveProject(match ? match : project);
   }, [projects, setActiveProject]);
 
-  if (isLoading) {
+  if (!orgId) return <div role="status" style={{ padding: 24 }}>Choose a workspace to load the dashboard.</div>;
+
+  if (failedQuery) {
+    return (
+      <div role="alert" className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <p>Couldn’t load dashboard data</p>
+        <p>{toUserErrorMessage(failedQuery.error, "Try again.")}</p>
+        <button type="button" className="sbd-btn sbd-btn-primary" onClick={() => failedQuery.refetch()}>Retry</button>
+      </div>
+    );
+  }
+
+  if (isLoading || (pid && !activeProjectIsLive)) {
     return (
       <div className="sb-dashboard-reference-page">
         <LoadingSkeleton variant="page" />
@@ -287,8 +337,8 @@ export default function Dashboard() {
     };
 
     const onNavigateDash = (target, opts = {}) => {
-      const path = resolveDashboardNavigation(target, opts);
-      if (path) navigate(path);
+      const destination = resolveDashboardNavigation(target, opts);
+      if (destination) navigate(destination);
     };
     return (
       <ErrorBoundary label="Dashboard Control Center">

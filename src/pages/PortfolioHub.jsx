@@ -11,6 +11,9 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import PortfolioControlCenter from "./portfolio/PortfolioControlCenter";
+import { useOrg } from "@/components/shared/OrgContext";
+import { projectsInWorkspace, readProjectRows } from "@/lib/portfolioScope";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const ExecutiveView = lazyWithRetry(() => import("@/pages/ExecutiveView"));
 
@@ -22,6 +25,8 @@ const TABS = [
 export default function PortfolioHub() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  const { currentOrg } = useOrg();
+  const orgId = currentOrg?.id;
 
   const param = params.get("pf_tab");
   const activeKey = TABS.some((t) => t.key === param) ? param : "overview";
@@ -40,60 +45,77 @@ export default function PortfolioHub() {
 
   const fetchForCC = activeKey === "overview";
 
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => entities.Project.listAll(),
+  const projectsQ = useQuery({
+    queryKey: ["projects", "portfolio-all", orgId],
+    queryFn: () => entities.Project.filterAll({ org_id: orgId }),
     staleTime: 5 * 60 * 1000,
-    enabled: fetchForCC,
+    enabled: fetchForCC && !!orgId,
   });
-  const { data: changeOrders = [] } = useQuery({
-    queryKey: ["portfolio-cos"],
-    queryFn: () => entities.ChangeOrder.listAll(),
+  const projects = useMemo(
+    () => projectsInWorkspace(projectsQ.data ?? [], orgId),
+    [projectsQ.data, orgId],
+  );
+  const projectIds = useMemo(() => projects.map((project) => project.id).sort(), [projects]);
+  const canReadRows = fetchForCC && !!orgId && projectsQ.isSuccess;
+  const changeOrdersQ = useQuery({
+    queryKey: ["portfolio-cos", orgId, projectIds],
+    queryFn: () => readProjectRows(entities.ChangeOrder, projectIds),
     staleTime: 60 * 1000,
-    enabled: fetchForCC,
+    enabled: canReadRows,
   });
-  const { data: workPackages = [] } = useQuery({
-    queryKey: ["portfolio-wps"],
-    queryFn: () => entities.WorkPackage.listAll(),
+  const { data: changeOrders = [] } = changeOrdersQ;
+  const workPackagesQ = useQuery({
+    queryKey: ["portfolio-wps", orgId, projectIds],
+    queryFn: () => readProjectRows(entities.WorkPackage, projectIds),
     staleTime: 30 * 1000,
-    enabled: fetchForCC,
+    enabled: canReadRows,
   });
-  const { data: costCodes = [] } = useQuery({
-    queryKey: ["portfolio-codes"],
-    queryFn: () => entities.CostCode.listAll(),
+  const { data: workPackages = [] } = workPackagesQ;
+  const costCodesQ = useQuery({
+    queryKey: ["portfolio-codes", orgId, projectIds],
+    queryFn: () => readProjectRows(entities.CostCode, projectIds),
     staleTime: 60 * 1000,
-    enabled: fetchForCC,
+    enabled: canReadRows,
   });
-  const { data: rfis = [] } = useQuery({
-    queryKey: ["portfolio-rfis"],
-    queryFn: () => entities.RFI.listAll(),
+  const { data: costCodes = [] } = costCodesQ;
+  const rfisQ = useQuery({
+    queryKey: ["portfolio-rfis", orgId, projectIds],
+    queryFn: () => readProjectRows(entities.RFI, projectIds),
     staleTime: 30 * 1000,
-    enabled: fetchForCC,
+    enabled: canReadRows,
   });
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ["portfolio-deliveries"],
-    queryFn: () => entities.Delivery.listAll(),
+  const { data: rfis = [] } = rfisQ;
+  const deliveriesQ = useQuery({
+    queryKey: ["portfolio-deliveries", orgId, projectIds],
+    queryFn: () => readProjectRows(entities.Delivery, projectIds),
     staleTime: 30 * 1000,
-    enabled: fetchForCC,
+    enabled: canReadRows,
   });
-  const { data: actionItems = [] } = useQuery({
-    queryKey: ["portfolio-action-items"],
-    queryFn: () => entities.ActionItem.listAll(),
+  const { data: deliveries = [] } = deliveriesQ;
+  const actionItemsQ = useQuery({
+    queryKey: ["portfolio-action-items", orgId, projectIds],
+    queryFn: () => readProjectRows(entities.ActionItem, projectIds),
     staleTime: 30 * 1000,
-    enabled: fetchForCC,
+    enabled: canReadRows,
   });
-  const { data: scheduleTasks = [] } = useQuery({
-    queryKey: ["portfolio-schedule-tasks"],
-    queryFn: () => entities.ScheduleTask.listAll("-start_date"),
+  const { data: actionItems = [] } = actionItemsQ;
+  const scheduleTasksQ = useQuery({
+    queryKey: ["portfolio-schedule-tasks", orgId, projectIds],
+    queryFn: () => readProjectRows(entities.ScheduleTask, projectIds, "-start_date"),
     staleTime: 60 * 1000,
-    enabled: fetchForCC,
+    enabled: canReadRows,
   });
-  const { data: expenses = [] } = useQuery({
-    queryKey: ["portfolio-expenses"],
-    queryFn: () => entities.Expense.listAll(),
+  const { data: scheduleTasks = [] } = scheduleTasksQ;
+  const expensesQ = useQuery({
+    queryKey: ["portfolio-expenses", orgId, projectIds],
+    queryFn: () => readProjectRows(entities.Expense, projectIds),
     staleTime: 60 * 1000,
-    enabled: fetchForCC,
+    enabled: canReadRows,
   });
+  const { data: expenses = [] } = expensesQ;
+  const allQueries = [projectsQ, changeOrdersQ, workPackagesQ, costCodesQ, rfisQ, deliveriesQ, actionItemsQ, scheduleTasksQ, expensesQ];
+  const isLoading = allQueries.some((query) => query.isPending);
+  const failedQuery = allQueries.find((query) => query.isError);
 
   const related = useMemo(
     () => ({ changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks, expenses }),
@@ -160,7 +182,15 @@ export default function PortfolioHub() {
               <ExecutiveView />
             </Suspense>
           </ErrorBoundary>
-        ) : projectsLoading ? (
+        ) : !orgId ? (
+          <div role="status" style={{ padding: 24 }}>Choose a workspace to load the portfolio.</div>
+        ) : failedQuery ? (
+          <div role="alert" style={{ padding: 24 }}>
+            <p>Couldn’t load portfolio data</p>
+            <p>{toUserErrorMessage(failedQuery.error, "Try again.")}</p>
+            <button type="button" className="sbd-btn sbd-btn-primary" onClick={() => failedQuery.refetch()}>Retry</button>
+          </div>
+        ) : isLoading ? (
           <LoadingSkeleton variant="page" />
         ) : (
           <PortfolioControlCenter

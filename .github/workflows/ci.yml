@@ -46,7 +46,7 @@
 #   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
 #   - SAST — still queued; needs an owner decision on tooling
 #     (see ENTERPRISE_READINESS_AUDIT.md L13).
-#   - Lighthouse / a11y / bundle-size budgets (queued for later).
+#   - Lighthouse / automated a11y auditing (queued for later).
 #
 # NOTE ON ENFORCEMENT: deploy dependencies block a failed build from publishing.
 # Branch protection must ALSO require these checks to prevent unchecked merges
@@ -223,6 +223,9 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
+      - name: Verify production bundle budgets
+        run: npm run perf:bundle
+
   # ── Dependency audit ────────────────────────────────────────────────────
   # `npm audit` over PRODUCTION dependencies, via scripts/audit-gate.mjs.
   # Deliberately NOT in `deploy.needs`: a CVE disclosed overnight in a
@@ -260,19 +263,6 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm audit --audit-level=high
 
-      - name: Inspect compatible dependency security updates
-        if: ${{ !cancelled() && github.ref == 'refs/heads/codex/steel-executive-hardening' }}
-        run: |
-          cp package-lock.json /tmp/steelbuild-lock-before.json
-          npm update brace-expansion dompurify smol-toml source-map-js --package-lock-only --ignore-scripts --no-audit
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const before = JSON.parse(fs.readFileSync('/tmp/steelbuild-lock-before.json', 'utf8'));
-          const after = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
-          const changed = Object.fromEntries(Object.entries(after.packages).filter(([key, value]) => JSON.stringify(before.packages[key]) !== JSON.stringify(value)));
-          const removed = Object.keys(before.packages).filter(key => !(key in after.packages));
-          console.log('STEELBUILD_LOCK_DIFF=' + JSON.stringify({ changed, removed }));
-          NODE
 
   # ── Secret scanning (enforced) ──────────────────────────────────────────────
   # Closes the "no secret scanning" gap this file used to list under "What does
