@@ -67,23 +67,24 @@ This is one completed implementation batch within the larger rebuild.
 
 ## Remaining verified priorities
 
-- Extend active-workspace scope consistently to Projects and RFI portfolio
-  queries; existing RLS-visible cross-company data is not the selected workspace.
-  Preserve on-hold projects in the Projects register, reject foreign-workspace
-  deep links, and keep failed child reads from appearing as zero cost or progress.
-- Make numbered CO/delivery/SOV creation atomic or explicitly recoverable when
-  optional required follow-up writes fail.
-- Stop converting constraint-engine fetch failure into an empty constraint set.
-  Gate the eight required sources as one complete project bundle, retain failure
-  identity for Retry, and bind manual constraint mutations to their source draft.
+The [commercial and workspace continuation](../audits/COMMERCIAL_WORKFLOW_CONTINUATION_2026-10-07.md)
+implements the selected-workspace Projects/RFI queries, on-hold project visibility,
+complete constraint evidence, Daily Logs edit/delete actions and PhoenixModal
+accessibility repairs previously listed here. It also provides candidate
+transactional numbered creates, reviewed CO/SOV writes and recovery across their
+audited callers. Local implementation and hosted acceptance remain separate.
+
+- Complete the three commercial migrations' hosted staging acceptance, including
+  role denial, stale-review conflicts, ambiguous response recovery and concurrent
+  operations against actual policy dependencies. Release the compatible backend
+  before the new client entry points.
+- Validate realistic high-volume records and field-phone actions for the
+  repaired workspace, constraint and commercial screens. Unit/component coverage
+  and the rendered approval dialog do not establish every operational flow.
 - Resolve the schedule import duplicate policy and the schedule/crew-commitment
   distinction before presenting unified forecasts.
 - Give fabrication blockers direct source-remediation actions. Finish readable,
   aligned revision-impact registers, including their virtualized phone layouts.
-- Expose the Daily Logs register's intended edit/delete actions. Its current list
-  ignores those parent callbacks; editing through a record deep link is supported.
-- Repair the shared PhoenixModal accessibility tree: its current hidden backdrop
-  encloses the dialog. Verify keyboard and screen-reader behavior across callers.
 - Complete the role, volume, integration, monitoring and backup-restore
   acceptance that source inspection and aggregate CI cannot establish.
 

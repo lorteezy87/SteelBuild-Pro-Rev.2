@@ -32,7 +32,15 @@ export type RowWithAliases<T extends TableName> = Row<T> & {
 export type Conditions = Record<string, unknown>;
 
 /** An isolated, caller-bound client for asynchronous offline replay. */
-export type EntityRequestOptions = { client?: SupabaseClient<Database> };
+export type EntityRequestOptions = {
+  client?: SupabaseClient<Database>;
+  /** Stable per draft/import row, retained through ambiguous numbered-create retries. */
+  clientOperationId?: string;
+  /** The version shown to the person reviewing this change order. */
+  changeOrderReview?: { updatedAt: string | null; status: string; amount: number | null };
+  /** Original SOV revision shown to the editor, including microsecond precision. */
+  sovItemReview?: { updatedAt: string | null };
+};
 
 export type EntityClient<T extends TableName> = {
   list: (sortBy?: string) => Promise<Array<RowWithAliases<T>>>;

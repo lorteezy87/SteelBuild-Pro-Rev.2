@@ -200,11 +200,11 @@ const COLUMN_ALIASES: Record<CoColumnKey, string[]> = {
   ],
 };
 
-const normalize = (s: unknown): string => String(s ?? "")
-  .toLowerCase()
-  .trim()
-  .replace(/[._\-#]+/g, " ")
-  .replace(/\s+/g, " ");
+const normalize = (s: unknown): string => {
+  const text = String(s ?? "").toLowerCase().trim();
+  if (text === "#") return text;
+  return text.replace(/[._\-#]+/g, " ").replace(/\s+/g, " ").trim();
+};
 
 const COLUMN_KEYS = Object.keys(COLUMN_ALIASES) as CoColumnKey[];
 
@@ -217,7 +217,7 @@ function buildColumnIndex(headerRow: readonly unknown[]): CoColumnIndex {
     if (!cell) continue;
     for (const key of COLUMN_KEYS) {
       if (idx[key] !== -1) continue;
-      if (COLUMN_ALIASES[key].includes(cell)) { idx[key] = i; break; }
+      if (COLUMN_ALIASES[key].some(alias => normalize(alias) === cell)) { idx[key] = i; break; }
     }
   }
   return idx;

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { entities } from "@/api/supabaseClient";
 import { fetchProjectRegister } from "./projects/projectQueries";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,8 +16,25 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
 import { localToday } from "@/utils/dates";
+import { useOrg } from "@/components/shared/OrgContext";
+import { readProjectRows } from "@/lib/portfolioScope";
 
 export default function Projects() {
+  const { currentOrg, isLoadingOrgs } = useOrg();
+  const orgId = currentOrg?.id;
+  const scope = useMemo(() => ({ orgId, isLoadingOrgs }), [orgId, isLoadingOrgs]);
+  const currentOrgRef = useRef(scope);
+  currentOrgRef.current = scope;
+  useEffect(() => {
+    currentOrgRef.current = scope;
+    return () => { if (currentOrgRef.current === scope) currentOrgRef.current = null; };
+  }, [scope]);
+  if (isLoadingOrgs) return <div role="status" style={{ padding: 24 }}>Loading workspace…</div>;
+  if (!orgId) return <div role="status" style={{ padding: 24 }}>Select a workspace to view projects.</div>;
+  return <WorkspaceProjects key={orgId} orgId={orgId} scope={scope} currentOrgRef={currentOrgRef} />;
+}
+
+function WorkspaceProjects({ orgId, scope, currentOrgRef }) {
   const qc         = useQueryClient();
   const { removeProject } = useProjectContext();
   const [search,        setSearch]        = useState("");
@@ -36,21 +53,36 @@ export default function Projects() {
      on_hold=true) and query the table directly, still honouring soft-delete
      and project-membership RLS. Every other consumer keeps using
      Project.list() and silently gets the active subset. */
-  const { data: projects = [], isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery({
-    queryKey: ["projects", "all-including-on-hold"],
-    queryFn: fetchProjectRegister,
+  const projectKey = ["projects", "all-including-on-hold", orgId];
+  const projectQuery = useQuery({
+    queryKey: projectKey,
+    queryFn: () => fetchProjectRegister(orgId),
     staleTime: 5 * 60 * 1000,
   });
-  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => entities.WorkPackage.listAll() });
-  const { data: rawRfis = [], isSuccess: rfisSuccess } = useQuery({ queryKey: ["rfis", "all"], queryFn: () => entities.RFI.listAll() });
-  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => entities.ChangeOrder.listAll() });
-  const { data: rawScheduleTasks = [], isSuccess: scheduleTasksSuccess } = useQuery({
-    queryKey: ["schedule-tasks-all"],
-    queryFn: () => entities.ScheduleTask.listAll("start_date"),
-  });
+  const projects = useMemo(() => (projectQuery.data || []).filter((p) => p.org_id === orgId && !p.is_deleted), [projectQuery.data, orgId]);
+  const projectIds = useMemo(() => projects.map((p) => p.id).filter(Boolean).sort(), [projects]);
+  const childReadsEnabled = projectQuery.isSuccess;
+  const workPackageQuery = useQuery({ queryKey: ["work-packages-all", orgId, projectIds], queryFn: () => readProjectRows(entities.WorkPackage, projectIds), enabled: childReadsEnabled });
+  const rfiQuery = useQuery({ queryKey: ["rfis", "project-register", orgId, projectIds], queryFn: () => readProjectRows(entities.RFI, projectIds), enabled: childReadsEnabled });
+  const changeOrderQuery = useQuery({ queryKey: ["change-orders-all", orgId, projectIds], queryFn: () => readProjectRows(entities.ChangeOrder, projectIds), enabled: childReadsEnabled });
+  const scheduleQuery = useQuery({ queryKey: ["schedule-tasks-all", orgId, projectIds], queryFn: () => readProjectRows(entities.ScheduleTask, projectIds, "start_date"), enabled: childReadsEnabled });
+  const { data: rawWorkPackages = [] } = workPackageQuery;
+  const { data: rawRfis = [], isSuccess: rfisSuccess } = rfiQuery;
+  const { data: rawChangeOrders = [] } = changeOrderQuery;
+  const { data: rawScheduleTasks = [], isSuccess: scheduleTasksSuccess } = scheduleQuery;
+  const sources = [["Projects", projectQuery], ["Work packages", workPackageQuery], ["RFIs", rfiQuery], ["Change orders", changeOrderQuery], ["Schedule tasks", scheduleQuery]];
+  const failedSource = sources.find(([, query]) => query.isError);
+  const evidenceReady = sources.every(([, query]) => query.isSuccess);
+  const assertCurrentWorkspace = (projectId) => {
+    const current = qc.getQueryState(projectKey);
+    if (currentOrgRef.current !== scope || current?.status !== "success" || current.fetchStatus !== "idle" || current.isInvalidated) {
+      throw new Error("Workspace changed or projects are refreshing. Reopen the project and try again.");
+    }
+    if (projectId && !current.data.some((p) => p.id === projectId && p.org_id === orgId && !p.is_deleted)) throw new Error("The project does not belong to this workspace.");
+  };
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
-  useAutoOpenEdit(projects, setDetailProject, { enabled: !projectsLoading, param: "recordId" });
+  useAutoOpenEdit(projects, setDetailProject, { enabled: evidenceReady, param: "recordId" });
   const workPackages = useMemo(
     () => rawWorkPackages.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
     [liveProjectIds, rawWorkPackages],
@@ -83,8 +115,10 @@ export default function Projects() {
   /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: async (d) => {
+      assertCurrentWorkspace();
       const { __apply_template, ...projectData } = d;
-      const created = await entities.Project.create(projectData);
+      if (projectData.org_id && projectData.org_id !== orgId) throw new Error("The project workspace must match the active workspace.");
+      const created = await entities.Project.create({ ...projectData, org_id: orgId });
       if (!__apply_template) return { created, template: null };
       // Template failure must not look like a failed creation — the project
       // row exists either way. Report it separately and keep the modal closed.
@@ -112,12 +146,16 @@ export default function Projects() {
     onError: (err) => toast.error(toUserErrorMessage(err, "Failed to create project")),
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => entities.Project.update(id, data),
+    mutationFn: ({ id, data }) => {
+      assertCurrentWorkspace(id);
+      if (data.org_id && data.org_id !== orgId) throw new Error("A project cannot be moved to another workspace here.");
+      return entities.Project.update(id, data);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project updated"); },
     onError: (err) => toast.error(toUserErrorMessage(err, "Failed to update project")),
   });
   const deleteMut = useMutation({
-    mutationFn: (id) => entities.Project.delete(id),
+    mutationFn: (id) => { assertCurrentWorkspace(id); return entities.Project.delete(id); },
     onSuccess: (_result, id) => {
       removeProject(id);
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -145,14 +183,14 @@ export default function Projects() {
       && (healthFilter === "all"  || healthByProjectId[p.id]?.label === healthFilter);
   }), [projects, search, phaseFilter, healthFilter, healthByProjectId]);
 
-  const canCreate = !projectsLoading && !projectsError && !atProjectLimit;
+  const canCreate = evidenceReady && !projectQuery.isFetching && !atProjectLimit;
 
-  if (projectsError) return (
+  if (failedSource) return (
     <div role="alert" style={{ padding: 24, color: "var(--status-error)" }}>
-      Projects could not be loaded. <button onClick={() => refetchProjects()}>Retry</button>
+      {failedSource[0]} could not be loaded. Project totals are unavailable. <button onClick={() => { sources.forEach(([, query]) => { void query.refetch(); }); }}>Retry</button>
     </div>
   );
-  if (projectsLoading) return <div role="status" style={{ padding: 24 }}>Loading projects…</div>;
+  if (!evidenceReady) return <div role="status" style={{ padding: 24 }}>Loading projects and operational evidence…</div>;
 
   return (
     <>

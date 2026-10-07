@@ -34,6 +34,10 @@ const saveQuery = (row, patch) => ({
   text: 'select public.save_change_order_reviewed($1,$2,$3,$4,$5::jsonb) as record',
   values: [row.id, row.updated_at, row.status, row.co_amount, JSON.stringify(patch)],
 });
+const saveSovQuery = (row, patch) => ({
+  text: 'select public.save_sov_item_reviewed($1,$2,$3::jsonb) as record',
+  values: [row.id,row.updated_at,JSON.stringify(patch)],
+});
 async function check(name, callback) {
   await callback();
   passed++;
@@ -203,6 +207,26 @@ try {
     assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
     assert.equal(results.find(result => result.status === 'rejected').reason.code, '40001');
     await totals();
+  });
+  await check('SOV save waiting on an approved CO adjustment rejects its stale version without overwriting value or metadata',async()=>{
+    const line=await newSov(1000);const co=await newCo(400);
+    const results=await contend('select id from sov_items where id=$1 for update',[line.id],[
+      {actor:ids.colleague,query:saveSovQuery(line,{description:'Must not overwrite',scheduled_value:1000})},
+    ],async()=>{
+      await admin.query("select set_config('request.jwt.claims',$1,true)",[JSON.stringify({sub:ids.pm,role:'authenticated',aal:'aal2'})]);
+      await admin.query('set local role authenticated');
+      await admin.query(saveQuery(co,{...approval,sov_mode:'adjust_line',sov_line_item_id:line.id}));
+    });
+    assert.equal(results[0].status,'rejected');assert.equal(results[0].reason.code,'40001');
+    const saved=(await admin.query('select scheduled_value,description from sov_items where id=$1',[line.id])).rows[0];
+    assert.equal(Number(saved.scheduled_value),1400);assert.equal(saved.description,line.description);await totals();
+  });
+  await check('two SOV reviewers sharing a revision commit one edit and reject the other',async()=>{
+    const line=await newSov(900);
+    const results=await contend('select id from sov_items where id=$1 for update',[line.id],[ids.pm,ids.colleague].map((actor,index)=>({actor,query:saveSovQuery(line,{description:`SOV editor ${index}`})})));
+    assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
+    assert.equal(results.find(result=>result.status==='rejected').reason.code,'40001');
+    assert.equal(Number((await admin.query('select scheduled_value from sov_items where id=$1',[line.id])).rows[0].scheduled_value),900);
   });
   console.log(`Real PostgreSQL concurrency verification: ${passed} cases passed across independent sessions. No hosted data was written.`);
 } finally {

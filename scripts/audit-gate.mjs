@@ -22,7 +22,8 @@
  *
  * Waive sparingly, and prefer removing an entry to extending its review date.
  */
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 export const SEVERITY_ORDER = ["info", "low", "moderate", "high", "critical"];
 export const THRESHOLD = "moderate";
@@ -91,9 +92,12 @@ export function runAudit() {
   // this script decides what counts, not npm's threshold flag.
   try {
     return JSON.parse(
-      execFileSync("npm", ["audit", "--omit=dev", "--json"], {
+      // npm is a .cmd launcher on Windows and needs a shell. Keep the command
+      // literal: no arguments or paths from callers are interpolated here.
+      execSync("npm audit --omit=dev --json", {
         encoding: "utf8",
         maxBuffer: 32 * 1024 * 1024,
+        windowsHide: true,
       }),
     );
   } catch (err) {
@@ -136,4 +140,4 @@ function main() {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

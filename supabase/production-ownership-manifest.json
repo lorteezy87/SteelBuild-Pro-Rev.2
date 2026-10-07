@@ -25,6 +25,21 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261007112918",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local atomic numbered-record creation candidate. Creates project-scoped idempotency receipts and transactional CO, delivery, SOV, change-request and backcharge creation while preserving official sequence allocation, project authorization, MFA and existing guards. Requires reviewed staged application and exact ledger-payload verification before frontend release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/commercial-create/README.md and supabase/tests/commercial-postgres/README.md."
+      },
+      {
+        "version": "20261007113400",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local reviewed change-order save candidate. Binds metadata and lifecycle effects to the reviewed timestamp, status and amount in one transaction so competing edits cannot approve an unreviewed amount. Requires reviewed staged application and financial lifecycle acceptance before frontend release. Keep visible in missingMigrations until its exact committed SQL is applied and stamped. See supabase/tests/commercial-lifecycle/README.md."
+      },
+      {
+        "version": "20261007120658",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local reviewed SOV save candidate. Rejects stale SOV drafts after an approved change-order adjustment or another editor save; preserves project authorization, MFA, financial guards, audit and timestamp triggers. Requires reviewed staged application and concurrent financial acceptance before frontend release. Keep visible in missingMigrations until its exact committed SQL is applied and stamped. See supabase/tests/commercial-lifecycle/README.md and supabase/tests/commercial-postgres/README.md."
+      },
+      {
         "version": "20261007090057",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix for the relation-lock/parent-row deadlock confirmed during staging account-erasure overlap validation. Acquires the existing erasure chain's potential trigger-toggle relation set before row locks using atomic NOWAIT attempts, rollback of partial locks, and an eight-second acquisition budget; preserves fresh ownership/membership checks, grants and the 60-second RPC timeout. This deliberately broadens each call's global write-lock set and needs exact reviewed staging HTTP overlap validation before manual application/stamping. Keep visible in missingMigrations until its exact committed payload is applied."

@@ -44,6 +44,14 @@ try {
       if(kind==='deliveries') { assert.equal(row.pieces,2); assert.equal(Number(row.weight_tons),2); assert.equal(await count('delivery_items'),1); }
     });
   }
+  await test('submitted CO imports retain their historical date while attribution stays server controlled',async()=>{
+    await asUser();
+    const payload={title:'Historical submitted steel change',co_amount:900,status:'Submitted',submitted_date:'2026-09-03'};
+    const operation=randomUUID(); const row=await create('change_orders',payload,operation);
+    assert.equal(row.submitted_date,'2026-09-03'); assert.equal(row.submitted_by,'fixture@example.invalid');
+    assert.equal((await create('change_orders',payload,operation)).id,row.id);
+    await assert.rejects(create('change_orders',{...payload,submitted_date:'2026-02-30'}));
+  });
   await test('backcharge creates and notice events are each recorded exactly once',async()=>{
     await admin(); const events=(await db.query('select event_type,detail,actor from backcharge_events where backcharge_id=$1 order by event_type',[saved.backcharges.row.id])).rows;
     assert.equal(events.length,2); assert.deepEqual(events.map(e=>e.event_type),['created','notice_sent']);

@@ -2,8 +2,17 @@
  * Seed / bulk-create helpers for Onboarding.
  * Entity clients are injected so tests can stub without React.
  */
-import { SEED_ENTITY_MAP } from "@/lib/onboardingTemplates";
+import { buildSeedPayloads, SEED_ENTITY_MAP } from "@/lib/onboardingTemplates";
 import { readFileText } from "@/lib/textDecoding";
+import { getActiveOrgGeneration, subscribeActiveOrgChange } from "@/lib/activeOrg";
+import {
+  bulkCreateWithFallback as recoverBulkCreate,
+  assertImportWorkspace,
+  getSessionBulkCreateRecovery,
+  type BulkCreateEntity,
+  type BulkCreateRecovery,
+  type BulkCreateResult,
+} from "@/lib/bulkCreateRecovery";
 
 export type SeedPayloadKey = keyof typeof SEED_ENTITY_MAP;
 export type SeedRecord = Record<string, unknown>;
@@ -36,79 +45,113 @@ export const IMPORT_EXAMPLES: Record<string, string> = {
 export const INVALID_IMPORT_TARGET = "rfis";
 export const ROLE_OPTIONS = ["owner", "admin", "pm", "field", "viewer"] as const;
 
-export type EntityClient = {
-  bulkCreate: (records: SeedRecord[]) => Promise<SeedRecord[]>;
-  create: (record: SeedRecord) => Promise<SeedRecord>;
-};
+export type EntityClient = BulkCreateEntity;
+
+export interface OnboardingSetupAttempt {
+  project: SeedRecord;
+  seedPayloads: Partial<Record<SeedPayloadKey, SeedRecord[]>>;
+  recovery: BulkCreateRecovery;
+}
+
+let setupAttempts = new Map<string, Promise<OnboardingSetupAttempt>>();
+subscribeActiveOrgChange(() => { setupAttempts = new Map(); });
+
+/** Reopening the same reviewed setup must reuse its project, including an in-flight create. */
+export function getOrCreateOnboardingSetup(
+  projectPayload: SeedRecord,
+  templateKey: string,
+  createProject: EntityClient["create"],
+): Promise<OnboardingSetupAttempt> {
+  const generation = getActiveOrgGeneration();
+  const cache = setupAttempts;
+  const key = JSON.stringify([projectPayload, templateKey]);
+  const previous = cache.get(key);
+  if (previous) return previous;
+  const payload = structuredClone(projectPayload);
+  const attempt = Promise.resolve().then(async () => {
+    assertImportWorkspace(generation);
+    const project = await createProject(payload);
+    assertImportWorkspace(generation);
+    return { project, seedPayloads: buildSeedPayloads(project, templateKey), recovery: getSessionBulkCreateRecovery() };
+  });
+  cache.set(key, attempt);
+  // A rejected project create is retained too: a lost reply must not mint a
+  // second project on reopen. A definite SQL rejection can safely be corrected.
+  void attempt.catch((error: unknown) => {
+    const fields = error && typeof error === "object" ? error as Record<string, unknown> : {};
+    if (typeof fields.code === "string" && (/^[0-9A-Z]{5}$/.test(fields.code) || /^PGRST/.test(fields.code))) cache.delete(key);
+  });
+  return attempt;
+}
 
 export async function bulkCreateWithFallback(
   entity: EntityClient | null | undefined,
   records: SeedRecord[],
-): Promise<SeedRecord[]> {
-  if (!records.length) return [];
-  if (!entity) {
-    console.warn("[onboarding] entity client unavailable; seed rows skipped");
-    return [];
-  }
+  recovery?: BulkCreateRecovery,
+): Promise<BulkCreateResult> {
+  return recoverBulkCreate(entity, records, "onboarding", recovery);
+}
 
-  try {
-    return await entity.bulkCreate(records);
-  } catch (err) {
-    console.warn("[onboarding] bulkCreate failed, falling back to row creates", err);
-    const created: SeedRecord[] = [];
-    for (const record of records) {
-      try {
-        created.push(await entity.create(record));
-      } catch (rowErr: unknown) {
-        // Skip a failing row (e.g. a duplicate unique key) instead of aborting
-        // the seed and leaving an unhandled rejection.
-        const detail = rowErr instanceof Error ? rowErr.message : String(rowErr);
-        console.warn("[onboarding] seed row skipped:", detail);
-      }
-    }
-    return created;
-  }
+export interface SeedCreateResult {
+  createdByKey: Partial<Record<SeedPayloadKey, SeedRecord[]>>;
+  skipped: number;
+  unresolved: number;
+  retryable: number;
 }
 
 export async function createSeedRecords(
   seedPayloads: Partial<Record<SeedPayloadKey, SeedRecord[]>>,
   entities: Record<string, EntityClient | undefined>,
   seedOrder: readonly SeedPayloadKey[] = SEED_ORDER,
-): Promise<Partial<Record<SeedPayloadKey, SeedRecord[]>>> {
+  recovery: BulkCreateRecovery = getSessionBulkCreateRecovery(),
+): Promise<SeedCreateResult> {
+  const generation = getActiveOrgGeneration();
   const createdByKey: Partial<Record<SeedPayloadKey, SeedRecord[]>> = {};
+  const summary: SeedCreateResult = { createdByKey, skipped: 0, unresolved: 0, retryable: 0 };
 
   for (const payloadKey of seedOrder) {
+    assertImportWorkspace(generation);
     const entityKey = SEED_ENTITY_MAP[payloadKey];
     const entity = entities[entityKey];
     let records = seedPayloads[payloadKey] ?? [];
-    if (!entity || records.length === 0) {
+    if (records.length === 0) {
       createdByKey[payloadKey] = [];
       continue;
     }
 
     const createdDrawingSets = createdByKey.drawingSets ?? [];
-    if (payloadKey === "drawings" && createdDrawingSets.length > 0) {
+    if (payloadKey === "drawings" && (seedPayloads.drawingSets?.length || createdDrawingSets.length)) {
       const setIdByName = new Map<string, string>();
       for (const set of createdDrawingSets) {
         const setName = typeof set.set_name === "string" ? set.set_name : "";
         if (setName && set.id != null) setIdByName.set(setName, String(set.id));
       }
 
-      records = records.map((record) => {
+      records = records.flatMap((record) => {
         const drawingSetName =
           typeof record.drawing_set_name === "string" ? record.drawing_set_name : "";
-        return {
+        const drawingSetId = setIdByName.get(drawingSetName) ?? record.drawing_set_id;
+        if (drawingSetName && !drawingSetId) {
+          // A later set retry must not change the payload of a drawing already created without it.
+          summary.skipped += 1;
+          return [];
+        }
+        return [{
           ...record,
           drawing_set_id:
-            setIdByName.get(drawingSetName) ?? record.drawing_set_id ?? null,
-        };
+            drawingSetId ?? null,
+        }];
       });
     }
 
-    createdByKey[payloadKey] = await bulkCreateWithFallback(entity, records);
+    const result = await bulkCreateWithFallback(entity, records, recovery);
+    createdByKey[payloadKey] = result.created;
+    summary.skipped += result.skipped;
+    summary.unresolved += result.unresolved;
+    summary.retryable += result.retryable;
   }
-
-  return createdByKey;
+  assertImportWorkspace(generation);
+  return summary;
 }
 
 /** Read CSV text from a pasted/uploaded onboarding import file. */

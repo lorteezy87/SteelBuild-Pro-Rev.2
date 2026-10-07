@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import React, { useState, useEffect, useRef } from "react";
+import PhoenixModal from "@/components/shared/PhoenixModal";
+import { validateSovValues } from "@/pages/sov/importBatch";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,25 +17,47 @@ const empty = {
   submitted_date: null, payment_received_date: null,
 };
 
-export default function SOVFormModal({ open, onClose, onSave, sov, projects = [], nextId, activeProject }) {
+/**
+ * @typedef {Partial<import("@/api/client/supabaseTypes").RowWithAliases<"sov_items">>} SovFormRecord
+ * @param {{
+ * open: boolean, onClose: () => void,
+ * onSave: (payload: Record<string, unknown>) => unknown,
+ * onRecover?: (() => unknown) | null, requiresRecovery?: boolean,
+ * onDelete?: (() => void) | null, isSaving?: boolean, writesDisabled?: boolean,
+ * sov?: SovFormRecord | null, initialValues?: SovFormRecord | null,
+ * projects?: Array<{ id: string, name?: string | null }>, nextId?: string,
+ * activeProject?: { id: string, name?: string | null } | null
+ * }} props
+ */
+export default function SOVFormModal({ open, onClose, onSave, onRecover = null, requiresRecovery = false, onDelete = null, isSaving = false, writesDisabled = false, sov, initialValues = null, projects = [], nextId, activeProject }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const initializedDraft = useRef(null);
+  const draftKey = sov ? `edit:${sov.id}` : `new:${activeProject?.id || ""}`;
+  const busy = saving || isSaving;
+  const close = () => { if (!busy) onClose(); };
 
   useEffect(() => {
+    if (!open) { initializedDraft.current = null; return; }
+    if (initializedDraft.current === draftKey) return;
+    initializedDraft.current = draftKey;
     if (sov) {
       setForm({ ...empty, ...sov });
     } else {
       setForm({
         ...empty,
+        ...(initialValues || {}),
         sov_id: nextId || "",
         project_id: activeProject?.id || "",
         project_name: activeProject?.name || "",
       });
     }
     setErrors({});
+    setSaveError("");
     setSaving(false);
-  }, [sov, open, nextId, activeProject?.id]);
+  }, [draftKey, sov, initialValues, open, nextId, activeProject?.id, activeProject?.name]);
 
   const validate = () => {
     const e = {};
@@ -59,7 +83,18 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
   };
 
   const handleSave = async () => {
-    if (!validate() || saving) return;
+    if (busy || writesDisabled) return;
+    setSaveError("");
+    if (requiresRecovery) {
+      if (!onRecover) { setSaveError("Reopen the original uncertain save recovery before creating another line."); return; }
+      setSaving(true);
+      try { await onRecover(); }
+      catch (error) { setSaveError(toUserErrorMessage(error, "Recovery failed. Retry this same save.")); }
+      finally { setSaving(false); }
+      return;
+    }
+    if (!validate()) return;
+    try { validateSovValues(form); } catch (error) { setSaveError(toUserErrorMessage(error)); return; }
     // Whitelist only editable SOV columns — never spread full record
     // (is_deleted / deleted_at / metadata / derived fields).
     const data = {
@@ -84,6 +119,8 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
     setSaving(true);
     try {
       await onSave(data);
+    } catch (error) {
+      setSaveError(toUserErrorMessage(error, "The SOV line could not be saved. Your draft has been retained."));
     } finally {
       setSaving(false);
     }
@@ -119,12 +156,17 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
   const netToDate = roundCurrency(toDate - retAmt);
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{sov ? "Edit SOV Line Item" : "New SOV Line Item"}</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+    <PhoenixModal open={open} onClose={close} title={sov ? "Edit SOV Line Item" : "New SOV Line Item"} footer={<>
+      {onDelete && <Button variant="destructive" disabled={busy || writesDisabled} onClick={onDelete}>Delete line</Button>}
+      <Button variant="outline" onClick={close} disabled={busy}>Cancel</Button>
+      <Button onClick={handleSave} disabled={busy || writesDisabled} style={{ background: "var(--accent)", color: "var(--on-accent)" }}>
+        {busy ? "Saving…" : requiresRecovery ? "Recover saved line" : sov ? "Update" : "Create"}
+      </Button>
+    </>}>
+      {saveError && <p role="alert" style={{ color: "var(--status-error)" }}>{saveError}</p>}
+      {requiresRecovery && <p role="status">The previous save may have completed. Recover that exact save before changing this draft.</p>}
+      {writesDisabled && <p role="status">Refresh complete project evidence before saving this draft.</p>}
+      <fieldset disabled={busy || writesDisabled || requiresRecovery} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
           <div>
             <Label>SOV ID</Label>
             <Input
@@ -140,7 +182,7 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
               <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
               <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
             </Select>
-            {errors.project_id && <p className="text-xs text-rose-500 mt-1">{errors.project_id}</p>}
+            {errors.project_id && <p className="text-xs mt-1" style={{ color: "var(--status-error)" }}>{errors.project_id}</p>}
           </div>
           <div>
             <Label>Application #</Label>
@@ -167,22 +209,22 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
           <div className="sm:col-span-2">
             <Label>Description *</Label>
             <Input value={form.description} onChange={e => set("description", e.target.value)} />
-            {errors.description && <p className="text-xs text-rose-500 mt-1">{errors.description}</p>}
+            {errors.description && <p className="text-xs mt-1" style={{ color: "var(--status-error)" }}>{errors.description}</p>}
           </div>
           <div>
             <Label>Scheduled Value *</Label>
             <Input type="number" value={form.scheduled_value} onChange={e => set("scheduled_value", e.target.value)} />
-            {errors.scheduled_value && <p className="text-xs text-rose-500 mt-1">{errors.scheduled_value}</p>}
+            {errors.scheduled_value && <p className="text-xs mt-1" style={{ color: "var(--status-error)" }}>{errors.scheduled_value}</p>}
           </div>
           <div>
             <Label>Previous % Complete</Label>
             <Input type="number" min="0" max="100" value={form.previous_percent_complete} onChange={e => set("previous_percent_complete", e.target.value)} />
-            {errors.previous_percent_complete && <p className="text-xs text-rose-500 mt-1">{errors.previous_percent_complete}</p>}
+            {errors.previous_percent_complete && <p className="text-xs mt-1" style={{ color: "var(--status-error)" }}>{errors.previous_percent_complete}</p>}
           </div>
           <div>
             <Label>Current % Complete</Label>
             <Input type="number" min="0" max="100" value={form.current_percent_complete} onChange={e => set("current_percent_complete", e.target.value)} />
-            {errors.current_percent_complete && <p className="text-xs text-rose-500 mt-1">{errors.current_percent_complete}</p>}
+            {errors.current_percent_complete && <p className="text-xs mt-1" style={{ color: "var(--status-error)" }}>{errors.current_percent_complete}</p>}
           </div>
           <div>
             <Label>Retainage %</Label>
@@ -206,7 +248,7 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
           <div>
             <Label>Date Payment Received</Label>
             <Input type="date" value={form.payment_received_date || ""} onChange={e => set("payment_received_date", e.target.value)} />
-            {errors.payment_received_date && <p className="text-xs text-rose-500 mt-1">{errors.payment_received_date}</p>}
+            {errors.payment_received_date && <p className="text-xs mt-1" style={{ color: "var(--status-error)" }}>{errors.payment_received_date}</p>}
           </div>
           {/* DSO helper — read-only, shows days to payment or days outstanding */}
           {form.submitted_date && (
@@ -239,17 +281,10 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
             </div>
             <div className="sm:col-span-4">
               <p style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text-muted)"}}>Net to Date</p>
-              <p className="text-sm font-bold text-blue-700">{formatCurrency(netToDate)}</p>
+              <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>{formatCurrency(netToDate)}</p>
             </div>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving} style={{ background: "var(--accent)", color: "var(--on-accent)" }}>
-            {saving ? "Saving…" : sov ? "Update" : "Create"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </fieldset>
+    </PhoenixModal>
   );
 }

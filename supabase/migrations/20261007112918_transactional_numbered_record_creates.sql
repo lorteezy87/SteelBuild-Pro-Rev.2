@@ -131,8 +131,13 @@ BEGIN
       END IF;
       SELECT to_jsonb(r) INTO v_result FROM public.create_change_order(p_project_id,p_payload) r;
       v_id := (v_result->>'id')::uuid;
-      IF p_payload ? 'attachments' THEN
-        UPDATE public.change_orders SET attachments=p_payload->>'attachments' WHERE id=v_id RETURNING to_jsonb(change_orders) INTO v_result;
+      IF p_payload ? 'attachments' OR nullif(p_payload->>'submitted_date','') IS NOT NULL THEN
+        -- Legacy Submitted creates stamp today. Preserve an explicitly supplied
+        -- historical date without accepting the server-owned submitted_by stamp.
+        UPDATE public.change_orders SET
+          attachments=CASE WHEN p_payload ? 'attachments' THEN p_payload->>'attachments' ELSE attachments END,
+          submitted_date=CASE WHEN nullif(p_payload->>'submitted_date','') IS NOT NULL THEN (p_payload->>'submitted_date')::date ELSE submitted_date END
+        WHERE id=v_id RETURNING to_jsonb(change_orders) INTO v_result;
       END IF;
     WHEN 'change_requests' THEN
       IF coalesce(nullif(p_payload->>'status',''),'Submitted') <> 'Submitted' THEN

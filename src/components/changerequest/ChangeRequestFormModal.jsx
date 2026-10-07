@@ -48,6 +48,7 @@ export default function ChangeRequestFormModal({
   onClose,
   onSave,
   isSaving = false,
+  recoveryPending = false,
 }) {
   const trapRef = useFocusTrap(true);
   const [formData, setFormData] = useState({ ...emptyForm, project_id: projectId || "" });
@@ -90,7 +91,7 @@ export default function ChangeRequestFormModal({
 
   const handleSave = () => {
     if (isSaving) return;
-    if (!formData.project_id || !formData.title?.trim() || !formData.description?.trim()) return;
+    if (!recoveryPending && (!formData.project_id || !formData.title?.trim() || !formData.description?.trim())) return;
     onSave?.({
       ...formData,
       estimated_cost_impact: parseFloat(formData.estimated_cost_impact) || 0,
@@ -139,8 +140,10 @@ export default function ChangeRequestFormModal({
         >
           {isEdit ? "Edit Change Request" : "Submit Change Request"}
         </h2>
+        {recoveryPending && <p role="status">The save may have completed. Retry to recover the original details; changes entered afterward will not be applied. Check the register before starting another request.</p>}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <fieldset disabled={isSaving || recoveryPending} style={{ display: "contents" }}>
           <div>
             <label style={labelStyle}>Project</label>
             <select
@@ -242,6 +245,7 @@ export default function ChangeRequestFormModal({
             />
           </div>
 
+          </fieldset>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button
               type="button"
@@ -267,7 +271,7 @@ export default function ChangeRequestFormModal({
             <button
               type="button"
               onClick={handleSave}
-              disabled={isSaving || !formData.project_id || !formData.title?.trim() || !formData.description?.trim()}
+              disabled={isSaving || (!recoveryPending && (!formData.project_id || !formData.title?.trim() || !formData.description?.trim()))}
               style={{
                 background: "var(--accent)",
                 color: "white",
@@ -277,13 +281,13 @@ export default function ChangeRequestFormModal({
                 fontFamily: "var(--font-mono)",
                 fontSize: 10,
                 fontWeight: 700,
-                cursor: isSaving || !formData.project_id || !formData.title?.trim() || !formData.description?.trim() ? "not-allowed" : "pointer",
+                cursor: isSaving || (!recoveryPending && (!formData.project_id || !formData.title?.trim() || !formData.description?.trim())) ? "not-allowed" : "pointer",
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
-                opacity: isSaving || !formData.project_id || !formData.title?.trim() || !formData.description?.trim() ? 0.5 : 1,
+                opacity: isSaving || (!recoveryPending && (!formData.project_id || !formData.title?.trim() || !formData.description?.trim())) ? 0.5 : 1,
               }}
             >
-              {isSaving ? (isEdit ? "Saving..." : "Submitting...") : (isEdit ? "Save Changes" : "Submit Request")}
+              {isSaving ? (isEdit ? "Saving..." : "Submitting...") : recoveryPending ? "Recover saved request" : (isEdit ? "Save Changes" : "Submit Request")}
             </button>
           </div>
         </div>

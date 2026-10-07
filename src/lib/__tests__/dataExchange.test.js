@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { setActiveOrgId } from "../activeOrg";
 import {
   buildJsonExport,
   bulkCreateWithFallback,
@@ -68,14 +69,95 @@ describe("dataExchange", () => {
 });
 
 describe("bulkCreateWithFallback", () => {
+  it("keeps a remaining subset unconfirmed after a short bulk response and register deduplication", async () => {
+    const recovery = new Map();
+    const entity = {
+      bulkCreate: vi.fn(async () => [{ id: "saved-a", key: "a" }]),
+      create: vi.fn(async (record) => ({ id: "duplicate", ...record })),
+    };
+    const initial = await bulkCreateWithFallback(entity, [{ key: "a" }, { key: "b" }], "test", recovery);
+    expect(initial).toMatchObject({ created: [{ id: "saved-a", key: "a" }], unresolved: 1 });
+    const remaining = await bulkCreateWithFallback(entity, [{ key: "b" }], "test", recovery);
+    expect(remaining).toMatchObject({ created: [], unresolved: 1 });
+    expect(entity.bulkCreate).toHaveBeenCalledTimes(1);
+    expect(entity.create).not.toHaveBeenCalled();
+  });
+
+  it("stops row fallback after the workspace changes during a write", async () => {
+    setActiveOrgId("import-org-a");
+    const entity = {
+      bulkCreate: vi.fn(async () => { throw Object.assign(new Error("constraint"), { operation: "bulkCreate", code: "23514" }); }),
+      create: vi.fn(async (record) => { setActiveOrgId("import-org-b"); return { id: "saved-a", ...record }; }),
+    };
+    await expect(bulkCreateWithFallback(entity, [{ key: "a" }, { key: "b" }])).rejects.toThrow(/workspace changed/i);
+    expect(entity.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks edited or reuploaded payloads in a project until prior unknown writes are reconciled", async () => {
+    const recovery = new Map();
+    const entity = {
+      bulkCreate: vi.fn(async () => { throw new TypeError("reply lost"); }),
+      create: vi.fn(async (record) => ({ id: "duplicate", ...record })),
+    };
+    await bulkCreateWithFallback(entity, [{ project_id: "p1", key: "a" }], "test", recovery);
+    await expect(bulkCreateWithFallback(entity, [{ project_id: "p1", key: "edited-a" }], "test", recovery)).rejects.toThrow(/unconfirmed.*reconcile/i);
+    expect(entity.bulkCreate).toHaveBeenCalledTimes(1);
+    expect(entity.create).not.toHaveBeenCalled();
+  });
+
+  it("retains a committed prefix and retries an ambiguous numbered row with its original identity", async () => {
+    const operation = "00000000-0000-4000-8000-000000000001";
+    const persisted = [{ id: "saved-a", key: "a" }];
+    const cause = Object.assign(new Error("reply lost"), { outcomeUnknown: true, clientOperationId: operation });
+    const entity = {
+      bulkCreate: vi.fn(async () => { throw Object.assign(new Error("partial batch"), { created: [...persisted], failedIndex: 1, cause }); }),
+      create: vi.fn(async (record, options) => {
+        if (record.key === "b" && options?.clientOperationId === operation) return { id: "saved-b", key: "b" };
+        const row = { id: `new-${persisted.length}`, ...record };
+        persisted.push(row);
+        return row;
+      }),
+    };
+    const result = await bulkCreateWithFallback(entity, [{ key: "a" }, { key: "b" }, { key: "c" }]);
+    expect(result.created.map((row) => row.id)).toEqual(["saved-a", "saved-b", "new-1"]);
+    expect(persisted.filter((row) => row.key === "a")).toHaveLength(1);
+    expect(entity.create).toHaveBeenCalledWith({ key: "b" }, { clientOperationId: operation });
+  });
+
+  it("holds an ambiguous bulk outcome without creating any row again", async () => {
+    const entity = {
+      bulkCreate: vi.fn(async () => { throw new TypeError("Failed to fetch"); }),
+      create: vi.fn(async (record) => ({ id: "duplicate", ...record })),
+    };
+    const result = await bulkCreateWithFallback(entity, [{ key: "a" }, { key: "b" }]);
+    expect(entity.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ created: [], skipped: 0, unresolved: 2 });
+  });
+
+  it("retains known successes and unknown outcomes when the same reviewed rows are submitted again", async () => {
+    const recovery = new Map();
+    const entity = {
+      bulkCreate: vi.fn(async () => { throw Object.assign(new Error("constraint"), { operation: "bulkCreate", code: "23514" }); }),
+      create: vi.fn(async (record) => {
+        if (record.key === "b") throw new TypeError("reply lost");
+        return { id: "saved-a", ...record };
+      }),
+    };
+    await bulkCreateWithFallback(entity, [{ key: "a" }, { key: "b" }], "test", recovery);
+    const result = await bulkCreateWithFallback(entity, [{ key: "a" }, { key: "b" }], "test", recovery);
+    expect(entity.bulkCreate).toHaveBeenCalledTimes(1);
+    expect(entity.create).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ created: [{ id: "saved-a", key: "a" }], skipped: 0, unresolved: 1 });
+  });
+
   const makeEntity = ({ bulkFails = false, failOn = [] } = {}) => ({
     bulkCreate: vi.fn(async (records) => {
-      if (bulkFails) throw new Error("bulk insert failed (one row violates a unique index)");
+      if (bulkFails) throw Object.assign(new Error("bulk insert failed (one row violates a unique index)"), { operation: "bulkCreate", code: "23505" });
       return records.map((r, i) => ({ id: `bulk-${i}`, ...r }));
     }),
     create: vi.fn(async (record) => {
       if (failOn.includes(record.key)) {
-        throw new Error(`duplicate key value violates unique constraint (${record.key})`);
+        throw Object.assign(new Error(`duplicate key value violates unique constraint (${record.key})`), { code: "23505" });
       }
       return { id: `created-${record.key}`, ...record };
     }),
@@ -104,7 +186,7 @@ describe("bulkCreateWithFallback", () => {
 
   it("returns empty created/skipped for an empty list without touching the entity", async () => {
     const entity = makeEntity();
-    expect(await bulkCreateWithFallback(entity, [])).toEqual({ created: [], skipped: 0 });
+    expect(await bulkCreateWithFallback(entity, [])).toEqual({ created: [], skipped: 0, unresolved: 0, retryable: 0 });
     expect(entity.bulkCreate).not.toHaveBeenCalled();
   });
 });

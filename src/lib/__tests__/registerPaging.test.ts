@@ -32,7 +32,7 @@ beforeEach(() => from.mockReset());
 
 describe.each([
   { table: "comments", read: () => fetchThreadComments("rfi", "rfi-1") },
-  { table: "projects", read: fetchProjectRegister },
+  { table: "projects", read: () => fetchProjectRegister("org-a") },
 ])("$table completeness", ({ table, read }) => {
   it("includes rows past the server ceiling with no gaps or duplicates", async () => {
     const { rows, calls } = serve(1001);
@@ -64,6 +64,18 @@ it("never loads a thread without an entity", async () => {
 
 it("includes on-hold projects in the project register", async () => {
   const { calls } = serve(1);
-  await fetchProjectRegister();
+  await fetchProjectRegister("org-a");
   expect(calls[0].filters).not.toHaveProperty("on_hold");
+});
+
+it("scopes every project page to the selected workspace", async () => {
+  const { calls } = serve(1001);
+  await fetchProjectRegister("org-a");
+  expect(calls).toHaveLength(3);
+  expect(calls.every(({ filters }) => filters.org_id === "org-a")).toBe(true);
+});
+
+it("never reads the project register without a workspace", async () => {
+  expect(await fetchProjectRegister("")).toEqual([]);
+  expect(from).not.toHaveBeenCalled();
 });
