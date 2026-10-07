@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { readOnlyTest as test } from "./acceptance";
+import { acceptanceOptions, readOnlyTest as test, visitRegister } from "./acceptance";
 
 test.describe("staging authentication boundary", () => {
   test.skip(
@@ -12,7 +12,7 @@ test.describe("staging authentication boundary", () => {
     test.use({ storageState: { cookies: [], origins: [] } });
     test("rejects an unauthenticated protected-route request", async ({ page }) => {
       await page.goto("/Submittals");
-      await expect(page.getByRole("button", { name: "Sign in" }).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "Log in", exact: true }).first()).toBeVisible();
       await expect(page.locator('main[aria-label="Main content"]')).toHaveCount(0);
     });
   });
@@ -20,8 +20,7 @@ test.describe("staging authentication boundary", () => {
   test.describe("explicit sign-out", () => {
     test.use({ allowAuthLogout: true });
     test("signs out the staging user and clears the browser session", async ({ page, readOnlySupabaseUrl }) => {
-      await page.goto("/Submittals");
-      await expect(page).toHaveURL(/\/Submittals\/?$/);
+      await visitRegister(page, "submittals", acceptanceOptions("submittals"));
 
       const signOutButton = page
         .locator('button[title*="sign out" i]')
@@ -37,7 +36,9 @@ test.describe("staging authentication boundary", () => {
       ]);
       expect(logout.ok(), "The allowed auth logout must succeed").toBe(true);
 
-      await expect(page.getByRole("button", { name: "Sign in" }).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "Log in", exact: true }).first()).toBeVisible();
+      await expect(page.locator('main[aria-label="Main content"]')).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => localStorage.getItem("sbp_projects_cache"))).toBe(null);
       await expect
         .poll(() =>
           page.evaluate(() =>

@@ -47,6 +47,32 @@ test("accepts a loaded authenticated register with its scoped response and fixtu
   await visitRegister(page, "submittals", options);
 });
 
+async function drawingFixture(page: Page, tab = "drawings", setName = TITLE) {
+  await fixture(page, {
+    table: "drawing_sets", body: [{ id: "fixture-set", project_id: PROJECT, set_name: setName, description: TITLE }],
+    extraScript: `history.replaceState(null, '', '/DrawingSubmittalHub?hub_tab=${tab}'); await fetch(${JSON.stringify(`${API}/rest/v1/drawings?project_id=eq.${PROJECT}`)});`,
+    html: `<main aria-label="Main content"><h1>Detailing Control Center</h1>
+      <button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true');document.getElementById('set-row').hidden=false">Sets &amp; revisions</button>
+      <table><tbody><tr id="set-row" hidden><td><span>${TITLE}</span></td></tr></tbody></table></main>`,
+  });
+}
+
+test("follows the canonical Drawing Register redirect and opens Sets & revisions", async ({ page }) => {
+  await drawingFixture(page);
+  await visitRegister(page, "drawings", options);
+  await expect(page.getByRole("button", { name: "Sets & revisions", exact: true })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("rejects a different hub tab despite a matching drawing set", async ({ page }) => {
+  await drawingFixture(page, "submittals");
+  await expect(visitRegister(page, "drawings", options)).rejects.toThrow(/canonical register route/);
+});
+
+test("rejects drawing fixture text found only in a description", async ({ page }) => {
+  await drawingFixture(page, "drawings", "Different set");
+  await expect(visitRegister(page, "drawings", options)).rejects.toThrow(/response must contain the known fixture row/);
+});
+
 test("rejects a login page even when its body contains the register name", async ({ page }) => {
   await fixture(page, { html: '<h1>Manage your submittals</h1><button>Sign in</button>' });
   await expect(visitRegister(page, "submittals", options)).rejects.toThrow(/Authenticated Main content/);
@@ -109,8 +135,8 @@ test("keeps blocking delayed writes after register acceptance returns", async ({
 test("accepts an exact drawing name beside its nested number badge and quote characters", async ({ page }) => {
   const name = `Owner's "Erection" Drawings`;
   await fixture(page, { table: "drawing_sets", body: [{ id: "set", project_id: PROJECT, set_name: name }],
-    extraScript: `await fetch(${JSON.stringify(`${API}/rest/v1/drawings?project_id=eq.${PROJECT}`)});`,
-    html: `<main aria-label="Main content"><h1>Drawings &amp; Submittals</h1><table><tbody><tr><td><span>${name}<span>STG-001</span></span></td></tr></tbody></table></main>` });
+    extraScript: `history.replaceState(null, '', '/DrawingSubmittalHub?hub_tab=drawings'); await fetch(${JSON.stringify(`${API}/rest/v1/drawings?project_id=eq.${PROJECT}`)});`,
+    html: `<main aria-label="Main content"><h1>Detailing Control Center</h1><button aria-pressed="true">Sets &amp; revisions</button><table><tbody><tr><td><span>${name}<span>STG-001</span></span></td></tr></tbody></table></main>` });
   await visitRegister(page, "drawings", { ...options, fixtureText: name });
 });
 

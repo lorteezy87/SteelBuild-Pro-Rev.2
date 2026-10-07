@@ -14,7 +14,7 @@ interface ReadOnlyProbe {
 const pageProbes = new WeakMap<Page, { origin: string; allowAuthLogout: boolean; probe: ReadOnlyProbe }>();
 
 export const REGISTER_CONTRACTS = {
-  drawings: { path: "/Drawings", headings: ["Drawings & Submittals"], tables: ["drawings", "drawing_sets"], fixtureTable: "drawing_sets" },
+  drawings: { path: "/Drawings", headings: ["Detailing Control Center"], tables: ["drawings", "drawing_sets"], fixtureTable: "drawing_sets" },
   submittals: { path: "/Submittals", headings: ["Submittal Register"], tables: ["submittals"], fixtureTable: "submittals" },
   rfis: { path: "/RFIs", headings: ["RFI Control Center", "RFI Work Queue"], tables: ["rfis"], fixtureTable: null },
 } as const;
@@ -186,11 +186,20 @@ export async function visitRegister(page: Page, register: RegisterName, options:
   }
   const probe = await observeReadOnlyPage(page, options.supabaseUrl, options.projectId);
   await page.goto(contract.path);
-  await expect(page).toHaveURL(new RegExp(`${contract.path}/?$`), { timeout });
+  await expect(page, "The app must reach the canonical register route").toHaveURL(url => register === "drawings"
+    ? url.pathname === "/DrawingSubmittalHub" && url.searchParams.get("hub_tab") === "drawings"
+    : url.pathname.replace(/\/$/, "") === contract.path, { timeout });
   const main = page.getByRole("main", { name: "Main content", exact: true });
   await expect(main, "Authenticated Main content must be visible").toBeVisible({ timeout });
   for (const name of contract.headings) {
     await expect(main.getByRole("heading", { name, exact: true }), "The loaded register heading must be inside Main content").toBeVisible({ timeout });
+  }
+  if (register === "drawings") {
+    // /Drawings redirects to the hub's sheet view. The known set-name fixture
+    // lives in its explicit Sets & revisions view.
+    const setsView = main.getByRole("button", { name: "Sets & revisions", exact: true });
+    await setsView.click();
+    await expect(setsView).toHaveAttribute("aria-pressed", "true");
   }
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("activeProjectId")), {
