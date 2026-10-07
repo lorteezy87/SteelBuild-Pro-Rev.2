@@ -682,7 +682,7 @@ export default function WorkPackages() {
             else createWPMut.mutate({ data, ...scope });
           }}
           wp={editingWP}
-          pieceDrivenEvidence={editingWP?.id ? metrics.enriched.find(wp => wp.id === editingWP.id)?._signals.pieceDriven : false}
+          pieceDrivenEvidence={editingWP?.id ? metrics.enriched.find((wp: (typeof metrics.enriched)[number] & Pick<WorkPackage, "id">) => wp.id === editingWP.id)?._signals.pieceDriven : false}
           projects={projects}
           nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
