@@ -17,6 +17,23 @@ This check does not run the complete production erasure chain. Run
 schema to cover authorship, archival rollback, and shared-workspace isolation.
 That script rolls back its fixtures and migrations.
 
+The authorship regression also loads complete live row shapes and the original
+immutability/financial triggers captured from staging on 2026-10-07. It first
+reproduces the failing Auth foreign-key cascade, then applies the forward fix
+`20261007084117`. Real account deletion must clear report/ticket authors without
+changing any other semantic report or financial field, recalculate no ticket
+amounts, and append no financial events. Draft, pending, approved, collected,
+void, and rejected ticket parents are covered. Direct clearing/reassignment,
+content edits, and mixed writes injected during the real cascade remain
+rejected; a normal draft ticket edit still recalculates and logs its event.
+
+The hosted script uses replica mode only for synthetic authored-row creation
+(not Auth, workspace, or project setup), restores origin before all seven
+original assertion groups, and checks trigger enablement before and after
+erasure. The immutable report and frozen financial snapshots must survive the
+real Auth delete. Apply the forward fix before releasing the account-delete
+function; its four existing trigger functions expose no new callable helper.
+
 ## Deployment checks
 
 1. Land the two migration files before manually applying and stamping the exact
@@ -27,7 +44,7 @@ That script rolls back its fixtures and migrations.
    function settings before the main query; production reported PostgREST 14.5
    on 2026-10-05. Its default `db-hoisted-tx-settings` includes
    `statement_timeout`. The migration reloads the schema cache so the REST API
-   sees this declaration. No global or role timeout is changed.
+sees this declaration. No global or role timeout is changed.
 3. Before deploying the Edge Function, prove the REST path on staging: use a
    disposable owner/account with multiple sole-member workspaces and enough
    data for the atomic RPC to take longer than eight seconds. Call it using

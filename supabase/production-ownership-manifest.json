@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261007084117",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix discovered by staging account-deletion validation. Permits only FK-driven author-to-NULL cleanup through immutable revision reports and frozen T&M ticket guards after the Auth parent is deleted; preserves report contents, financial totals and events, normal edit restrictions, and all trigger enablement. The existing applied migration files remain unchanged. Local real-FK regression covers direct and nested mixed-write refusal and all frozen ticket states; exact reviewed hosted rollback verification is required before manual application/stamping. Keep this required migration visible in missingMigrations until its exact committed payload is applied."
+      },
+      {
         "version": "20261007073051",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - local server-MFA candidate only; not applied or stamped. Enforces opted-in MFA through a shared-project PostgREST pre-request hook, restrictive Storage policy, and restrictive policies on the current Realtime publication. Isolated PGlite tests cover AAL1/AAL2, onboarding, definer RPCs, tenant boundaries, public/service access, failed lookup and existing-hook preservation. Shared-app configuration review and staging HTTP/Auth/Storage/Realtime verification are required before manual application; preserve the drift gate's missing-migration report until the exact reviewed SQL is applied and stamped. See supabase/tests/server-mfa/README.md."
