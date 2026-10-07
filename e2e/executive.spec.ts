@@ -22,7 +22,8 @@ for (const theme of ["dark", "light"] as const) {
     });
     await page.goto("/dev/executive.html");
     await page.evaluate(() => document.fonts.ready);
-    await expect(page.getByRole("heading", { name: "Project Dashboard" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Northline Distribution Center", level: 1 })).toBeVisible();
+    await expect(page.getByText("Project dashboard", { exact: true })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await expect(page.getByRole("region", { name: "Executive operating summary" })).toBeVisible();
     await expect(page.getByText(/Showing 8 of \d+ priorities/)).toBeVisible();

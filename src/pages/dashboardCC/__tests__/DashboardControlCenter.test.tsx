@@ -62,8 +62,12 @@ describe("DashboardControlCenter", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Project Dashboard" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "BIMC ED Expansion", level: 1 })).toBeInTheDocument();
+    expect(screen.getByText("Project dashboard")).toBeInTheDocument();
     expect(screen.getByText("Needs Attention")).toBeInTheDocument();
+    const attention = screen.getByRole("region", { name: "Needs Attention" });
+    const workflow = screen.getByRole("navigation", { name: "Steel workflow" });
+    expect(attention.compareDocumentPosition(workflow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText("Approvals & Engineering")).toBeInTheDocument();
     expect(screen.getByText("Fabrication & Logistics")).toBeInTheDocument();
     expect(screen.getByText("Piece Control")).toBeInTheDocument();

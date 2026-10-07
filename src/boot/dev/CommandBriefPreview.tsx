@@ -19,20 +19,29 @@ const sources: CommandCenterSources = {
   changeOrders: [], deliveries: [],
 };
 const emptySources: CommandCenterSources = { ...sources, rfis: [], submittals: [], workPackages: [], scheduleTasks: [] };
+const largeSources: CommandCenterSources = {
+  ...emptySources,
+  rfis: Array.from({ length: 115 }, (_, index) => ({
+    id: `large-rfi-${index}`, project_id: projectId, rfi_number: `RFI-${String(index + 1).padStart(3, "0")}`,
+    title: `Bay ${index + 1} connection review`, status: "Open", date_required: "2026-10-05", ball_in_court: "EOR",
+  })),
+};
 
 function CommandBriefPreview() {
   const [opened, setOpened] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [empty, setEmpty] = useState(false);
+  const [large, setLarge] = useState(false);
   return (
     <main aria-label="Main content" style={{ padding: 16, minWidth: 0 }}>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <span>Development fixture · synthetic project records</span>
-        <button type="button" onClick={() => setEmpty(value => !value)}>{empty ? "Show populated snapshot" : "Show empty snapshot"}</button>
+        <button type="button" onClick={() => { setLarge(false); setEmpty(value => !value); }}>{empty ? "Show populated snapshot" : "Show empty snapshot"}</button>
+        <button type="button" onClick={() => { setEmpty(false); setLarge(value => !value); }}>{large ? "Show small snapshot" : "Show large snapshot"}</button>
         <output aria-label="Opened source">{opened}</output>
       </div>
-      <CommandCenterControlCenter sources={empty ? emptySources : sources} projectName="Northline Distribution Center"
+      <CommandCenterControlCenter sources={large ? largeSources : empty ? emptySources : sources} projectName="Northline Distribution Center"
         search={search} onSearch={setSearch} typeFilter={typeFilter} onTypeChange={setTypeFilter}
         dataUpdatedAt={new Date("2026-10-06T17:58:00Z").getTime()}
         onOpenItem={item => setOpened(`${item.itemType}:${item.id}`)} onForwardLook={() => setOpened("ForwardLook")} />

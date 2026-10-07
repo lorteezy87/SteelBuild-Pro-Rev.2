@@ -595,6 +595,8 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
         key={item.page}
         type="button"
         className={`sb-dashboard-reference-nav__item${active ? " is-active" : ""}`}
+        aria-label={item.label}
+        title={collapsed ? item.label : undefined}
         aria-current={active ? "page" : undefined}
         onClick={() => onNavigate(item.page)}
         onMouseEnter={() => prefetchRoute(item.page)}
@@ -611,10 +613,10 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
       <button
         type="button"
         className="sb-dashboard-reference-brand"
+        aria-label="SteelBuild Pro — project dashboard"
         onClick={() => onNavigate("Dashboard")}
       >
-        <span className="sb-dashboard-reference-brand__mark">SB</span>
-        <span>SteelBuild Pro</span>
+        <BrandLogo height={collapsed ? 40 : 44} variant={collapsed ? "mark" : "full"} />
       </button>
 
       <nav className="sb-dashboard-reference-nav">
@@ -645,6 +647,8 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
         <button
           type="button"
           className="sb-dashboard-reference-nav__item"
+          aria-label="Settings"
+          title={collapsed ? "Settings" : undefined}
           onClick={() => onNavigate("Settings")}
         >
           {React.createElement(PAGE_ICON.Settings || FallbackIcon, { size: 17, strokeWidth: 1.85 })}

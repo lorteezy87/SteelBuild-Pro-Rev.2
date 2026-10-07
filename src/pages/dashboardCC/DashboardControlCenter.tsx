@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ArrowRight, ArrowUpRight, CircleDollarSign, Factory, FileCheck2, HardHat } from "lucide-react";
+import { ArrowRight, ArrowUpRight, HardHat } from "lucide-react";
 import { todayLocalISO } from "@/lib/dateMath";
 import "@/styles/command.css";
 import "@/styles/piece-control-command.css";
@@ -46,17 +46,9 @@ interface DashboardControlCenterProps {
 
 const EMPTY_ROWS: Record<string, unknown>[] = [];
 
-const BAND_ICONS = {
-  approvals: FileCheck2,
-  production: Factory,
-  field: HardHat,
-  commercial: CircleDollarSign,
-};
-
 function toneForStatus(statusTone: string) {
   if (statusTone === "approved") return "good" as const;
   if (statusTone === "waiting") return "warn" as const;
-  if (statusTone === "open") return "danger" as const;
   if (statusTone === "progress") return "info" as const;
   return "neutral" as const;
 }
@@ -183,15 +175,14 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
   return (
     <div className="sbp-command-page dash-cc dash-executive" data-skin="command">
       <div className="dash-executive__masthead">
-        <span>SteelBuild Pro <span aria-hidden="true">/</span> Executive workspace</span>
+        <span>Job review</span>
         <time dateTime={effectiveToday}>{reviewDate}</time>
       </div>
 
       <PageHeader
-        eyebrow={summary.projectName}
-        title="Project Dashboard"
-        subtitle="Control the work. Protect the margin. Keep steel moving."
-        meta={summary.healthReasons[0] || "Detailing, fabrication, logistics, and erection in one operating view."}
+        eyebrow="Project dashboard"
+        title={summary.projectName}
+        meta={summary.healthReasons[0]}
         actions={onNavigate ? (
           <>
             <button type="button" className="dash-executive__button dash-executive__button--primary"
@@ -207,36 +198,6 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
       />
 
       <OperationalSummary metrics={metrics} ariaLabel="Executive operating summary" />
-
-      <section className="dash-executive__operations" aria-label="Steel workflow">
-        <div className="dash-executive__section-heading">
-          <div>
-            <span className="dash-executive__eyebrow">From approval to erection</span>
-            <h2>Keep the next operation moving</h2>
-          </div>
-          <span className="dash-executive__caption">Four views of the work ahead</span>
-        </div>
-        <div className="dash-executive__bands">
-          {reference.bands.map((band, index) => {
-            const Icon = BAND_ICONS[band.id];
-            return (
-              <button type="button" key={band.id}
-                className={`dash-executive__band is-${band.tone}`}
-                disabled={!onNavigate}
-                onClick={() => onNavigate?.(band.target)}>
-                <div className="dash-executive__band-top">
-                  <span className="dash-executive__band-icon"><Icon size={20} aria-hidden="true" /></span>
-                  <span className="dash-executive__band-step">0{index + 1}</span>
-                </div>
-                <h3>{band.label}</h3>
-                <strong className="dash-executive__band-value">{band.metric}</strong>
-                <p>{band.detail}</p>
-                <span className="dash-executive__band-link">Open workspace <ArrowUpRight size={15} aria-hidden="true" /></span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
 
       <div className="dash-executive__decision-grid">
         <div className="dash-executive__priorities">
@@ -258,7 +219,6 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
         <aside className="dash-executive__brief" aria-label="Project brief">
           <div className="dash-executive__section-heading">
             <div>
-              <span className="dash-executive__eyebrow">At a glance</span>
               <h2>Project brief</h2>
             </div>
           </div>
@@ -282,6 +242,19 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
           ) : null}
         </aside>
       </div>
+
+      <nav className="dash-executive__workflow" aria-label="Steel workflow">
+        {reference.bands.map((band) => (
+          <button type="button" key={band.id} disabled={!onNavigate}
+            onClick={() => onNavigate?.(band.target)}>
+            <span>
+              <strong>{band.label}</strong>
+              <span>{band.id === "field" ? band.detail : `${band.metric} · ${band.detail}`}</span>
+            </span>
+            <ArrowUpRight size={16} aria-hidden="true" />
+          </button>
+        ))}
+      </nav>
 
       {project ? (
         <PieceControlDashboardPanel project={project}

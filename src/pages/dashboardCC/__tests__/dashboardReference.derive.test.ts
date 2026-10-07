@@ -98,7 +98,7 @@ describe("attention preview completeness", () => {
     expect(model.attentionCounts).toEqual({ danger: 9, warn: 1, info: 0, neutral: 0, good: 0 });
     expect(model.bands.find((band) => band.id === "production")?.tone).toBe("danger");
     expect(model.bands.find((band) => band.id === "commercial")).toMatchObject({
-      tone: "warn", detail: "1 aging decisions need action",
+      tone: "warn", detail: "1 aging decision needs action",
     });
   });
 });
