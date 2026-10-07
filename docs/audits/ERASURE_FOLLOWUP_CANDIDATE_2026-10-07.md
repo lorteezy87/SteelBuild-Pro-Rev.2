@@ -1,13 +1,15 @@
 # Account-erasure follow-up candidate — 2026-10-07
 
 Two forward migrations address failures found while validating the approved
-staging release `1f475a4aaf2451b81456d8e3cb1cc2ecdad7a242`. Both remain **unapplied
-to staging and production** at this checkpoint. The five original applied
-staging payloads are unchanged. The approved account-delete v5 deployment is
-held; staging still runs v4. This document is review evidence, not production
-release authorization. The two exact migrations below are ready for
-**staging-only application approval** after the hosted rollback and four overlap
-cases passed. UI work is independent of this backend approval.
+staging release `1f475a4aaf2451b81456d8e3cb1cc2ecdad7a242`. The owner separately
+approved their exact committed bytes at `44e04ea6d28016feccdfe33b97fb19141d657efa`.
+Both were **applied and stamped only to staging at 09:20 UTC**, with full raw-blob
+ledger hashes verified. The five original staging payloads are unchanged.
+Account-delete v5 was deployed at 09:20:56 UTC with gateway JWT verification;
+its seven source files match the original approved bundle. Actual account-delete
+MFA/ownership denials, journal recovery and final synthetic cleanup passed.
+The rehearsal history below explains the fixes; it is not production release
+authorization. [Current staging acceptance](STAGING_ACCEPTANCE_2026-10-07.md).
 
 | Forward migration | Exact file SHA-256 | Change |
 | --- | --- | --- |
@@ -65,7 +67,7 @@ the potential set. It fixes the demonstrated inversion; it is not a scalable
 concurrent-erasure redesign. Standalone project/organization/reset RPCs are
 unchanged, and unrelated possible row-lock conflicts are outside this claim.
 
-## Verification at this checkpoint
+## Pre-application verification record
 
 - Local account-deletion package passed: real Auth FK cascades through reports
   and six ticket-parent states; complete retained financial/report snapshots;
@@ -126,16 +128,26 @@ entries. These checks address the earlier misleading HTTP-success result.
 After all requests settled, root ran the exact `49_retry_cleanup.sql` package
 and verified that the disposable workspace and its two projects were gone,
 no orphan memberships remained, all three validation Auth users survived, and
-the temporary RPCs/schema were absent. The application RPC remained unchanged
-and neither forward migration had a ledger stamp. The original deleted
-workspace's journal/Storage recovery fixture remains reserved for account-delete
-acceptance; this cleanup does not claim that account recovery is complete.
+the temporary RPCs/schema were absent. At that rehearsal checkpoint, the
+application RPC remained unchanged and neither forward migration had a ledger
+stamp. The original deleted workspace's journal/Storage object was reserved
+for the later account-delete acceptance; v5 subsequently recovered and removed
+it, and all three Auth users and remaining exact fixtures were cleaned up.
 
-## Remaining staging gates
+## Applied staging follow-up and remaining holds
 
-Approve only the two exact migration payloads above for staging
-`ndyfjffsulfbwpmwdmic`, then apply/stamp their committed bytes and verify ledger
-hashes, readiness, function settings and grants. The already approved
-account-delete v5 deployment remains held until those prerequisites pass.
-Hosted account-deletion/journal recovery acceptance and final fixture cleanup
-follow that deployment. Production changes require separate authorization.
+The exact `44e04ea6` application job passed in
+[run 37599017686, job 112718815317](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37599017686/job/112718815317),
+alongside secret scan and Edge typecheck. Both reviewed migration transactions
+were applied to `ndyfjffsulfbwpmwdmic` and their full committed SQL ledger hashes
+matched. The already-approved account-delete v5 deployment then passed 66
+assertions across five actual HTTP phases, including journal recovery and
+preservation of the other workspace during nonowner cleanup. Final privileged
+fixture-absence checks and MFA readiness passed; the Realtime publication was
+restored to its original zero-table baseline.
+
+Production remains unchanged and requires separate authorization. The five high
+development-dependency findings, billing/read-service configuration, native
+release and operational acceptance remain open. Neither frontend Worker was
+deployed by this backend release. The relation-lock operational tradeoff above
+remains applicable after the demonstrated deadlock correction.

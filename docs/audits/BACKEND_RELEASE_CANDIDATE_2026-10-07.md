@@ -1,10 +1,10 @@
 # Reviewed backend candidate — 2026-10-07
 
-Status: owner approved staging release of exact candidate `1f475a4aaf2451b81456d8e3cb1cc2ecdad7a242`. All five migrations and six functions are now applied to staging `ndyfjffsulfbwpmwdmic`; account-delete is held after hosted erasure testing exposed defects. See [staging acceptance and follow-up evidence](STAGING_ACCEPTANCE_2026-10-07.md). Production `kjrwqagyeswwoxpjkcko` is shared with another application and remains unchanged/unapproved. The production observations below describe the original read-only review.
+Status: the owner-approved staging package at `1f475a4aaf2451b81456d8e3cb1cc2ecdad7a242` and two separately approved erasure corrections at `44e04ea6d28016feccdfe33b97fb19141d657efa` are applied to `ndyfjffsulfbwpmwdmic`. All seven SQL ledger blobs and all 47 file entries across seven deployed function bundles match their approved sources. Account-delete v5 passed real MFA/ownership denial, journal recovery and disposable-account cleanup; final MFA readiness has zero gaps. Billing/read-service configuration remains held. See [current staging acceptance](STAGING_ACCEPTANCE_2026-10-07.md). Production `kjrwqagyeswwoxpjkcko` remains unchanged/unapproved, and neither frontend Worker was replaced. The production inventory, source comparison and release sequence below are the original read-only candidate review, not a description of the completed staging state.
 
 ## Database evidence and application order
 
-The production ledger contains 132 versions. The unmodified reconciliation planner reports the following five required versions missing, with no unknown inventory blockers. An inventory match does not establish schema or function-source equivalence.
+At the original review, the production ledger contained 132 versions. The unmodified reconciliation planner reported the following five required versions missing, with no unknown inventory blockers. The two subsequent forward fixes are also required pending production application. An inventory match does not establish schema or function-source equivalence.
 
 | Order / version | Candidate | Observed production state |
 |---|---|---|
@@ -14,7 +14,7 @@ The production ledger contains 132 versions. The unmodified reconciliation plann
 | 4 / `20261005100745` | `retry_failed_revision_comparison.sql` | `retry_revision_comparison(uuid)` is absent. |
 | 5 / `20261007073051` | `enforce_enrolled_mfa_at_server_boundaries.sql` | The MFA helper and PostgREST request hook are absent. Existing verified-factor accounts currently lack this server boundary. |
 
-All SQL files are under `supabase/migrations/`. These five versions remain **required / pending in production**; their exact payloads have been applied and stamped only in staging. The other four were already required on the base branch. Subsequent forward corrections are separate from this approved package.
+All SQL files are under `supabase/migrations/`. These five versions remain **required / pending in production**; their exact payloads have been applied and stamped only in staging. Four were already required on the base branch. The separately approved [two forward corrections](ERASURE_FOLLOWUP_CANDIDATE_2026-10-07.md) are also applied only in staging, bringing the current required production set to seven.
 
 Candidate source commit: `2d9bf6e69827ecf471def2adbb7e31060b13d261`. SHA-256 below hashes the exact committed SQL blob bytes, before adding the reviewed atomic ledger stamp:
 
@@ -28,9 +28,9 @@ Candidate source commit: `2d9bf6e69827ecf471def2adbb7e31060b13d261`. SHA-256 bel
 
 The MFA candidate adds an enrolled-factor/AAL2 request check before authenticated REST tables, views and definer RPCs. Storage objects and currently published Realtime tables receive restrictive policies composed with their existing tenant policies. Unenrolled users can complete onboarding. Existing hooks cause an abort instead of silent replacement. See [MFA tests and rollout limits](../../supabase/tests/server-mfa/README.md) and the [read-only readiness query](../../supabase/tests/server-mfa/readiness.sql).
 
-## Deployed Edge source comparison
+## Original production Edge source comparison
 
-All seven deployed source bundles were retrieved read-only on 2026-10-07 and compared to the candidate after CRLF normalization. Twenty-eight supporting files match exactly. The six non-erasure entrypoints differ by MFA integration; email-send also includes existing TypeScript ArrayBuffer annotations and comment formatting. The account-delete candidate includes the previously pending offboarding redesign, so it requires the complete account deletion review, not a claim that this is only an MFA patch.
+All seven production source bundles were retrieved read-only on 2026-10-07 and compared to the candidate after CRLF normalization. Twenty-eight supporting files match exactly. The six non-erasure entrypoints differ by MFA integration; email-send also includes existing TypeScript ArrayBuffer annotations and comment formatting. The account-delete candidate includes the previously pending offboarding redesign, so it requires the complete account deletion review, not a claim that this is only an MFA patch. Current staging versions and exact post-deployment source matches are recorded separately in the staging acceptance report.
 
 | Function | Observed version | Preserve gateway JWT verification |
 |---|---:|---|
@@ -46,7 +46,7 @@ Every user-facing guard runs after Auth verifies the exact bearer token and befo
 
 ## Release sequence and acceptance
 
-Follow [Reviewed backend releases](../runbooks/reviewed-backend-release.md). Its instruction is: “Obtain approval for the named functions and exact database changes.” The owner has now approved this exact package for staging. That approval does not authorize production or automatically include new forward migrations discovered during acceptance.
+Follow [Reviewed backend releases](../runbooks/reviewed-backend-release.md). Its instruction is: “Obtain approval for the named functions and exact database changes.” The owner approved the original package and separately approved both exact forward corrections for staging; those backend applications are complete. The sequence below remains the review process, not an instruction to rerun the applied staging migrations. Production still requires its own authorization.
 
 1. Review the exact release commit and candidate SQL; inspect both applications' MFA compatibility and any PostgREST configuration outside the database catalog. Preserve current source bundles and JWT settings again immediately before deployment.
 2. Apply and stamp each approved migration atomically in staging, using its exact committed payload. Do not nest the existing `BEGIN`/`COMMIT` wrappers when constructing the approved transaction. Never use `db push`, migration repair, or an inventory-only stamp.
