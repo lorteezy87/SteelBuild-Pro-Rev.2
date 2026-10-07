@@ -21,7 +21,12 @@ export function useDestructiveAudit() {
   const currentKey = useRef(storageKey);
   currentKey.current = storageKey;
 
-  const logAction = useCallback((action, details = {}) => {
+  const logAction = useCallback(
+    /**
+     * @param {string} action
+     * @param {Record<string, unknown>} [details]
+     */
+    (action, details = {}) => {
     if (!userId || !orgId || currentKey.current !== storageKey) return;
     try {
       appendOwnedAudit(localStorage, { userId, orgId }, action, details, user?.email,
@@ -29,7 +34,9 @@ export function useDestructiveAudit() {
     } catch { /* Logging must never break the operation. */ }
   }, [userId, orgId, storageKey, user?.email]);
 
-  const getLog = useCallback((filterAction = null) => {
+  const getLog = useCallback(
+    /** @param {string | null} [filterAction] */
+    (filterAction = null) => {
     if (!userId || !orgId || currentKey.current !== storageKey) return [];
     try {
       return readOwnedAudit(localStorage, { userId, orgId }, filterAction);

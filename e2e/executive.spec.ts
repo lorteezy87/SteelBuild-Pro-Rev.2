@@ -36,6 +36,8 @@ for (const theme of ["dark", "light"] as const) {
     expect(errors).toEqual([]);
     expect(backendRequests).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`executive-${theme}.png`), fullPage: true });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: testInfo.outputPath(`executive-${theme}-viewport.jpg`), type: "jpeg", quality: 70 });
 
     if (testInfo.project.name === "desktop") {
       await page.setViewportSize({ width: 768, height: 1024 });

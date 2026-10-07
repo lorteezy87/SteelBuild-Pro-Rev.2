@@ -189,6 +189,21 @@ jobs:
       - name: Verify shell recovery (desktop and mobile, no backend)
         run: npm run test:e2e:foundation
 
+      - name: Review synthetic executive screenshots
+        if: ${{ always() && github.ref == 'refs/heads/codex/steel-executive-hardening' }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const root = 'test-results/foundation';
+          if (fs.existsSync(root)) {
+            for (const entry of fs.readdirSync(root, { recursive: true })) {
+              if (String(entry).endsWith('-viewport.jpg')) {
+                console.log('EXECUTIVE_IMAGE:' + entry + ':' + fs.readFileSync(root + '/' + entry).toString('base64'));
+              }
+            }
+          }
+          NODE
+
       - name: Preserve browser acceptance evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
