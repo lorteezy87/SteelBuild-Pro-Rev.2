@@ -63,6 +63,17 @@ export const SERVER_MAX_ROWS = 1000;
  */
 export const EFFECTIVE_LIST_CAP = Math.min(LIST_ROW_CAP, SERVER_MAX_ROWS);
 
+const ALL_ROWS_SAFETY_CAP = 100_000;
+
+const completeReadLimitError = (table: string, operation: 'listAll' | 'filterAll') =>
+  new SupabaseOperationError(table, operation, {
+    code: 'READ_LIMIT_REACHED',
+    // The query must be narrowed. Use the non-retryable client-error status
+    // already recognized by the shared query client, not a transient failure.
+    status: 400,
+    message: 'Unable to confirm complete results within the 100,000-row safety limit. Narrow the project or date selection.',
+  });
+
 // Warn when a read comes back at the cap (likely truncated) so the silent-
 // 1000-row failure mode surfaces. In DEV this logs to the console; in PROD it
 // reports a Sentry warning message (H10) so silent truncation is observable in
@@ -125,13 +136,13 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
    * capped read — so portfolio-wide dashboards (CommandCenter / AIInsights) don't
    * silently truncate at DEFAULT_LIST_LIMIT as a tenant grows. The primary sort
    * plus an `id` tiebreaker keeps page boundaries stable (no dropped/dup rows).
+   * Rejects at the safety limit when completeness cannot be established.
    */
   listAll: async (sortBy) => {
-    const PAGE = 1000;
-    const SAFETY_MAX_ROWS = 100_000;
+    const PAGE = SERVER_MAX_ROWS;
     const sort = parseSortBy(sortBy);
     const all: Array<RowWithAliases<T>> = [];
-    for (let offset = 0; offset < SAFETY_MAX_ROWS; offset += PAGE) {
+    for (let offset = 0; offset < ALL_ROWS_SAFETY_CAP; offset += PAGE) {
       let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
       q = applyLiveProjectScope(q, tableName as string);
       if (SOFT_DELETE_TABLES.has(tableName as string)) q = q.eq('is_deleted', false);
@@ -144,10 +155,9 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
       all.push(...addAliasesToList<RowWithAliases<T>>(data, tableName as string));
       if (!data || data.length < PAGE) return all;
     }
-    // Hit the safety ceiling — surface in PROD too (unlike list()'s dev-only warn).
-     
-    console.warn(`[supabaseClient] ${tableName}.listAll() stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
-    return all;
+    // A full final page cannot establish whether more rows exist. Never let
+    // callers publish incomplete financial, release or operational evidence.
+    throw completeReadLimitError(tableName as string, 'listAll');
   },
 
   /**
@@ -183,13 +193,13 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
    * filter() paged to completeness. See the EntityClient type for when to
    * choose this over filter(). Pages are ordered by the caller's sort plus an
    * `id` tiebreaker so page boundaries can't drop or duplicate a row.
+   * Rejects at the safety limit instead of returning a partial success.
    */
   filterAll: async (conditions = {}, sortBy) => {
     const PAGE = SERVER_MAX_ROWS;
-    const SAFETY_MAX_ROWS = 100_000;
     const sort = parseSortBy(sortBy);
     const all: Array<RowWithAliases<T>> = [];
-    for (let offset = 0; offset < SAFETY_MAX_ROWS; offset += PAGE) {
+    for (let offset = 0; offset < ALL_ROWS_SAFETY_CAP; offset += PAGE) {
       let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
       q = applyLiveProjectScope(q, tableName as string);
       if (SOFT_DELETE_TABLES.has(tableName as string) && !('is_deleted' in conditions)) {
@@ -207,9 +217,7 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
       all.push(...addAliasesToList<RowWithAliases<T>>(data, tableName as string));
       if (!data || data.length < PAGE) return all;
     }
-     
-    console.warn(`[supabaseClient] ${tableName}.filterAll() stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
-    return all;
+    throw completeReadLimitError(tableName as string, 'filterAll');
   },
 
   /**
