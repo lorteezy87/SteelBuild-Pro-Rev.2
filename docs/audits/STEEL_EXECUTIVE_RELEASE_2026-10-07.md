@@ -7,7 +7,7 @@ Branch: `codex/steel-executive-hardening`.
 
 This release keeps SteelBuild Pro focused on structural-steel subcontractors. The project dashboard emphasizes engineering approvals, fabrication and logistics, field readiness, and commercial exposure. It retains the canonical piece-control panel and fabrication-release rules.
 
-The executive presentation uses the existing light/dark theme and accent preferences, a clear project masthead, operating metrics, four workstream entry points, an actionable priority queue, a project brief, and recent activity. Its layout adapts to desktop, tablet, and field-phone widths. Keyboard focus and reduced-motion preferences remain supported.
+The executive presentation uses the existing light/dark theme and accent preferences, a clear project masthead, operating metrics, four workstream entry points, an actionable priority queue, a project brief, and recent activity. Its layout adapts to desktop, tablet, and field-phone widths. Keyboard focus and reduced-motion preferences remain supported. Small light-theme text uses stronger contrast, and the preview loads the same font families as the production entry.
 
 ## Corrections included
 

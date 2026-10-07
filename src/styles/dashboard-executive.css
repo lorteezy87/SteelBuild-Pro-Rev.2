@@ -2,6 +2,7 @@
  * Uses the shared theme, contrast, font-scale, density and motion preferences. */
 .dash-executive.sbp-command-page {
   --executive-accent: var(--accent);
+  --executive-accent-text: var(--accent);
   gap: 22px;
   padding: clamp(16px, 2.2vw, 32px);
   max-width: 1920px;
@@ -39,6 +40,7 @@
   background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 15%, transparent));
 }
 .dash-executive .sbp-page-header__eyebrow {
+  color: var(--executive-accent-text);
   font-size: .75rem;
   letter-spacing: .13em;
   margin-bottom: 14px;
@@ -86,7 +88,7 @@
 }
 .dash-executive__button:hover { border-color: var(--accent); background: var(--bg-hover); }
 .dash-executive__button--primary:hover { background: var(--accent-hover); color: var(--on-accent); }
-.dash-executive__text-button { min-height: 40px; padding-inline: 0; border: 0; background: transparent; color: var(--accent); }
+.dash-executive__text-button { min-height: 40px; padding-inline: 0; border: 0; background: transparent; color: var(--executive-accent-text); }
 .dash-executive__text-button:hover { text-decoration: underline; text-underline-offset: 4px; }
 .dash-executive button:focus-visible, .dash-executive a:focus-visible {
   outline: 3px solid var(--accent);
@@ -241,3 +243,9 @@
   .dash-executive__band, .dash-executive__button { transition: none; transform: none !important; }
 }
 [data-motion="reduced"] .dash-executive__band { transform: none !important; }
+
+/* Keep small labels and text links readable on the light operating surface. */
+:root[data-theme="light"] .dash-executive.sbp-command-page {
+  --executive-accent-text: color-mix(in srgb, var(--accent) 35%, var(--text-primary));
+  --text-muted: var(--text-secondary);
+}

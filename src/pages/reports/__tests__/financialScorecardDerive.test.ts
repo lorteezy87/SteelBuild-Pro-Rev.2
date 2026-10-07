@@ -80,8 +80,8 @@ describe("financial scorecard budget reconciliation", () => {
       paid: 320,
       unmappedCount: 2,
       unmappedCommitted: 100,
-      budgetUsedPct: 55,
     });
+    expect(result.budgetUsedPct).toBeCloseTo(55);
   });
 
   it("revises the budget with approved allocations and surfaces unallocated changes separately", () => {

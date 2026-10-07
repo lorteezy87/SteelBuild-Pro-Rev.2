@@ -11,13 +11,17 @@ for (const theme of ["dark", "light"] as const) {
     await page.clock.setFixedTime(new Date("2026-10-06T18:00:00Z"));
     await page.route("**/*", async route => {
       const url = new URL(route.request().url());
-      if (url.origin === "http://127.0.0.1:4186") await route.continue();
+      if (url.origin === "http://127.0.0.1:4186"
+        || (url.protocol === "https:" && ["fonts.googleapis.com", "fonts.gstatic.com"].includes(url.hostname))) {
+        await route.continue();
+      }
       else {
         if (url.hostname.includes("supabase") || url.port === "54321") backendRequests.push(url.href);
         await route.fulfill({ status: 200, contentType: "text/plain", body: "" });
       }
     });
     await page.goto("/dev/executive.html");
+    await page.evaluate(() => document.fonts.ready);
     await expect(page.getByRole("heading", { name: "Project Dashboard" })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await expect(page.getByRole("region", { name: "Executive operating summary" })).toBeVisible();
