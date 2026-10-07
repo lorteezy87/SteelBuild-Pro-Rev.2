@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import {
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { localToday } from "@/utils/dates";
+import { createDailyLogDraft } from "@/lib/field/dailyLogDraft";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -55,14 +56,47 @@ export default function DailyLogs() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState("all");
+  const [formScope, setFormScope] = useState(null);
+  const formScopeRef = useRef(null);
+  const nextFormId = useRef(0);
+  const currentProjectRef = useRef(projectId);
+  currentProjectRef.current = projectId;
+
+  const closeForm = () => {
+    formScopeRef.current = null;
+    setFormScope(null);
+    setShowForm(false);
+    setEditing(null);
+  };
+  const openForm = (log = null) => {
+    if (!projectId || (log?.project_id && log.project_id !== projectId)) {
+      toast.error("Select the daily log's project before opening this form.");
+      return;
+    }
+    const scope = { projectId, id: ++nextFormId.current };
+    formScopeRef.current = scope;
+    setFormScope(scope);
+    setEditing(log);
+    setShowForm(true);
+  };
+  const isCurrentForm = (scope) => Boolean(scope && formScopeRef.current === scope && currentProjectRef.current === scope.projectId);
+  const assertSaveScope = ({ scope, data }) => {
+    if (!isCurrentForm(scope) || data.project_id !== scope.projectId) {
+      throw new Error("This daily log draft is no longer open in its original project. Reopen the log before saving.");
+    }
+  };
+  useEffect(() => {
+    closeForm();
+    setDeleteTarget(null);
+    // Project changes retire both pending form callbacks and visible drafts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+  useEffect(() => () => { formScopeRef.current = null; }, []);
 
   const qc = useQueryClient();
   const { enqueue: enqueueOutbox, flush: flushOutbox } = useOutbox();
 
-  useAutoOpenCreate(() => {
-    setEditing(null);
-    setShowForm(true);
-  });
+  useAutoOpenCreate(() => openForm(), { enabled: !!projectId });
 
   const dailyLogQueryKeys = [["daily-logs", projectId]];
 
@@ -90,8 +124,8 @@ export default function DailyLogs() {
   // Field Hub rows deep-link here with ?id=<log>; open it for edit.
   useAutoOpenEdit(
     logs,
-    (log) => { setEditing(log); setShowForm(true); },
-    { enabled: !isLoading },
+    (log) => openForm(log),
+    { enabled: !!projectId && !isLoading },
   );
 
   const { data: projects = [] } = useQuery({
@@ -151,99 +185,108 @@ export default function DailyLogs() {
   }, [filteredLogs]);
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.DailyLog.create(withProjectId(data, projectId)),
-    onSuccess: async (created) => {
-      appendRecordToCaches(qc, dailyLogQueryKeys, created);
-      toast.success("Daily log created");
-      setShowForm(false);
-      setEditing(null);
-      await invalidateCrudQueries(qc, dailyLogQueryKeys);
+    mutationFn: (request) => {
+      assertSaveScope(request);
+      return entities.DailyLog.create(withProjectId(request.data, request.scope.projectId));
+    },
+    onSuccess: async (created, request) => {
+      const queryKeys = [["daily-logs", request.scope.projectId]];
+      appendRecordToCaches(qc, queryKeys, created);
+      if (isCurrentForm(request.scope)) {
+        toast.success("Daily log created");
+        closeForm();
+      }
+      await invalidateCrudQueries(qc, queryKeys);
       // Audit trail — fire-and-forget
       logActivity("daily_log", "created", created, {
-        projectId,
+        projectId: request.scope.projectId,
         description: `Daily log for ${created?.date || "today"}`,
       });
-      flushOutbox(); // online write succeeded → drain any offline backlog
+      request.flush(); // Captured owner-bound outbox callback rejects a changed owner.
     },
-    onError: (err, data) => {
+    onError: (err, request) => {
       // No signal at end of day? Queue the log instead of losing it. The
       // client_op_id (minted in handleSave) rides both this attempt and the
       // replay, dedup'd against daily_logs.uq_daily_logs_client_op_id. Photos
       // in the log are online-only — an offline log syncs its text/manning data.
       if (isLikelyOfflineError(err)) {
-        enqueueOutbox(makeDailyLogCreateOp(data, data.client_op_id, Date.now()));
-        setShowForm(false);
-        setEditing(null);
-        toast.message("Saved offline — will sync when you're back online");
+        const { data } = request;
+        request.enqueue(makeDailyLogCreateOp(data, data.client_op_id, Date.now()));
+        if (isCurrentForm(request.scope)) {
+          closeForm();
+          toast.message("Saved offline — will sync when you're back online");
+        }
         return;
       }
-      toastCrudError(err, "Failed to create daily log");
+      if (isCurrentForm(request.scope)) toastCrudError(err, "Failed to create daily log");
     },
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => entities.DailyLog.update(id, data),
-    onSuccess: async (updated) => {
-      replaceRecordInCaches(qc, dailyLogQueryKeys, updated);
-      toast.success("Daily log updated");
-      setShowForm(false);
-      setEditing(null);
-      await invalidateCrudQueries(qc, dailyLogQueryKeys);
+    mutationFn: (request) => {
+      assertSaveScope(request);
+      return entities.DailyLog.update(request.id, request.data);
+    },
+    onSuccess: async (updated, request) => {
+      const queryKeys = [["daily-logs", request.scope.projectId]];
+      replaceRecordInCaches(qc, queryKeys, updated);
+      if (isCurrentForm(request.scope)) {
+        toast.success("Daily log updated");
+        closeForm();
+      }
+      await invalidateCrudQueries(qc, queryKeys);
       logActivity("daily_log", "updated", updated, {
-        projectId,
+        projectId: request.scope.projectId,
         description: `Daily log for ${updated?.date || ""}`,
       });
     },
-    onError: (err) => toastCrudError(err, "Failed to update daily log"),
+    onError: (err, request) => { if (isCurrentForm(request.scope)) toastCrudError(err, "Failed to update daily log"); },
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => entities.DailyLog.delete(id),
-    onSuccess: async (_, deletedId) => {
-      removeRecordFromCaches(qc, dailyLogQueryKeys, deletedId);
-      if (editing?.id === deletedId) {
-        setEditing(null);
-        setShowForm(false);
-      }
-      toast.success("Daily log deleted");
-      setDeleteTarget(null);
-      await invalidateCrudQueries(qc, dailyLogQueryKeys);
-      logActivity("daily_log", "deleted", { id: deletedId }, { projectId });
+    mutationFn: ({ id, sourceProjectId }) => {
+      if (!sourceProjectId || currentProjectRef.current !== sourceProjectId) throw new Error("Reopen this daily log in its original project before deleting.");
+      return entities.DailyLog.delete(id);
     },
-    onError: (err) => toastCrudError(err, "Failed to delete daily log"),
+    onSuccess: async (_, { id: deletedId, sourceProjectId }) => {
+      const queryKeys = [["daily-logs", sourceProjectId]];
+      removeRecordFromCaches(qc, queryKeys, deletedId);
+      if (currentProjectRef.current === sourceProjectId) {
+        if (editing?.id === deletedId) closeForm();
+        toast.success("Daily log deleted");
+        setDeleteTarget(current => current?.id === deletedId ? null : current);
+      }
+      await invalidateCrudQueries(qc, queryKeys);
+      logActivity("daily_log", "deleted", { id: deletedId }, { projectId: sourceProjectId });
+    },
+    onError: (err, { sourceProjectId }) => { if (currentProjectRef.current === sourceProjectId) toastCrudError(err, "Failed to delete daily log"); },
   });
 
   const handleSave = (data) => {
-    if (editing) {
-      updateMut.mutate({ id: editing.id, data });
+    if (editing?.id) {
+      updateMut.mutate({ id: editing.id, data, scope: formScope });
     } else {
       // Mint the idempotency key up front so it rides BOTH the online create and
       // any offline retry (dedup'd server-side on replay).
-      createMut.mutate({ ...data, client_op_id: newClientOpId() });
+      createMut.mutate({ data: { ...data, client_op_id: newClientOpId() }, scope: formScope, enqueue: enqueueOutbox, flush: flushOutbox });
     }
   };
 
   const handleCopyFromYesterday = () => {
-    if (logs.length === 0) {
+    if (!projectId) {
+      toast.error("Select a project before copying a daily log.");
+      return;
+    }
+    const projectLogs = logs.filter((log) => log.project_id === projectId);
+    if (projectLogs.length === 0) {
       toast.error("No previous logs to copy from");
       return;
     }
-    const sorted = [...logs].sort(
+    const sorted = [...projectLogs].sort(
       (a, b) => new Date(b.date) - new Date(a.date)
     );
     const mostRecent = sorted[0];
-    const today = new Date().toISOString().slice(0, 10);
-    setEditing({
-      crew_name: mostRecent.crew_name || "",
-      headcount: mostRecent.headcount || 0,
-      superintendent: mostRecent.superintendent || "",
-      equipment_used: mostRecent.equipment_used || "",
-      activities: "",
-      delays: "",
-      safety_notes: "",
-      date: today,
-    });
-    setShowForm(true);
+    openForm(createDailyLogDraft(projectId, mostRecent));
   };
 
   const selectedProject = projectId
@@ -286,7 +329,7 @@ export default function DailyLogs() {
           </Button>
         )}
         {can("create", "daily_log") && (
-          <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
+          <Button variant="primary" icon="plus" onClick={() => openForm()}>
             New Log
           </Button>
         )}
@@ -332,12 +375,13 @@ export default function DailyLogs() {
       </div>
 
       {/* Form */}
-      {showForm && (
+      {showForm && formScope?.projectId === projectId && (
         <DailyLogForm
+          key={formScope.id}
           projectId={projectId}
           log={editing}
           onSave={handleSave}
-          onClose={() => { setShowForm(false); setEditing(null); }}
+          onClose={closeForm}
           isSaving={createMut.isPending || updateMut.isPending}
         />
       )}
@@ -361,7 +405,7 @@ export default function DailyLogs() {
       ) : (
         <DailyLogsList
           logs={filteredLogs}
-          onEdit={can("edit", "daily_log") ? (log) => { setEditing(log); setShowForm(true); } : null}
+          onEdit={can("edit", "daily_log") ? (log) => openForm(log) : null}
           onDelete={can("delete", "daily_log") ? (log) => setDeleteTarget(log) : null}
         />
       )}
@@ -372,7 +416,7 @@ export default function DailyLogs() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => {
           if (!deleteMut.isPending && deleteTarget?.id) {
-            deleteMut.mutate(deleteTarget.id);
+            deleteMut.mutate({ id: deleteTarget.id, sourceProjectId: deleteTarget.project_id });
           }
         }}
         title="Delete Daily Log"
@@ -381,4 +425,3 @@ export default function DailyLogs() {
     </div>
   );
 }
-
