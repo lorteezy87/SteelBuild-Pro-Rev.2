@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "user" }, error: null }) }) }) }),
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async (): Promise<{ data: { role: string }; error: Error | null }> => ({ data: { role: "user" }, error: null }) }) }) }),
     auth: {
       getSession: mocks.getSession, refreshSession: mocks.refreshSession, signOut: mocks.signOut,
       mfa: { getAuthenticatorAssuranceLevel: mocks.aal },

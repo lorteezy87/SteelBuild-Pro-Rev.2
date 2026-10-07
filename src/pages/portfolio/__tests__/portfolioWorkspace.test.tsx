@@ -18,9 +18,9 @@ vi.mock("@/components/shared/OrgContext", () => ({
   useOrg: () => ({ currentOrg: mocks.orgId ? { id: mocks.orgId } : null }),
 }));
 vi.mock("@/components/shared/ProjectContext", () => ({
-  useProjectContext: () => ({ activeProject: null, setActiveProject: vi.fn() }),
+  useProjectContext: () => ({ activeProject: null as null, setActiveProject: vi.fn() }),
 }));
-vi.mock("@/lib/AuthContext", () => ({ useAuth: () => ({ user: null }) }));
+vi.mock("@/lib/AuthContext", () => ({ useAuth: () => ({ user: null as null }) }));
 vi.mock("@/hooks/useUserPrefs", () => ({
   useUserPrefs: () => ({ auto_refresh_secs: 0 }),
   refetchIntervalFromPref: () => false,
@@ -36,7 +36,7 @@ vi.mock("@/api/supabaseClient", () => ({
   },
 }));
 vi.mock("@/lib/supabase", () => ({ supabase: { from: vi.fn() } }));
-vi.mock("@/components/dashboard/GettingStartedChecklist", () => ({ default: () => null }));
+vi.mock("@/components/dashboard/GettingStartedChecklist", () => ({ default: (): null => null }));
 vi.mock("@/components/shared/ErrorBoundary", () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -49,17 +49,17 @@ vi.mock("@/components/shared/KPIStrip", () => ({
   default: ({ items }: { items: Array<{ label: string; value: string | number }> }) =>
     <pre data-testid="summary">{JSON.stringify(items)}</pre>,
 }));
-vi.mock("@/components/shared/StatusBadge", () => ({ default: () => null }));
-vi.mock("@/components/dashboard/TrueHealthChart", () => ({ default: () => null }));
+vi.mock("@/components/shared/StatusBadge", () => ({ default: (): null => null }));
+vi.mock("@/components/dashboard/TrueHealthChart", () => ({ default: (): null => null }));
 vi.mock("@/components/design-system", () => ({
-  CommandBar: () => null,
+  CommandBar: (): null => null,
   Button: ({ children, onClick }: { children: ReactNode; onClick: () => void }) =>
     <button type="button" onClick={onClick}>{children}</button>,
 }));
 vi.mock("recharts", () => Object.fromEntries([
   "BarChart", "Bar", "XAxis", "YAxis", "CartesianGrid", "Tooltip",
   "ResponsiveContainer", "PieChart", "Pie", "Cell", "Legend",
-].map((name) => [name, () => null])));
+].map((name) => [name, (): null => null])));
 
 const projectFixtures = [
   { id: "project-a", org_id: "org-a", name: "Alpha", original_contract_value: 100 },
