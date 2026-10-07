@@ -34,6 +34,9 @@ import PayApplicationsControlCenter from "./payApplications/PayApplicationsContr
 import { assertProjectId, toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
+import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
+import PayApplicationVoidDialog from "./payApplications/PayApplicationVoidDialog";
+import { buildVoidPayApplicationPatch, canMovePayApplication } from "./payApplications/payApplicationStatus";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
@@ -70,14 +73,18 @@ function NewAppModal({ open, defaultRetainage, onClose, onCreate, busy }) {
 export default function PayApplications() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
+  const { role, isLoading: roleLoading } = useProjectRole(projectId);
+  const statusContext = { projectId, role, roleLoading };
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [voidTarget, setVoidTarget] = useState(null);
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
   useEffect(() => {
     setSelectedId(null);
     setNewOpen(false);
+    setVoidTarget(null);
   }, [projectId]);
 
   const {
@@ -104,6 +111,9 @@ export default function PayApplications() {
   }), [contractQuery.data, changeOrders]);
 
   const selectedApp = payApps.find((a) => a.id === selectedId) || null;
+  const voidApp = voidTarget?.projectId === projectId
+    ? payApps.find((app) => app.id === voidTarget.id && app.project_id === projectId) || null
+    : null;
   // Only a DRAFT pay app is editable — once submitted/approved/paid the G703
   // figures are a billing record (locked in the UI here + by the DB trigger, C2).
   const isDraft = selectedApp?.status === "draft";
@@ -151,9 +161,35 @@ export default function PayApplications() {
     onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
   });
   const statusMut = useMutation({
-    mutationFn: ({ id, status }) => updatePayApplication(id, { status }),
+    mutationFn: ({ id, status }) => {
+      const application = payApps.find((app) => app.id === id) || null;
+      if (status === "void" || !canMovePayApplication(application, statusContext, status)) {
+        throw new Error("This status change is unavailable for your current project role or application state.");
+      }
+      return updatePayApplication(id, { status });
+    },
     onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); },
     onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
+  });
+  const voidMut = useMutation({
+    mutationFn: ({ id, projectId: targetProjectId, reason }) => {
+      const application = payApps.find((app) => app.id === id) || null;
+      if (targetProjectId !== projectId || !canMovePayApplication(application, statusContext, "void")) {
+        throw new Error("Voiding is unavailable for your current project role or application state.");
+      }
+      return updatePayApplication(id, buildVoidPayApplicationPatch(reason));
+    },
+    onSuccess: (application, { id, projectId: targetProjectId }) => {
+      // Bind cache, audit and dialog completion to the request's original
+      // project/application even if navigation changed while the RPC ran.
+      qc.setQueryData(["pay_applications", targetProjectId], (previous) =>
+        Array.isArray(previous) ? previous.map((app) => app.id === id ? application : app) : previous);
+      qc.invalidateQueries({ queryKey: ["pay_applications", targetProjectId] });
+      qc.invalidateQueries({ queryKey: ["payapp_lines", id] });
+      logActivity("pay_application", "status_changed", application, { projectId: targetProjectId, description: "→ void" });
+      setVoidTarget((current) => current?.id === id && current.projectId === targetProjectId ? null : current);
+      toast.success(`Pay Application #${application.application_number} voided`);
+    },
   });
   const delMut = useMutation({
     mutationFn: (id) => softDeletePayApplication(id),
@@ -274,8 +310,15 @@ export default function PayApplications() {
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <select style={{ ...input, width: "auto" }} value={selectedApp.status} onChange={(e) => statusMut.mutate({ id: selectedApp.id, status: e.target.value })}>
-                    {PAY_APP_STATUSES.map((s) => <option key={s} value={s}>{PAY_APP_STATUS_LABELS[s]}</option>)}
+                  <select aria-label="Pay application status" style={{ ...input, width: "auto" }} value={selectedApp.status}
+                    disabled={roleLoading || !roleAtLeast(role, "pm") || appsFetching || statusMut.isPending || voidMut.isPending}
+                    onChange={(e) => {
+                      const status = e.target.value;
+                      if (!canMovePayApplication(selectedApp, statusContext, status) || statusMut.isPending || voidMut.isPending) return;
+                      if (status === "void") setVoidTarget({ id: selectedApp.id, projectId });
+                      else statusMut.mutate({ id: selectedApp.id, status });
+                    }}>
+                    {PAY_APP_STATUSES.map((s) => <option key={s} value={s} disabled={s !== selectedApp.status && !canMovePayApplication(selectedApp, statusContext, s)}>{PAY_APP_STATUS_LABELS[s]}</option>)}
                   </select>
                   <button style={btnP} disabled={!linesReady || lineMut.isPending} onClick={exportPdf}>Export PDF</button>
                   <button style={{ ...btn, color: "var(--status-error)", borderColor: "var(--status-error)", opacity: isDraft ? 1 : 0.4, cursor: isDraft ? "pointer" : "not-allowed" }} disabled={!isDraft} title={isDraft ? "" : "Only a draft pay application can be deleted — set status to void instead."} onClick={() => { if (confirm("Delete this pay application?")) delMut.mutate(selectedApp.id); }}>Delete</button>
@@ -330,6 +373,13 @@ export default function PayApplications() {
             </div>
           </div>
         )}
+        {voidApp && <PayApplicationVoidDialog
+          key={`${voidApp.project_id}:${voidApp.id}`}
+          applicationNumber={voidApp.application_number}
+          allowed={!appsFetching && !statusMut.isPending && canMovePayApplication(voidApp, statusContext, "void")}
+          onCancel={() => setVoidTarget(null)}
+          onConfirm={(reason) => voidMut.mutateAsync({ id: voidApp.id, projectId: voidApp.project_id, reason })}
+        />}
         {newOpen && <NewAppModal
           key={projectId}
           open
