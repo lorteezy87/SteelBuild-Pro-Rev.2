@@ -19,6 +19,26 @@ Browser acceptance now requires authenticated main content, complete project con
 
 [Field-phone light-theme brief](evidence/command-brief-light-mobile.png). These captures show the shipped component with synthetic records; they do not establish backend deployment or live-account acceptance.
 
+## Continuation verification record
+
+Application source commit `2d9bf6e69827ecf471def2adbb7e31060b13d261` is the continuation candidate. Local execution is now available. The following checks passed locally and the complete application job independently passed on that exact source in [push run 37591398899](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37591398899/job/112693493075):
+
+| Check | Result |
+|---|---|
+| Vitest | 7,446 tests in 780 files passed |
+| Browser acceptance | 70 passed across desktop/mobile; executive and brief fixtures cover both themes |
+| ESLint and all four type gates | Passed; no ratchet-ignore growth |
+| New-source TypeScript policy | Passed |
+| Isolated database verification | MFA boundaries, account deletion and eight helper search paths / 3,929 result cases passed |
+| MFA Edge guard tests | 23 tests passed, including actual handler bodies |
+| Production build and bundle budgets | Passed: initial 162.8 KB gzip / 320 KB; total 3,192.9 KB gzip / 3,600 KB |
+| Production dependency audit | Zero advisories, zero waivers |
+| Complete dependency audit | Five high findings in the upstream Braces/Tailwind tooling chain; unresolved |
+
+The same push run passed the secret scan, every Edge Function entrypoint typecheck and the production-dependency audit. The complete-dependency audit remains failed for the five documented high findings; production drift remains failed for the five required pending migration versions. Deployment and authenticated staging jobs were skipped. The overall workflow is therefore not green despite the passing application job. [CI browser evidence](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37591398899/artifacts/11468747601) expires 2026-10-14; the selected screenshots above are retained in the repository.
+
+The final evidence update changes only this report, backend candidate SQL hashes and coordination metadata. Application code remains the verified source. No live staging acceptance or backend deployment is implied by fixture checks.
+
 ## Product scope
 
 This release keeps SteelBuild Pro focused on structural-steel subcontractors. The project dashboard emphasizes engineering approvals, fabrication and logistics, field readiness, and commercial exposure. It retains the canonical piece-control panel and fabrication-release rules.

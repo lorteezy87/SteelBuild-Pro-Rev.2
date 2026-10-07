@@ -16,6 +16,16 @@ The production ledger contains 132 versions. The unmodified reconciliation plann
 
 All SQL files are under `supabase/migrations/`. The new MFA version stays **required / pending**, never stamped as applied by these changes. The other four were already required on the base branch.
 
+Candidate source commit: `2d9bf6e69827ecf471def2adbb7e31060b13d261`. SHA-256 below hashes the exact committed SQL blob bytes, before adding the reviewed atomic ledger stamp:
+
+| Version | SHA-256 |
+|---|---|
+| `20260922015713` | `5e91c05e0d37e2775f11f5d734df7d5cc955b471f1bd2bbed9c84c43f94f1b80` |
+| `20260927150000` | `34500dcf125e3b10432dcfb44c3d10705b77a491263dcd95f155e3c1160550c5` |
+| `20260927160000` | `e67a55a414277691c20599003cedcafc79bad51ccc447b47930ff06d3602215c` |
+| `20261005100745` | `e05b215cc397e96d41bf10d037d491ff1b2078db62fd60762c13b1fdcdd9839d` |
+| `20261007073051` | `8354f2ff700eb49b4d3e6580419c07087bc1e6cfbbe6222dec58bc1a52162e9e` |
+
 The MFA candidate adds an enrolled-factor/AAL2 request check before authenticated REST tables, views and definer RPCs. Storage objects and currently published Realtime tables receive restrictive policies composed with their existing tenant policies. Unenrolled users can complete onboarding. Existing hooks cause an abort instead of silent replacement. See [MFA tests and rollout limits](../../supabase/tests/server-mfa/README.md) and the [read-only readiness query](../../supabase/tests/server-mfa/readiness.sql).
 
 ## Deployed Edge source comparison
