@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CommandCenterControlCenter from "../CommandCenterControlCenter";
 
@@ -146,7 +147,7 @@ describe("Command Center register drilldowns", () => {
   });
 
   it("clears the prior project's horizon so undated work in the new project remains visible", () => {
-    const props = {
+    const props: ComponentProps<typeof CommandCenterControlCenter> = {
       sources: {
         rfis: [{ id: "urgent", title: "Prior project approval", status: "Open", date_required: "2026-10-05" }],
         submittals: [], changeOrders: [], deliveries: [], workPackages: [], scheduleTasks: [], projects: [{ id: "p1" }],
