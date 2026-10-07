@@ -42,7 +42,7 @@ const blockedGate: CanonicalReleaseGate = {
   evaluated_at: "2026-07-23T12:00:00.000Z",
 };
 
-function renderPanel(pieceControlMode = "shadow") {
+function renderPanel(pieceControlMode = "shadow", assertCanRelease?: () => void) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -56,6 +56,7 @@ function renderPanel(pieceControlMode = "shadow") {
         projectId="project-1"
         workPackageId="wp-1"
         pieceControlMode={pieceControlMode}
+        assertCanRelease={assertCanRelease}
       />
     </QueryClientProvider>,
   );
@@ -157,5 +158,18 @@ describe("CanonicalFabReleasePanel", () => {
     expect(
       screen.getByLabelText("Required exception reason"),
     ).toHaveAttribute("id", "piece-release-exception-reason-wp-1");
+  });
+
+  it("rechecks caller evidence at the actual release boundary", async () => {
+    vi.mocked(evaluateCanonicalReleaseGate).mockResolvedValue({
+      ...blockedGate, passes: true,
+      checks: { ...blockedGate.checks, scope: { passed: true, blockers: [] } },
+    });
+    const assertCanRelease = vi.fn(() => { throw new Error("Evidence is refreshing"); });
+    renderPanel("live", assertCanRelease);
+    fireEvent.click(await screen.findByRole("button", { name: "Release for fabrication" }));
+    await waitFor(() => expect(assertCanRelease).toHaveBeenCalledOnce());
+    expect(releaseCanonicalWorkPackage).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
   });
 });

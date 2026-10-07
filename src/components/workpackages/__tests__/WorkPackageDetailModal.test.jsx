@@ -20,7 +20,7 @@ vi.mock("@/components/pieceControl/PieceLogisticsControl", () => ({
 }));
 
 vi.mock("@/components/pieceControl/CanonicalFabReleasePanel", () => ({
-  default: () => <div>Release controls</div>,
+  default: () => <div>Release controls<label htmlFor="release-draft">Release draft<input id="release-draft" defaultValue="" /></label><button type="button">Commit release</button></div>,
 }));
 
 const sampleWp = {
@@ -37,6 +37,24 @@ const sampleWp = {
 };
 
 describe("WorkPackageDetailModal", () => {
+  it("keeps an open release draft mounted and disables its actions during evidence refresh", () => {
+    const props = { wp: sampleWp, onClose: vi.fn(), onSetStatus: vi.fn() };
+    const { rerender } = render(<WorkPackageDetailModal {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "release gate" }));
+    fireEvent.change(screen.getByLabelText("Release draft"), { target: { value: "Review missing material" } });
+    rerender(<WorkPackageDetailModal {...props} evidencePending />);
+    expect(screen.getByLabelText("Release draft")).toHaveValue("Review missing material");
+    expect(screen.getByLabelText("Release draft")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Commit release" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mark complete" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Close", exact: true }));
+    expect(props.onClose).toHaveBeenCalledOnce();
+    expect(props.onSetStatus).not.toHaveBeenCalled();
+    rerender(<WorkPackageDetailModal {...props} />);
+    expect(screen.getByLabelText("Release draft")).toHaveValue("Review missing material");
+    expect(screen.getByRole("button", { name: "Commit release" })).toBeEnabled();
+  });
+
   it("renders the overview drawer for a clicked work package", () => {
     expect(() => {
       render(

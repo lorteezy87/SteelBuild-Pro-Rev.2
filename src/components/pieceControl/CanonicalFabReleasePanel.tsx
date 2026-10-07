@@ -14,6 +14,7 @@ interface CanonicalFabReleasePanelProps {
   projectId: string;
   workPackageId: string;
   pieceControlMode: string;
+  assertCanRelease?: () => void;
 }
 
 const CHECK_LABELS: Array<{ key: keyof CanonicalReleaseGate["checks"]; label: string }> = [
@@ -189,6 +190,7 @@ export default function CanonicalFabReleasePanel({
   projectId,
   workPackageId,
   pieceControlMode,
+  assertCanRelease,
 }: CanonicalFabReleasePanelProps) {
   const queryClient = useQueryClient();
   const enabled = Boolean(projectId && workPackageId && pieceControlMode !== "off");
@@ -205,7 +207,10 @@ export default function CanonicalFabReleasePanel({
   const gate = gateQuery.data;
 
   const releaseMutation = useMutation({
-    mutationFn: (reason: string | null) => releaseCanonicalWorkPackage(workPackageId, reason),
+    mutationFn: (reason: string | null) => {
+      assertCanRelease?.();
+      return releaseCanonicalWorkPackage(workPackageId, reason);
+    },
     onSuccess: async (result) => {
       setExceptionOpen(false);
       setExceptionReason("");

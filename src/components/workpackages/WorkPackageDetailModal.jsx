@@ -55,6 +55,8 @@ export default function WorkPackageDetailModal({
   onDelete = null,
   onSetStatus = null,
   statusPending = false,
+  evidencePending = false,
+  assertEvidenceReady,
   onNavigate = null,
 }) {
   const [tab, setTab] = useState("scope");
@@ -168,7 +170,7 @@ export default function WorkPackageDetailModal({
             wp={wp}
             signals={signals}
             onSetStatus={onSetStatus}
-            statusPending={statusPending}
+            statusPending={statusPending || evidencePending}
             onNavigate={onNavigate}
             pieceControlMode={pieceControlMode}
           />
@@ -188,7 +190,7 @@ export default function WorkPackageDetailModal({
           ))}
           <div style={{ flex: 1 }} />
           {onEdit && (
-            <button type="button" onClick={() => onEdit(wp)} style={tabButtonStyle(false)}>
+            <button type="button" disabled={evidencePending} onClick={() => onEdit(wp)} style={tabButtonStyle(false)}>
               EDIT
             </button>
           )}
@@ -196,6 +198,7 @@ export default function WorkPackageDetailModal({
             <button
               type="button"
               onClick={() => onDelete(wp)}
+              disabled={evidencePending}
               style={{ ...tabButtonStyle(false), color: "var(--status-error)" }}
             >
               DELETE
@@ -203,7 +206,14 @@ export default function WorkPackageDetailModal({
           )}
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <fieldset
+          disabled={evidencePending}
+          aria-label="Package evidence and actions"
+          onClickCapture={(event) => {
+            if (evidencePending) { event.preventDefault(); event.stopPropagation(); }
+          }}
+          style={{ flex: 1, minWidth: 0, margin: 0, border: 0, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}
+        >
           {tab === "scope" && (
             <>
               <SectionTitle
@@ -228,6 +238,7 @@ export default function WorkPackageDetailModal({
                 projectId={wp.project_id}
                 workPackageId={wp.id}
                 pieceControlMode={pieceControlMode}
+                assertCanRelease={assertEvidenceReady}
               />
             </div>
           )}
@@ -271,7 +282,7 @@ export default function WorkPackageDetailModal({
           {tab === "field" && (
             <FieldTab wp={wp} signals={signals} />
           )}
-        </div>
+        </fieldset>
       </div>
     </>
   );

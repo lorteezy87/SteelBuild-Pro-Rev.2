@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { formatBudgetPercent } from "../shared/formatters";
@@ -37,7 +37,8 @@ const calcStyle = (val, ref) => ({
   color: Number(val) > Number(ref) && Number(ref) > 0 ? "var(--status-error)" : "var(--text-muted)"
 });
 
-export default function WPFormModal({ open, onClose, onSave, wp, projects = [], nextNumber, allDrawings = [], defaultProjectId = "", isSaving = false }) {
+export default function WPFormModal({ open, onClose, onSave, wp, projects = [], nextNumber, allDrawings = [], defaultProjectId = "", isSaving = false, pieceDrivenEvidence = undefined }) {
+  const queryClient = useQueryClient();
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [linkedDrawingIds, setLinkedDrawingIds] = useState([]);
@@ -55,17 +56,19 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     staleTime: 60_000,
   });
 
-  const { data: pieceProgressGate } = useQuery({
+  const progressGateQuery = useQuery({
     queryKey: ["wp-piece-progress-gate", activeProjectId, wp?.id],
     enabled: Boolean(open && activeProjectId && wp?.id),
     staleTime: 30_000,
     queryFn: async () => {
       const db = supabase;
-      const { data: project } = await db
+      const { data: project, error: projectError } = await db
         .from("projects")
         .select("piece_control_mode")
         .eq("id", activeProjectId)
         .maybeSingle();
+      if (projectError) throw projectError;
+      if (!project) throw new Error("The work package project could not be verified.");
       const mode = project?.piece_control_mode ?? "off";
       // Only the leaf-lot *existence* matters here; a HEAD count avoids
       // downloading every piece row on the package just to open the form.
@@ -79,13 +82,20 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         .is("deleted_at", null)
         .or("is_container.is.null,is_container.eq.false");
       if (error) throw error;
-      return { mode, leafCount: count ?? 0 };
+      if (!Number.isInteger(count) || count < 0) throw new Error("The assigned piece count could not be verified.");
+      return { mode, leafCount: count };
     },
   });
-  const pieceDrivenProgress = isPieceDrivenWorkPackageProgress(
-    pieceProgressGate?.mode,
-    pieceProgressGate?.leafCount ?? 0,
-  );
+  // The page's complete canonical leaf snapshot takes precedence over this
+  // form's independent lookup, including while that lookup is pending/error.
+  const hasProvenEvidence = typeof pieceDrivenEvidence === "boolean";
+  const pieceProgressGate = progressGateQuery.data;
+  const pieceDrivenProgress = hasProvenEvidence
+    ? pieceDrivenEvidence
+    : isPieceDrivenWorkPackageProgress(pieceProgressGate?.mode, pieceProgressGate?.leafCount ?? 0);
+  const progressEvidenceReady = !wp?.id || hasProvenEvidence
+    || (progressGateQuery.status === "success" && progressGateQuery.fetchStatus === "idle");
+  const progressReadOnly = pieceDrivenProgress || !progressEvidenceReady;
 
   useEffect(() => {
     if (wp) {
@@ -109,14 +119,14 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     setSetSearch("");
   }, [wp, open, nextNumber, defaultProjectId]);
 
-  const validate = () => {
+  const validate = (progressLocked) => {
     const e = {};
     if (!form.name?.trim()) e.name = "Required";
     if (!form.project_id) e.project_id = "Required";
     // Fabrication with no linked sheets is a hard stop; sheets that are linked
     // but not yet IFC only warn — Fab Release owns that gate and can release
     // as an exception, so blocking here contradicted its own banner.
-    if (form.phase === "Fabrication" && linkedDrawingIds.length === 0 && !pieceDrivenProgress) {
+    if (form.phase === "Fabrication" && linkedDrawingIds.length === 0 && !progressLocked) {
       e.phase = "Cannot advance to Fabrication without linked drawings";
     }
     setErrors(e);
@@ -128,7 +138,14 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
 
   const handleSave = () => {
     if (isSaving) return;
-    if (!validate()) return;
+    // Query invalidation may begin before React repaints disabled controls.
+    // Unknown standalone edit evidence must never send manual progress keys.
+    const currentGate = queryClient.getQueryState(["wp-piece-progress-gate", activeProjectId, wp?.id]);
+    const lockProgressAtSave = hasProvenEvidence ? pieceDrivenEvidence : Boolean(wp?.id) && (
+      currentGate?.status !== "success" || currentGate.fetchStatus !== "idle"
+      || isPieceDrivenWorkPackageProgress(currentGate.data?.mode, currentGate.data?.leafCount ?? 0)
+    );
+    if (!validate(lockProgressAtSave)) return;
     // Strip read-only / server-generated fields before sending
     const { id: _id, created_at: _ca, updated_at: _ua, created_date: _cd, updated_date: _ud, _signals: _sig, ...rest } = form;
     const data = {
@@ -145,7 +162,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
       scheduled_end_date: dateOrNull(form.scheduled_end_date),
       vif_confirmed_date: dateOrNull(form.vif_confirmed_date),
     };
-    if (pieceDrivenProgress) {
+    if (lockProgressAtSave) {
       // Progress, status and phase are written by refresh_work_package_progress
       // from leaf pieces; a hand edit would be reverted on the next piece event.
       delete data.percent_complete;
@@ -330,9 +347,9 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         </div>
         <FormField label="Phase" error={errors.phase}>
           <select
-            style={pieceDrivenProgress ? inputDisabledStyle : selectStyle}
+            style={progressReadOnly ? inputDisabledStyle : selectStyle}
             value={form.phase}
-            disabled={pieceDrivenProgress}
+            disabled={progressReadOnly}
             title={pieceDrivenProgress ? "Phase follows the furthest piece on this package" : undefined}
             onChange={e => set("phase", e.target.value)}
           >
@@ -341,9 +358,9 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         </FormField>
         <FormField label="Status">
           <select
-            style={pieceDrivenProgress ? inputDisabledStyle : selectStyle}
+            style={progressReadOnly ? inputDisabledStyle : selectStyle}
             value={form.status}
-            disabled={pieceDrivenProgress}
+            disabled={progressReadOnly}
             title={pieceDrivenProgress ? "Progress is driven by piece fabrication" : undefined}
             onChange={e => set("status", e.target.value)}
           >
@@ -356,7 +373,17 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           </div>
         )}
 
-        {form.phase === "Fabrication" && linkedDrawingIds.length === 0 && !pieceDrivenProgress && (
+        {!progressEvidenceReady && (
+          <div role={progressGateQuery.isError ? "alert" : "status"} style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 6, color: "var(--text-primary)" }}>
+            <p style={{ margin: 0 }}>
+              {progressGateQuery.isError ? "Piece progress could not be verified." : "Checking piece progress."}
+              {" "}Phase, status and % complete stay locked until verification finishes. Other package edits can still be saved.
+            </p>
+            {progressGateQuery.isError && <button type="button" style={{ ...btnSecondary, marginTop: 8 }} disabled={progressGateQuery.isFetching} onClick={() => { void progressGateQuery.refetch(); }}>Retry progress checks</button>}
+          </div>
+        )}
+
+        {form.phase === "Fabrication" && linkedDrawingIds.length === 0 && !progressReadOnly && (
           <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderLeft: "3px solid var(--status-error)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-error)", letterSpacing: "0.08em" }}>
             ⊘ NO DRAWING SETS LINKED — Cannot advance to Fabrication without at least one linked drawing set. Link a set below first.
           </div>
@@ -383,9 +410,9 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
             type="number"
             min="0"
             max="100"
-            style={pieceDrivenProgress ? inputDisabledStyle : inputStyle}
+            style={progressReadOnly ? inputDisabledStyle : inputStyle}
             value={form.percent_complete}
-            disabled={pieceDrivenProgress}
+            disabled={progressReadOnly}
             title={pieceDrivenProgress ? "Progress is driven by piece fabrication" : undefined}
             onChange={e => set("percent_complete", e.target.value)}
           />
