@@ -8,7 +8,7 @@
 #                before merge.
 #   - deploy-cloudflare: THE production deploy — `wrangler deploy` to the
 #                Cloudflare Worker. GATED on `ci`, secret scan, Edge typecheck
-#                and production drift, and ONLY on a push to main, so
+#                production drift and commercial PostgreSQL acceptance, and ONLY on a push to main, so
 #                a red lint/typecheck/test/build cannot reach
 #                steelbuild-pro.com. That gate only holds while this is the SOLE
 #                publisher, so Cloudflare's own Workers Builds git integration
@@ -86,6 +86,51 @@ permissions:
   contents: read
 
 jobs:
+  commercial-postgres:
+    name: Commercial SQL + concurrent PostgreSQL acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Disposable synthetic database; no Supabase credentials or hosted writes.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: steelbuild_commercial_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: commercial-fixture-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d steelbuild_commercial_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            supabase/tests/commercial-create/package-lock.json
+            supabase/tests/commercial-lifecycle/package-lock.json
+            supabase/tests/commercial-postgres/package-lock.json
+      - name: Verify transactional create and reviewed lifecycle boundaries
+        run: |
+          npm ci --prefix supabase/tests/commercial-create --ignore-scripts
+          npm test --prefix supabase/tests/commercial-create
+          npm ci --prefix supabase/tests/commercial-lifecycle --ignore-scripts
+          npm test --prefix supabase/tests/commercial-lifecycle
+      - name: Verify independent concurrent PostgreSQL sessions
+        env:
+          COMMERCIAL_POSTGRES_TEST: "1"
+          COMMERCIAL_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_commercial_test
+        run: |
+          npm ci --prefix supabase/tests/commercial-postgres --ignore-scripts
+          npm test --prefix supabase/tests/commercial-postgres
+
   edge-typecheck:
     name: Release Edge Function typecheck
     runs-on: ubuntu-latest
@@ -381,7 +426,7 @@ jobs:
   # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers (production)
-    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -527,7 +572,7 @@ jobs:
   # public/_headers marks them noindex, and Cloudflare Access is the real fix.
   preview-cloudflare:
     name: Cloudflare preview (PR)
-    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
     # Same-repo PRs only. Secrets are not exposed to forked-PR workflows, so a
     # fork would trip the config check below instead of building something
     # broken; skipping outright is clearer.
@@ -601,7 +646,7 @@ jobs:
   # Staging has its own Worker and Supabase branch. Never inherit prod env.
   deploy-staging-cloudflare:
     name: Deploy to Cloudflare Workers (staging)
-    needs: [ci, secret-scan, edge-typecheck]
+    needs: [ci, secret-scan, edge-typecheck, commercial-postgres]
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
