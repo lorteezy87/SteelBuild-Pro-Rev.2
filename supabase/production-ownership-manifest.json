@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20260921083000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - security repair that forces create_change_request submissions to server-controlled Submitted status and JWT requester identity, preventing project viewers from forging PM workflow decisions during INSERT."
+      },
+      {
         "version": "20260921054458",
         "lifecycle": "required",
         "evidence": "Owner approved release of PR #460 on 2026-09-21 after checks. Applied and stamped atomically in production after transactional staging permission tests; ledger SQL matches the committed file (MD5 8e7a375975fa3d6ca73bbaa8894d892e). Invoker RPC and INSERT policy use org-aware project access; PM-only edits remain."
