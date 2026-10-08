@@ -5,7 +5,9 @@
  *
  * KPI/queue contract is the source of truth for FabReleaseControlCenter.tsx.
  */
-import type { EnrichedWorkPackage, FabMetrics } from "./types";
+import type { EnrichedWorkPackage, FabMetrics, ReleaseGateState } from "./types";
+import type { CanonicalReleaseGate } from "@/lib/pieceControl/releaseRepository";
+import { createPageUrl } from "@/utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,16 +26,25 @@ export interface FabSummary {
   // KPI cells (6)
   kpis: FabKpiRow[];
   // Decision panel queues
-  readyQueue: EnrichedWorkPackage[];         // Up to 6: readyForRelease, sorted
-  blockedQueue: EnrichedWorkPackage[];       // Up to 6: blocked by RFI/approval, sorted by risk
-  recentlyReleased: EnrichedWorkPackage[];   // Up to 6: already in-shop, sorted by released_date desc
+  readyQueue: EnrichedWorkPackage[];         // Up to 6: verified passing release checks
+  blockedQueue: EnrichedWorkPackage[];       // Up to 6: verified release blockers
+  recentlyReleased: EnrichedWorkPackage[];   // Up to 6: recorded releases, sorted by available WP stamp
   // Headline counts (used by hero chips)
   totalCount: number;
-  releasedCount: number;            // shop_released or beyond
+  releasedCount: number;            // verified active release records
   readyForReleaseCount: number;
   blockedCount: number;
   inFabCount: number;               // actively in_fabrication
   percentReleased: number;          // releasedTons / totalTons (0–100)
+}
+
+export function workPackageReleaseGateUrl(wp: EnrichedWorkPackage, projectId: string): string {
+  const params = new URLSearchParams({
+    project: String(wp.project_id || projectId),
+    id: wp.id,
+    tab: "release-gate",
+  });
+  return `${createPageUrl("WorkPackages")}?${params.toString()}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,9 +72,9 @@ export function stageTone(stage: string): FabTone {
 /** Map a fab lane/stage to a human-readable status label for a pill. */
 export function stageLabel(stage: string): string {
   const labels: Record<string, string> = {
-    drawings_approved:  "Drawings OK",
-    material_on_hand:   "Matl Ready",
-    shop_released:      "Released",
+    drawings_approved:  "Drawing Prep",
+    material_on_hand:   "Matl Planning",
+    shop_released:      "Release Stamp",
     in_fabrication:     "In Fab",
     fabricated:         "Fabricated",
     finish_treatment:   "Finishing",
@@ -79,31 +90,63 @@ export function stageLabel(stage: string): string {
  */
 export function releaseBlockerSummary(wp: EnrichedWorkPackage): string {
   const signals = wp._signals;
-  if (signals.readyForRelease) return "Ready for release";
-
-  const rankedFlags = [...signals.flags]
-    .filter((flag) => flag.severity === "high" || flag.severity === "medium")
-    .sort((a, b) => {
-      const rank: Record<string, number> = { high: 0, medium: 1, clear: 2 };
-      return (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2);
-    })
-    .map((flag) => flag.label)
-    .filter(Boolean);
-
-  if (rankedFlags.length > 0) {
-    return `RELEASE BLOCKED — ${rankedFlags.join(" · ")}`;
+  if (signals.releaseGateState === "ready") return "Ready for release — verified";
+  if (signals.releaseGateState === "released") return "Fabrication release recorded";
+  if (signals.releaseGateState === "blocked") {
+    const blockers = signals.releaseGate?.blockers?.filter(Boolean) ?? [];
+    return blockers.length ? `RELEASE BLOCKED — ${blockers.join(" · ")}` : "RELEASE BLOCKED — review release checks";
   }
+  return "Release not verified — open Work Package release checks";
+}
 
-  const missingLinks = Number(signals.drawing?.missingLinks ?? 0);
-  if (missingLinks > 0) {
-    return `RELEASE BLOCKED — ${missingLinks} drawing link${missingLinks === 1 ? "" : "s"} missing`;
-  }
+function isMatchingGate(gate: CanonicalReleaseGate | null | undefined, packageId: string, projectId: string): gate is CanonicalReleaseGate {
+  if (!gate || gate.work_package_id !== packageId || gate.project_id !== projectId) return false;
+  if (typeof gate.passes !== "boolean" || typeof gate.already_released !== "boolean" || !Array.isArray(gate.blockers)) return false;
+  const checks = gate.checks;
+  if (!checks || [checks.scope, checks.drawings, checks.material, checks.holds].some((check) =>
+    !check || typeof check.passed !== "boolean" || !Array.isArray(check.blockers))) return false;
+  if (gate.passes && (gate.already_released || gate.blockers.length > 0 ||
+    [checks.scope, checks.drawings, checks.material, checks.holds].some((check) => !check.passed || check.blockers.length > 0))) return false;
+  return true;
+}
 
-  if (signals.risk !== "clear" || signals.needsRelease) {
-    return "RELEASE BLOCKED — blocker evidence unavailable";
-  }
-
-  return "Release status unavailable";
+/** The server result is the only source of Ready/Blocked/Released decisions. */
+export function applyCanonicalGateReadout(
+  metrics: FabMetrics,
+  projectId: string,
+  gates: Record<string, CanonicalReleaseGate | null>,
+  snapshotComplete: boolean,
+): FabMetrics {
+  const enriched: EnrichedWorkPackage[] = metrics.enriched.map((wp) => {
+    const candidate = snapshotComplete ? gates[wp.id] : null;
+    const releaseGate = isMatchingGate(candidate, wp.id, projectId) ? candidate : null;
+    const releaseGateState: ReleaseGateState = !releaseGate ? "unverified"
+      : releaseGate.already_released ? "released"
+      : releaseGate.passes ? "ready" : "blocked";
+    return {
+      ...wp,
+      _signals: {
+        ...wp._signals,
+        advisoryReadyForRelease: wp._signals.readyForRelease,
+        readyForRelease: releaseGateState === "ready",
+        releaseGateState,
+        releaseGate,
+      },
+    };
+  });
+  const byId = new Map(enriched.map((wp) => [wp.id, wp]));
+  return {
+    ...metrics,
+    enriched,
+    readyForRelease: enriched.filter((wp) => wp._signals.releaseGateState === "ready"),
+    releaseBlocked: enriched.filter((wp) => wp._signals.releaseGateState === "blocked"),
+    releasedTons: enriched.filter((wp) => wp._signals.releaseGateState === "released")
+      .reduce((sum, wp) => sum + (Number(wp.tonnage) || 0), 0),
+    activeShop: metrics.activeShop.map((wp) => byId.get(wp.id) ?? wp),
+    readyToShip: metrics.readyToShip.map((wp) => byId.get(wp.id) ?? wp),
+    exceptions: metrics.exceptions.map((wp) => byId.get(wp.id) ?? wp),
+    warnings: metrics.warnings.map((wp) => byId.get(wp.id) ?? wp),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -133,12 +176,12 @@ export function buildFabReleaseSummary(metrics: FabMetrics): FabSummary {
     totalActualHours,
   } = metrics;
 
-  // "Released" = at or beyond shop_released stage
-  const releasedCount = activeShop.length + readyToShip.length;
+  const releasedPackages = enriched.filter((wp) => wp._signals.releaseGateState === "released");
+  const releasedCount = releasedPackages.length;
   // "In Fab" = actively in in_fabrication stage (subset of activeShop)
   const inFabCount = activeShop.filter((wp) => wp._signals.stage === "in_fabrication").length;
-  // Blocked = needs release but has high/medium risk flags
-  const blockedCount = metrics.releaseBlocked.filter((wp) => wp._signals.risk !== "clear").length;
+  // Blocked comes only from the verified release check, not advisory risk.
+  const blockedCount = metrics.releaseBlocked.length;
 
   const percentReleased = totalTons > 0
     ? Math.round((releasedTons / totalTons) * 100)
@@ -149,31 +192,31 @@ export function buildFabReleaseSummary(metrics: FabMetrics): FabSummary {
     {
       label: "Released",
       value: releasedCount,
-      sublabel: "pkgs in shop",
+      sublabel: "verified release records",
       tone: releasedCount > 0 ? "good" : "neutral",
     },
     {
       label: "Ready to Release",
       value: readyForRelease.length,
-      sublabel: "pkgs queued",
+      sublabel: "verified release checks",
       tone: readyForRelease.length > 0 ? "info" : "neutral",
     },
     {
       label: "Blocked",
       value: blockedCount,
-      sublabel: "RFI / approval",
+      sublabel: "verified release blockers",
       tone: blockedCount > 0 ? "danger" : "neutral",
     },
     {
       label: "In Fab",
       value: inFabCount,
-      sublabel: "active shop work",
+      sublabel: "package stage (advisory)",
       tone: inFabCount > 0 ? "info" : "neutral",
     },
     {
       label: "% Released",
       value: `${percentReleased}%`,
-      sublabel: "by tonnage",
+      sublabel: "verified by tonnage",
       tone: percentReleased >= 80 ? "good" : percentReleased >= 40 ? "warn" : "neutral",
     },
     {
@@ -186,25 +229,21 @@ export function buildFabReleaseSummary(metrics: FabMetrics): FabSummary {
 
   // ── Decision panel queues ───────────────────────────────────────────────
 
-  // Ready Queue: packages that are readyForRelease, sorted by risk then readiness score desc
+  // Ready Queue: server-passing packages, sorted by advisory score within the queue.
   const readyQueue = [...readyForRelease]
     .sort((a, b) => b._signals.readinessScore - a._signals.readinessScore)
     .slice(0, 6);
 
-  // Blocked Queue: packages blocked by RFI or approval (high-risk, needs release)
+  // Blocked Queue: packages the server gate blocked, sorted by advisory risk.
   const blockedQueue = [...metrics.releaseBlocked]
-    .filter((wp) => wp._signals.risk !== "clear")
     .sort((a, b) => {
       const riskRank: Record<string, number> = { high: 0, medium: 1, clear: 2 };
       return (riskRank[a._signals.risk] ?? 2) - (riskRank[b._signals.risk] ?? 2);
     })
     .slice(0, 6);
 
-  // Recently Released reads the exact same released package set as the KPI.
-  // Missing dates are incomplete metadata, not proof the release did not happen.
-  const releasedPackages = [...activeShop, ...readyToShip].filter(
-    (wp, index, all) => all.findIndex((candidate) => candidate.id === wp.id) === index,
-  );
+  // Recorded Releases reads the exact same released package set as the KPI.
+  // WP stamp dates help sort; they are not treated as release-record evidence.
   const recentlyReleased = releasedPackages
     .sort((a, b) => {
       const aDate = String(a.released_date ?? "");

@@ -16,12 +16,14 @@ export function exportFabReleaseCSV(rows: EnrichedWorkPackage[], fileName = "fab
     "Status",
     "Tons",
     "Progress",
-    "Readiness",
-    "Risk",
+    "Release Verification",
+    "Release Blockers",
+    "Advisory Planning Score",
+    "Advisory Risk",
     "Crew",
-    "Released Date",
-    "Drawing Packages",
-    "Flags",
+    "WP Release Stamp",
+    "WP Drawing Packages (Advisory)",
+    "Advisory Risk Markers",
   ];
   const lines = [
     headers.join(","),
@@ -32,6 +34,10 @@ export function exportFabReleaseCSV(rows: EnrichedWorkPackage[], fileName = "fab
       wp._signals.status,
       num(wp.tonnage).toFixed(1),
       wp._signals.progress,
+      wp._signals.releaseGateState === "ready" ? "Release verified"
+        : wp._signals.releaseGateState === "blocked" ? "Release blocked"
+          : wp._signals.releaseGateState === "released" ? "Release recorded" : "Not verified",
+      wp._signals.releaseGate?.blockers?.join("; ") || "",
       wp._signals.readinessScore,
       wp._signals.risk,
       wp.crew,

@@ -100,7 +100,7 @@ export function Hero({ projectName, metrics, view, onViewChange, onExport, onCre
         <HeroMetric
           label="In Shop"
           value={metrics.activeShop.length}
-          sub={`${formatTons(metrics.releasedTons)} released`}
+          sub={`${formatTons(metrics.releasedTons)} verified release tons`}
           color="var(--phase-fab)"
           icon={Hammer}
         />
@@ -171,7 +171,7 @@ export function SummaryStrip({ metrics, stageFilter, onStageFilter }: SummaryStr
     <section className="fab-summary-grid">
       <SummaryCard icon={PackageCheck} label="Total Tonnage" value={formatTons(metrics.totalTons)} sub={`${metrics.totalCount} packages`} color="var(--accent)" />
       <SummaryCard icon={Wrench} label="Shop Hours" value={`${metrics.laborBurn}%`} sub={`${formatHours(metrics.totalActualHours)} / ${formatHours(metrics.totalBudgetHours)}`} color={metrics.laborBurn > 100 ? "var(--status-error)" : "var(--status-info)"} />
-      <SummaryCard icon={ShieldCheck} label="Release Blocked" value={metrics.releaseBlocked.length} sub={`${metrics.onHold.length} on hold`} color={metrics.releaseBlocked.length ? "var(--status-error)" : "var(--status-success)"} />
+      <SummaryCard icon={ShieldCheck} label="Release Blocked" value={metrics.releaseBlocked.length} sub="Verified release checks" color={metrics.releaseBlocked.length ? "var(--status-error)" : "var(--status-success)"} />
       <SummaryCard icon={Clock3} label="Released Tons" value={formatTons(metrics.releasedTons)} sub={`${metrics.activeShop.length} active shop packages`} color="var(--phase-fab)" />
       {metrics.stageRollup.slice(0, 4).map((stage) => (
         <button
@@ -223,7 +223,7 @@ export function StageFlowStrip({ metrics, stageFilter, onStageFilter }: StageFlo
       <div className="fab-section-head">
         <div>
           <div className="fab-section-label">Release Pipeline</div>
-          <div className="fab-muted">Visual stage flow from approved drawings through ready-to-ship packages.</div>
+          <div className="fab-muted">Package workflow markers are advisory. Verified release checks control fabrication release.</div>
         </div>
         <div className="fab-flow-total" style={mono}>{formatTons(metrics.totalTons)} total</div>
       </div>
@@ -366,7 +366,7 @@ export function ExceptionRail({ metrics, onOpen, onFilterRisk, onFilterStage }: 
       <div className="fab-rail-header">
         <div>
           <div className="fab-section-label">Next Attention</div>
-          <div className="fab-muted">Blocked release items and shop risks.</div>
+          <div className="fab-muted">Package execution risks; use verified release checks for release blockers.</div>
         </div>
         <AlertTriangle size={18} color={metrics.exceptions.length ? "var(--status-error)" : "var(--status-success)"} />
       </div>
@@ -374,7 +374,7 @@ export function ExceptionRail({ metrics, onOpen, onFilterRisk, onFilterStage }: 
       <div className="fab-rail-kpis">
         <MiniStat label="Exceptions" value={metrics.exceptions.length} color="var(--status-error)" onClick={() => onFilterRisk("high")} />
         <MiniStat label="Warnings" value={metrics.warnings.length} color="var(--status-warning)" onClick={() => onFilterRisk("medium")} />
-        <MiniStat label="Ready" value={metrics.readyForRelease.length} color="var(--status-success)" onClick={() => onFilterStage("material_on_hand")} />
+        <MiniStat label="Release Verified" value={metrics.readyForRelease.length} color="var(--status-success)" onClick={() => onFilterRisk("release-ready")} />
         <MiniStat label="RTS" value={metrics.readyToShip.length} color="var(--phase-delivery)" onClick={() => onFilterStage("ready_to_ship")} />
       </div>
 
@@ -445,12 +445,13 @@ interface FlowViewProps {
   rows: EnrichedWorkPackage[];
   stageRollup: StageRollup[];
   onOpen: WpHandler;
+  onOpenGate: WpHandler;
   onEdit: WpHandler | null;
   onComplete: WpHandler;
   isCompleting: boolean;
 }
 
-export function FlowView({ rows, stageRollup, onOpen, onEdit, onComplete, isCompleting }: FlowViewProps) {
+export function FlowView({ rows, stageRollup, onOpen, onOpenGate, onEdit, onComplete, isCompleting }: FlowViewProps) {
   if (!rows.length) return null;
   return (
     <div className="fab-stage-lanes">
@@ -473,6 +474,7 @@ export function FlowView({ rows, stageRollup, onOpen, onEdit, onComplete, isComp
                   key={wp.id}
                   wp={wp}
                   onOpen={() => onOpen(wp)}
+                  onOpenGate={() => onOpenGate(wp)}
                   onEdit={onEdit ? () => onEdit(wp) : null}
                   onComplete={() => onComplete(wp)}
                   isCompleting={isCompleting}
@@ -491,12 +493,13 @@ export function FlowView({ rows, stageRollup, onOpen, onEdit, onComplete, isComp
 interface BoardViewProps {
   laneGroups: Record<string, EnrichedWorkPackage[]>;
   onOpen: WpHandler;
+  onOpenGate: WpHandler;
   onEdit: WpHandler | null;
   onComplete: WpHandler;
   isCompleting: boolean;
 }
 
-export function BoardView({ laneGroups, onOpen, onEdit, onComplete, isCompleting }: BoardViewProps) {
+export function BoardView({ laneGroups, onOpen, onOpenGate, onEdit, onComplete, isCompleting }: BoardViewProps) {
   return (
     <div className="fab-board">
       {BOARD_LANES.map((lane) => {
@@ -515,6 +518,7 @@ export function BoardView({ laneGroups, onOpen, onEdit, onComplete, isCompleting
                   wp={wp}
                   compact
                   onOpen={() => onOpen(wp)}
+                  onOpenGate={() => onOpenGate(wp)}
                   onEdit={onEdit ? () => onEdit(wp) : null}
                   onComplete={() => onComplete(wp)}
                   isCompleting={isCompleting}
@@ -533,12 +537,13 @@ export function BoardView({ laneGroups, onOpen, onEdit, onComplete, isCompleting
 interface RegisterViewProps {
   rows: EnrichedWorkPackage[];
   onOpen: WpHandler;
+  onOpenGate: WpHandler;
   onEdit: WpHandler | null;
   onComplete: WpHandler;
   isCompleting: boolean;
 }
 
-export function RegisterView({ rows, onOpen, onEdit, onComplete, isCompleting }: RegisterViewProps) {
+export function RegisterView({ rows, onOpen, onOpenGate, onEdit, onComplete, isCompleting }: RegisterViewProps) {
   if (!rows.length) return null;
   return (
     <section className="fab-register-shell">
@@ -549,16 +554,17 @@ export function RegisterView({ rows, onOpen, onEdit, onComplete, isCompleting }:
             <th>Package</th>
             <th>Stage</th>
             <th>Status</th>
-            <th>Drawings</th>
+            <th>WP linked drawings</th>
             <th>Progress</th>
-            <th>Readiness</th>
-            <th>Released</th>
+            <th>Release checks</th>
+            <th>Advisory score</th>
+            <th>WP release stamp</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((wp) => (
-            <tr key={wp.id} onClick={() => onOpen(wp)} className={`risk-${wp._signals.risk}`}>
+            <tr key={wp.id} onClick={() => onOpen(wp)} className={`risk-${wp._signals.releaseGateState === "blocked" ? "high" : wp._signals.releaseGateState === "unverified" ? "medium" : wp._signals.risk}`}>
               <td><span className="fab-wp-number">{wp.wp_number || "-"}</span></td>
               <td>
                 <strong>{getWorkPackageDisplayName(wp)}</strong>
@@ -568,11 +574,13 @@ export function RegisterView({ rows, onOpen, onEdit, onComplete, isCompleting }:
               <td><StatusPill label={wp._signals.status} color={STATUS_TONE[wp._signals.status]} size="xs" /></td>
               <td>{wp._signals.drawing.releasedCount}/{wp._signals.drawing.linkedCount || 0}</td>
               <td><ProgressBar value={wp._signals.progress} color={stageColor(wp._signals.stage)} height={4} sub={`${wp._signals.progress}%`} /></td>
+              <td>{gateStatusLabel(wp)}</td>
               <td><Readiness value={wp._signals.readinessScore} risk={wp._signals.risk} /></td>
               <td>{formatDate(wp.released_date)}</td>
               <td>
                 <CardActions
                   wp={wp}
+                  onOpenGate={(event) => { event.stopPropagation(); onOpenGate(wp); }}
                   onEdit={onEdit ? (event) => { event.stopPropagation(); onEdit(wp); } : null}
                   onComplete={(event) => { event.stopPropagation(); onComplete(wp); }}
                   isCompleting={isCompleting}
@@ -584,6 +592,15 @@ export function RegisterView({ rows, onOpen, onEdit, onComplete, isCompleting }:
       </table>
     </section>
   );
+}
+
+function gateStatusLabel(wp: EnrichedWorkPackage): string {
+  const { releaseGateState, releaseGate } = wp._signals;
+  if (releaseGateState === "ready") return "Release verified";
+  if (releaseGateState === "released") return "Fabrication release recorded";
+  if (releaseGateState === "blocked") return releaseGate?.blockers?.[0]
+    ? `Blocked — ${releaseGate.blockers[0]}` : "Release blocked";
+  return "Release not verified";
 }
 
 interface HoursViewProps {
@@ -643,16 +660,16 @@ interface FabPackageCardProps {
   wp: EnrichedWorkPackage;
   compact?: boolean;
   onOpen: () => void;
+  onOpenGate: () => void;
   onEdit: ActionHandler | null;
   onComplete: ActionHandler;
   isCompleting: boolean;
 }
 
-function FabPackageCard({ wp, compact = false, onOpen, onEdit, onComplete, isCompleting }: FabPackageCardProps) {
+function FabPackageCard({ wp, compact = false, onOpen, onOpenGate, onEdit, onComplete, isCompleting }: FabPackageCardProps) {
   const signals = wp._signals;
-  const firstFlag = signals.flags[0];
   return (
-    <article className={`fab-package-card risk-${signals.risk} ${compact ? "is-compact" : ""}`} onClick={onOpen}>
+    <article className={`fab-package-card risk-${signals.releaseGateState === "blocked" ? "high" : signals.releaseGateState === "unverified" ? "medium" : signals.risk} ${compact ? "is-compact" : ""}`} onClick={onOpen}>
       <div className="fab-card-top">
         <span className="fab-wp-number">{wp.wp_number || "WP"}</span>
         <StageBadge stage={signals.stage} />
@@ -662,20 +679,20 @@ function FabPackageCard({ wp, compact = false, onOpen, onEdit, onComplete, isCom
         <div className="fab-card-facts">
           <Fact icon={PackageCheck} label="Tons" value={formatTons(wp.tonnage)} />
           <Fact icon={Users} label="Owner" value={wp.crew || "Open"} />
-          <Fact icon={CalendarDays} label="Release" value={formatDate(wp.released_date)} />
+          <Fact icon={CalendarDays} label="WP stamp" value={formatDate(wp.released_date)} />
         </div>
       )}
       <ProgressBar value={signals.progress} color={stageColor(signals.stage)} height={5} sub={`${signals.progress}% complete`} />
       <div className="fab-card-pills">
         <Readiness value={signals.readinessScore} risk={signals.risk} />
-        <Flag label={firstFlag?.label || "No blockers"} severity={firstFlag?.severity || "clear"} />
+        <Flag label={gateStatusLabel(wp)} severity={signals.releaseGateState === "blocked" ? "high" : signals.releaseGateState === "ready" ? "clear" : "medium"} />
       </div>
       <div className="fab-card-drawings">
-        {signals.drawing.releasedCount}/{signals.drawing.linkedCount || 0} released drawings
+        {signals.drawing.releasedCount}/{signals.drawing.linkedCount || 0} WP-linked drawing stage markers (advisory)
         {signals.drawing.packageNames[0] ? ` / ${signals.drawing.packageNames[0]}` : ""}
       </div>
       <div className="fab-card-actions">
-        <CardActions wp={wp} onEdit={onEdit} onComplete={onComplete} isCompleting={isCompleting} />
+        <CardActions wp={wp} onOpenGate={onOpenGate} onEdit={onEdit} onComplete={onComplete} isCompleting={isCompleting} />
       </div>
     </article>
   );
@@ -683,14 +700,18 @@ function FabPackageCard({ wp, compact = false, onOpen, onEdit, onComplete, isCom
 
 interface CardActionsProps {
   wp: EnrichedWorkPackage;
+  onOpenGate: ActionHandler;
   onEdit: ActionHandler | null;
   onComplete: ActionHandler;
   isCompleting: boolean;
 }
 
-function CardActions({ wp, onEdit, onComplete, isCompleting }: CardActionsProps) {
+function CardActions({ wp, onOpenGate, onEdit, onComplete, isCompleting }: CardActionsProps) {
   return (
     <span className="fab-row-actions">
+      <button type="button" onClick={(event) => { event.stopPropagation(); onOpenGate(event); }} title="Open work package release checks" aria-label="Open work package release checks">
+        <ShieldCheck size={12} />
+      </button>
       {onEdit && (
         <button
           type="button"
@@ -731,7 +752,7 @@ interface ReadinessProps {
   suffix?: string;
 }
 
-function Readiness({ value, risk, suffix = "% ready" }: ReadinessProps) {
+function Readiness({ value, risk, suffix = "% advisory" }: ReadinessProps) {
   const tone = riskColor(risk || (value >= 80 ? "clear" : value >= 55 ? "medium" : "high"));
   return <span className="fab-readiness" style={{ "--readiness-color": tone } as CSSProperties}>{value}{suffix}</span>;
 }
@@ -761,13 +782,14 @@ function Fact({ icon: Icon, label, value }: FactProps) {
 interface DetailPanelProps {
   wp: EnrichedWorkPackage;
   onClose: () => void;
+  onOpenGate: () => void;
   onEdit: (() => void) | null;
   onDelete: (() => void) | null;
   onComplete: () => void;
   isCompleting: boolean;
 }
 
-export function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompleting }: DetailPanelProps) {
+export function DetailPanel({ wp, onClose, onOpenGate, onEdit, onDelete, onComplete, isCompleting }: DetailPanelProps) {
   const signals = wp._signals;
   const packageLabels = signals.drawing.packages.map(drawingPackageLabel);
   return (
@@ -789,16 +811,16 @@ export function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompl
         <div className="fab-detail-pills">
           <StageBadge stage={signals.stage} />
           <StatusPill label={signals.status} color={STATUS_TONE[signals.status]} />
-          <StatusPill label={signals.risk === "high" ? "Exception" : signals.risk === "medium" ? "Warning" : "Clear"} color={riskColor(signals.risk)} />
+          <Flag label={gateStatusLabel(wp)} severity={signals.releaseGateState === "blocked" ? "high" : signals.releaseGateState === "ready" ? "clear" : "medium"} />
           <Readiness value={signals.readinessScore} risk={signals.risk} />
         </div>
 
         <section className="fab-detail-section">
-          <div className="fab-section-label">Release Status</div>
+          <div className="fab-section-label">Package Status and Release Stamp</div>
           <div className="fab-detail-grid">
             <DetailStat label="Tonnage" value={formatTons(wp.tonnage)} />
             <DetailStat label="Progress" value={`${signals.progress}%`} />
-            <DetailStat label="Released" value={formatDate(wp.released_date)} />
+            <DetailStat label="WP Release Stamp" value={formatDate(wp.released_date)} />
             <DetailStat label="Crew / Owner" value={wp.crew || "Open"} />
             <DetailStat label="VIF" value={wp.vif_confirmed ? "Confirmed" : "Open"} />
             <DetailStat label="Load List" value={wp.load_list_complete ? "Complete" : "Open"} />
@@ -806,7 +828,7 @@ export function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompl
         </section>
 
         <section className="fab-detail-section">
-          <div className="fab-section-label">Drawing Packages</div>
+          <div className="fab-section-label">WP Drawing Links (Advisory)</div>
           {packageLabels.length ? (
             <div className="fab-detail-list">
               {packageLabels.map((label) => (
@@ -817,12 +839,22 @@ export function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompl
             <div className="fab-detail-empty">No linked drawing packages.</div>
           )}
           <div className="fab-muted">
-            {signals.drawing.releasedCount}/{signals.drawing.linkedCount || 0} linked drawings released for fabrication.
+            {signals.drawing.releasedCount}/{signals.drawing.linkedCount || 0} WP-linked drawing stage markers. Release checks include linked piece drawings and holds.
           </div>
         </section>
 
         <section className="fab-detail-section">
-          <div className="fab-section-label">Blockers</div>
+          <div className="fab-section-label">Release Checks</div>
+          <div className="fab-detail-list">
+            <span>{gateStatusLabel(wp)}</span>
+            {signals.releaseGateState === "blocked" && signals.releaseGate?.blockers?.slice(1).map((blocker) => (
+              <span key={blocker}>{blocker}</span>
+            ))}
+          </div>
+        </section>
+
+        <section className="fab-detail-section">
+          <div className="fab-section-label">Package Risk Markers (Advisory)</div>
           {signals.flags.length ? (
             <div className="fab-detail-flags">
               {signals.flags.map((flag) => (
@@ -830,13 +862,13 @@ export function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompl
               ))}
             </div>
           ) : (
-            <div className="fab-detail-empty">No blockers currently flagged.</div>
+            <div className="fab-detail-empty">No local risk markers. Review verified release checks before release.</div>
           )}
         </section>
 
         {signals.readinessBreakdown && (
           <section className="fab-detail-section">
-            <div className="fab-section-label">Release Readiness Breakdown</div>
+            <div className="fab-section-label">Advisory Planning Score</div>
             <div style={{ marginTop: 10, display: "grid", gap: 4 }}>
               {signals.readinessBreakdown.map((gate) => (
                 <div key={gate.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -870,7 +902,7 @@ export function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompl
                   color: signals.readinessScore >= 80 ? "var(--status-success)"
                     : signals.readinessScore >= 55 ? "var(--status-warning)" : "var(--status-error)",
                 }}>
-                  {signals.readinessScore}/100
+                  {signals.readinessScore}/100 advisory
                 </span>
               </div>
             </div>
@@ -888,6 +920,7 @@ export function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompl
         </section>
 
         <div className="fab-detail-actions">
+          <Button variant="secondary" icon="shield" onClick={onOpenGate}>Open work package release checks</Button>
           {onEdit && <Button variant="secondary" icon="edit" onClick={onEdit}>Edit</Button>}
           {signals.stage !== "ready_to_ship" && (
             <Button variant="primary" icon="check" onClick={onComplete} disabled={isCompleting}>Mark RTS</Button>

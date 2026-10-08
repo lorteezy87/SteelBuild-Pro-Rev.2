@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import "@/styles/command.css";
 import { AttentionQueue, OperationalSummary, PageHeader, StatusBadge, useCommandSkin } from "@/components/command";
 import type { AttentionItem } from "@/components/command";
-import { buildFabReleaseSummary, releaseBlockerSummary, stageTone, stageLabel } from "./fabReleaseControlCenter.derive";
+import { buildFabReleaseSummary, releaseBlockerSummary } from "./fabReleaseControlCenter.derive";
 import type { EnrichedWorkPackage, FabMetrics } from "./types";
 import { formatDate } from "./format";
 
@@ -27,6 +27,13 @@ export interface FabReleaseControlCenterProps {
   riskFilter: string;
   onRiskFilter: (value: string) => void;
   onOpenWP: (wp: EnrichedWorkPackage) => void;
+  onOpenGate: (wp: EnrichedWorkPackage) => void;
+  gateRefreshing: boolean;
+  unavailableGateCount: number;
+  refreshRequiredCount: number;
+  deferredGateCount: number;
+  verificationDisabled: boolean;
+  onRefreshGates: () => void;
   toolbar: ReactNode;
   sequenceFilter?: ReactNode;
   stageFlow?: ReactNode;
@@ -44,6 +51,13 @@ export default function FabReleaseControlCenter({
   riskFilter,
   onRiskFilter,
   onOpenWP,
+  onOpenGate,
+  gateRefreshing,
+  unavailableGateCount,
+  refreshRequiredCount,
+  deferredGateCount,
+  verificationDisabled,
+  onRefreshGates,
   toolbar,
   sequenceFilter,
   stageFlow,
@@ -54,6 +68,7 @@ export default function FabReleaseControlCenter({
 }: FabReleaseControlCenterProps) {
   useCommandSkin();
   const summary = useMemo(() => buildFabReleaseSummary(metrics), [metrics]);
+  const unverifiedCount = metrics.enriched.filter((wp) => wp._signals.releaseGateState === "unverified").length;
   const bodyRef = useRef<HTMLElement | null>(null);
   const scrollToBody = () => bodyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -65,9 +80,9 @@ export default function FabReleaseControlCenter({
       : null,
     risk: releaseBlockerSummary(wp),
     owner: wp.crew || null,
-    nextAction: "Clear release gate",
-    tone: wp._signals.risk === "high" ? "danger" : "warn",
-    onOpen: () => onOpenWP(wp),
+    nextAction: "Review release checks",
+    tone: "danger",
+    onOpen: () => onOpenGate(wp),
   }));
 
   const operationalMetrics = summary.kpis.map((kpi) => ({
@@ -82,8 +97,8 @@ export default function FabReleaseControlCenter({
       <PageHeader
         eyebrow={`${projectName} / Production`}
         title="Fab Release Control Center"
-        subtitle="Authoritative release-gate status for shop packages, blockers, and recent releases."
-        meta={`${summary.totalCount} packages · ${summary.releasedCount} released · ${summary.blockedCount} blocked`}
+        subtitle="Fabrication release status verified against current drawing, material, and hold checks. Unverified packages stay separate."
+        meta={`${summary.totalCount} ${summary.totalCount === 1 ? "package" : "packages"} · ${summary.releasedCount} released · ${summary.blockedCount} blocked · ${unverifiedCount} unverified`}
         actions={(
           <>
             <button
@@ -91,7 +106,7 @@ export default function FabReleaseControlCenter({
               className="cmd-btn cmd-btn--ghost"
               onClick={() => {
                 onStageFilter("all");
-                onRiskFilter("clear");
+                onRiskFilter("release-ready");
                 scrollToBody();
               }}
             >
@@ -101,22 +116,46 @@ export default function FabReleaseControlCenter({
               type="button"
               className="cmd-btn cmd-btn--ghost"
               onClick={() => {
-                onRiskFilter("high");
+                onRiskFilter("release-blocked");
                 scrollToBody();
               }}
             >
               Blocked
             </button>
+            <button type="button" className="cmd-btn cmd-btn--ghost" disabled={gateRefreshing || verificationDisabled} onClick={onRefreshGates}>
+              {gateRefreshing ? "Checking…" : "Refresh release checks"}
+            </button>
           </>
         )}
       />
+
+      {unavailableGateCount > 0 && (
+        <div role="alert" className="sbp-attention__empty">
+          {unavailableGateCount} release {unavailableGateCount === 1 ? "check is" : "checks are"} unavailable. Refresh release checks to verify those packages.
+        </div>
+      )}
+      {refreshRequiredCount > 0 && (
+        <div role="status" className="sbp-attention__empty">
+          Release checks need refreshing for {refreshRequiredCount} packages. Their status is unverified until refreshed.
+        </div>
+      )}
+      {verificationDisabled && (
+        <div role="status" className="sbp-attention__empty">
+          Release verification is unavailable because Piece Control is off for this project. Enable it in project settings to verify package releases.
+        </div>
+      )}
+      {deferredGateCount > 0 && !verificationDisabled && (
+        <div role="status" className="sbp-attention__empty">
+          {deferredGateCount} packages remain unchecked in this view. Open a package’s release checks in Work Packages for its current status.
+        </div>
+      )}
 
       <OperationalSummary metrics={operationalMetrics} ariaLabel="Fab release operational summary" />
 
       <AttentionQueue
         title="Release Blockers"
         items={releaseBlockers}
-        emptyMessage="No packages currently have an authoritative release blocker."
+        emptyMessage="No packages are currently blocked by verified release checks."
       />
 
       <div className="sbp-work-grid">
@@ -133,7 +172,7 @@ export default function FabReleaseControlCenter({
                 type="button"
                 key={wp.id}
                 className="cmd-row is-clickable"
-                onClick={() => onOpenWP(wp)}
+                onClick={() => onOpenGate(wp)}
                 style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}
               >
                 <div>
@@ -142,8 +181,8 @@ export default function FabReleaseControlCenter({
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <StatusBadge
-                    label={`${wp._signals.readinessScore}% ready`}
-                    tone={wp._signals.readinessScore >= 80 ? "success" : wp._signals.readinessScore >= 50 ? "warning" : "danger"}
+                    label="Release verified"
+                    tone="success"
                   />
                   <span className="cmd-row__meta">{fmtTons(wp.tonnage)}</span>
                 </div>
@@ -154,12 +193,13 @@ export default function FabReleaseControlCenter({
 
         <section className="sbp-work-panel">
           <div className="sbp-work-panel__head">
-            <h2>Recently Released</h2>
+            <h2>Recorded Releases</h2>
             <button
               type="button"
               className="cmd-btn cmd-btn--ghost"
               onClick={() => {
-                onStageFilter("shop_released");
+                onStageFilter("all");
+                onRiskFilter("release-released");
                 scrollToBody();
               }}
             >
@@ -182,9 +222,9 @@ export default function FabReleaseControlCenter({
                   <div className="cmd-row__meta">{wp.name || "Unnamed"}</div>
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <StatusBadge label={stageLabel(wp._signals.stage)} tone={stageTone(wp._signals.stage) === "good" ? "success" : "info"} />
+                  <StatusBadge label="Release recorded" tone="success" />
                   <span className="cmd-row__meta">
-                    {wp.released_date ? formatDate(wp.released_date as string) : "Date unknown"}
+                    {wp.released_date ? `WP stamp ${formatDate(wp.released_date as string)}` : "WP stamp unknown"}
                   </span>
                 </div>
               </button>

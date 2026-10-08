@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -59,6 +59,8 @@ import {
 } from "./fabRelease/components";
 import type { EnrichedWorkPackage } from "./fabRelease/types";
 import FabReleaseControlCenter from "./fabRelease/FabReleaseControlCenter";
+import { applyCanonicalGateReadout, workPackageReleaseGateUrl } from "./fabRelease/fabReleaseControlCenter.derive";
+import { isFabReleaseSnapshotCurrent, loadCanonicalFabReleaseGates, selectFabReleaseGatePackageIds } from "./fabRelease/fabReleaseGateLoader";
 
 // The design-system primitives and LoadingSkeleton are still .jsx, so TS infers
 // all of their destructured props as required when consumed from .tsx. Until
@@ -75,6 +77,7 @@ const SequenceFilter = SequenceFilterRaw as unknown as ComponentType<AnyProps>;
 
 export default function FabRelease() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
@@ -117,12 +120,14 @@ export default function FabRelease() {
     if (normalizedStage) setStageFilter(normalizedStage);
   }, [searchParams]);
 
-  const { data: workPackages = [], isLoading: wpLoading } = useQuery({
+  const workPackagesQuery = useQuery({
     queryKey: ["wps-fab", projectId],
-    queryFn: () => (projectId ? entities.WorkPackage.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.WorkPackage.filterAll({ project_id: projectId }) : []),
     enabled: !!projectId,
-    staleTime: 30000,
+    staleTime: 120_000,
+    refetchOnWindowFocus: true,
   });
+  const { data: workPackages = [], isLoading: wpLoading } = workPackagesQuery;
 
   const { data: drawings = [], isLoading: drawingLoading } = useQuery({
     queryKey: ["drawings", projectId],
@@ -166,13 +171,38 @@ export default function FabRelease() {
   });
 
   const project = projects.find((item) => item.id === projectId) || activeProject || null;
+  const pieceControlMode = project?.id === projectId ? String(project.piece_control_mode ?? "off") : null;
+  const activePackageCount = workPackages.filter((wp) => !wp.is_deleted && wp.id).length;
+  const gatePackageIds = useMemo(() => selectFabReleaseGatePackageIds(workPackages), [workPackages]);
+  const deferredGateCount = Math.max(0, activePackageCount - gatePackageIds.length);
+  const checkedGateIds = useMemo(() => new Set(gatePackageIds), [gatePackageIds]);
+  // A project may have many packages. Gate checks use a bounded worker pool.
+  const gatesQuery = useQuery({
+    queryKey: ["fab-release-canonical-gates", projectId, gatePackageIds],
+    queryFn: () => loadCanonicalFabReleaseGates(gatePackageIds),
+    enabled: !!projectId && workPackagesQuery.isSuccess && pieceControlMode !== null && pieceControlMode !== "off" && gatePackageIds.length > 0,
+    staleTime: 120_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+  const gatesComplete = isFabReleaseSnapshotCurrent(
+    workPackagesQuery, gatesQuery, gatePackageIds.length > 0, pieceControlMode,
+  );
+  // A refreshed package list may change gate inputs without changing its IDs.
+  // Recheck the same bounded batch when that list is newer than the gate result.
+  useEffect(() => {
+    if (pieceControlMode === "off" || !gatesQuery.isSuccess || gatesQuery.isFetching ||
+      workPackagesQuery.dataUpdatedAt <= gatesQuery.dataUpdatedAt) return;
+    void gatesQuery.refetch();
+  }, [gatesQuery.dataUpdatedAt, gatesQuery.isFetching, gatesQuery.isSuccess, gatesQuery.refetch,
+    pieceControlMode, workPackagesQuery.dataUpdatedAt]);
   // `projects` rows expose `name`; some legacy callers still carry a `project_name`
   // alias. Read the legacy key through a loose view so the original `||` fallback
   // order (legacy alias → canonical name → "Project") is preserved unchanged.
   const projectLegacyName = (project as Record<string, unknown> | null)?.project_name as string | undefined;
   const projectName = projectLegacyName || project?.name || "Project";
 
-  const wpQueryKeys = [["work-packages", projectId], ["work_packages", projectId], getQueryKey("work_package", projectId)];
+  const wpQueryKeys = [["work-packages", projectId], ["work_packages", projectId], ["wps-fab", projectId], getQueryKey("work_package", projectId)];
   useRealtimeInvalidation("work_packages", projectId, wpQueryKeys);
 
   const invalidateWorkPackages = () => invalidateEntity(qc, "work_package", projectId);
@@ -271,10 +301,29 @@ export default function FabRelease() {
     return map;
   }, [submittals]);
 
-  const metrics = useMemo(
+  const advisoryMetrics = useMemo(
     () => buildFabReleaseMetrics(workPackages, drawings, drawingSets, { rfisByWpId, deliveriesByWpId, submittalsByDrawingSetId }),
     [drawingSets, drawings, workPackages, rfisByWpId, deliveriesByWpId, submittalsByDrawingSetId]
   );
+  const metrics = useMemo(
+    () => applyCanonicalGateReadout(advisoryMetrics, projectId ?? "", gatesQuery.data ?? {}, gatesComplete),
+    [advisoryMetrics, projectId, gatesQuery.data, gatesComplete],
+  );
+  const unavailableGateCount = pieceControlMode !== null && pieceControlMode !== "off" &&
+    gatePackageIds.length > 0 && !gatesQuery.isFetching && !workPackagesQuery.isFetching
+    ? (gatesComplete
+      ? metrics.enriched.filter((wp) => checkedGateIds.has(wp.id) && wp._signals.releaseGateState === "unverified").length
+      : gatesQuery.isError ? gatePackageIds.length : 0)
+    : 0;
+  const refreshRequiredCount = pieceControlMode !== null && pieceControlMode !== "off" &&
+    gatePackageIds.length > 0 && !gatesComplete && !gatesQuery.isError &&
+    !gatesQuery.isFetching && !workPackagesQuery.isFetching &&
+    (gatesQuery.isStale || gatesQuery.fetchStatus === "paused" ||
+      workPackagesQuery.isStale || workPackagesQuery.fetchStatus === "paused")
+    ? gatePackageIds.length : 0;
+  const openPackageReleaseGate = (wp: EnrichedWorkPackage) => {
+    navigate(workPackageReleaseGateUrl(wp, projectId ?? ""));
+  };
 
   const filtered = useMemo(() => {
     return filterFabReleasePackages(metrics.enriched, { stageFilter, riskFilter, seqFilter, search });
@@ -388,6 +437,13 @@ export default function FabRelease() {
     );
   }
 
+  if (workPackagesQuery.isError) {
+    return <div className="sb-dashboard-reference-page" role="alert" style={{ padding: 24 }}>
+      Work packages could not be loaded completely. Release status is unavailable.
+      <button type="button" onClick={() => void workPackagesQuery.refetch()}>Retry</button>
+    </div>;
+  }
+
   // Shared modals remain owned by this page so canonical presentation cannot
   // diverge from the existing mutation, permission, and audit behavior.
   const modals = (
@@ -396,6 +452,7 @@ export default function FabRelease() {
         <DetailPanel
           wp={detailWP}
           onClose={() => setDetailWP(null)}
+          onOpenGate={() => openPackageReleaseGate(detailWP)}
           onEdit={can("edit", "work_package") ? () => handleEdit(detailWP) : null}
           onDelete={can("delete", "work_package") ? () => { setDeleteTarget(detailWP); setDetailWP(null); } : null}
           onComplete={() => completeMut.mutate(detailWP.id)}
@@ -434,6 +491,7 @@ export default function FabRelease() {
       rows={filtered}
       stageRollup={metrics.stageRollup}
       onOpen={setDetailWP}
+      onOpenGate={openPackageReleaseGate}
       onEdit={canEdit ? handleEdit : null}
       onComplete={(wp) => completeMut.mutate(wp.id)}
       isCompleting={completeMut.isPending}
@@ -442,6 +500,7 @@ export default function FabRelease() {
     <BoardView
       laneGroups={laneGroups}
       onOpen={setDetailWP}
+      onOpenGate={openPackageReleaseGate}
       onEdit={canEdit ? handleEdit : null}
       onComplete={(wp) => completeMut.mutate(wp.id)}
       isCompleting={completeMut.isPending}
@@ -450,6 +509,7 @@ export default function FabRelease() {
     <RegisterView
       rows={filtered}
       onOpen={setDetailWP}
+      onOpenGate={openPackageReleaseGate}
       onEdit={canEdit ? handleEdit : null}
       onComplete={(wp) => completeMut.mutate(wp.id)}
       isCompleting={completeMut.isPending}
@@ -496,6 +556,13 @@ export default function FabRelease() {
         riskFilter={riskFilter}
         onRiskFilter={setRiskFilter}
         onOpenWP={setDetailWP}
+        onOpenGate={openPackageReleaseGate}
+        gateRefreshing={gatesQuery.isFetching || workPackagesQuery.isFetching}
+        unavailableGateCount={unavailableGateCount}
+        refreshRequiredCount={refreshRequiredCount}
+        deferredGateCount={deferredGateCount}
+        verificationDisabled={pieceControlMode === "off"}
+        onRefreshGates={() => { void workPackagesQuery.refetch(); void gatesQuery.refetch(); }}
         toolbar={(
           <Toolbar
             search={search}

@@ -133,8 +133,9 @@ describe("fab release analytics", () => {
       { today: "2026-05-13" }
     ).enriched;
 
-    expect(fabReleaseLane(rows.find((row) => row.id === "blocked"))).toBe("Blocked");
-    expect(fabReleaseLane(rows.find((row) => row.id === "ready"))).toBe("Ready For Release");
+    expect(rows.map(fabReleaseLane)).toEqual(["Unverified", "Unverified"]);
+    expect(fabReleaseLane({ _signals: { releaseGateState: "blocked" } })).toBe("Blocked");
+    expect(fabReleaseLane({ _signals: { releaseGateState: "ready" } })).toBe("Ready For Release");
     expect([...rows].sort(sortFabPackagesForRelease).map((row) => row.id)).toEqual(["blocked", "ready"]);
   });
 });
