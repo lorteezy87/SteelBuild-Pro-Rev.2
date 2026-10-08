@@ -170,8 +170,7 @@ describe('the real manifest', () => {
     expect(report.missingMigrations).toContain(version);
   });
 
-  it('keeps membership revocation required until its reviewed SQL is applied', () => {
-    const version = '20261008032524';
+  it.each(['20261008032524', '20261008071019'])('keeps security candidate %s required until its reviewed SQL is applied', (version) => {
     const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
     expect(entry?.lifecycle).toBe('required');
     expect(entry?.evidence).toMatch(/PENDING PRODUCTION APPLY/);

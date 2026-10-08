@@ -10,8 +10,9 @@
 //                     ownership here before touching Storage).
 //   2. Storage      — app-files under `<org_id>/…` and email-attachments under
 //                     each `<project_id>/…` (service role).
-//   3. auth.users   — members who, after erasure, belong to NO other org
-//                     (service role, auth admin API).
+//   Account identities are preserved for EVERY member, including the caller and
+//   users left with no workspace. Workspace ownership never authorizes deleting
+//   another person's login. A successful response reports users_deleted: 0.
 //
 // B) { mode: "account" } — the CALLER deletes THEIR OWN account (App Store
 //    Guideline 5.1.1(v): any account-creating user must be able to self-delete).

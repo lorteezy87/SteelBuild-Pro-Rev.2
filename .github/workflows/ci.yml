@@ -265,6 +265,12 @@ jobs:
           npm ci --prefix supabase/tests/server-mfa --ignore-scripts
           npm test --prefix supabase/tests/server-mfa
 
+      - name: Verify atomic Stripe billing and replay boundaries
+        # Required ci gate; isolated SQL fixtures use no provider credentials.
+        run: |
+          npm ci --prefix supabase/tests/stripe-billing --ignore-scripts
+          npm test --prefix supabase/tests/stripe-billing
+
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
