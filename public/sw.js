@@ -22,14 +22,14 @@
  *     either host — see src/lib/deployHost.ts) in main.jsx, so dev/HMR never
  *     runs a SW.
  *
- * Bump CACHE_VERSION whenever the caching STRATEGY changes (not per app
- * release — releases are handled by the network-first + hashed-asset rules).
+ * Bump CACHE_VERSION when the cache strategy changes or a pinned static asset
+ * changes identity, so existing offline installs drop the old cached image.
  */
-const CACHE_VERSION = "sbp-shell-v1";
+const CACHE_VERSION = "sbp-shell-v2";
 const SHELL_URL = "/index.html";
 // Best-effort precache so the very first offline boot has a shell even if the
 // user never triggered a same-origin navigation while online.
-const PRECACHE_URLS = [SHELL_URL, "/", "/manifest.json", "/favicon.svg", "/icon-maskable.svg", "/steelbuild-pro-mark.svg"];
+const PRECACHE_URLS = [SHELL_URL, "/", "/manifest.json", "/favicon-64.png", "/steelbuild-pro-icon-192.png", "/steelbuild-pro-icon-512.png", "/steelbuild-pro-icon-maskable-512.png", "/marketing/steelbuild-pro-logo.jpg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

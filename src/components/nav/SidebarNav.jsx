@@ -245,7 +245,7 @@ export default function SidebarNav({
       {/* ── Brand logo (expanded mode) ───────────────────────────── */}
       {!railMode && (
         <div style={{ padding: "14px 16px 8px", display: "flex", justifyContent: "center" }}>
-          <BrandLogo height={64} style={{ width: "100%", height: "auto", maxWidth: 150 }} />
+          <BrandLogo height={88} style={{ width: "100%", height: "auto", maxWidth: 150 }} />
         </div>
       )}
 
@@ -613,8 +613,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
         className="sb-dashboard-reference-brand"
         onClick={() => onNavigate("Dashboard")}
       >
-        <span className="sb-dashboard-reference-brand__mark">SB</span>
-        <span>SteelBuild Pro</span>
+        <BrandLogo height={collapsed ? 40 : 68} variant={collapsed ? "mark" : "full"} />
       </button>
 
       <nav className="sb-dashboard-reference-nav">

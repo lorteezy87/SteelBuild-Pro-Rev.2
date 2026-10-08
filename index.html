@@ -30,10 +30,9 @@
     <meta name="twitter:title" content="SteelBuild Pro — Structural Steel Project Management" />
     <meta name="twitter:image" content="https://steelbuild-pro.com/steelbuild-pro-og.png" />
 
-    <!-- Favicon & app icons. A single full-bleed square SVG carrying the hex-S
-         brand mark — scales sharply at any size and iOS rounds the
-         apple-touch-icon from the square field. See public/favicon.svg. -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Favicon and home-screen icons use the approved steel diamond badge.
+         Square exports letterbox its 3:2 artwork without cropping the words. -->
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
     <!-- iOS home-screen icon: a 180×180 PNG (iOS does not reliably render SVG
          apple-touch-icons). -->
     <link rel="apple-touch-icon" href="/steelbuild-pro-icon-180.png" />
@@ -84,9 +83,9 @@
       }
       #root:empty::before {
         content: '';
-        width: min(132px, 26vw);
-        aspect-ratio: 340 / 452;
-        background: url('/steelbuild-pro-mark.svg') center / contain no-repeat;
+        width: min(264px, 64vw);
+        aspect-ratio: 3 / 2;
+        background: url('/marketing/steelbuild-pro-logo.jpg') center / contain no-repeat;
       }
       #root:empty::after {
         content: '';
