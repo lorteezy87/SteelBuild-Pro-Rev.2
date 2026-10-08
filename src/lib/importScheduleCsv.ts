@@ -36,10 +36,10 @@ const SCHEDULE_STATUSES = new Set([
 ]);
 
 export const SCHEDULE_CSV_TEMPLATE = [
-  "WBS,Task Name,Phase,Start,Finish,Duration,Percent Complete,Status,Predecessors,Resources,Outline Level,Milestone,Notes",
-  "1,Fabrication,Fabrication,2026-03-01,2026-03-31,22,0,Not Started,,,1,No,Phase summary",
-  "1.1,Weld beams,Fabrication,2026-03-01,2026-03-05,5,0,Not Started,,Shop crew,2,No,",
-  "1.2,Paint,Fabrication,2026-03-06,2026-03-08,3,0,Not Started,1.1FS+1d,Shop crew,2,No,",
+  "Activity ID,WBS,Task Name,Phase,Start,Finish,Duration,Percent Complete,Status,Predecessors,Resources,Outline Level,Milestone,Notes",
+  "FAB-000,1,Fabrication,Fabrication,2026-03-01,2026-03-31,22,0,Not Started,,,1,No,Phase summary",
+  "FAB-010,1.1,Weld beams,Fabrication,2026-03-01,2026-03-05,5,0,Not Started,,Shop crew,2,No,",
+  "FAB-020,1.2,Paint,Fabrication,2026-03-06,2026-03-08,3,0,Not Started,FAB-010FS+1d,Shop crew,2,No,",
   "",
 ].join("\n");
 
@@ -408,6 +408,8 @@ function calendarDurationDays(start: string | null, finish: string | null): numb
 
 export interface ParsedScheduleCsvTask extends ParsedMppTask {
   rowNumber: number;
+  sourceUid: string | null;
+  unresolvedPredecessors: string[];
 }
 
 export interface ParseScheduleCsvResult {
@@ -493,6 +495,7 @@ export function parseScheduleCsv(csvText: string, { fileName = "" }: { fileName?
 
   const tasks: ParsedScheduleCsvTask[] = [];
   const usedUids = new Set<string>();
+  const sourceUidCounts = new Map<string, number>();
   const jobNumbers = new Set<string>();
   let skippedBlankRows = 0;
   const unresolvedPredTokens: string[] = [];
@@ -512,7 +515,9 @@ export function parseScheduleCsv(csvText: string, { fileName = "" }: { fileName?
     }
 
     const wbs = pick("wbs");
-    const uidPreferred = pick("uid") || wbs;
+    const sourceUid = pick("uid") || null;
+    if (sourceUid) sourceUidCounts.set(sourceUid, (sourceUidCounts.get(sourceUid) || 0) + 1);
+    const uidPreferred = sourceUid || wbs;
     const uid = uniqueUid(uidPreferred, usedUids, String(tasks.length + 1));
 
     const outlineRaw = pick("outline_level");
@@ -540,6 +545,8 @@ export function parseScheduleCsv(csvText: string, { fileName = "" }: { fileName?
 
     const task: ParsedScheduleCsvTask = {
       uid,
+      sourceUid,
+      unresolvedPredecessors: [],
       name,
       start,
       finish,
@@ -561,6 +568,18 @@ export function parseScheduleCsv(csvText: string, { fileName = "" }: { fileName?
   }
 
   markSummaries(tasks);
+  if (tasks.some((task) => !task.sourceUid)) {
+    warnings.push("An explicit Activity ID is required for every row before import. WBS and row position are not stable source IDs.");
+  }
+  if ([...sourceUidCounts.values()].some((count) => count > 1)) {
+    warnings.push("Duplicate Activity ID values were found. Give each source task a unique Activity ID before import.");
+  }
+  const unknownPhases = [...new Set(tasks
+    .map((task) => task.phaseHint)
+    .filter((phase): phase is string => Boolean(phase) && !PHASES.includes(phase as string)))];
+  if (unknownPhases.length > 0) {
+    warnings.push(`Unrecognized phase ${unknownPhases.map((phase) => `"${phase}"`).join(", ")} will import as unassigned. Correct the Phase column if this is not intended.`);
+  }
 
   // Resolve predecessor tokens against UID, WBS, then unique name.
   const byUid = new Map<string, string>();
@@ -589,6 +608,7 @@ export function parseScheduleCsv(csvText: string, { fileName = "" }: { fileName?
       const predUid = resolveToken(tok.token);
       if (!predUid) {
         unresolvedPredTokens.push(tok.token);
+        tasks[taskIndex].unresolvedPredecessors.push(tok.token);
         continue;
       }
       if (predUid === tasks[taskIndex].uid) continue;

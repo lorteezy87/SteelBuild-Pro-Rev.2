@@ -134,6 +134,7 @@ describe("parseScheduleCsv", () => {
     expect(warnings.filter((w) => /couldn't confidently/i.test(w))).toHaveLength(0);
     expect(tasks).toHaveLength(3);
     expect(tasks[0].name).toBe("Fabrication");
+    expect(tasks.map((task) => task.sourceUid)).toEqual(["FAB-000", "FAB-010", "FAB-020"]);
     expect(tasks[0].isSummary).toBe(true);
     expect(tasks[1].name).toBe("Weld beams");
     expect(tasks[1].start).toBe("2026-03-01");
@@ -142,7 +143,7 @@ describe("parseScheduleCsv", () => {
     expect(tasks[1].resources).toEqual(["Shop crew"]);
     expect(tasks[1].phaseHint).toBe("Fabrication");
     expect(tasks[2].preds).toEqual([
-      { predUid: "1.1", linkType: "1", lagDuration: "4800" },
+      { predUid: "FAB-010", linkType: "1", lagDuration: "4800" },
     ]);
   });
 
@@ -154,6 +155,7 @@ describe("parseScheduleCsv", () => {
     ].join("\n");
     const { tasks } = parseScheduleCsv(csv);
     expect(tasks.map((t) => t.uid)).toEqual(["1", "2"]);
+    expect(tasks.map((t) => t.sourceUid)).toEqual(["1", "2"]);
     expect(tasks[0].isSummary).toBe(true);
     expect(tasks[1].preds[0]).toMatchObject({ predUid: "1", linkType: "1" });
     expect(tasks[1].outlineNumber).toBe("1.1");
@@ -210,6 +212,25 @@ describe("parseScheduleCsv", () => {
     expect(areaOnly.tasks[0].phaseHint).toBeNull();
   });
 
+  it("warns that an unrecognized source phase will remain unassigned", () => {
+    const { tasks, warnings } = parseScheduleCsv("Activity ID,Task Name,Phase\nA1000,Set columns,South Yard");
+    expect(tasks[0].phaseHint).toBe("South Yard");
+    expect(warnings.join(" ")).toMatch(/South Yard.*unassigned/i);
+  });
+
+  it("warns when a row has no explicit Activity ID instead of treating WBS or row order as durable identity", () => {
+    const { tasks, warnings } = parseScheduleCsv("WBS,Task Name,Phase\n1.1,Set columns,Erection");
+    expect(tasks[0].uid).toBe("1.1");
+    expect(tasks[0].sourceUid).toBeNull();
+    expect(warnings.join(" ")).toMatch(/Activity ID.*required/i);
+  });
+
+  it("exposes duplicate Activity IDs for commit preflight to reject", () => {
+    const { tasks, warnings } = parseScheduleCsv("Activity ID,Task Name\nA1000,Set columns\nA1000,Bolt columns");
+    expect(tasks.map((task) => task.sourceUid)).toEqual(["A1000", "A1000"]);
+    expect(warnings.join(" ")).toMatch(/duplicate Activity ID/i);
+  });
+
   it("skips blank-name rows, reports missing name column, and warns on bad preds", () => {
     const csv = "WBS,Start\n1.1,2026-03-01\n";
     const { tasks, warnings, skippedBlankRows } = parseScheduleCsv(csv);
@@ -225,6 +246,7 @@ describe("parseScheduleCsv", () => {
     ].join("\n");
     const { tasks, warnings } = parseScheduleCsv(csv);
     expect(tasks[0].preds).toEqual([]);
+    expect(tasks[0].unresolvedPredecessors).toEqual(["MISSING"]);
     expect(warnings.join(" ")).toMatch(/MISSING/);
   });
 

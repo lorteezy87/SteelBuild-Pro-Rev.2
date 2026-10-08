@@ -603,8 +603,11 @@ export function useScheduleMutations({
         tasks: allParsed,
         projectId,
         qc,
+        source: { kind: "mpp-xml", fileName: file.name },
       });
-      toast.success(`Imported ${created} tasks from ${file.name}`);
+      toast.success(created > 0
+        ? `Imported ${created} tasks from ${file.name}`
+        : `No new tasks in ${file.name}; this source is already imported`);
     } catch (e: unknown) {
       toast.error(toUserErrorMessage(e, "Import failed"));
     } finally {

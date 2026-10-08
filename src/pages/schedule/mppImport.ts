@@ -38,12 +38,13 @@ export function parseMsProjectXml(xml: string): ParsedMppTask[] {
 
   const tasks: ParsedMppTask[] = [];
   taskNodes.forEach((node) => {
-    const uid = node.getElementsByTagName("UID")[0]?.textContent;
-    if (!uid || uid === "0") return; // skip root project summary
-    const isSummary = node.getElementsByTagName("Summary")[0]?.textContent === "1";
+    const uid = node.getElementsByTagName("UID")[0]?.textContent?.trim();
     const outlineLevel = Number(node.getElementsByTagName("OutlineLevel")[0]?.textContent) || 0;
-    const outlineNumber = node.getElementsByTagName("OutlineNumber")[0]?.textContent || "";
     const name = node.getElementsByTagName("Name")[0]?.textContent || "Task";
+    if (uid === "0" && outlineLevel === 0) return; // genuine root project summary
+    if (!uid || uid === "0") throw new Error(`MS Project task ${name} has no valid UID. Correct the XML export before importing.`);
+    const isSummary = node.getElementsByTagName("Summary")[0]?.textContent === "1";
+    const outlineNumber = node.getElementsByTagName("OutlineNumber")[0]?.textContent || "";
     const start = node.getElementsByTagName("Start")[0]?.textContent?.slice(0, 10) || null;
     const finish = node.getElementsByTagName("Finish")[0]?.textContent?.slice(0, 10) || null;
     const pct = Number(node.getElementsByTagName("PercentComplete")[0]?.textContent) || 0;
