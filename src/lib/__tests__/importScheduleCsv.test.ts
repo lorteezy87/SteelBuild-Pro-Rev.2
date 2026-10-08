@@ -172,6 +172,44 @@ describe("parseScheduleCsv", () => {
     expect(tasks[0].durationDays).toBe(8);
   });
 
+  it("uses P6 current dates when baseline columns appear first", () => {
+    const csv = [
+      "Activity ID,Activity Name,Baseline Start,Baseline Finish,Start,Finish",
+      "A1000,Fabricate beams,2026-01-02,2026-01-12,2026-04-01,2026-04-10",
+    ].join("\n");
+    const { tasks } = parseScheduleCsv(csv);
+    expect(tasks[0].start).toBe("2026-04-01");
+    expect(tasks[0].finish).toBe("2026-04-10");
+  });
+
+  it("uses generic current date columns after baseline columns", () => {
+    const csv = [
+      "Task Name,Baseline Start,Baseline Finish,Start Date,Finish Date",
+      "Set columns,2026-02-01,2026-02-08,2026-05-04,2026-05-12",
+    ].join("\n");
+    const { tasks } = parseScheduleCsv(csv);
+    expect(tasks[0].start).toBe("2026-05-04");
+    expect(tasks[0].finish).toBe("2026-05-12");
+  });
+
+  it("leaves dates unknown and warns when only baseline dates are supplied", () => {
+    const csv = [
+      "Task Name,Baseline Start,Baseline Finish",
+      "Set columns,2026-02-01,2026-02-08",
+    ].join("\n");
+    const { tasks, warnings } = parseScheduleCsv(csv);
+    expect(tasks[0].start).toBeNull();
+    expect(tasks[0].finish).toBeNull();
+    expect(warnings.join(" ")).toMatch(/baseline dates.*ignored.*current/i);
+  });
+
+  it("uses Phase instead of Area and leaves a location-only phase unknown", () => {
+    const withPhase = parseScheduleCsv("Task Name,Area,Phase\nSet columns,South Bay,Fabrication");
+    const areaOnly = parseScheduleCsv("Task Name,Area\nSet columns,South Bay");
+    expect(withPhase.tasks[0].phaseHint).toBe("Fabrication");
+    expect(areaOnly.tasks[0].phaseHint).toBeNull();
+  });
+
   it("skips blank-name rows, reports missing name column, and warns on bad preds", () => {
     const csv = "WBS,Start\n1.1,2026-03-01\n";
     const { tasks, warnings, skippedBlankRows } = parseScheduleCsv(csv);

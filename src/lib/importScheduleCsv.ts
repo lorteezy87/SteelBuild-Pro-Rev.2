@@ -70,14 +70,14 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   outline_level: [
     "outline level", "outlinelevel", "level", "indent", "indent level",
   ],
-  phase: ["phase", "stage", "discipline", "area"],
+  phase: ["phase", "stage", "discipline"],
   start: [
     "start", "start date", "startdate", "planned start", "early start",
-    "baseline start", "begin", "from",
+    "begin", "from",
   ],
   finish: [
     "finish", "finish date", "finishdate", "end", "end date", "enddate",
-    "planned finish", "early finish", "baseline finish", "to", "due",
+    "planned finish", "early finish", "to", "due",
     "due date",
   ],
   duration: [
@@ -479,6 +479,13 @@ export function parseScheduleCsv(csvText: string, { fileName = "" }: { fileName?
 
   const idx = bestIdxObj || buildColumnIndex(rows[0]);
   if (idx.name < 0) warnings.push(`No task-name column found (looked for "Task Name", "Name", "Activity", etc.).`);
+  const hasBaselineDateColumns = rows[bestIdx].some((header) => {
+    const normalizedHeader = normalize(header);
+    return /\bbaseline\b/.test(normalizedHeader) && /\b(start|finish|end)\b/.test(normalizedHeader);
+  });
+  if (hasBaselineDateColumns) {
+    warnings.push("Baseline dates were ignored; only current Start/Finish columns populate the schedule.");
+  }
 
   const header: ParseScheduleCsvResult["header"] = {
     job_name: fileName ? fileName.replace(/\.csv$/i, "") : undefined,
