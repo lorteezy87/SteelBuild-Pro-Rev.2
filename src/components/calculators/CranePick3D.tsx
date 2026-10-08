@@ -289,6 +289,7 @@ export default function CranePick3D({ spec, ariaLabel, height = 360 }: CranePick
     <div>
       <div
         ref={hostRef}
+        className="crane-pick-viewport"
         role="img"
         aria-label={ariaLabel}
         style={{ position: "relative", width: "100%", height, borderRadius: 6, overflow: "hidden", background: "var(--bg-surface-low)", cursor: "grab" }}

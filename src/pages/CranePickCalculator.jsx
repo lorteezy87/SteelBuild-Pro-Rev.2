@@ -535,7 +535,7 @@ export default function CranePickCalculator() {
   // ── Render ────────────────────────────────────────────────
   return (
     <div className="sb-dashboard-reference-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
-      <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+      <div style={{ width: "100%", maxWidth: 1440, margin: "0 auto" }}>
 
         {/* Header */}
         <div style={{ marginBottom: 14 }}>
@@ -642,7 +642,7 @@ export default function CranePickCalculator() {
                 {/* Offset CG geometry (2-leg only) */}
                 {isOffset && (
                   <div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <div className="crane-pick-field-grid crane-pick-field-grid--three" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                       {field("Hook ↕ Picks H (ft)", offH, setOffH, "e.g. 8", { small: true })}
                       {field("CG → Pick 1 (ft)", offD1, setOffD1, "e.g. 4", { small: true })}
                       {field("CG → Pick 2 (ft)", offD2, setOffD2, "e.g. 12", { small: true })}
@@ -702,7 +702,7 @@ export default function CranePickCalculator() {
                     )}
                     {angleMode === ANGLE_MODES.HEIGHT_SPAN && (
                       <>
-                        <div style={{ display: "grid", gridTemplateColumns: numLegs === 4 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8 }}>
+                        <div className={`crane-pick-field-grid${numLegs === 4 ? " crane-pick-field-grid--three" : ""}`} style={{ display: "grid", gridTemplateColumns: numLegs === 4 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8 }}>
                           {field("Height H (in)", hspanH, setHspanH, "vertical drop", { small: true })}
                           {field(numLegs === 4 ? "Half-length (in)" : "Half-span S (in)", hspanS, setHspanS, "horizontal", { small: true })}
                           {numLegs === 4 && field("Half-width (in)", hspanW, setHspanW, "horizontal", { small: true })}
@@ -1000,12 +1000,7 @@ export default function CranePickCalculator() {
           )}
         </div>
 
-        {/* Mobile: collapse the grid */}
         <style>{`
-          @media (max-width: 820px) {
-            .crane-pick-grid { grid-template-columns: 1fr !important; }
-            .crane-pick-grid > div { position: static !important; }
-          }
           @media print {
             body > :not(.pick-summary-print-root),
             .pick-summary-print-root > :not(.pick-summary-print-area) { display: none !important; }
