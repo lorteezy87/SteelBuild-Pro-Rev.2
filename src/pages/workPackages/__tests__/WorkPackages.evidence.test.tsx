@@ -49,12 +49,14 @@ vi.mock("@/components/workpackages/WPFormModal", () => ({ default: ({ open, onSa
 } }));
 vi.mock("@/components/workpackages/WPBulkAddModal", () => ({ default: ({ onCommit }: { onCommit: (rows: Record<string, unknown>[]) => void }): null => { mocks.lastBulkSave = onCommit; return null; } }));
 vi.mock("@/components/workpackages/WorkPackageDetailModal", () => ({
-  default: ({ wp, onSetStatus, onEdit, evidencePending }: { wp: WorkPackage; evidencePending?: boolean; onEdit?: ((wp: WorkPackage) => void) | null; onSetStatus?: ((wp: WorkPackage, status: string) => void) | null }) => {
+  default: ({ wp, onSetStatus, onEdit, onClose, evidencePending, initialTab }: { wp: WorkPackage; evidencePending?: boolean; initialTab?: string; onClose?: () => void; onEdit?: ((wp: WorkPackage) => void) | null; onSetStatus?: ((wp: WorkPackage, status: string) => void) | null }) => {
     mocks.lastStatusAction = onSetStatus ? () => onSetStatus(wp, "Complete") : null;
     return <section aria-label="Package details">
+      <output aria-label="Initial package tab">{initialTab}</output>
       <input aria-label="Open draft" defaultValue="" />
       {onEdit && <button type="button" onClick={() => onEdit(wp)}>Edit package</button>}
       {onSetStatus && <button type="button" disabled={evidencePending} onClick={() => onSetStatus(wp, "Complete")}>Mark complete</button>}
+      <button type="button" onClick={onClose}>Close package</button>
     </section>;
   },
 }));
@@ -442,5 +444,16 @@ describe("Work Packages evidence boundary", () => {
     expect(screen.queryByRole("region", { name: "Package details" })).not.toBeInTheDocument();
     await act(async () => { resolvePackages([packageRow]); });
     expect(await screen.findByRole("region", { name: "Package details" })).toBeInTheDocument();
+  });
+
+  it("routes a Fab Release deep link to the exact package release gate and resets ordinary opens", async () => {
+    renderPage(["/WorkPackages?id=wp-1&tab=release-gate"]);
+    expect(await screen.findByRole("region", { name: "Package details" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Initial package tab")).toHaveTextContent("release gate");
+    await waitFor(() => expect(screen.getByLabelText("Current query")).toBeEmptyDOMElement());
+
+    fireEvent.click(screen.getByRole("button", { name: "Close package" }));
+    fireEvent.click(screen.getByRole("button", { name: /WP-001: piece-driven/ }));
+    expect(screen.getByLabelText("Initial package tab")).toHaveTextContent("scope");
   });
 });

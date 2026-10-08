@@ -58,9 +58,14 @@ export default function WorkPackageDetailModal({
   evidencePending = false,
   assertEvidenceReady,
   onNavigate = null,
+  initialTab = "scope",
 }) {
-  const [tab, setTab] = useState("scope");
+  const [tab, setTab] = useState(() => TABS.includes(initialTab) ? initialTab : "scope");
   const { activeProject } = useProjectContext();
+
+  useEffect(() => {
+    setTab(TABS.includes(initialTab) ? initialTab : "scope");
+  }, [initialTab, wp?.id]);
 
   const drawingMap = useMemo(() => {
     const m = {};

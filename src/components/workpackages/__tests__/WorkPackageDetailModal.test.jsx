@@ -37,6 +37,12 @@ const sampleWp = {
 };
 
 describe("WorkPackageDetailModal", () => {
+  it("opens directly on the canonical release gate when requested", () => {
+    render(<WorkPackageDetailModal wp={sampleWp} initialTab="release gate" onClose={vi.fn()} />);
+    expect(screen.getByText("Release controls")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "release gate" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("keeps an open release draft mounted and disables its actions during evidence refresh", () => {
     const props = { wp: sampleWp, onClose: vi.fn(), onSetStatus: vi.fn() };
     const { rerender } = render(<WorkPackageDetailModal {...props} />);

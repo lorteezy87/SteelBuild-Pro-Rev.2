@@ -122,6 +122,7 @@ export default function WorkPackages() {
   // The drawer holds an id, not a row snapshot, so a status change or a
   // realtime refetch is visible without closing and reopening it.
   const [detailWPId, setDetailWPId] = useState<string | null>(null);
+  const [detailInitialTab, setDetailInitialTab] = useState("scope");
   const [selectedWPs, setSelectedWPs] = useState<Set<string>>(new Set());
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [allocatingNumber, setAllocatingNumber] = useState(false);
@@ -132,6 +133,7 @@ export default function WorkPackages() {
     setEditingWP(null);
     setWPModalOpen(false);
     setDetailWPId(null);
+    setDetailInitialTab("scope");
     setDeleteTarget(null);
     setBulkAddOpen(false);
     setSelectedWPs(new Set());
@@ -582,7 +584,8 @@ export default function WorkPackages() {
 
   // Inbound deep link: `?id=<uuid>` (Alerts Center, Fab Release) or
   // `?wp=WP-014` (typed / shared). Opens the drawer once rows are loaded,
-  // then strips the param so closing the drawer sticks.
+  // then strips the params so closing the drawer sticks. Fab Release may
+  // target the release gate directly with `tab=release-gate`.
   useEffect(() => {
     if (!evidenceReady) return;
     const idParam = searchParams.get("id")?.trim();
@@ -596,6 +599,7 @@ export default function WorkPackages() {
       (numberParam && String(wp.wp_number || "").trim().toLowerCase() === numberParam.toLowerCase())
     );
     if (match) {
+      setDetailInitialTab(searchParams.get("tab") === "release-gate" ? "release gate" : "scope");
       setDetailWPId(match.id);
     } else if (snapshot) {
       toast.error(`Work package ${idParam || numberParam} was not found in this project.`);
@@ -603,6 +607,7 @@ export default function WorkPackages() {
     const next = new URLSearchParams(searchParams);
     next.delete("id");
     next.delete("wp");
+    next.delete("tab");
     setSearchParams(next, { replace: true });
   }, [evidenceReady, workPackages, snapshot, projectId, selectedProject, searchParams, setSearchParams]);
 
@@ -610,6 +615,11 @@ export default function WorkPackages() {
     () => (detailWPId ? metrics.enriched.find((wp) => wp.id === detailWPId) || null : null),
     [detailWPId, metrics.enriched]
   );
+
+  const openDetailWP = (id: string | null | undefined) => {
+    setDetailInitialTab("scope");
+    setDetailWPId(id ?? null);
+  };
 
   const projectName = selectedProject?.name || (projectId ? "No active project" : "All Projects");
 
@@ -797,8 +807,9 @@ export default function WorkPackages() {
       {detailWP && (
         <WorkPackageDetailModal
           wp={detailWP}
+          initialTab={detailInitialTab}
           drawings={drawings}
-          onClose={() => setDetailWPId(null)}
+          onClose={() => { setDetailWPId(null); setDetailInitialTab("scope"); }}
           onEdit={canEdit ? (wp: WorkPackage) => { setDetailWPId(null); handleWPEdit(wp); } : null}
           onDelete={canDelete ? (wp: WorkPackage) => setDeleteTarget(wp) : null}
           onSetStatus={canEdit && !detailWP._signals.pieceDriven
@@ -894,7 +905,7 @@ export default function WorkPackages() {
       }}
       filteredCount={filtered.length}
       totalCount={metrics.totalCount}
-      onOpenWp={(wp) => setDetailWPId(wp.id)}
+      onOpenWp={(wp) => openDetailWP(wp.id)}
       onExport={() => exportWorkPackagesCSV(filtered)}
       onBulkAdd={() => setBulkAddOpen(true)}
       onCreate={canCreate ? handleWPCreate : null}
@@ -913,7 +924,7 @@ export default function WorkPackages() {
           metrics={metrics}
           onRiskFilter={setRiskFilter}
           onStatusFilter={setStatusFilter}
-          onOpen={(wp) => setDetailWPId(wp.id ?? null)}
+          onOpen={(wp) => openDetailWP(wp.id)}
         />
       }
       bulkActions={bulkActions}
@@ -924,7 +935,7 @@ export default function WorkPackages() {
           <PhaseFlowView
             rows={filtered}
             phaseRollup={metrics.phaseRollup}
-            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
+            onOpen={(wp) => openDetailWP(wp.id)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
             selectedWPs={selectedWPs}
@@ -935,7 +946,7 @@ export default function WorkPackages() {
         {view === "board" && (
           <StatusBoardView
             rows={filtered}
-            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
+            onOpen={(wp) => openDetailWP(wp.id)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
             selectedWPs={selectedWPs}
@@ -948,7 +959,7 @@ export default function WorkPackages() {
             rows={filtered}
             selectedWPs={selectedWPs}
             onToggleSelect={toggleSelect}
-            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
+            onOpen={(wp) => openDetailWP(wp.id)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
             sort={registerSort}
