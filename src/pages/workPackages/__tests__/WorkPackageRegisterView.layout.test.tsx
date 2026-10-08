@@ -83,6 +83,7 @@ describe("Work Package register layout", () => {
 
     const header = screen.getByRole("row");
     const packageRow = screen.getByRole("button", { name: "Open WP-01" });
+    expect(screen.getByRole("region", { name: "Work packages register" }).tabIndex).toBe(0);
     expect(packageRow.children).toHaveLength(header.children.length);
     expect(packageRow.style.gridTemplateColumns).toBe(header.style.gridTemplateColumns);
   });

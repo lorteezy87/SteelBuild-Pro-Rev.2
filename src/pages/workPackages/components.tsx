@@ -500,7 +500,8 @@ export function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit
   if (!rows.length) return <NoPackages />;
 
   return (
-    <section style={registerShellStyle}>
+    // The wide evidence register is a deliberate horizontal scroll region.
+    <section style={registerShellStyle} aria-label="Work packages register" tabIndex={0}>
       <div style={registerHeaderStyle} role="row">
         <span />
         {REGISTER_COLUMNS.map((column) => {
