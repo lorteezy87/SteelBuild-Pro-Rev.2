@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-10-08T18:50:27Z | codex-command-brief-virtual-body | Virtual command register browser acceptance | src/components/command/DataTable.tsx; e2e/command-brief.spec.ts | Give the virtual scroll body a stable locator and preserve full-row reachability checks. |
 | ~~2026-10-08~~ released | codex-payapp-viewport-fit | Pay Applications editor and new-app dialog fit | src/pages/PayApplications.jsx; src/pages/payApplications/payApplicationsLayout.css | Responsive G702/G703 editor, keyboard-scrollable sheet, and narrow new-app dialog committed in `690a55642`; 14 focused tests, lint/typechecks, and build passed. Rendered QA pending. |
 | ~~2026-10-08~~ released | codex-converter-phone-fit | Converter controls on narrow screens | src/pages/DecimalFractionConverter.jsx; src/components/calculators/calc.css; scoped calculator tests | Fraction and unit controls fit narrow phones and sidebar-constrained widths in `22192b8ec`; 36 focused tests and scoped lint passed. |
 | ~~2026-10-08T17:32:27Z~~ released | codex-fab-release-gate-queue | Fab Release readout and gate routing | src/pages/FabRelease.tsx; src/pages/fabRelease/{FabReleaseControlCenter.tsx,fabReleaseControlCenter.derive.ts,fabReleaseGateLoader.ts,analytics.js,components.tsx,types.ts,filter.ts,format.ts,exportCsv.ts}; src/pages/fabRelease/__tests__/** | Canonical gate readout, blocker links, and advisory labels committed in `7ab977eab`; 45 focused tests, scoped lint/typecheck and build passed. |
