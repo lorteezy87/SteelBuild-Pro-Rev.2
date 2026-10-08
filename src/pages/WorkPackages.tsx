@@ -54,6 +54,7 @@ import {
 } from "./workPackages/analytics";
 import {
   indexReleasesByWorkPackage,
+  indexPieceDrawingScopeByWorkPackage,
   isPieceDrivenPackage,
   summarizePiecesByWorkPackage,
   type CanonicalPieceRow,
@@ -70,7 +71,7 @@ import type { WorkPackage } from "./workPackages/types";
 import WpControlCenter from "./workPackages/WpControlCenter";
 import { reconcileSelection } from "./workPackages/wpControlCenter.derive";
 import { calcWpProgress } from "@/utils/projectKpis";
-import { loadWorkPackageEvidence, rejectIncompleteWorkPackageEvidence, workPackageEvidenceState } from "./workPackages/evidence";
+import { loadWorkPackageEvidence, rejectIncompleteWorkPackageEvidence, verifyWorkPackageEvidenceScope, workPackageEvidenceState } from "./workPackages/evidence";
 
 // The design-system primitives and the workpackages
 // modals/filter are still .jsx; their destructured `= []` prop defaults make
@@ -170,6 +171,43 @@ export default function WorkPackages() {
     staleTime: 30 * 1000,
   });
 
+  // Sheet stage is reference context. Only an active Shop Drawing submittal
+  // linked to that exact set can clear the drawing-approval check. Read the
+  // complete project scope so a capped register cache cannot turn a missing
+  // governing submittal or deleted set into a false clear signal.
+  const drawingSetsQuery = useQuery({
+    queryKey: ["drawing-sets-for-wps", projectId],
+    queryFn: async () => verifyWorkPackageEvidenceScope(
+      await fetchAllProjectRowsPaged<{
+        id: string; project_id: string; is_deleted: boolean | null; deleted_at: string | null;
+      }>(supabase, "drawing_sets", projectId!, {
+        select: "id,project_id,is_deleted,deleted_at",
+        maxRows: 100_000,
+        onTruncated: rejectIncompleteWorkPackageEvidence,
+      }), projectId!,
+    ),
+    enabled: !!projectId,
+    staleTime: 30 * 1000,
+  });
+
+  const submittalsQuery = useQuery({
+    queryKey: ["submittals-for-wps", projectId],
+    queryFn: async () => verifyWorkPackageEvidenceScope(
+      await fetchAllProjectRowsPaged<{
+        id: string; project_id: string; submittal_type: string | null; status: string;
+        ball_in_court: string | null; drawing_set_ids: string[] | null;
+        submitted_date: string | null; updated_at: string | null; created_at: string | null;
+        round_number: number | null; is_deleted: boolean | null; deleted_at: string | null;
+      }>(supabase, "submittals", projectId!, {
+        select: "id,project_id,submittal_type,status,ball_in_court,drawing_set_ids,submitted_date,updated_at,created_at,round_number,is_deleted,deleted_at",
+        maxRows: 100_000,
+        onTruncated: rejectIncompleteWorkPackageEvidence,
+      }), projectId!,
+    ),
+    enabled: !!projectId,
+    staleTime: 30 * 1000,
+  });
+
   const deliveriesQuery = useQuery({
     queryKey: ["deliveries-for-wps", projectId],
     queryFn: () => projectId
@@ -196,6 +234,7 @@ export default function WorkPackages() {
 
   // Leaf-lot counts per package; only read when piece control is on.
   const piecesEnabled = !!projectId && !!queryProject && String(queryProject.piece_control_mode ?? "off") !== "off";
+  const canonicalLinksEnabled = !!projectId && ["pilot", "live"].includes(String(queryProject?.piece_control_mode ?? "off"));
   const piecesQuery = useQuery({
     queryKey: ["wp-piece-counts", projectId],
     queryFn: () => projectId
@@ -209,13 +248,52 @@ export default function WorkPackages() {
     staleTime: 30 * 1000,
   });
 
+  // In pilot/live, lot links define the fabrication drawing scope. Legacy
+  // work_packages.linked_drawing_ids can disagree with those links, so read
+  // both canonical set links and fallback sheet links to completion.
+  const pieceDrawingSetsQuery = useQuery({
+    queryKey: ["wp-piece-drawing-sets", projectId],
+    queryFn: async () => verifyWorkPackageEvidenceScope(
+      await fetchAllProjectRowsPaged<{ project_id: string; piece_id: string; drawing_set_id: string }>(
+        supabase, "piece_drawing_sets", projectId!, {
+          select: "project_id,piece_id,drawing_set_id",
+          maxRows: 100_000,
+          onTruncated: rejectIncompleteWorkPackageEvidence,
+        },
+      ), projectId!,
+    ),
+    enabled: canonicalLinksEnabled,
+    staleTime: 30 * 1000,
+  });
+
+  const pieceDrawingsQuery = useQuery({
+    queryKey: ["wp-piece-drawings", projectId],
+    queryFn: async () => verifyWorkPackageEvidenceScope(
+      await fetchAllProjectRowsPaged<{ project_id: string; piece_id: string; drawing_id: string }>(
+        supabase, "piece_drawings", projectId!, {
+          select: "project_id,piece_id,drawing_id",
+          maxRows: 100_000,
+          onTruncated: rejectIncompleteWorkPackageEvidence,
+        },
+      ), projectId!,
+    ),
+    enabled: canonicalLinksEnabled,
+    staleTime: 30 * 1000,
+  });
+
   const evidenceSources = [
     { label: "Work packages", key: ["work-packages", projectId, "wp-evidence"], query: workPackagesQuery },
     { label: "Project configuration", key: ["projects"], query: projectsQuery },
     { label: "Drawings", key: ["drawings", projectId, "wp-evidence"], query: drawingsQuery },
+    { label: "Drawing sets", key: ["drawing-sets-for-wps", projectId], query: drawingSetsQuery },
+    { label: "Shop submittals", key: ["submittals-for-wps", projectId], query: submittalsQuery },
     { label: "Deliveries", key: ["deliveries-for-wps", projectId], query: deliveriesQuery },
     { label: "Fabrication releases", key: ["wp-fab-releases", projectId], query: releasesQuery },
     ...(piecesEnabled ? [{ label: "Assigned pieces", key: ["wp-piece-counts", projectId], query: piecesQuery }] : []),
+    ...(canonicalLinksEnabled ? [
+      { label: "Lot drawing sets", key: ["wp-piece-drawing-sets", projectId], query: pieceDrawingSetsQuery },
+      { label: "Legacy lot sheets", key: ["wp-piece-drawings", projectId], query: pieceDrawingsQuery },
+    ] : []),
   ];
   const evidence = workPackageEvidenceState(evidenceSources);
   const evidenceReady = !!effectiveProjectId && evidence.complete && !evidence.refreshing;
@@ -232,9 +310,15 @@ export default function WorkPackages() {
     });
     const currentProject = qc.getQueryData<ProjectRow[]>(["projects"])?.find(project => project.id === projectId);
     const currentPieceQuery = qc.getQueryState(["wp-piece-counts", projectId]);
-    const currentPiecesReady = String(currentProject?.piece_control_mode ?? "off") === "off"
+    const currentMode = String(currentProject?.piece_control_mode ?? "off");
+    const currentPiecesReady = currentMode === "off"
       || (currentPieceQuery?.status === "success" && currentPieceQuery.fetchStatus === "idle");
-    if (!evidenceRef.current.ready || evidenceRef.current.projectId !== projectId || !cacheReady || !currentProject || !currentPiecesReady) {
+    const currentLinksReady = !["pilot", "live"].includes(currentMode)
+      || (["wp-piece-drawing-sets", "wp-piece-drawings"] as const).every(key => {
+        const state = qc.getQueryState([key, projectId]);
+        return state?.status === "success" && state.fetchStatus === "idle";
+      });
+    if (!evidenceRef.current.ready || evidenceRef.current.projectId !== projectId || !cacheReady || !currentProject || !currentPiecesReady || !currentLinksReady) {
       throw new Error("Wait for complete work package evidence before changing this package.");
     }
     if (packageId) {
@@ -263,7 +347,9 @@ export default function WorkPackages() {
   const candidate = {
     projectId, project: queryProject,
     workPackages: workPackagesQuery.data ?? [], drawings: drawingsQuery.data ?? [],
+    drawingSets: drawingSetsQuery.data ?? [], submittals: submittalsQuery.data ?? [],
     deliveries: deliveriesQuery.data ?? [], releases: releasesQuery.data ?? [], pieces: piecesQuery.data ?? [],
+    pieceDrawingSets: pieceDrawingSetsQuery.data ?? [], pieceDrawings: pieceDrawingsQuery.data ?? [],
   };
   const provenSnapshot = useRef<typeof candidate | null>(null);
   if (evidenceReady) provenSnapshot.current = candidate;
@@ -274,15 +360,24 @@ export default function WorkPackages() {
   const pieceControlMode = String(selectedProject?.piece_control_mode ?? "off");
   const workPackages = snapshot?.workPackages ?? EMPTY_EVIDENCE;
   const drawings = snapshot?.drawings ?? EMPTY_EVIDENCE;
+  const drawingSets = snapshot?.drawingSets ?? EMPTY_EVIDENCE;
+  const submittals = snapshot?.submittals ?? EMPTY_EVIDENCE;
   const projectDeliveries = snapshot?.deliveries ?? EMPTY_EVIDENCE;
   const fabReleases = snapshot?.releases ?? EMPTY_EVIDENCE;
   const pieces = snapshot?.pieces ?? EMPTY_EVIDENCE;
+  const pieceDrawingSets = snapshot?.pieceDrawingSets ?? EMPTY_EVIDENCE;
+  const pieceDrawings = snapshot?.pieceDrawings ?? EMPTY_EVIDENCE;
 
   const wpQueryKeys = workPackageCacheKeys(projectId);
 
-  useRealtimeInvalidation("work_packages", projectId, wpQueryKeys);
-  useRealtimeInvalidation("fab_releases", projectId, [["wp-fab-releases", projectId]]);
-  useRealtimeInvalidation("pieces", piecesEnabled ? projectId : null, [["wp-piece-counts", projectId]]);
+  useRealtimeInvalidation(projectId ? "work_packages" : "", projectId, wpQueryKeys);
+  useRealtimeInvalidation(projectId ? "drawings" : "", projectId, [["drawings", projectId, "wp-evidence"]]);
+  useRealtimeInvalidation(projectId ? "drawing_sets" : "", projectId, [["drawing-sets-for-wps", projectId]]);
+  useRealtimeInvalidation(projectId ? "submittals" : "", projectId, [["submittals-for-wps", projectId]]);
+  useRealtimeInvalidation(projectId ? "fab_releases" : "", projectId, [["wp-fab-releases", projectId]]);
+  useRealtimeInvalidation(piecesEnabled ? "pieces" : "", projectId, [["wp-piece-counts", projectId]]);
+  useRealtimeInvalidation(canonicalLinksEnabled ? "piece_drawing_sets" : "", projectId, [["wp-piece-drawing-sets", projectId]]);
+  useRealtimeInvalidation(canonicalLinksEnabled ? "piece_drawings" : "", projectId, [["wp-piece-drawings", projectId]]);
 
   const invalidateWps = (sourceProjectId: string | null) => {
     qc.invalidateQueries({ queryKey: ["work-packages", sourceProjectId] });
@@ -418,10 +513,18 @@ export default function WorkPackages() {
 
   const releasesByWp = useMemo(() => indexReleasesByWorkPackage(fabReleases), [fabReleases]);
   const piecesByWp = useMemo(() => summarizePiecesByWorkPackage(pieces), [pieces]);
+  const pieceDrawingScopeByWp = useMemo(() => indexPieceDrawingScopeByWorkPackage(
+    pieces,
+    pieceDrawingSets,
+    pieceDrawings,
+    drawings as Parameters<typeof indexPieceDrawingScopeByWorkPackage>[3],
+  ), [pieces, pieceDrawingSets, pieceDrawings, drawings]);
 
   const metrics = useMemo(
-    () => buildWorkPackageMetrics(workPackages, drawings, projectDeliveries, { releasesByWp, piecesByWp, pieceControlMode }),
-    [workPackages, drawings, projectDeliveries, releasesByWp, piecesByWp, pieceControlMode]
+    () => buildWorkPackageMetrics(workPackages, drawings, projectDeliveries, {
+      releasesByWp, piecesByWp, pieceControlMode, submittals, drawingSets, pieceDrawingScopeByWp,
+    }),
+    [workPackages, drawings, projectDeliveries, releasesByWp, piecesByWp, pieceControlMode, submittals, drawingSets, pieceDrawingScopeByWp]
   );
 
   const filtered = useMemo(() => {

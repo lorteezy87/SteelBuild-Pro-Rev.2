@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   derivePhaseFromPieces,
   describePieceCounts,
+  indexPieceDrawingScopeByWorkPackage,
   indexReleasesByWorkPackage,
   isPieceDrivenPackage,
   summarizePiecesByWorkPackage,
@@ -25,6 +26,38 @@ describe("summarizePiecesByWorkPackage", () => {
     });
     expect(counts.get("wp2")?.erected).toBe(1);
     expect(counts.has("unassigned")).toBe(false);
+  });
+});
+
+describe("indexPieceDrawingScopeByWorkPackage", () => {
+  it("uses actionable lot links and expands only active sheets from each linked set", () => {
+    const scope = indexPieceDrawingScopeByWorkPackage(
+      [
+        { id: "container", work_package_id: "wp-1", is_container: true },
+        { id: "parent", work_package_id: "wp-1" },
+        { id: "child", work_package_id: "wp-1", parent_piece_id: "parent" },
+        { id: "unlinked", work_package_id: "wp-1" },
+        { id: "other", work_package_id: "wp-2" },
+      ],
+      [
+        { piece_id: "child", drawing_set_id: "set-1" },
+        { piece_id: "child", drawing_set_id: "empty-set" },
+        { piece_id: "other", drawing_set_id: "set-2" },
+        { piece_id: "container", drawing_set_id: "ignored-set" },
+      ],
+      [{ piece_id: "child", drawing_id: "legacy-sheet" }],
+      [
+        { id: "active-sheet", drawing_set_id: "set-1" },
+        { id: "old-sheet", drawing_set_id: "set-1", is_superseded: true },
+        { id: "other-sheet", drawing_set_id: "set-2" },
+        { id: "ignored-sheet", drawing_set_id: "ignored-set" },
+      ],
+    );
+    expect(scope.get("wp-1")).toEqual({
+      drawingIds: ["active-sheet", "legacy-sheet"],
+      missingLinkCount: 2, // one unlinked leaf plus one set without active sheets
+    });
+    expect(scope.get("wp-2")).toEqual({ drawingIds: ["other-sheet"], missingLinkCount: 0 });
   });
 });
 

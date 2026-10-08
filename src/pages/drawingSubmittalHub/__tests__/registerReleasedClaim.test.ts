@@ -20,20 +20,19 @@ function rowsFor(parent: any, submittals: any[] = [], sheets: any[] = []) {
 /**
  * The register Status chip used to derive its tone from a regex whose first
  * alternative tested for "Released for Fabrication" and "Approved" — SUBMITTAL
- * statuses that `effectiveDetailingState` never returns. "Released", the state
- * that means the shop has the package, matched nothing and rendered the same
- * neutral grey as "Not Started", beside a green Released column.
+ * statuses that `effectiveDetailingState` never returns. Release-looking
+ * workflow labels are neutral because they do not prove server clearance.
  */
 describe("registerStatusTone", () => {
-  it("gives every reachable state a tone, and only 'Not Started' is neutral", () => {
+  it("keeps workflow release markers and Not Started neutral", () => {
     const neutral = (DETAILING_STATE_ORDER as string[]).filter((s) => registerStatusTone(s) === "neutral");
-    expect(neutral).toEqual(["Not Started"]);
+    expect(neutral).toEqual(expect.arrayContaining(["Not Started", "Released", "Partially Released", "Released for Erection"]));
   });
 
-  it("tones the three at-or-past-release states as done", () => {
-    expect(registerStatusTone("Released")).toBe("done");
-    expect(registerStatusTone("Partially Released")).toBe("done");
-    expect(registerStatusTone("Released for Erection")).toBe("done");
+  it("does not give release-looking workflow states a fabrication-clear tone", () => {
+    expect(registerStatusTone("Released")).toBe("neutral");
+    expect(registerStatusTone("Partially Released")).toBe("neutral");
+    expect(registerStatusTone("Released for Erection")).toBe("neutral");
   });
 
   it("does not key off submittal statuses, which are not states", () => {
@@ -48,24 +47,22 @@ describe("registerStatusTone", () => {
 });
 
 /**
- * The Released column claims the shop has the package, so it must use the same
- * predicate as the hub's "Released / sets to fab" KPI. `isClosedPackage` is
- * terminal-FOR-TRIAGE and also fires on dead ends the shop never received; it
- * stays behind the late flag only.
+ * The workflow marker stays distinct from the server fabrication gate.
+ * `isClosedPackage` is terminal for triage and can fire on dead ends.
  */
 describe("Drawing Register: released claim vs terminal-for-triage", () => {
   it("a governing released submittal is both released and terminal", () => {
     const parent: any = { id: "ds1", detailing_state: null, set_approval_status: "approved" };
-    const submittals = [{ id: "s", status: "Released for Fabrication", round_number: 1, approved_date: "2026-09-01" }];
+    const submittals = [{ id: "s", submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Released for Fabrication", round_number: 1, approved_date: "2026-09-01" }];
     const [row] = rowsFor(parent, submittals);
     expect(isPackageReleasedForFab(parent, submittals, [])).toBe(true);
     expect(row.done).toBe(true);
-    expect(registerStatusTone(row.effectiveState)).toBe("done");
+    expect(registerStatusTone(row.effectiveState)).toBe("neutral");
   });
 
   it("a Void-only set is NOT shown as released, though it is terminal", () => {
     const parent: any = { id: "ds1", detailing_state: null };
-    const submittals = [{ id: "s", status: "Void", round_number: 1 }];
+    const submittals = [{ id: "s", submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Void", round_number: 1 }];
     const [row] = rowsFor(parent, submittals);
     expect(isClosedPackage({ key: "k", setId: "ds1", parent, sheets: [], submittals } as any)).toBe(true);
     expect(row.done).toBe(false); // the shop never received it
@@ -105,7 +102,7 @@ describe("triage atRiskCount excludes closed packages", () => {
   }
 
   it("does not count a Void-only set as at risk", () => {
-    const t = triageFor({ id: "ds1", detailing_state: null }, [{ id: "s", status: "Void", round_number: 1 }]);
+    const t = triageFor({ id: "ds1", detailing_state: null }, [{ id: "s", submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Void", round_number: 1 }]);
     expect(t.atRiskCount).toBe(0);
   });
 

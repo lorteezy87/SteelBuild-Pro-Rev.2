@@ -11,7 +11,7 @@
 
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { usePermissions } from "@/services/permissions";
@@ -20,7 +20,7 @@ import { useGcDocumentsPageController } from "./gcDocuments/useGcDocumentsPageCo
 import { useGcDocumentsPageData } from "./gcDocuments/useGcDocumentsPageData";
 import { useGcDocumentsPageState } from "./gcDocuments/useGcDocumentsPageState";
 
-export default function GcDocuments() {
+export default function GcDocuments({ embedded = false }: { embedded?: boolean }) {
   const { activeProject: activeProjectRaw } = useProjectContext();
   // ProjectContext.jsx is untyped JS, so activeProject infers as `null`/`never`.
   // Cast at the boundary to its real shape (drop once ProjectContext is typed),
@@ -28,12 +28,14 @@ export default function GcDocuments() {
   const activeProject = activeProjectRaw as { id?: string | null; name?: string | null } | null;
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { can } = usePermissions();
   // useProjectId, not activeProject.id — it also honours ?projectId= / ?project=
   // deep links, which is how the dashboard and alerts point at one project.
   const projectId = useProjectId();
 
-  const state = useGcDocumentsPageState(searchParams);
+  const navigationState = location.state as { gcPdfIntake?: unknown } | null;
+  const state = useGcDocumentsPageState(searchParams, navigationState?.gcPdfIntake === true);
 
   const filters = useMemo(
     () => ({ search: state.search, docType: state.docType, impact: state.impact }),
@@ -50,6 +52,7 @@ export default function GcDocuments() {
 
   return (
     <GcDocumentsPageView
+      embedded={embedded}
       projectId={projectId}
       projectName={activeProject?.name}
       // Mirrors the RLS on both tables: read needs project access, write needs

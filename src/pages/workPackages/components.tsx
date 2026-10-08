@@ -207,7 +207,7 @@ interface ExceptionPanelProps {
 
 /**
  * Exception rail. Every count routes to the Focus filter that produces exactly
- * that set — "Drawing gaps" used to map to plain `high`, and "Ready for fab"
+ * that set — "Drawing gaps" used to map to plain `high`, and the drawing-stage count
  * to the Detailing phase filter, so the rail's numbers never matched the list.
  */
 export function ExceptionPanel({ metrics, onRiskFilter, onStatusFilter, onOpen }: ExceptionPanelProps) {
@@ -246,9 +246,9 @@ export function ExceptionPanel({ metrics, onRiskFilter, onStatusFilter, onOpen }
         <span>Drawing gaps</span>
         <strong>{metrics.drawingGaps.length}</strong>
       </button>
-      <button type="button" onClick={() => onRiskFilter("ready_fab")} style={railStatStyle("var(--status-success)")}>
-        <span>Ready for fab</span>
-        <strong>{metrics.readyForFab.length}</strong>
+      <button type="button" onClick={() => onRiskFilter("drawing_stage_clear")} style={railStatStyle("var(--status-info)")}>
+        <span>Drawing stage clear</span>
+        <strong>{metrics.drawingStageClear.length}</strong>
       </button>
       <button type="button" onClick={() => onRiskFilter("released")} style={railStatStyle("var(--phase-fab)")}>
         <span>Released</span>
@@ -444,14 +444,14 @@ function drawingRegisterStatus(signals: EnrichedWorkPackage["_signals"]): {
   if (blocked > 0) {
     return {
       primary: `${blocked} blocked`,
-      detail: `${ready}/${drawing.linkedCount} fab-ready`,
+      detail: `${ready}/${drawing.linkedCount} governing stages clear`,
       tone: "var(--status-error)",
     };
   }
   return {
-    primary: `${ready}/${drawing.linkedCount} ready`,
-    detail: "Drawing gate clear",
-    tone: "var(--status-success)",
+    primary: `${ready}/${drawing.linkedCount} stage clear`,
+    detail: "Verify full Fab Release gate",
+    tone: "var(--status-info)",
   };
 }
 
@@ -617,7 +617,7 @@ function WorkPackageCard({ wp, selected, onToggle, onOpen, onEdit, onDelete }: W
   const signals = wp._signals;
   const drawingCaption = signals.released
     ? `Released${signals.release?.releaseNumber ? ` · ${signals.release.releaseNumber}` : ""}`
-    : `${signals.drawing.fabReadyCount ?? signals.drawing.approvedCount}/${signals.drawing.linkedCount || 0} sheets fab-ready`;
+    : `${signals.drawing.fabReadyCount ?? signals.drawing.approvedCount}/${signals.drawing.linkedCount || 0} drawing stages clear`;
   return (
     <article
       role="button"

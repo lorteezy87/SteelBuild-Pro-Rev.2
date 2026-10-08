@@ -10,7 +10,7 @@ import type WpControlCenter from "../WpControlCenter";
 
 const mocks = vi.hoisted(() => ({
   projectId: "project-1" as string | null,
-  projects: vi.fn(), packages: vi.fn(), drawings: vi.fn(), deliveries: vi.fn(), releases: vi.fn(), pieces: vi.fn(), update: vi.fn(), create: vi.fn(),
+  projects: vi.fn(), packages: vi.fn(), drawings: vi.fn(), drawingSets: vi.fn(), submittals: vi.fn(), deliveries: vi.fn(), releases: vi.fn(), pieces: vi.fn(), pieceDrawingSets: vi.fn(), pieceDrawings: vi.fn(), update: vi.fn(), create: vi.fn(),
   lastStatusAction: null as null | (() => void),
   lastSave: null as null | ((data: Record<string, unknown>) => void),
   lastBulkSave: null as null | ((rows: Record<string, unknown>[]) => void),
@@ -27,7 +27,11 @@ vi.mock("@/lib/supabase", () => ({ supabase: {} }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/pieceControl/pagedSelect", () => ({
   fetchAllProjectRowsPaged: (_client: unknown, table: string, projectId: string, options: unknown) => {
-    const readers: Record<string, typeof mocks.drawings> = { drawings: mocks.drawings, fab_releases: mocks.releases, pieces: mocks.pieces };
+    const readers: Record<string, typeof mocks.drawings> = {
+      drawings: mocks.drawings, fab_releases: mocks.releases, pieces: mocks.pieces,
+      drawing_sets: mocks.drawingSets, submittals: mocks.submittals,
+      piece_drawing_sets: mocks.pieceDrawingSets, piece_drawings: mocks.pieceDrawings,
+    };
     return readers[table](projectId, options);
   },
 }));
@@ -59,7 +63,7 @@ vi.mock("@/components/workpackages/WorkPackageDetailModal", () => ({
 vi.mock("../WpControlCenter", () => ({
   default: ({ filtered, metrics, onOpenWp, onCreate, modals, bulkActions, onToggleAll, banner }: ComponentProps<typeof WpControlCenter>) => (
     <section aria-label="Production workflow">
-      <p>{metrics.readyForFab.length} ready for fabrication</p>
+      <p>{metrics.drawingStageClear.length} drawing stage clear</p>
       {filtered.map(wp => <button type="button" key={wp.id} onClick={() => onOpenWp(wp)}>
         {wp.wp_number}: {wp._signals.pieceDriven ? "piece-driven" : "manual"} · {wp._signals.phase}
       </button>)}
@@ -75,12 +79,16 @@ import { getNextNumber } from "@/components/shared/numberSequencing";
 
 const project = { id: "project-1", name: "Steel job", piece_control_mode: "live" };
 const packageRow = { id: "wp-1", project_id: project.id, wp_number: "WP-001", name: "North frame", phase: "Detailing", status: "Not Started", linked_drawing_ids: ["drawing-1"] };
-const drawing = { id: "drawing-1", project_id: project.id, stage: "IFC" };
+const drawing = { id: "drawing-1", project_id: project.id, drawing_set_id: "set-1", stage: "IFC" };
+const drawingSet = { id: "set-1", project_id: project.id };
+const shopSubmittal = { id: "shop-1", project_id: project.id, submittal_type: "Shop Drawing", drawing_set_ids: [drawingSet.id], status: "Released for Fabrication" };
 const piece = { id: "piece-1", work_package_id: packageRow.id, lifecycle_status: "fabricated" };
-const sources = ["packages", "projects", "drawings", "deliveries", "releases", "pieces"] as const;
+const pieceDrawingSet = { project_id: project.id, piece_id: piece.id, drawing_set_id: drawingSet.id };
+const sources = ["packages", "projects", "drawings", "drawingSets", "submittals", "deliveries", "releases", "pieces", "pieceDrawingSets", "pieceDrawings"] as const;
 type Source = typeof sources[number];
 const rows: Record<Source, Record<string, unknown>[]> = {
-  packages: [packageRow], projects: [project], drawings: [drawing], deliveries: [], releases: [], pieces: [piece],
+  packages: [packageRow], projects: [project], drawings: [drawing], drawingSets: [drawingSet], submittals: [shopSubmittal], deliveries: [], releases: [], pieces: [piece],
+  pieceDrawingSets: [pieceDrawingSet], pieceDrawings: [],
 };
 const clients: QueryClient[] = [];
 
@@ -95,6 +103,16 @@ function renderPage(initialEntries = ["/WorkPackages"], prepare?: (client: Query
   clients.push(client);
   const view = render(<QueryClientProvider client={client}><MemoryRouter initialEntries={initialEntries}><WorkPackages /><LocationState /></MemoryRouter></QueryClientProvider>);
   return { ...view, client };
+}
+
+function mockProjectTwoEvidence() {
+  const projectId = "project-2";
+  mocks.packages.mockResolvedValue([{ ...packageRow, id: "wp-2", project_id: projectId, wp_number: "WP-002" }]);
+  mocks.drawings.mockResolvedValue([{ ...drawing, project_id: projectId }]);
+  mocks.drawingSets.mockResolvedValue([{ ...drawingSet, project_id: projectId }]);
+  mocks.submittals.mockResolvedValue([{ ...shopSubmittal, project_id: projectId }]);
+  mocks.pieceDrawingSets.mockResolvedValue([]);
+  mocks.pieceDrawings.mockResolvedValue([]);
 }
 
 beforeEach(() => {
@@ -218,9 +236,26 @@ describe("Work Packages evidence boundary", () => {
     mocks.pieces.mockResolvedValue([]);
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /WP-001: manual · Detailing/ }));
-    expect(screen.getByText("1 ready for fabrication")).toBeInTheDocument();
+    expect(screen.getByText("1 drawing stage clear")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mark complete" }));
     await waitFor(() => expect(mocks.update).toHaveBeenCalledWith("wp-1", { status: "Complete" }));
+  });
+
+  it("uses the assigned lot's set instead of a different approved work-package sheet", async () => {
+    const blockedSheet = { id: "drawing-2", project_id: project.id, drawing_set_id: "set-2", stage: "OFA" };
+    mocks.pieces.mockResolvedValue([{ ...piece, lifecycle_status: "not_started" }]);
+    mocks.drawings.mockResolvedValue([drawing, blockedSheet]);
+    mocks.drawingSets.mockResolvedValue([drawingSet, { id: "set-2", project_id: project.id }]);
+    mocks.submittals.mockResolvedValue([
+      shopSubmittal,
+      { id: "shop-2", project_id: project.id, submittal_type: "Shop Drawing", drawing_set_ids: ["set-2"], status: "Submitted", ball_in_court: "EOR" },
+    ]);
+    mocks.pieceDrawingSets.mockResolvedValue([{ ...pieceDrawingSet, drawing_set_id: "set-2" }]);
+    const { client } = renderPage();
+    expect(await screen.findByText("0 drawing stage clear")).toBeInTheDocument();
+    mocks.pieceDrawingSets.mockResolvedValue([pieceDrawingSet]);
+    await act(async () => { await client.invalidateQueries({ queryKey: ["wp-piece-drawing-sets", project.id] }); });
+    expect(await screen.findByText("1 drawing stage clear")).toBeInTheDocument();
   });
 
   it("does not wait for the deliberately disabled piece query when the project mode is off", async () => {
@@ -229,6 +264,8 @@ describe("Work Packages evidence boundary", () => {
     fireEvent.click(await screen.findByRole("button", { name: /WP-001: manual/ }));
     expect(screen.getByRole("button", { name: "Mark complete" })).toBeInTheDocument();
     expect(mocks.pieces).not.toHaveBeenCalled();
+    expect(mocks.pieceDrawingSets).not.toHaveBeenCalled();
+    expect(mocks.pieceDrawings).not.toHaveBeenCalled();
   });
 
   it("rejects a queued manual transition when cached configuration newly requires pieces before repaint", async () => {
@@ -244,6 +281,19 @@ describe("Work Packages evidence boundary", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
+  it("rejects a queued transition if piece control enables before lot-link evidence loads", async () => {
+    mocks.projects.mockResolvedValue([{ ...project, piece_control_mode: "off" }]);
+    const { client } = renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /WP-001: manual/ }));
+    const queuedAction = mocks.lastStatusAction!;
+    await act(async () => {
+      client.setQueryData(["projects"], [project]);
+      client.setQueryData(["wp-piece-counts", project.id], []);
+      queuedAction();
+    });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   it("asks for a project instead of classifying portfolio packages as manual", () => {
     mocks.projectId = null;
     renderPage();
@@ -253,7 +303,7 @@ describe("Work Packages evidence boundary", () => {
     expect(mocks.releases).not.toHaveBeenCalled();
   });
 
-  it.each(["drawings", "releases", "pieces"] as const)("rejects a truncated %s snapshot", async source => {
+  it.each(["drawings", "drawingSets", "submittals", "releases", "pieces", "pieceDrawingSets", "pieceDrawings"] as const)("rejects a truncated %s snapshot", async source => {
     mocks[source].mockImplementation((_projectId: string, options: { onTruncated?: (count: number) => void }) => {
       options.onTruncated?.(200_000);
       return Promise.resolve(rows[source]);
@@ -309,12 +359,14 @@ describe("Work Packages evidence boundary", () => {
       client.setQueryData(["work-packages", project.id], [packageRow]);
       client.setQueryData(["drawings", project.id], []);
     });
-    expect(await screen.findByText("1001 ready for fabrication")).toBeInTheDocument();
+    expect(await screen.findByText("1001 drawing stage clear")).toBeInTheDocument();
     expect(mocks.packages).toHaveBeenCalledWith({ project_id: project.id }, "id");
+    expect(mocks.drawingSets).toHaveBeenCalledWith(project.id, expect.any(Object));
+    expect(mocks.submittals).toHaveBeenCalledWith(project.id, expect.any(Object));
     expect(mocks.drawings).toHaveBeenCalled();
   });
 
-  it.each(["packages", "deliveries"] as const)("rejects %s evidence belonging to another project", async source => {
+  it.each(["packages", "drawingSets", "submittals", "deliveries", "pieceDrawingSets", "pieceDrawings"] as const)("rejects %s evidence belonging to another project", async source => {
     mocks[source].mockResolvedValue([{ id: "foreign-row", project_id: "project-2" }]);
     renderPage();
     expect(await screen.findByRole("alert", { name: "Work package evidence" })).toBeInTheDocument();
@@ -328,7 +380,7 @@ describe("Work Packages evidence boundary", () => {
     fireEvent.click(await screen.findByRole("button", { name: /WP-001: manual/ }));
     const queuedAction = mocks.lastStatusAction!;
     mocks.projectId = "project-2";
-    mocks.packages.mockResolvedValue([{ ...packageRow, id: "wp-2", project_id: "project-2", wp_number: "WP-002" }]);
+    mockProjectTwoEvidence();
     let resolvePieces!: (value: never[]) => void;
     mocks.pieces.mockReturnValue(new Promise(done => { resolvePieces = done; }));
     rerender(<QueryClientProvider client={client}><MemoryRouter><WorkPackages /></MemoryRouter></QueryClientProvider>);
@@ -348,7 +400,7 @@ describe("Work Packages evidence boundary", () => {
     const oldSave = mocks.lastSave!;
     const oldBulkSave = mocks.lastBulkSave!;
     mocks.projectId = "project-2";
-    mocks.packages.mockResolvedValue([{ ...packageRow, id: "wp-2", project_id: "project-2", wp_number: "WP-002" }]);
+    mockProjectTwoEvidence();
     rerender(<QueryClientProvider client={client}><MemoryRouter><WorkPackages /></MemoryRouter></QueryClientProvider>);
     await screen.findByRole("button", { name: /WP-002: manual/ });
     await act(async () => { oldSave({ name: "Project A draft" }); oldBulkSave([{ name: "Project A bulk draft" }]); });
@@ -365,7 +417,7 @@ describe("Work Packages evidence boundary", () => {
     await act(async () => { mocks.lastSave!({ name: "Project A draft" }); });
     expect(mocks.create).toHaveBeenCalledOnce();
     mocks.projectId = "project-2";
-    mocks.packages.mockResolvedValue([{ ...packageRow, id: "wp-2", project_id: "project-2", wp_number: "WP-002" }]);
+    mockProjectTwoEvidence();
     rerender(<QueryClientProvider client={client}><MemoryRouter><WorkPackages /></MemoryRouter></QueryClientProvider>);
     await screen.findByRole("button", { name: /WP-002: manual/ });
     fireEvent.click(screen.getByRole("button", { name: "Create package" }));

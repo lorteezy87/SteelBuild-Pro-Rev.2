@@ -32,6 +32,7 @@ const submittals = [
   // Set A: Released for Fabrication (terminal)
   {
     id: "s1",
+    submittal_type: "Shop Drawing",
     status: "Released for Fabrication",
     ball_in_court: null,
     approved_date: "2026-01-15",
@@ -43,6 +44,7 @@ const submittals = [
   // scrub) — should NOT win as most-recent (older submitted_date).
   {
     id: "s2",
+    submittal_type: "Shop Drawing",
     status: "Approved as Noted",
     ball_in_court: "Detailer",
     approved_date: null,
@@ -53,6 +55,7 @@ const submittals = [
   // Set B: Revise and Resubmit → R&R (first-class stage, 2026-07-25)
   {
     id: "s3",
+    submittal_type: "Shop Drawing",
     status: "Revise and Resubmit",
     ball_in_court: "Detailer",
     approved_date: null,
@@ -63,6 +66,7 @@ const submittals = [
   // Set C: Approved as Noted + bic EOR → BFA (just-returned)
   {
     id: "s4",
+    submittal_type: "Shop Drawing",
     status: "Approved as Noted",
     ball_in_court: "EOR",
     approved_date: null,
@@ -73,6 +77,7 @@ const submittals = [
   // Soft-deleted Approved submittal — must NOT count anywhere.
   {
     id: "s5",
+    submittal_type: "Shop Drawing",
     status: "Approved",
     ball_in_court: null,
     approved_date: "2026-02-01",

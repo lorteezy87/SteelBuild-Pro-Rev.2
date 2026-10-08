@@ -88,6 +88,22 @@ describe("buildIntakeRecords", () => {
     expect(record.findings.some((f) => f.code === "not-inspected")).toBe(true);
   });
 
+  it("preserves a person's keyed sheet number and revision on a scanned revision", () => {
+    const [record] = intake([
+      {
+        ...revised,
+        newSheet: {
+          ...revised.newSheet,
+          pdfPage: 1,
+          manual: { sheetNumber: "S-101", revision: "REV 2", issueDate: "04/02/2026" },
+        },
+      },
+    ], { scanned: true, setMeta: null });
+    expect(record.titleBlock.sheetNumber).toMatchObject({ value: "S-101", provenance: "human" });
+    expect(record.titleBlock.revisionNumber).toMatchObject({ value: "2", provenance: "human" });
+    expect(record.register.status).toBe("revision-of-record");
+  });
+
   it("detects a seal when the caller supplies that page's text", () => {
     const [record] = intake(
       [{ ...revised, newSheet: { ...revised.newSheet, pdfPage: 4 } }],

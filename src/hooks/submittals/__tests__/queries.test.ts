@@ -7,8 +7,8 @@ const reads = vi.hoisted(() => ({
 
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
-    Submittal: { filter: reads.submittals },
-    SubmittalRound: { filter: reads.rounds },
+    Submittal: { filterAll: reads.submittals },
+    SubmittalRound: { filterAll: reads.rounds },
   },
 }));
 
@@ -29,7 +29,7 @@ describe("submittal query helpers", () => {
     reads.rounds.mockReset();
   });
 
-  it("keeps project scope, ordering, and row limits on both reads", async () => {
+  it("requests complete project-scoped submittal and round evidence", async () => {
     reads.submittals.mockResolvedValue([]);
     reads.rounds.mockResolvedValue([]);
 
@@ -39,13 +39,21 @@ describe("submittal query helpers", () => {
     expect(reads.submittals).toHaveBeenCalledWith(
       { project_id: "project-1" },
       "-submitted_date",
-      2000,
     );
     expect(reads.rounds).toHaveBeenCalledWith(
       { project_id: "project-1" },
       "-round_number",
-      2000,
     );
+  });
+
+  it("passes a read failure through instead of publishing an earlier page", async () => {
+    const incomplete = new Error("Could not read the second submittal page");
+    reads.submittals.mockRejectedValue(incomplete);
+    await expect(fetchSubmittals("project-1")).rejects.toBe(incomplete);
+
+    const missingRounds = new Error("Could not read the second round page");
+    reads.rounds.mockRejectedValue(missingRounds);
+    await expect(fetchSubmittalRounds("project-1")).rejects.toBe(missingRounds);
   });
 
   it("groups rounds in cycle order and omits unscoped rows", () => {

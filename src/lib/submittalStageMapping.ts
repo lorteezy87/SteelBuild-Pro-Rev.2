@@ -63,12 +63,15 @@ const STAGE_KEYS = STAGE_ORDER as readonly string[];
 export interface SubmittalLike {
   id?: string | null;
   status?: string | null;
+  submittal_type?: string | null;
   ball_in_court?: string | null;
   approved_date?: string | null;
   submitted_date?: string | null;
   updated_at?: string | null;
+  created_at?: string | null;
   round_number?: number | null;
   is_deleted?: boolean | null;
+  deleted_at?: string | null;
   assigned_to?: string | null;
   reviewer?: string | null;
   submittal_number?: string | null;
@@ -84,6 +87,8 @@ export interface SubmittalLike {
 /** Sheet/drawing-like row used as legacy stage fallback. */
 export interface SheetLike {
   stage?: string | null;
+  is_deleted?: boolean | null;
+  deleted_at?: string | null;
 }
 
 export interface StageSubmittalPair {
@@ -180,6 +185,21 @@ export function submittalStatusToStage(
   return null;
 }
 
+/** Only an active, typed shop-drawing record can govern drawing approval.
+ * Nullable type is permitted by the DB for legacy/imported records, but there
+ * is no safe way to infer it from title, set link, or approval status. */
+export function isUsableShopDrawingSubmittal(
+  submittal: SubmittalLike | null | undefined,
+): boolean {
+  return Boolean(
+    submittal &&
+    submittal.submittal_type === "Shop Drawing" &&
+    !submittal.is_deleted &&
+    !submittal.deleted_at &&
+    submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) !== null,
+  );
+}
+
 /**
  * Inverse: given a drawing stage, propose the (status, ball_in_court)
  * pair that would put a NEW submittal at that stage. Used when the
@@ -219,10 +239,14 @@ export function isRRStatus(status: string | null | undefined): boolean {
 }
 
 /**
- * Pick the most-recently-touched submittal from an array. Sort key:
- *   1. submitted_date (desc, ISO sort)
- *   2. updated_at (desc)
- *   3. round_number (desc)
+ * Pick the governing submittal from an array. This order must match the
+ * evaluate_fab_release_set SQL gate: a never-submitted Draft cannot displace
+ * a submitted approval round merely because it was created later.
+ *   1. submitted_date (desc, null last)
+ *   2. updated_at (desc, null last; compare actual instants)
+ *   3. round_number (desc; null means 1)
+ *   4. created_at (desc, null last; stable tie-break)
+ *   5. id (desc; stable tie-break)
  *
  * Returns null on empty / null input.
  */
@@ -230,16 +254,23 @@ export function pickMostRecentSubmittal<T extends SubmittalLike>(
   submittals: T[] | null | undefined,
 ): T | null {
   if (!Array.isArray(submittals) || submittals.length === 0) return null;
-  const active = submittals.filter((s) => s && !s.is_deleted);
+  const active = submittals.filter((s) => s && !s.is_deleted && !s.deleted_at);
   if (active.length === 0) return null;
   const sorted = active.slice().sort((a, b) => {
     const aD = a.submitted_date || "";
     const bD = b.submitted_date || "";
     if (aD !== bD) return bD.localeCompare(aD);
-    const aU = a.updated_at || "";
-    const bU = b.updated_at || "";
-    if (aU !== bU) return bU.localeCompare(aU);
-    return (b.round_number || 1) - (a.round_number || 1);
+    const timestamp = (value: string | null | undefined): number => {
+      const parsed = value ? Date.parse(value) : NaN;
+      return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+    };
+    const updatedDifference = timestamp(b.updated_at) - timestamp(a.updated_at);
+    if (!Number.isNaN(updatedDifference) && updatedDifference !== 0) return updatedDifference;
+    const roundDifference = (b.round_number ?? 1) - (a.round_number ?? 1);
+    if (roundDifference !== 0) return roundDifference;
+    const createdDifference = timestamp(b.created_at) - timestamp(a.created_at);
+    if (!Number.isNaN(createdDifference) && createdDifference !== 0) return createdDifference;
+    return (b.id || "").localeCompare(a.id || "");
   });
   return sorted[0];
 }
@@ -264,10 +295,7 @@ export function derivedSetStage(
   submittalsForSet: SubmittalLike[] | null | undefined,
   sheetsForSet: SheetLike[] = [],
 ): string {
-  const usable = (Array.isArray(submittalsForSet) ? submittalsForSet : []).filter((s) => {
-    if (!s || s.is_deleted) return false;
-    return submittalStatusToStage(s.status, s.ball_in_court, s.approved_date) !== null;
-  });
+  const usable = (Array.isArray(submittalsForSet) ? submittalsForSet : []).filter(isUsableShopDrawingSubmittal);
   const mostRecent = pickMostRecentSubmittal(usable);
   if (mostRecent) {
     const stage = submittalStatusToStage(
@@ -278,7 +306,7 @@ export function derivedSetStage(
     if (stage) return stage;
   }
   if (Array.isArray(sheetsForSet) && sheetsForSet.length > 0) {
-    return dominantStage(sheetsForSet.map((s) => s?.stage));
+    return dominantStage(sheetsForSet.filter((sheet) => sheet && !sheet.is_deleted && !sheet.deleted_at).map((sheet) => sheet.stage));
   }
   return "Not Started";
 }

@@ -665,29 +665,29 @@ export default function PieceRelationshipManager({
         </div>
       </DecisionPanel>
 
-      <DecisionPanel title="Work package readiness">
+      <DecisionPanel title="Work package stage check">
         <p className="piece-readiness-notice">
-          Read-only readiness check. Work package status is not changed.
+          Read-only piece and drawing-stage check. Sheet holds, RFIs, PDFs, material and the server fabrication gate must be checked separately before release.
         </p>
         <div className="piece-readiness-grid">
           {visibleReadiness.map((row) => (
             <article
               key={row.workPackageId}
-              className={`piece-readiness-card${row.isReady ? " is-ready" : " is-blocked"}`}
+              className={`piece-readiness-card${row.isReady ? " is-stage-clear" : " is-blocked"}`}
             >
               <div className="piece-readiness-card__head">
                 <div>
                   <strong>{workPackageMap.get(row.workPackageId)}</strong>
                   <span>
-                    {row.pieceCount} pieces · {row.approvedDrawingCount}/{row.linkedDrawingCount} drawings IFC/Released
+                    {row.pieceCount} pieces · {row.approvedDrawingCount}/{row.linkedDrawingCount} drawings at IFC/Released stage
                   </span>
                 </div>
                 {row.isReady
-                  ? <Pill tone="good"><CheckCircle2 size={13} /> Ready</Pill>
-                  : <Pill tone="warn"><AlertTriangle size={13} /> Blocked</Pill>}
+                  ? <Pill tone="info"><CheckCircle2 size={13} /> Stage check clear</Pill>
+                  : <Pill tone="warn"><AlertTriangle size={13} /> Stage/link issue</Pill>}
               </div>
               {row.blockers.length === 0 ? (
-                <p className="piece-readiness-card__success">No piece or drawing blockers found.</p>
+                <p className="piece-readiness-card__success">This limited check found no piece hold or drawing-stage issue. Run the server Fab Release check before authorizing work.</p>
               ) : (
                 <ul className="piece-readiness-card__blockers">
                   {row.blockers.map((blocker) => (

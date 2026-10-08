@@ -28,6 +28,11 @@ interface ProjectEntity<T extends ProjectRecord> {
 /** Keep complete evidence separate from capped register caches. */
 export async function loadWorkPackageEvidence<T extends ProjectRecord>(entity: ProjectEntity<T>, projectId: string): Promise<T[]> {
   const records = await entity.filterAll({ project_id: projectId }, "id");
+  return verifyWorkPackageEvidenceScope(records, projectId);
+}
+
+/** Also validate the result of direct paged reads before publishing a snapshot. */
+export function verifyWorkPackageEvidenceScope<T extends ProjectRecord>(records: T[], projectId: string): T[] {
   if (records.length >= 100_000) rejectIncompleteWorkPackageEvidence();
   if (records.some(record => record.project_id !== projectId)) {
     throw new Error("Work package evidence returned records outside the selected project.");

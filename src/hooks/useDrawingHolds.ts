@@ -33,7 +33,9 @@ export function useDrawingHolds(projectId: string | null) {
     enabled: !!projectId,
     staleTime: 30_000,
     queryFn: async (): Promise<DrawingHoldRow[]> => {
-      const rows = await entities.DrawingHold.filter({ project_id: projectId });
+      // Counts, blockers, and the matrix must cover the full project audit
+      // trail. A capped read can omit an active hold beyond PostgREST's page.
+      const rows = await entities.DrawingHold.filterAll({ project_id: projectId });
       return sortHoldsNewestFirst(rows as unknown as DrawingHoldRow[]);
     },
   });

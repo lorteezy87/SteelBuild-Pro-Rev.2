@@ -52,6 +52,8 @@ export type UploadNewSheet = {
    * `drawings.callouts`.
    */
   callouts?: unknown;
+  /** Title-block fields a reviewer keyed from a scan's source PDF page. */
+  manual?: TitleBlockSource["manual"];
 };
 
 /** One row of the wizard's `matchSheets` output. */
@@ -113,6 +115,7 @@ export function buildIntakeRecords(input: IntakeInput): DocControlRecord[] {
         titleBlock: {
           scanned: input.scanned,
           setMeta: input.setMeta,
+          manual: incoming.manual,
           sheet: {
             sheetNumber: incoming.sheetNumber ?? "",
             revision: incoming.revision ?? "",

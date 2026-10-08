@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
@@ -17,6 +17,18 @@ import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 
 let registerState: { data: DrawingRegisterRow[] | undefined; isLoading: boolean; error: Error | null };
 let holdsState: { data: DrawingHoldRow[] | undefined; isLoading: boolean; error: Error | null };
+const holdClient = vi.hoisted(() => ({
+  create: vi.fn(),
+  update: vi.fn(),
+  updateRevision: vi.fn(),
+}));
+
+vi.mock("@/api/supabaseClient", () => ({
+  entities: {
+    DrawingHold: { create: holdClient.create, update: holdClient.update },
+    DrawingRevision: { update: holdClient.updateRevision },
+  },
+}));
 
 vi.mock("@/hooks/useDrawingRegister", () => ({
   useDrawingRegister: () => registerState,
@@ -34,11 +46,12 @@ const HELD_CLAIM = /Every sheet already has an active hold\./;
 
 function renderPanel() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
       <HoldsPanel projectId="p1" />
     </QueryClientProvider>,
   );
+  return { ...view, queryClient: qc };
 }
 
 async function openPicker() {
@@ -58,6 +71,9 @@ const sheet = (over: Partial<DrawingRegisterRow>): DrawingRegisterRow => ({
 beforeEach(() => {
   // Holds answered with zero rows — the live shape today.
   holdsState = { data: [], isLoading: false, error: null };
+  holdClient.create.mockReset().mockResolvedValue({ id: "h1" });
+  holdClient.update.mockReset().mockResolvedValue({ id: "h1" });
+  holdClient.updateRevision.mockReset().mockResolvedValue({ id: "r1" });
 });
 
 describe("HoldsPanel sheet picker", () => {
@@ -90,5 +106,43 @@ describe("HoldsPanel sheet picker", () => {
     await openPicker();
     expect(screen.getByRole("option", { name: /S-101/ })).toBeInTheDocument();
     expect(screen.queryByText(HELD_CLAIM)).not.toBeInTheDocument();
+  });
+
+  it("clears cached drawing-set gate results after placing a hold", async () => {
+    registerState = { data: [sheet({})], isLoading: false, error: null };
+    const { queryClient } = renderPanel();
+    const oldClear = { ok: true };
+    queryClient.setQueryData(["drawing-set-gate", "p1", "set-1"], oldClear);
+    queryClient.setQueryData(["drawing-set-gate", "p2", "set-2"], oldClear);
+    await openPicker();
+    await userEvent.click(screen.getByRole("option", { name: /S-101/ }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Hold reason" }), "Unresolved connection detail");
+    await userEvent.click(screen.getAllByRole("button", { name: /^Place hold$/ }).at(-1)!);
+
+    await waitFor(() => expect(holdClient.create).toHaveBeenCalled());
+    await waitFor(() => expect(queryClient.getQueryData(["drawing-set-gate", "p1", "set-1"])).toBeUndefined());
+    expect(queryClient.getQueryData(["drawing-set-gate", "p2", "set-2"])).toEqual(oldClear);
+  });
+
+  it("clears cached drawing-set gate results after releasing a hold", async () => {
+    registerState = { data: [sheet({ active_hold_id: "h1" })], isLoading: false, error: null };
+    holdsState = {
+      data: [{
+        id: "h1", project_id: "p1", drawing_id: "d1", reason: "Unresolved connection detail",
+        prior_release_status: "released", placed_by_id: "u1", placed_by_name: "PM",
+        placed_at: "2026-10-01T00:00:00Z", is_active: true,
+        released_by_id: null, released_by_name: null, released_at: null,
+        release_notes: null, created_at: "2026-10-01T00:00:00Z",
+      }],
+      isLoading: false,
+      error: null,
+    };
+    const { queryClient } = renderPanel();
+    queryClient.setQueryData(["drawing-set-gate", "p1", "set-1"], { ok: true });
+    await userEvent.click(screen.getByRole("button", { name: /Release hold on S-101/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Confirm release" }));
+
+    await waitFor(() => expect(holdClient.update).toHaveBeenCalled());
+    await waitFor(() => expect(queryClient.getQueryData(["drawing-set-gate", "p1", "set-1"])).toBeUndefined());
   });
 });

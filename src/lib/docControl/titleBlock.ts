@@ -126,6 +126,14 @@ export function normalizeRevisionCode(raw: string | null | undefined): string | 
 export type TitleBlockSource = {
   /** True when the PDF had no text layer — nothing text-derived is observed. */
   scanned: boolean;
+  /** Values a person read on the source PDF, independent of its text layer. */
+  manual?: {
+    projectName?: string;
+    sheetNumber?: string;
+    revision?: string;
+    issueDate?: string;
+    authorizingEngineer?: string;
+  } | null;
   /** Set-level metadata from the cover sheet. */
   setMeta?: {
     projectName?: string;
@@ -162,6 +170,7 @@ export type TitleBlockSource = {
  */
 export function readTitleBlock(source: TitleBlockSource): DocControlTitleBlock {
   const { scanned } = source;
+  const manual = source.manual ?? null;
   const setMeta = source.setMeta ?? null;
   const sheet = source.sheet ?? null;
   const existing = source.existingSet ?? null;
@@ -178,11 +187,16 @@ export function readTitleBlock(source: TitleBlockSource): DocControlTitleBlock {
     return observedField(raw, provenance);
   };
 
+  const fromHuman = (key: keyof NonNullable<TitleBlockSource["manual"]>): DocField | null =>
+    manual && key in manual ? observedField(manual[key], "human") : null;
+
   const sheetNumber = coalesceField(
+    fromHuman("sheetNumber"),
     fromText(sheet?.sheetNumber, sheet ? "sheetNumber" in sheet : false),
   );
 
   const rawRevision = coalesceField(
+    fromHuman("revision"),
     fromText(
       sheet?.revision,
       sheet ? "revision" in sheet : false,
@@ -197,6 +211,7 @@ export function readTitleBlock(source: TitleBlockSource): DocControlTitleBlock {
   };
 
   const rawIssueDate = coalesceField(
+    fromHuman("issueDate"),
     fromText(sheet?.date, sheet ? "date" in sheet : false),
     fromText(setMeta?.issueDate, setMeta ? "issueDate" in setMeta : false),
     existing?.issued_date != null ? observedField(existing.issued_date, "drawing-set") : null,
@@ -209,6 +224,7 @@ export function readTitleBlock(source: TitleBlockSource): DocControlTitleBlock {
   };
 
   const projectName = coalesceField(
+    fromHuman("projectName"),
     fromText(setMeta?.projectName, setMeta ? "projectName" in setMeta : false),
     existing?.project_name != null ? observedField(existing.project_name, "drawing-set") : null,
   );
@@ -217,6 +233,7 @@ export function readTitleBlock(source: TitleBlockSource): DocControlTitleBlock {
   // seal, so it is never promoted into authorizingEngineer — only a dedicated
   // engineer field or the set's recorded EOR counts.
   const authorizingEngineer = coalesceField(
+    fromHuman("authorizingEngineer"),
     fromText(
       setMeta?.authorizingEngineer,
       setMeta ? "authorizingEngineer" in setMeta : false,

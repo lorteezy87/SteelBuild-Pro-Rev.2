@@ -26,6 +26,7 @@ const DRAWINGS = [
 const SUBMITTALS = [
   {
     id: "sub-1",
+    submittal_type: "Shop Drawing",
     drawing_set_ids: ["set-linked"],
     status: "Under Review",
     ball_in_court: "EOR",
@@ -35,6 +36,7 @@ const SUBMITTALS = [
   },
   {
     id: "sub-2",
+    submittal_type: "Shop Drawing",
     drawing_set_ids: [] as string[],
     status: "Submitted",
     ball_in_court: "EOR",

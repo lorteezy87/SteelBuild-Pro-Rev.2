@@ -111,10 +111,12 @@ function withTruncationFlag(rows: TransmittalRow[], truncation: TransmittalTrunc
  * `enabled` lets a consumer that only needs the log on one tab (the Detailing
  * hub's Approval Matrix) defer the three-table read until that tab is open.
  */
-export function useTransmittals(projectId: string | null, options: { enabled?: boolean } = {}) {
-  const { enabled = true } = options;
+export function useTransmittals(projectId: string | null, options: { enabled?: boolean; focusTransmittalId?: string | null } = {}) {
+  const { enabled = true, focusTransmittalId = null } = options;
   return useQuery({
-    queryKey: ["drawing-transmittals", projectId],
+    queryKey: focusTransmittalId
+      ? ["drawing-transmittals", projectId, "focus", focusTransmittalId]
+      : ["drawing-transmittals", projectId],
     enabled: !!projectId && enabled,
     staleTime: 60_000,
     // Structural sharing rebuilds a changed array without the non-enumerable
@@ -144,6 +146,37 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
         items: ((rawItems as any[]) ?? []).length >= TRANSMITTAL_LOG_READ_CAP,
       };
 
+      let visibleHeaders = (rawTransmittals as any[]) ?? [];
+      let visibleItems = (rawItems as any[]) ?? [];
+      if (focusTransmittalId) {
+        // The project log is capped, so a real older ?transmittal= link may
+        // sit beyond its first 1,000 headers. Fetch that primary key directly
+        // and its exact attachment list to completeness before auto-opening.
+        // The cap notice still reflects the original project-wide reads.
+        const inLog = visibleHeaders.some((row) => row.id === focusTransmittalId);
+        if (!inLog) {
+          const focused = await entities.DrawingTransmittal.filter(
+            { project_id: projectId, id: focusTransmittalId }, "id", 1,
+          );
+          if (focused.some((row) => row.project_id !== projectId || row.id !== focusTransmittalId)) {
+            throw new Error("Focused transmittal header scope could not be verified.");
+          }
+          visibleHeaders = [...visibleHeaders, ...focused];
+        }
+        if (visibleHeaders.some((row) => row.id === focusTransmittalId)) {
+          const exactItems = await entities.DrawingTransmittalItem.filterAll(
+            { project_id: projectId, transmittal_id: focusTransmittalId }, "id",
+          );
+          if (exactItems.some((item) => item.project_id !== projectId || item.transmittal_id !== focusTransmittalId)) {
+            throw new Error("Focused transmittal attachment scope could not be verified.");
+          }
+          visibleItems = [
+            ...visibleItems.filter((item) => item.transmittal_id !== focusTransmittalId),
+            ...exactItems,
+          ];
+        }
+      }
+
       const revisionsById = new Map<string, any>();
       for (const revision of (rawRevisions as any[]) ?? []) {
         if (revision?.id) revisionsById.set(String(revision.id), revision);
@@ -155,7 +188,7 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
       }
 
       const itemsByTransmittal = new Map<string, TransmittalAttachment[]>();
-      for (const it of (rawItems as any[]) ?? []) {
+      for (const it of visibleItems) {
         const tid = String(it?.transmittal_id ?? "");
         if (!tid) continue;
 
@@ -204,7 +237,7 @@ export function useTransmittals(projectId: string | null, options: { enabled?: b
         itemsByTransmittal.set(tid, transmittalItems);
       }
 
-      const rows = ((rawTransmittals as any[]) ?? [])
+      const rows = visibleHeaders
         .filter((t) => !t.is_deleted)
         .map((t) => {
           const items = (itemsByTransmittal.get(String(t.id)) ?? []).sort((a, b) =>

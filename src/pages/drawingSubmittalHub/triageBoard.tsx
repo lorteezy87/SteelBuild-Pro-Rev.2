@@ -301,19 +301,17 @@ const drillTh: CSSProperties = {
 };
 const drillTd: CSSProperties = { padding: "6px 12px", borderBottom: `1px solid ${border}`, color: "var(--text-secondary)" };
 
-// ── Sequence Readiness rollup ───────────────────────────────────────────────
-// The sequence-aware view: group packages by erection sequence and show how far
-// each sequence's detailing has progressed + how many packages are fab/erection
-// ready, so the schedule can pull detailing (design doc §7).
+// ── Sequence workflow rollup ────────────────────────────────────────────────
+// These are local workflow markers, not server-verified production releases.
 
 export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
   return (
     <SectionCard
-      title="Sequence readiness"
+      title="Sequence workflow"
       headerAction={<span className="sbd-badge-info">{rows.length}</span>}
     >
       <p style={{ margin: "0 0 12px", color: textMuted, fontSize: 12 }}>
-        Detailing progress + fab/erection readiness by erection sequence.
+        Stage position and shop/field markers by erection sequence. The percentage reflects workflow order, not work completed. Production release requires the server gate.
       </p>
       {rows.length === 0 || rows.every((r) => r.sequence === "Unsequenced") ? (
         // No REAL sequence exists yet — a lone "Unsequenced" bucket is just a dead
@@ -339,15 +337,15 @@ export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[
               </div>
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10, color: textPrimary, marginBottom: 4 }}>
-                  <span style={{ color: textMuted }}>Detailing</span>
+                  <span style={{ color: textMuted }}>Stage position</span>
                   <span className="sbd-num">{row.detailingPct}%</span>
                 </div>
                 <div style={{ height: 7, borderRadius: 999, background: surface2, overflow: "hidden", border: `1px solid ${border}` }}>
                   <div style={{ height: "100%", width: `${row.detailingPct}%`, background: accent, boxShadow: `0 0 10px ${accent}` }} />
                 </div>
               </div>
-              <SeqMetric label="Fab" value={`${row.fabReadyCount}/${row.packageCount}`} tone={row.fabReadyCount === row.packageCount ? success : textMuted} />
-              <SeqMetric label="Erect" value={`${row.erectionReadyCount}/${row.packageCount}`} tone={row.erectionReadyCount === row.packageCount ? success : textMuted} />
+              <SeqMetric label="Shop stage" value={`${row.shopStageCount}/${row.packageCount}`} tone={textMuted} />
+              <SeqMetric label="Field stage" value={`${row.fieldStageCount}/${row.packageCount}`} tone={textMuted} />
               <SeqMetric label="At risk" value={row.atRiskCount} tone={row.atRiskCount ? warning : success} />
             </div>
           ))}
@@ -457,20 +455,20 @@ interface ReadinessPanelProps {
 
 export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanelProps) {
   const {
-    backwardDates = {}, scheduleRisk = {}, fabricationReady, erectionReady,
+    backwardDates = {}, scheduleRisk = {}, shopStageMarked, fieldStageMarked,
     rfiBlocked, revisionImpacted, materialImpacted, longLeadImpact, prioritySequence,
   } = readiness || {};
-  const riskTone = scheduleRisk.severity === "critical" ? error : scheduleRisk.severity === "at_risk" ? warning : success;
-  const riskLabel = scheduleRisk.severity === "critical"
+  const hasSchedule = SCHEDULE_ROWS.some(([k]) => backwardDates[k]);
+  const riskTone = !hasSchedule ? textMuted : scheduleRisk.severity === "critical" ? error : scheduleRisk.severity === "at_risk" ? warning : success;
+  const riskLabel = !hasSchedule ? "Schedule unknown" : scheduleRisk.severity === "critical"
     ? `Critical · ${scheduleRisk.daysLate}d`
     : scheduleRisk.severity === "at_risk" ? `At risk · ${scheduleRisk.daysLate}d` : "On track";
-  const hasSchedule = SCHEDULE_ROWS.some(([k]) => backwardDates[k]);
 
   return (
     <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
         <div style={{ fontFamily: mono, fontSize: 8, color: textMuted, letterSpacing: "0.12em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
-          <CalendarClock size={10} /> Schedule &amp; readiness
+          <CalendarClock size={10} /> Schedule &amp; workflow
         </div>
         <span title={(scheduleRisk.reasons || []).join("; ") || "On track"} style={{
           fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
@@ -500,8 +498,12 @@ export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanel
       )}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-        <ReadyChip ok={!!fabricationReady} label="Fab ready" />
-        <ReadyChip ok={!!erectionReady} label="Erect ready" />
+        <span title="Workflow stage only. Check the server fab-release gate before authorizing production.">
+          <ReadyChip ok={false} neutral label={shopStageMarked === undefined ? "Shop stage unknown" : shopStageMarked ? "Shop stage marked" : "Shop stage pending"} />
+        </span>
+        <span title="Workflow stage only. This does not authorize erection or field work.">
+          <ReadyChip ok={false} neutral label={fieldStageMarked === undefined ? "Field stage unknown" : fieldStageMarked ? "Field stage marked" : "Field stage pending"} />
+        </span>
         {rfiBlocked && <ReadyChip ok={false} label="RFI blocked" bad />}
         {revisionImpacted && <ReadyChip ok={false} label="Rev impacted" bad />}
         {prioritySequence && <ReadyChip ok label="Seq" neutral />}
@@ -514,6 +516,4 @@ export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanel
     </div>
   );
 }
-
-
 

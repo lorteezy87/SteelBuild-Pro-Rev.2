@@ -25,46 +25,47 @@ describe("linkPiecesToDrawingSet", () => {
 });
 
 describe("replacePiecesDrawingSet", () => {
-  it("unlinks other sets then links the target", async () => {
-    const link = vi.fn(async () => undefined);
-    const unlink = vi.fn(async () => undefined);
-    const existing = [
-      { piece_id: "p1", drawing_set_id: "old-a" },
-      { piece_id: "p1", drawing_set_id: "old-b" },
-      { piece_id: "p2", drawing_set_id: "set-1" },
-      { piece_id: "p3", drawing_set_id: "wrong" },
-    ];
+  it("assigns each leaf in one atomic server call rather than unlinking first", async () => {
+    const replace = vi.fn(async (pieceId: string, drawingSetId: string) => ({
+      piece_id: pieceId,
+      drawing_set_id: drawingSetId,
+      linked: pieceId !== "p2",
+      unlinked_count: pieceId === "p1" ? 2 : pieceId === "p3" ? 1 : 0,
+    }));
     const result = await replacePiecesDrawingSet(
-      ["p1", "p2", "p3"],
+      ["p1", "p2", "p3", "p1"],
       "set-1",
-      existing,
-      link,
-      unlink,
+      replace,
     );
-    expect(unlink).toHaveBeenCalledTimes(3);
-    expect(unlink).toHaveBeenCalledWith("p1", "old-a");
-    expect(unlink).toHaveBeenCalledWith("p1", "old-b");
-    expect(unlink).toHaveBeenCalledWith("p3", "wrong");
-    expect(link).toHaveBeenCalledTimes(3);
-    expect(link).toHaveBeenCalledWith("p1", "set-1");
-    expect(link).toHaveBeenCalledWith("p2", "set-1");
-    expect(link).toHaveBeenCalledWith("p3", "set-1");
+    expect(replace).toHaveBeenCalledTimes(3);
+    expect(replace).toHaveBeenCalledWith("p1", "set-1");
+    expect(replace).toHaveBeenCalledWith("p2", "set-1");
+    expect(replace).toHaveBeenCalledWith("p3", "set-1");
     expect(result).toEqual({ linked: 3, unlinked: 3, errors: [] });
   });
 
   it("collects errors per piece without aborting the batch", async () => {
-    const link = vi.fn(async (pieceId: string) => {
-      if (pieceId === "p2") throw new Error("link failed");
+    const replace = vi.fn(async (pieceId: string, drawingSetId: string) => {
+      if (pieceId === "p2") throw new Error("replace failed");
+      return { piece_id: pieceId, drawing_set_id: drawingSetId, linked: true, unlinked_count: 0 };
     });
-    const unlink = vi.fn(async () => undefined);
     const result = await replacePiecesDrawingSet(
       ["p1", "p2"],
       "set-1",
-      [{ piece_id: "p2", drawing_set_id: "old" }],
-      link,
-      unlink,
+      replace,
     );
     expect(result.linked).toBe(1);
-    expect(result.errors).toEqual([{ pieceId: "p2", message: "link failed" }]);
+    expect(result.errors).toEqual([{ pieceId: "p2", message: "replace failed" }]);
+  });
+
+  it("does not count an incomplete server response as a successful assignment", async () => {
+    const result = await replacePiecesDrawingSet(
+      ["p1"], "set-1", async () => ({ linked: true, unlinked_count: 0 }),
+    );
+    expect(result).toEqual({
+      linked: 0,
+      unlinked: 0,
+      errors: [{ pieceId: "p1", message: "Drawing-set replacement returned incomplete evidence" }],
+    });
   });
 });

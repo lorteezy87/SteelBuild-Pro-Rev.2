@@ -78,9 +78,16 @@ vi.mock("@/services/permissions", () => ({
     user: { id: "test-user-id", email: "test@example.com" },
   }),
 }));
+let holdQueryState: {
+  data: unknown[];
+  isSuccess: boolean;
+  isError: boolean;
+  isLoading: boolean;
+  error: Error | null;
+} = { data: [], isSuccess: true, isError: false, isLoading: false, error: null };
 vi.mock("@/hooks/useDrawingHolds", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/useDrawingHolds")>()),
-  useDrawingHolds: () => ({ data: [] as unknown[], isSuccess: true, isError: false, isLoading: false, error: null as Error | null }),
+  useDrawingHolds: () => holdQueryState,
 }));
 
 // Stubs expose exactly what the hub hands each board (owner decision 3).
@@ -114,7 +121,10 @@ vi.mock("@/pages/Submittals", async () => {
 import DrawingSubmittalHub from "@/pages/DrawingSubmittalHub";
 import { ProjectContext } from "@/components/shared/ProjectContext";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  holdQueryState = { data: [], isSuccess: true, isError: false, isLoading: false, error: null };
+});
 
 const TEST_PROJECT = { id: "test-project-id", name: "Test Project" };
 
@@ -160,6 +170,20 @@ function renderHubRoutes(entry: string) {
 const NOTICE = { name: "Doc Control has moved" };
 
 describe("hub under real routes", () => {
+  it("does not publish a cached hold count when its background refresh fails", async () => {
+    holdQueryState = {
+      data: [{ id: "stale-hold", drawing_id: "d1", is_active: true }],
+      isSuccess: false,
+      isError: true,
+      isLoading: false,
+      error: new Error("Hold read failed"),
+    };
+    renderHubRoutes("/DrawingSubmittalHub?hub_tab=overview");
+
+    expect(await screen.findByRole("heading", { name: "Drawing Control" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sheet On Hold|No holds/i })).not.toBeInTheDocument();
+  });
+
   it("doesn't bring the Doc Control notice back after leaving the hub and pressing Back", async () => {
     const user = userEvent.setup();
     renderHubRoutes("/DrawingSubmittalHub?hub_tab=doccontrol");
@@ -173,7 +197,7 @@ describe("hub under real routes", () => {
 
     await user.click(screen.getByRole("button", { name: "probe-back" }));
     // Back on the arrival entry, the hub remounts on the Drawing Register...
-    expect(await screen.findByRole("tab", { name: /Drawing Register/ })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("tab", { name: /Shop Drawings/ })).toHaveAttribute("aria-selected", "true");
     // ...and the dismissed notice stays gone.
     expect(screen.queryByRole("heading", NOTICE)).not.toBeInTheDocument();
   });

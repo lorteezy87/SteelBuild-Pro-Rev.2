@@ -18,6 +18,7 @@ import {
   isClosedSubmittal,
   itemUrgency,
   rollupDrawingStage,
+  resolveDrawingPackageDue,
   textMuted,
   toDateInputValue,
   toLocalDay,
@@ -113,7 +114,9 @@ describe("isClosedSubmittal (due/triage 'closed' definition)", () => {
 describe("isClosedPackage (the layer the reported bug lives in)", () => {
   // Minimal SetPackage factory — isClosedPackage only reads submittals/parent/sheets.
   const pkg = (over: any = {}) =>
-    ({ key: "k", setId: null, name: "Set", parent: null, sheets: [], submittals: [], ...over } as any);
+    ({ key: "k", setId: null, name: "Set", parent: null, sheets: [], ...over,
+      submittals: (over.submittals ?? []).map((submittal: any) => ({ submittal_type: "Shop Drawing", ...submittal })),
+    } as any);
 
   it("does NOT close a package whose linked submittal is Approved / Approved as Noted", () => {
     // The exact path the user hits: linking an approved submittal to a drawing
@@ -353,9 +356,9 @@ describe("buildSetPackages (the set↔submittal join behind every matrix row)", 
     { id: "d5", drawing_set_id: "s2", is_deleted: true },    // skipped
   ];
   const submittals = [
-    { id: "sub1", drawing_set_ids: ["s1"] },           // linked by id
-    { id: "sub2", drawing_set_name: "Anchor Bolts" },  // linked by name fallback
-    { id: "sub3", drawing_set_ids: ["s1"], is_deleted: true }, // excluded
+    { id: "sub1", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"] },           // linked by id
+    { id: "sub2", submittal_type: "Shop Drawing", drawing_set_name: "Anchor Bolts" },  // historical name match
+    { id: "sub3", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], is_deleted: true }, // excluded
   ];
 
   it("groups live sheets under their parent set, skipping deleted + superseded", () => {
@@ -366,10 +369,46 @@ describe("buildSetPackages (the set↔submittal join behind every matrix row)", 
     expect(s2.sheets.map((d) => d.id)).toEqual(["d3"]);
   });
 
-  it("links a submittal by drawing_set_ids and by drawing_set_name fallback", () => {
+  it("keeps Product Data and unknown-type records linked but outside shop drawing approval", () => {
+    const pkgs = buildSetPackages(
+      [{ id: "d1", drawing_set_id: "s1", stage: "IFA" }] as any,
+      [{ id: "s1", set_name: "Main Steel" }] as any,
+      [
+        { id: "product", submittal_type: "Product Data", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["s1"] },
+        { id: "unknown", submittal_type: null, status: "Released for Fabrication", drawing_set_ids: ["s1"] },
+      ] as any,
+    );
+    expect(pkgs[0].submittals).toEqual([]);
+    expect(pkgs[0].relatedSubmittals?.map((submittal) => submittal.id)).toEqual(["product", "unknown"]);
+    expect(resolveDrawingPackageDue(pkgs[0]).governingSubmittal).toBeNull();
+    expect(buildTriage(pkgs[0].relatedSubmittals as any, pkgs, new Map()).setItems[0]._submittalId).toBeNull();
+  });
+
+  it("excludes timestamp-deleted drawing sets and sheets from package readiness", () => {
+    const pkgs = buildSetPackages(
+      [
+        { id: "live", drawing_set_id: "s1" },
+        { id: "deleted-sheet", drawing_set_id: "s1", deleted_at: "2026-10-01T00:00:00Z", stage: "Released" },
+      ] as any,
+      [
+        { id: "s1", set_name: "Main Steel" },
+        { id: "deleted-set", set_name: "Obsolete", deleted_at: "2026-10-01T00:00:00Z" },
+      ] as any,
+      [] as any,
+    );
+    expect(pkgs.map((pkg) => pkg.setId)).toEqual(["s1"]);
+    expect(pkgs[0].sheets.map((sheet) => sheet.id)).toEqual(["live"]);
+  });
+
+  it("keeps name-only submittals as historical evidence instead of a governing link", () => {
     const pkgs = buildSetPackages(drawings as any, sets as any, submittals as any);
     expect(pkgs.find((p) => p.setId === "s1")!.submittals.map((s) => s.id)).toEqual(["sub1"]);
-    expect(pkgs.find((p) => p.setId === "s2")!.submittals.map((s) => s.id)).toEqual(["sub2"]);
+    const anchorBolts = pkgs.find((p) => p.setId === "s2")!;
+    expect(anchorBolts.submittals).toEqual([]);
+    expect(anchorBolts.historicalSubmittals?.map((s) => s.id)).toEqual(["sub2"]);
+    expect(resolveDrawingPackageDue(anchorBolts).governingSubmittal).toBeNull();
+    const legacyItem = buildTriage(submittals as any, pkgs, new Map()).unlinkedSubmittalItems.find((item) => item._submittalId === "sub2");
+    expect(legacyItem?.group).toBe("No drawing set ID linked");
   });
 
   it("excludes a soft-deleted submittal from every package", () => {
@@ -403,7 +442,7 @@ describe("buildSetPackages (the set↔submittal join behind every matrix row)", 
     const pkgs = buildSetPackages(
       [{ id: "d1", drawing_set_id: "s1", stage: "Released" }] as any,
       [{ id: "s1", set_name: "Main Steel" }] as any,
-      [{ id: "sub1", drawing_set_ids: ["s1"], status: "Approved", ball_in_court: "EOR" }] as any,
+      [{ id: "sub1", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Approved", ball_in_court: "EOR" }] as any,
     );
     expect(buildDrawingKpis([{ id: "d1", drawing_set_id: "s1" }] as any, pkgs).inReview).toBe(1);
     const triage = buildTriage(pkgs[0].submittals, pkgs, new Map());
@@ -418,8 +457,8 @@ describe("buildSetPackages (the set↔submittal join behind every matrix row)", 
       [{ id: "d1", drawing_set_id: "s1", reviewer: "Sheet owner" }] as any,
       [{ id: "s1", set_name: "Main Steel" }] as any,
       [
-        { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9, ball_in_court: "Void owner" },
-        { id: "active", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, ball_in_court: "EOR" },
+        { id: "void", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Void", round_number: 9, ball_in_court: "Void owner" },
+        { id: "active", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, ball_in_court: "EOR" },
       ] as any,
     );
     const item = buildTriage(pkgs[0].submittals, pkgs, new Map()).setItems[0];
@@ -463,9 +502,9 @@ describe("buildApprovalMatrixRows", () => {
     { id: "s3", set_name: "Old", is_deleted: true }, // deleted → excluded
   ];
   const subs = [
-    { id: "a", drawing_set_ids: ["s1"], round_number: 1, status: "Submitted", submittal_number: "001" },
-    { id: "b", drawing_set_ids: ["s1"], round_number: 2, status: "Approved", submittal_number: "002" },
-    { id: "c", drawing_set_ids: ["s2"], is_deleted: true, round_number: 1, status: "Approved" }, // deleted sub
+    { id: "a", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], round_number: 1, status: "Submitted", submittal_number: "001" },
+    { id: "b", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], round_number: 2, status: "Approved", submittal_number: "002" },
+    { id: "c", submittal_type: "Shop Drawing", drawing_set_ids: ["s2"], is_deleted: true, round_number: 1, status: "Approved" }, // deleted sub
   ];
 
   it("joins active sets to their active submittals and picks the latest round", () => {
@@ -494,6 +533,7 @@ describe("buildApprovalMatrixRows", () => {
       [{ id: "s1", set_name: "Main Steel", is_deleted: false }],
       [{
         id: "a",
+        submittal_type: "Shop Drawing",
         drawing_set_ids: ["s1"],
         round_number: 1,
         status: "Submitted",
@@ -782,7 +822,7 @@ describe("buildTriage — working-day due display (submittal_workday_dues)", () 
     parent: null,
     sheets: [{ id: "d1", stage: "IFA", due_date: null }],
     submittals: [
-      { id: "sub-1", round_number: 1, status: "Submitted", required_date: NEXT_MONDAY, submittal_number: "001" },
+      { id: "sub-1", submittal_type: "Shop Drawing", round_number: 1, status: "Submitted", required_date: NEXT_MONDAY, submittal_number: "001", drawing_set_ids: ["set-s"] },
     ],
   });
 
@@ -837,7 +877,7 @@ describe("buildApprovalMatrixRows — working-day due display", () => {
   const MONDAY = new Date(2026, 6, 6, 12, 0, 0);
   const NEXT_MONDAY = "2026-07-13";
   const sets = [{ id: "s1", set_name: "Main Steel", is_deleted: false }];
-  const subs = [{ id: "a", drawing_set_ids: ["s1"], round_number: 1, status: "Submitted", required_date: NEXT_MONDAY, submittal_number: "001" }];
+  const subs = [{ id: "a", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], round_number: 1, status: "Submitted", required_date: NEXT_MONDAY, submittal_number: "001" }];
 
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(MONDAY); });
   afterEach(() => { vi.useRealTimers(); });
@@ -880,8 +920,8 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
     // comparator returned 0 and query order decided — and "-submitted_date"
     // DESC/NULLS-FIRST puts the undated Draft first.
     const rows = buildApprovalMatrixRows(sets, [
-      { id: "draft", drawing_set_ids: ["s1"], status: "Draft", round_number: 1, submitted_date: null },
-      { id: "live", drawing_set_ids: ["s1"], status: "Under Review", round_number: 1, ball_in_court: "EOR", submitted_date: "2026-01-05", required_date: "2026-01-20" },
+      { id: "draft", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Draft", round_number: 1, submitted_date: null },
+      { id: "live", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Under Review", round_number: 1, ball_in_court: "EOR", submitted_date: "2026-01-05", required_date: "2026-01-20" },
     ] as any);
     expect(rows[0]?.latestSubmittal?.id).toBe("live");
     expect(rows[0]?.latestSubmittal?.ball_in_court).toBe("EOR");
@@ -889,8 +929,8 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
 
   it("does not let a Void submittal govern and render a green Closed", () => {
     const rows = buildApprovalMatrixRows(sets, [
-      { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9 },
-      { id: "live", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, submitted_date: "2026-01-05", required_date: "2000-01-01" },
+      { id: "void", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Void", round_number: 9 },
+      { id: "live", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, submitted_date: "2026-01-05", required_date: "2000-01-01" },
     ] as any);
     expect(rows[0]?.latestSubmittal?.id).toBe("live");
     expect(rows[0]?.due.overdue).toBe(true);
@@ -898,15 +938,15 @@ describe("buildApprovalMatrixRows — governing submittal", () => {
 
   it("still governs by the most recent submittal among usable ones", () => {
     const rows = buildApprovalMatrixRows(sets, [
-      { id: "older", drawing_set_ids: ["s1"], status: "Submitted", submitted_date: "2026-01-01" },
-      { id: "newer", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-03-01" },
+      { id: "older", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Submitted", submitted_date: "2026-01-01" },
+      { id: "newer", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-03-01" },
     ] as any);
     expect(rows[0]?.latestSubmittal?.id).toBe("newer");
   });
 
   it("falls back to an unusable submittal rather than showing none linked", () => {
     const rows = buildApprovalMatrixRows(sets, [
-      { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 1 },
+      { id: "void", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Void", round_number: 1 },
     ] as any);
     expect(rows[0].latestSubmittal?.id).toBe("void");
   });
@@ -919,7 +959,7 @@ describe("buildApprovalMatrixRows — a returned review stops counting down", ()
     // required_date is never re-stamped after a verdict, so without this the row
     // grew one day later every day, forever, with no way to clear it.
     const rows = buildApprovalMatrixRows(sets, [
-      { id: "a", drawing_set_ids: ["s1"], status: "Approved as Noted", submitted_date: "2026-01-01", required_date: "2000-01-01", returned_date: "2000-01-05" },
+      { id: "a", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Approved as Noted", submitted_date: "2026-01-01", required_date: "2000-01-01", returned_date: "2000-01-05" },
     ] as any);
     expect(rows[0].due.overdue).toBe(false);
     expect(rows[0].due.label).toBe("Closed");
@@ -927,7 +967,7 @@ describe("buildApprovalMatrixRows — a returned review stops counting down", ()
 
   it("still marks an outstanding (not yet returned) submittal late", () => {
     const rows = buildApprovalMatrixRows(sets, [
-      { id: "b", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-01-01", required_date: "2000-01-01", returned_date: null },
+      { id: "b", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Under Review", submitted_date: "2026-01-01", required_date: "2000-01-01", returned_date: null },
     ] as any);
     expect(rows[0].due.overdue).toBe(true);
   });

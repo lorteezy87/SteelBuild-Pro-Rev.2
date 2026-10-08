@@ -60,7 +60,7 @@ export const ALL_MODULES = [
   { icon: "\u2630", name: "Contacts",                 group: "Projects",      page: "Contacts" },
   { icon: "\uD83D\uDC65", name: "Project Members",          group: "Projects",      page: "ProjectMembers" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
-  { icon: "\u25A6", name: "Detailing Control Center",    group: "Detailing",     page: "DrawingSubmittalHub" },
+  { icon: "\u25A6", name: "Drawing Control",             group: "Detailing",     page: "DrawingSubmittalHub" },
   { icon: "\u2731", name: "Document Control",            group: "Detailing",     page: "DocumentControl" },
   { icon: "\u25a4", name: "GC Documents",                group: "Detailing",     page: "GcDocuments" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
@@ -138,8 +138,6 @@ const OPERATIONAL_GROUPS = [
     collapsible: true,
     items: [
       { label: "Drawing Control", icon: "▦", page: "DrawingSubmittalHub" },
-      { label: "GC Documents", icon: "▤", page: "GcDocuments" },
-      { label: "Document Control", icon: "✱", page: "DocumentControl" },
       { label: "RFIs", icon: "⚑", page: "RFIs", badgeKey: "rfi" },
       { label: "Documents", icon: "📁", page: "Documents" },
     ],

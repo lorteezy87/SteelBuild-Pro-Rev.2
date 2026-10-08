@@ -72,7 +72,7 @@ export const RISK_FILTERS: Array<{ id: string; label: string; tone: string }> = 
   { id: "medium", label: "Warnings", tone: "var(--status-warning)" },
   { id: "clear", label: "Clear", tone: "var(--status-success)" },
   { id: "drawing_gaps", label: "Drawing gaps", tone: "var(--status-warning)" },
-  { id: "ready_fab", label: "Ready for fab", tone: "var(--status-success)" },
+  { id: "drawing_stage_clear", label: "Drawing stage clear", tone: "var(--status-info)" },
   { id: "released", label: "Released", tone: "var(--phase-fab)" },
   { id: "exception", label: "Exception release", tone: "var(--status-warning)" },
   { id: "overdue", label: "Overdue", tone: "var(--status-error)" },

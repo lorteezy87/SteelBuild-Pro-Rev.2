@@ -11,6 +11,7 @@ import {
   buildSheetApprovalPatch,
   buildSubmittalAdvanceSearch,
   buildSubmittalNavigationSearch,
+  openShopDrawingSubmittalsForSet,
   formatBulkDeleteToast,
   formatBulkUpdateToast,
   formatRenameSetToast,
@@ -379,10 +380,10 @@ describe("buildSubmittalNavigationSearch", () => {
   const mapped = { status: "Approved as Noted", ball_in_court: "Detailer" };
   it("opens the latest OPEN linked submittal instead of creating a new one", () => {
     const submittals = [
-      { id: "old", status: "Submitted", submitted_date: "2026-01-01", drawing_set_ids: ["set-1"] },
-      { id: "newest", status: "Under Review", submitted_date: "2026-03-01", drawing_set_ids: ["set-1"] },
-      { id: "closed", status: "Released for Fabrication", submitted_date: "2026-04-01", drawing_set_ids: ["set-1"] },
-      { id: "other", status: "Submitted", submitted_date: "2026-05-01", drawing_set_ids: ["set-2"] },
+      { id: "old", submittal_type: "Shop Drawing", status: "Submitted", submitted_date: "2026-01-01", drawing_set_ids: ["set-1"] },
+      { id: "newest", submittal_type: "Shop Drawing", status: "Under Review", submitted_date: "2026-03-01", drawing_set_ids: ["set-1"] },
+      { id: "closed", submittal_type: "Shop Drawing", status: "Released for Fabrication", submitted_date: "2026-04-01", drawing_set_ids: ["set-1"] },
+      { id: "other", submittal_type: "Shop Drawing", status: "Submitted", submitted_date: "2026-05-01", drawing_set_ids: ["set-2"] },
     ];
     expect(buildSubmittalNavigationSearch({ setId: "set-1", mapped, submittals })).toBe("?recordId=newest");
   });
@@ -396,6 +397,18 @@ describe("buildSubmittalNavigationSearch", () => {
       "?targetSetId=set-1&prefilledStatus=Approved+as+Noted&prefilledBallInCourt=Detailer",
     );
     expect(buildSubmittalNavigationSearch({ setId: null, mapped: null, submittals: [] })).toBe("");
+  });
+
+  it("does not route a drawing stage move into linked Product Data, untyped, or deleted Shop Drawing records", () => {
+    const submittals = [
+      { id: "product", submittal_type: "Product Data", status: "Submitted", drawing_set_ids: ["set-1"] },
+      { id: "unknown", submittal_type: null, status: "Under Review", drawing_set_ids: ["set-1"] },
+      { id: "deleted", submittal_type: "Shop Drawing", status: "Submitted", drawing_set_ids: ["set-1"], deleted_at: "2026-10-07T00:00:00Z" },
+    ];
+    expect(buildSubmittalNavigationSearch({ setId: "set-1", mapped, submittals })).toBe(
+      "?targetSetId=set-1&prefilledStatus=Approved+as+Noted&prefilledBallInCourt=Detailer",
+    );
+    expect(openShopDrawingSubmittalsForSet("set-1", submittals)).toEqual([]);
   });
 });
 

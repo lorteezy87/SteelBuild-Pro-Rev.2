@@ -7,11 +7,10 @@ const read = (rel: string) => readFileSync(resolve(process.cwd(), rel), "utf8");
 const squash = (value: string) => value.replace(/\s+/g, " ").trim();
 
 /**
- * The hex-S is drawn in five places that cannot import each other: the React
- * component (via this module), three static SVGs served out of public/, and the
- * plain-node raster generator. A drifted copy means the favicon, the app icon
- * and the nav logo stop being the same logo, which nobody notices until it
- * ships. These tests are the only thing holding them together.
+ * Historical hex-S assets remain in the repository for compatibility. The
+ * approved steel diamond badge now owns every active logo and raster export.
+ * Keep legacy geometry internally consistent without reconnecting it to the
+ * app identity.
  */
 describe("SteelBuild-Pro hex-S mark geometry", () => {
   const STATIC_SVGS = [
@@ -24,13 +23,10 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     expect(squash(read(file))).toContain(MARK_PATH);
   });
 
-  it("keeps the raster generator on the same sub-paths", () => {
-    // The script runs under plain node, outside the Vite/TS graph, so it holds
-    // its own copy of the three sub-paths rather than importing this module.
+  it("generates current rasters from the approved badge instead of the retired paths", () => {
     const script = read("scripts/generate-brand-rasters.cjs");
-    for (const subPath of MARK_PATH.split(/(?<=Z) /)) {
-      expect(script).toContain(subPath);
-    }
+    expect(script).toContain('"marketing", "steelbuild-pro-logo.jpg"');
+    expect(script).not.toContain("MARK_PATH");
   });
 
   it("fills evenodd everywhere so the carved S stays transparent", () => {
@@ -39,11 +35,11 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     }
   });
 
-  it("uses the brand palette's Signal Amber and Foundry Black", () => {
+  it("retains the historical palette without coloring the approved badge", () => {
     expect(MARK_AMBER).toBe("#F5BB00");
     expect(MARK_TILE_BG).toBe("#0D1117");
     expect(read("src/styles/brand-theme.css")).toContain("--sbp-signal-amber:          #F5BB00");
-    expect(read("src/styles/brand-theme.css")).toMatch(/--brand-amber:\s+var\(--sbp-signal-amber\)/);
+    expect(read("src/styles/brand-theme.css")).not.toMatch(/--brand-amber:/);
   });
 
   it("leaves the product accent on the approved brand orange", () => {

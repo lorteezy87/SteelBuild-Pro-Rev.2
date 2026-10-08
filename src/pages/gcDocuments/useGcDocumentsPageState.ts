@@ -18,7 +18,7 @@ export interface GcConfirmState {
   run: () => void | Promise<void>;
 }
 
-export function useGcDocumentsPageState(searchParams?: SearchParams) {
+export function useGcDocumentsPageState(searchParams?: SearchParams, openReviewedPdf = false) {
   // Deep links: /GcDocuments?docType=asi&impact=_needsReview lets the
   // dashboard and alerts point straight at a filtered register.
   const [search, setSearch] = useState("");
@@ -31,7 +31,8 @@ export function useGcDocumentsPageState(searchParams?: SearchParams) {
   // Modal targets. Each is null when closed — no separate open flags to drift.
   const [editingSet, setEditingSet] = useState<GcDrawingSetRow | null>(null);
   const [impactTarget, setImpactTarget] = useState<GcIssuance | null>(null);
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(openReviewedPdf);
+  const [initialSource] = useState<"pdf" | null>(openReviewedPdf ? "pdf" : null);
   const [confirmState, setConfirmState] = useState<GcConfirmState | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -42,7 +43,7 @@ export function useGcDocumentsPageState(searchParams?: SearchParams) {
     expanded, setExpanded,
     editingSet, setEditingSet,
     impactTarget, setImpactTarget,
-    uploadOpen, setUploadOpen,
+    uploadOpen, setUploadOpen, initialSource,
     confirmState, setConfirmState,
     saving, setSaving,
   };

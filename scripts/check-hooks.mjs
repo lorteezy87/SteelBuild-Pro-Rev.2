@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const result = spawnSync(
-  "npx",
-  ["eslint", "src", "--quiet", "--rule", "react-hooks/rules-of-hooks: error"],
+  process.execPath,
+  [join(root, "node_modules", "eslint", "bin", "eslint.js"), "src", "--quiet", "--rule", "react-hooks/rules-of-hooks: error"],
   { cwd: root, encoding: "utf8", maxBuffer: 10 * 1024 * 1024 },
 );
 process.stdout.write(result.stdout || "");
