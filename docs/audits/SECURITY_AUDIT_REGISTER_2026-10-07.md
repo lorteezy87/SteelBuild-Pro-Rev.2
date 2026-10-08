@@ -4,6 +4,8 @@
 
 The actionable register is [TECH_DEBT.md — Current security audit and hardening register](../../TECH_DEBT.md#current-security-audit-and-hardening-register). This document supplies the evidence and historical-finding crosswalk. Do not maintain a second independent status list in this report.
 
+October 8 follow-up: [remediation and verification evidence](SECURITY_REMEDIATION_2026-10-08.md) records source corrections for selected findings below. The original observations remain dated evidence; consult TECH_DEBT for their current release status.
+
 Code reviewed: `lorteezy87/SteelBuild-Pro-Rev.2`, security branch code at `33abb703df9ea2366134c82ba999c853d67bf345`, including implementation commit `219aa4f3e2afebab9984aca69d713d27e908952e`. The later `742cee35` commit adds a documentation claim only. This is an isolated checkout; unrelated uncommitted drawing/application work in the original checkout is excluded.
 
 Assessment date is October 7, 2026 in America/Phoenix; live observations occurred October 8 UTC. Methods: source and configuration review, reconciliation of prior findings, read-only production catalog/API inspection, public response-header inspection, dependency audits and bounded offline reproductions. No hosted migration, deployment, provider send, customer-data export, destructive probe or live identity mutation was performed.

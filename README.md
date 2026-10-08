@@ -204,9 +204,12 @@ project the caller can access — fetched through the RLS-scoped, audit-logged
 **Right-to-erasure (GDPR/CCPA).** An owner-only "Danger Zone → Delete workspace"
 action (Team page) permanently erases an organization — DB rows via the
 `hard_delete_organization` RPC (with an append-only `account_deletions` audit that
-survives the wipe), Storage objects, and orphaned auth users via the
-`account-delete` Edge Function. Gated behind the **`account_deletion`** feature
-flag (off by default) and a type-the-name confirmation.
+survives the wipe) and Storage objects via the `account-delete` Edge Function.
+Every member's Auth identity remains, including the caller's; explicit account
+deletion is a separate self-service action targeting only the signed-in user.
+Gated behind the **`account_deletion`** feature flag (off by default) and a
+type-the-name confirmation. These source changes still require the coordinated
+release described in [the security register](TECH_DEBT.md).
 
 ## Testing
 

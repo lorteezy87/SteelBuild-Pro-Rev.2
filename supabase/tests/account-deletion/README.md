@@ -124,20 +124,24 @@ Missing/failed reads, incomplete journal records, or a recreated ID stop deletio
 with `ACCOUNT_CLEANUP_INCOMPLETE` and keep the account. Historical malformed
 journal records require support review; they are never treated as completed.
 
-Workspace mode also requires complete paginated project/member snapshots before
-its RPC. It purges the RPC's durable project census, then requires an explicit
-successful zero-membership count before deleting an orphaned Auth user. It
-reports a failure if any count or Auth deletion fails. A failed workspace-mode
-request cannot be replayed through the deleted org's ownership lookup; its owner
-can recover file cleanup through account mode, or support can finish from the
-journal. The journal does not contain a durable member-ID roster for retrying
-other users' workspace-mode Auth cleanup.
+Workspace mode verifies ownership and a complete paginated project snapshot
+before its caller-scoped RPC, then purges the durable project census. It retains
+every Auth identity, including members with no remaining workspaces and the
+caller, and returns `users_deleted: 0`. There is no orphan-account sweep or
+unlocked zero-membership deletion decision. A failed workspace-mode request
+cannot be replayed through the deleted org's ownership lookup; support can
+finish file cleanup from the journal. The caller may explicitly choose account
+mode for recovery, but that also deletes their own login after cleanup succeeds.
 
 The mocked handler regression runs the actual two-attempt account flow: the
 first attempt commits database erasure but fails file removal; the second gets
 empty RPC IDs, recovers the journal, removes all files, and only then deletes
 Auth. It also covers more than one journal page, wrong-caller isolation,
 incomplete census and live-ID refusal, and unknown membership/snapshot reads.
+Workspace regressions retain all identities even when a member joins another
+workspace during Storage cleanup, preserve the caller's later explicit
+self-deletion, and ensure error text never steers workspace cleanup into an
+unrequested account deletion. Only account mode calls `deleteUser(callerId)`.
 Run these tests without any live Supabase connection:
 
 ```sh
