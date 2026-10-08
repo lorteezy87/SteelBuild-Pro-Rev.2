@@ -188,7 +188,8 @@
 /* Standalone tool routes need their own width container when the app sidebar
    reduces the page width without crossing a viewport media breakpoint. */
 .crane-pick-page,
-.weight-calc-page {
+.weight-calc-page,
+.converter-page {
   container-type: inline-size;
 }
 
@@ -215,14 +216,22 @@
 }
 
 .crane-pick-field-grid > *,
-.ground-bearing-field-grid > * {
+.ground-bearing-field-grid > *,
+.converter-fraction-inputs > *,
+.converter-unit-selectors > * {
   min-width: 0;
 }
 
 .crane-pick-grid :is(input, select, textarea),
-.ground-bearing-field-grid :is(input, select) {
+.ground-bearing-field-grid :is(input, select),
+.converter-page :is(input, select) {
   min-width: 0;
   max-width: 100%;
+}
+
+.converter-custom-fraction-row input {
+  flex: 1 1 0;
+  width: 0 !important;
 }
 
 .crane-pick-viewport {
@@ -378,8 +387,21 @@
 
 @container (max-width: 380px) {
   .crane-pick-field-grid,
-  .ground-bearing-field-grid {
+  .ground-bearing-field-grid,
+  .converter-unit-selectors {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .converter-fraction-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .converter-fraction-inputs > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .converter-unit-selectors > :nth-child(2) {
+    justify-self: center;
   }
 }
 
@@ -427,6 +449,23 @@
   .crane-pick-field-grid--three,
   .ground-bearing-field-grid--three {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Mobile WebViews without container queries still need the converter stack. */
+  .converter-fraction-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .converter-fraction-inputs > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .converter-unit-selectors {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .converter-unit-selectors > :nth-child(2) {
+    justify-self: center;
   }
 }
 
