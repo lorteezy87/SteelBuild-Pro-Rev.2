@@ -170,6 +170,16 @@ describe('the real manifest', () => {
     expect(report.missingMigrations).toContain(version);
   });
 
+  it('keeps membership revocation required until its reviewed SQL is applied', () => {
+    const version = '20261008032524';
+    const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
+    expect(entry?.lifecycle).toBe('required');
+    expect(entry?.evidence).toMatch(/PENDING PRODUCTION APPLY/);
+    const report = compareDrift(manifest, local, [...LEDGER].map(version => ({ version })), []);
+    expect(report.missingMigrations).toContain(version);
+    expect(report.hasDrift).toBe(true);
+  });
+
   it('keeps pending account deletion migrations required by the drift gate', () => {
     const pending = ['20260927150000', '20260927160000'].filter((version) => !LEDGER.has(version));
     const entries = pending.map((version) =>

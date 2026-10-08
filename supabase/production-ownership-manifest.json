@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261008032524",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local membership-revocation candidate. Requires current workspace membership in all three explicit project-role resolvers, including callers that bypass ordinary project RLS; preserves role precedence, execution grants and current archived-project administration. Isolated SQL regressions cover removed viewer/field/PM/admin/owner roles and refused archival. Requires exact reviewed staging application and matching ledger payload before release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/membership-revocation/README.md and docs/audits/SECURITY_HARDENING_2026-10-07.md."
+      },
+      {
         "version": "20261007112918",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - local atomic numbered-record creation candidate. Creates project-scoped idempotency receipts and transactional CO, delivery, SOV, change-request and backcharge creation while preserving official sequence allocation, project authorization, MFA and existing guards. Requires reviewed staged application and exact ledger-payload verification before frontend release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/commercial-create/README.md and supabase/tests/commercial-postgres/README.md."
