@@ -42,6 +42,15 @@ const blockedGate: CanonicalReleaseGate = {
   evaluated_at: "2026-07-23T12:00:00.000Z",
 };
 
+const readyGate: CanonicalReleaseGate = {
+  ...blockedGate,
+  passes: true,
+  checks: {
+    ...blockedGate.checks,
+    scope: { passed: true, blockers: [] },
+  },
+};
+
 function renderPanel(pieceControlMode = "shadow", assertCanRelease?: () => void) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -109,6 +118,30 @@ describe("CanonicalFabReleasePanel", () => {
     expect(
       await screen.findByText("Fabrication release could not be evaluated."),
     ).toBeInTheDocument();
+  });
+
+  it("removes the release action if refreshing a previously clear gate fails", async () => {
+    vi.mocked(evaluateCanonicalReleaseGate)
+      .mockResolvedValueOnce(readyGate)
+      .mockRejectedValueOnce(new Error("Network unavailable"));
+    renderPanel();
+
+    expect(await screen.findByRole("button", { name: "Release for fabrication" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh fabrication release checks" }));
+    expect(await screen.findByText("Fabrication release could not be evaluated.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Release for fabrication" })).not.toBeInTheDocument();
+    expect(releaseCanonicalWorkPackage).not.toHaveBeenCalled();
+  });
+
+  it("rejects a gate response for another project or package", async () => {
+    vi.mocked(evaluateCanonicalReleaseGate).mockResolvedValue({
+      ...readyGate,
+      project_id: "another-project",
+    });
+    renderPanel();
+
+    expect(await screen.findByText("Fabrication release evidence did not match this package.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Release for fabrication" })).not.toBeInTheDocument();
   });
 
   it("uses plain operational mutation error copy", async () => {
