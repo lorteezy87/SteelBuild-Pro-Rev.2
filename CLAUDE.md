@@ -5,24 +5,27 @@ Vite, React 18, TypeScript, Supabase (project: kjrwqagyeswwoxpjkcko), Tailwind. 
 
 Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` from `@/api/supabaseClient` — a thin re-export barrel. The implementation lives in `src/api/client/*` domain modules (entities, auth, storage, uploads, llm, functions, entityClient, fieldMapping, …), not inline in supabaseClient.ts.
 
+## Product scope
+The active rebuild covers the entire subcontractor app for structural steel fabricators and erectors, not an isolated dashboard. Preserve the fabricate-and-erect workflow and enforce erection-only capability exclusions at the server boundary as well as the UI. The proposed voice field assistant, scanned drawing intake, schedule/blocker agent, cited project-document assistant, and labeled proposal/training studio remain feature directions unless source and hosted acceptance establish otherwise. Human review precedes an AI-assisted save; deterministic rules govern authorization, engineering approval, release holds, dependencies, and forecasts.
+
 ## Production Control scoring
 `src/utils/pccEngine.ts` is the typed deterministic boundary for Production Control scoring. It exports the raw record contracts, normalized `PCCItem`, `ScoredPCCItem`, execution-window/owner-load/briefing results, and release-gate action drafts. Preserve its formulas, stable score ordering, local-calendar-day date semantics, status mappings, and output keys. Extend the narrow source interfaces when a real producer adds a field; do not bypass them with `any` or duplicate scoring in UI code.
 
 ## Commands
 - `npm run dev` — local dev server
 - `npm run lint` — lint (must be clean before commit)
-- `npm run test` — full test suite (6,842 tests / 712 files as of 2026-09-22)
+- `npm run test` — full Vitest suite; the 2026-10-08 `73664ef16` CI run passed 8,193 tests across 842 files (rerun for current counts)
 - `npm run build` — production build
-- CI gates — every PR must pass all of them: `lint`, `typecheck`, `typecheck:js`, `typecheck:strict`, `typecheck:noimplicitany`, `check:no-new-js`, `test`, `build`.
+- The `ci` job blocks on `lint`, `typecheck`, `typecheck:js`, `typecheck:strict`, `typecheck:noimplicitany`, `check:no-new-js`, `test`, `test:e2e:foundation`, database helper/account deletion/MFA checks, `build`, and `perf:bundle`.
   - New source files must be `.ts`/`.tsx` (enforced by `check:no-new-js`). Editing existing `.js`/`.jsx` files is fine.
-  - **A deploy is gated on four jobs, not just `ci`.** `deploy-cloudflare` and `preview-cloudflare` both declare `needs: [ci, secret-scan, supabase-drift, edge-typecheck]`. `edge-typecheck` is a Deno check over the released Edge Functions, so an Edge Function that does not type-check blocks the web deploy too.
+  - **Production deploys and PR previews require five jobs:** `ci`, `secret-scan`, `supabase-drift`, `edge-typecheck`, and `commercial-postgres`. Staging requires the same jobs except `supabase-drift`. `edge-typecheck` checks released Edge Functions; `commercial-postgres` checks commercial SQL and concurrent database behavior. A failed required job blocks publishing.
 - Tests run with `TZ=UTC` (`vite.config.js`), which hides local-vs-UTC bugs.
   - A test that must prove local-day behaviour has to inject the zone, for example by stubbing the date conversion or the `Date` getters.
   - Building dates from local parts passes vacuously on the UTC runner.
 
 ## Deploy — Cloudflare Workers
 - **Production:** the static-asset Worker `steelbuild-pro-rev-2`, configured in `wrangler.jsonc`.
-- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after green `ci`, `secret-scan`, `supabase-drift`, and `edge-typecheck` jobs. PRs get a Cloudflare preview.
+- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after the five required jobs above pass. PR previews are created only when their required jobs pass.
 - **Custom domains:** `steelbuild-pro.com` and `www.steelbuild-pro.com`.
 - **Vercel is retired.** Don't reintroduce it.
 - **`wrangler.jsonc`:** keep `workers_dev` and `preview_urls` set explicitly. Adding `routes` silently turns both off, which once broke the post-deploy health check.
@@ -36,6 +39,11 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - Theme preference: `sbp-theme` in localStorage, else `prefers-color-scheme`.
 - Never use `<form>` tags. Never use Radix Dialog.
 
+## Viewport invariants
+- Size calculator controls to the available content width, not only the window width: the sidebar can narrow the page while the viewport remains wide. Keep the container-query stacks in `src/components/calculators/calc.css` and the crane 3D view's container resize behavior.
+- Dense virtual command registers use one aligned header/body horizontal scroll canvas in `src/components/command/DataTable.tsx`; preserve keyboard scrolling and access to rightmost actions. Do not conceal an over-wide register by clipping page overflow.
+- `e2e/mobile-overflow.spec.ts` names `/CalculatorsHub?calc_tab=cranepick` at 360, 393, and 430px. The 2026-10-08 checkpoint only listed these authenticated cases; passing the no-backend foundation suite is not evidence that the protected calculator route fits a rendered device.
+
 ## Database / RLS
 - All tables must have RLS enabled with explicit per-role policies. No blanket-`true` policies.
 - Check `auth_rls_initplan` pattern on any new policy — wrap `auth.uid()` calls in `(select ...)`.
@@ -43,7 +51,7 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - Known-fixed classes of bugs (do not reintroduce): feature_flags privilege escalation, vendors blanket-true policies.
 
 ## Applying a migration — the file lands with the stamp, DO NOT regress
-`supabase db push` **cannot run against this project**: 42 versions in the remote ledger have no local file, and the CLI refuses rather than understanding a database two repos share. Re-counted 2026-09-22 — ledger 130 versions, repo 123 files, 42 ledger-only (38 sibling-2026, 2 Rev.2 apply-time restamps, 2 shared-production), and 35 repo files with no ledger row from the re-baselining. Every one of the 42 is accounted for in `supabase/production-ownership-manifest.json`; that manifest is the record, never a way to silence the check. Its own suggested remedy, `migration repair --status reverted`, would mark those applied migrations as reverted and **corrupt the ledger for both apps** — never run it. MCP `apply_migration` is also out: it stamps its own apply-time version, which is how the ledger drifted from the repo in the first place.
+`supabase db push` **cannot run against this shared project**: the remote ledger includes versions owned by the sibling app, so the CLI cannot interpret the two repositories as one history. The 2026-09-22 inventory found 42 ledger-only versions; those counts are historical, not the current drift report. Consult `supabase/production-ownership-manifest.json` and `docs/runbooks/supabase-production-ownership.md` for ownership. A manifest entry is a record, never a way to silence a check. `migration repair --status reverted` would corrupt the shared ledger — never run it. MCP `apply_migration` is also out: it stamps its own apply-time version, which is how the ledger drifted from the repo in the first place.
 
 So migrations here are applied and stamped by hand, and *that* is what makes the ordering a rule rather than a nicety:
 
@@ -162,6 +170,9 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 
 ## Production-readiness audit (2026-09-21)
 `docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md` is the evidence-based audit of security, tenancy, data correctness, performance, store readiness and release process. §9 reconciles it against `main` after PRs #460–#464, so read a finding's status there before acting on it. The invariants above that it found regressed are flagged inline in this file; the rest are tracked in `TECH_DEBT.md`.
+
+## Current rebuild and release boundary (2026-10-08)
+Draft [PR #499](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/499) on `codex/steel-executive-hardening` is a source checkpoint, not hosted or full-app acceptance. The five exact Drawing Control SQL files in the [release candidate](./docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md) remain unapplied and unstamped on staging and production; earlier backend approvals do not cover them. The 2026-10-08 application job at `73664ef16` passed tests, browser foundation, and build, but authenticated crane-pick viewport and steel-workflow scenarios remain unverified; production drift and build-tool advisories remain open. Do not call the app enterprise-ready or deploy based on source checks alone. Use the linked candidate and PR for the current release state rather than copying old counts forward.
 
 ## Branches — PRs target `main`
 `main` is the integration and GitHub default branch (verified 2026-09-11). Open PRs against `main`. Check the live default branch and `git rev-list --count origin/main..HEAD` before opening a PR; older notes naming `codex/base44-deploy-nick` are stale.
