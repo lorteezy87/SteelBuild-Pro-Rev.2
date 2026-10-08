@@ -177,11 +177,18 @@
 }
 
 /* ── Shell body ─────────────────────────────────────────────── */
-.sbd-calc-shell__body {
+.sbd-calc-shell > .sbd-calc-shell__body.sbd-card {
   padding: 16px;
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
+  container-type: inline-size;
+}
+
+/* Standalone tool routes need their own width container when the app sidebar
+   reduces the page width without crossing a viewport media breakpoint. */
+.crane-pick-page,
+.weight-calc-page {
   container-type: inline-size;
 }
 
@@ -220,6 +227,16 @@
 
 .crane-pick-viewport {
   max-width: 100%;
+}
+
+@container (max-width: 300px) {
+  .sbd-calc-keypad--4 {
+    gap: 4px !important;
+  }
+
+  .sbd-calc-keypad--5 {
+    grid-template-columns: repeat(3, minmax(44px, 1fr)) !important;
+  }
 }
 
 /* ── Key — inner elements ────────────────────────────────────── */
@@ -360,8 +377,8 @@
 }
 
 @container (max-width: 380px) {
-  .crane-pick-field-grid--three,
-  .ground-bearing-field-grid--three {
+  .crane-pick-field-grid,
+  .ground-bearing-field-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
@@ -388,7 +405,7 @@
     padding: 10px;
   }
 
-  .sbd-calc-shell__body {
+  .sbd-calc-shell > .sbd-calc-shell__body.sbd-card {
     padding: 10px;
   }
 
@@ -410,6 +427,21 @@
   .crane-pick-field-grid--three,
   .ground-bearing-field-grid--three {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .crane-pick-field-grid,
+  .ground-bearing-field-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .sbd-calc-keypad--4 {
+    gap: 4px !important;
+  }
+
+  .sbd-calc-keypad--5 {
+    grid-template-columns: repeat(3, minmax(44px, 1fr)) !important;
   }
 }
 

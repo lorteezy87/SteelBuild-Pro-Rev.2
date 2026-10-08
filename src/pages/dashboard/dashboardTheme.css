@@ -303,6 +303,35 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   background: var(--hover-bg);
 }
 
+/* The project switcher and utility actions share the width left by the
+   sidebar. Use one search affordance at a time so tablet widths do not clip
+   the alerts, contrast, or account controls behind the shell overflow. */
+@media (min-width: 1361px) {
+  .dashboard-reference-shell .sb-dashboard-topbar__icon {
+    display: none;
+  }
+}
+
+@media (max-width: 1360px) {
+  .dashboard-reference-shell .sb-dashboard-topbar .topbar-search-button.is-dashboard-search {
+    display: none !important; /* The component's desktop display is inline. */
+  }
+
+  .dashboard-reference-shell .sb-dashboard-topbar__actions {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .dashboard-reference-shell .sbp-project-context {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
+  .dashboard-reference-shell .sbp-project-context__identity {
+    flex: 1 1 0;
+  }
+}
+
 .sb-dashboard-topbar__user {
   min-height: 38px;
   gap: 8px;

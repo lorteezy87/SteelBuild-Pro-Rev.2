@@ -35,7 +35,7 @@ export default function CraneChartSource({ cranes, craneId, configId, onSelect, 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div className="crane-pick-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <label style={{ display: "block" }}>
           <span style={labelStyle}>Crane</span>
           <select
