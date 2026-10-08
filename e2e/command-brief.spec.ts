@@ -97,7 +97,7 @@ for (const theme of ["dark", "light"] as const) {
       await expect(dueHeader).toBeInViewport();
       await expect(firstRow.getByText("2026-10-05", { exact: true })).toBeInViewport();
     }
-    const virtualBody = largeRegister.locator(".cmd-table-wrap > div").nth(1);
+    const virtualBody = largeRegister.locator(".cmd-table-virtual-body");
     await virtualBody.evaluate(element => { element.scrollTop = element.scrollHeight; });
     const lastRow = largeRegister.getByRole("button", { name: /RFI-115 — Bay 115 connection review/ });
     await expect(lastRow).toBeVisible();

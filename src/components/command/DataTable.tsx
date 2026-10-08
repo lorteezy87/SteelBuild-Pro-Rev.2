@@ -188,7 +188,7 @@ function VirtualDataTable<Row extends { id?: string }>({
           </div>
         ))}
       </div>
-      <div ref={parentRef} style={{ maxHeight: virtualMaxHeight, overflowY: "auto", scrollbarGutter: "stable" }}>
+      <div className="cmd-table-virtual-body" ref={parentRef} style={{ maxHeight: virtualMaxHeight, overflowY: "auto", scrollbarGutter: "stable" }}>
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index];
