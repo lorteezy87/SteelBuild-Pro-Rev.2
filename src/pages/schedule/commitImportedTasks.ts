@@ -45,7 +45,7 @@ export async function commitImportedScheduleTasks({
 
   allParsed.forEach((task) => assertScheduleDateRange({
     start_date: task.start ?? null,
-    end_date: task.finish ?? task.start ?? null,
+    end_date: task.finish ?? null,
   }));
 
   const uidToDbId: Record<string, string> = {};
@@ -69,7 +69,9 @@ export async function commitImportedScheduleTasks({
       task_type: inferTaskType(t.name, t.isSummary, t.milestone),
       phase,
       start_date: t.start ?? null,
-      end_date: t.finish ?? t.start ?? null,
+      // An imported start does not establish a finish. Explicit source duration
+      // remains independent below until the source supplies both dates.
+      end_date: t.finish ?? null,
       status,
       percent_complete: t.pct,
       priority: "Normal",

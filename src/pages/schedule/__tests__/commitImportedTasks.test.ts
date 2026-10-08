@@ -107,6 +107,52 @@ describe("commitImportedScheduleTasks", () => {
     expect(create.mock.calls[0][0].wbs_code).toMatch(/^2\./);
   });
 
+  it("keeps a start-only task's finish and duration unknown", async () => {
+    await commitImportedScheduleTasks({
+      tasks: [task({
+        uid: "1",
+        name: "Detail connections",
+        start: "2026-03-01",
+        finish: null,
+        durationDays: null,
+        pct: 40,
+      })],
+      projectId: "proj-1",
+      qc,
+    });
+
+    expect(create.mock.calls[0][0]).toMatchObject({
+      task_name: "Detail connections",
+      start_date: "2026-03-01",
+      end_date: null,
+      duration: null,
+      status: "In Progress",
+      percent_complete: 40,
+    });
+  });
+
+  it("preserves an explicitly imported duration without inventing a finish", async () => {
+    await commitImportedScheduleTasks({
+      tasks: [task({
+        uid: "1",
+        name: "Erect bay one",
+        start: "2026-03-01",
+        finish: null,
+        durationDays: 5,
+      })],
+      projectId: "proj-1",
+      qc,
+    });
+
+    expect(create.mock.calls[0][0]).toMatchObject({
+      start_date: "2026-03-01",
+      end_date: null,
+      duration: 5,
+      status: "Not Started",
+      percent_complete: 0,
+    });
+  });
+
   it("rejects inverted date windows before writing", async () => {
     await expect(commitImportedScheduleTasks({
       tasks: [task({ uid: "1", name: "Bad", start: "2026-03-10", finish: "2026-03-01" })],
