@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-10-08T17:48:22Z | codex-schedule-csv-live-columns | Schedule CSV parsing | src/lib/importScheduleCsv.ts; src/lib/__tests__/importScheduleCsv*.test.ts | Keep baseline dates from replacing live schedule dates and never interpret Area as construction phase. |
 | 2026-10-08T17:47:04Z | codex-schedule-import-null-finish | Schedule import date fidelity | src/pages/schedule/commitImportedTasks.ts; src/pages/schedule/__tests__/commitImportedTasks*.test.ts and scoped tests | Preserve unknown finish dates when an imported task provides only a start date. |
 | 2026-10-08T17:32:27Z | codex-fab-release-gate-queue | Fab Release readout and gate routing | src/pages/FabRelease.tsx; src/pages/fabRelease/{FabReleaseControlCenter.tsx,fabReleaseControlCenter.derive.ts,fabReleaseGateLoader.ts,analytics.js,components.tsx,types.ts,filter.ts,format.ts}; src/pages/fabRelease/__tests__/** | Make every release-readiness claim fail closed on the canonical gate and route blockers to the exact package release action. |
 | ~~2026-10-08~~ released | codex-tailwind-tsx-coverage | Tailwind utility source coverage | tailwind.config.js; scoped audit evidence | TS/TSX coverage and generated-selector check committed in `289b42a23`; build, bundle budget, lint, and focused tests passed. |
