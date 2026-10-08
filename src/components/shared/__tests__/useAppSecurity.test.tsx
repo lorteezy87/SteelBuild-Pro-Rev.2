@@ -25,6 +25,8 @@ function authValue(partial: Partial<AuthContextValue>): AuthContextValue {
     loginWithPassword: async () => ({ success: false, error: { type: "auth_required", message: "n/a" } }),
     signUpWithPassword: async () => ({ success: false, error: { type: "auth_required", message: "n/a" } }),
     isPasswordRecovery: false,
+    passwordRecoveryPhase: null,
+    finishPasswordRecovery: async () => ({ success: true }),
     sendPasswordReset: async () => ({ success: false, error: "n/a" }),
     updatePassword: async () => ({ success: false, error: "n/a" }),
     mfaRequired: false,

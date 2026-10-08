@@ -127,7 +127,7 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     expect(await screen.findByText("APP_ROUTES")).toBeInTheDocument();
   });
 
-  it("shows the set-new-password screen during password recovery, above every other state (H22)", async () => {
+  it("shows password recovery before org/project entry (H22)", async () => {
     // A recovery session is technically authenticated with a workspace; the gate
     // must still route straight to UpdatePassword, not into the app.
     authState = { ...authed, isPasswordRecovery: true };
@@ -153,11 +153,12 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
   });
 
-  it("password recovery outranks an MFA step-up (H22 > H23)", async () => {
+  it("requires the MFA step-up before changing a recovery password (AUTH-4)", async () => {
     authState = { ...authed, isPasswordRecovery: true, mfaRequired: true };
     render(<AuthenticatedApp />);
-    expect(await screen.findByText("UPDATE_PW")).toBeInTheDocument();
-    expect(screen.queryByText("MFA_CHALLENGE")).not.toBeInTheDocument();
+    expect(await screen.findByText("MFA_CHALLENGE")).toBeInTheDocument();
+    expect(screen.queryByText("UPDATE_PW")).not.toBeInTheDocument();
+    expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
   });
 
   it("fails open — renders the app when the org gate reports hasOrg despite an error", async () => {

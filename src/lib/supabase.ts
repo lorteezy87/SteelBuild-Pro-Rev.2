@@ -1,6 +1,10 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 import { env } from '@/lib/env';
+import { initializePasswordRecovery, capturePasswordRecovery } from '@/lib/passwordRecovery';
+
+// Record the callback hint before Auth consumes it, including before React loads.
+initializePasswordRecovery();
 
 // Config (and its validation) is centralized in @/lib/env — importing it here
 // makes this module the fail-fast entry point: a missing/malformed
@@ -17,3 +21,9 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(
     },
   }
 );
+
+// This synchronous listener deliberately makes no Auth API calls. It captures
+// recovery even if the SDK finishes initialization before AuthProvider mounts.
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY') capturePasswordRecovery(session);
+});
