@@ -159,7 +159,32 @@
   text-transform: uppercase;
 }
 
+/* Keep every sequence metric and revision action inside the Control Board card. */
+[data-skin="command"] .detailing-cc .drawing-triage__sequence-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.7fr) minmax(120px, 1.3fr) repeat(3, minmax(64px, 0.5fr));
+}
+
+[data-skin="command"] .detailing-cc .drawing-triage__revision-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(150px, 1fr) auto;
+}
+
 @media (max-width: 680px) {
+  [data-skin="command"] .detailing-cc .drawing-triage__sequence-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  [data-skin="command"] .detailing-cc .drawing-triage__sequence-row > :nth-child(-n + 2) {
+    grid-column: 1 / -1;
+  }
+  [data-skin="command"] .detailing-cc .drawing-triage__revision-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-skin="command"] .detailing-cc .drawing-triage__revision-row > :last-child {
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
   [data-skin="command"] .detailing-cc__nav {
     flex-direction: column;
     gap: 0;

@@ -322,9 +322,7 @@ export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {rows.map((row) => (
-            <div key={row.sequence} style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(80px, 0.7fr) minmax(120px, 1.3fr) repeat(3, minmax(64px, 0.5fr))",
+            <div key={row.sequence} className="drawing-triage__sequence-row" style={{
               gap: 10, alignItems: "center",
               padding: "10px 12px", borderRadius: 10,
               border: `1px solid ${row.atRiskCount ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
@@ -385,8 +383,8 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: RevisionImpac
             const pillTone = r.severity === "critical" || r.severity === "high" ? "danger"
               : r.severity === "medium" ? "review" : "neutral";
             return (
-              <div key={r.revisionId} style={{
-                display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(150px, 1fr) auto", gap: 12, alignItems: "center",
+              <div key={r.revisionId} className="drawing-triage__revision-row" style={{
+                gap: 12, alignItems: "center",
                 padding: "10px 12px", borderRadius: 10,
                 border: `1px solid ${r.severity === "critical" ? "color-mix(in srgb, var(--status-error) 56%, transparent)" : border}`,
                 background: "var(--bg-surface-low)",
@@ -516,4 +514,3 @@ export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanel
     </div>
   );
 }
-
