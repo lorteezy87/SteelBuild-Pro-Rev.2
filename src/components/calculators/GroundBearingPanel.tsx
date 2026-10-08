@@ -55,7 +55,7 @@ export default function GroundBearingPanel() {
         {field("Mat width (ft)", wid, setWid, "e.g. 4")}
         {field("Mat weight (lb)", matWeight, setMatWeight, "0")}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "end" }}>
+      <div className="ground-bearing-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "end" }}>
         {field("Allowable bearing (psf)", allowable, setAllowable, "From the geotech report")}
         <label style={{ display: "block" }}>
           <span style={labelStyle}>Or presumptive (IBC 1806.2)</span>
