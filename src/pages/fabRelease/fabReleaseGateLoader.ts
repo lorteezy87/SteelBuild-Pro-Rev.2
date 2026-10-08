@@ -12,6 +12,7 @@ interface QueryReadiness {
   isStale: boolean;
   isError: boolean;
   fetchStatus: string;
+  dataUpdatedAt: number;
 }
 
 interface GatePackageCandidate {
@@ -27,10 +28,11 @@ export function isFabReleaseSnapshotCurrent(
   hasPackagesToCheck: boolean,
   pieceControlMode: string | null,
 ): boolean {
-  if (!workPackages.isSuccess || workPackages.isFetching || workPackages.isStale ||
+  if (!workPackages.isSuccess || workPackages.isError || workPackages.isFetching || workPackages.isStale ||
     workPackages.fetchStatus === "paused" || !pieceControlMode || pieceControlMode === "off") return false;
   return !hasPackagesToCheck || (gates.isSuccess && !gates.isFetching && !gates.isStale &&
-    !gates.isError && gates.fetchStatus !== "paused");
+    !gates.isError && gates.fetchStatus !== "paused" &&
+    gates.dataUpdatedAt >= workPackages.dataUpdatedAt);
 }
 
 /** Keep each screen refresh bounded, prioritizing packages without a WP release stamp. */

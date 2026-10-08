@@ -68,7 +68,7 @@ export default function FabReleaseControlCenter({
 }: FabReleaseControlCenterProps) {
   useCommandSkin();
   const summary = useMemo(() => buildFabReleaseSummary(metrics), [metrics]);
-  const unverifiedCount = metrics.enriched.filter((wp) => wp._signals.releaseGateState === "unverified").length;
+  const unverifiedCount = summary.totalCount - summary.verifiedCount;
   const bodyRef = useRef<HTMLElement | null>(null);
   const scrollToBody = () => bodyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -98,7 +98,7 @@ export default function FabReleaseControlCenter({
         eyebrow={`${projectName} / Production`}
         title="Fab Release Control Center"
         subtitle="Fabrication release status verified against current drawing, material, and hold checks. Unverified packages stay separate."
-        meta={`${summary.totalCount} ${summary.totalCount === 1 ? "package" : "packages"} · ${summary.releasedCount} released · ${summary.blockedCount} blocked · ${unverifiedCount} unverified`}
+        meta={`${summary.totalCount} ${summary.totalCount === 1 ? "package" : "packages"} · ${summary.releasedCount} verified releases · ${summary.blockedCount} verified blockers · ${unverifiedCount} unverified`}
         actions={(
           <>
             <button
@@ -155,7 +155,7 @@ export default function FabReleaseControlCenter({
       <AttentionQueue
         title="Release Blockers"
         items={releaseBlockers}
-        emptyMessage="No packages are currently blocked by verified release checks."
+        emptyMessage={summary.coverageComplete ? "No packages are currently blocked by release checks." : "No blockers among packages with completed release checks; some packages remain unverified."}
       />
 
       <div className="sbp-work-grid">
@@ -166,7 +166,7 @@ export default function FabReleaseControlCenter({
           </div>
           <div>
             {summary.readyQueue.length === 0 ? (
-              <div className="sbp-attention__empty">No packages ready for release.</div>
+              <div className="sbp-attention__empty">{summary.coverageComplete ? "No packages ready for release." : "No verified-ready packages in the checked scope; some packages remain unverified."}</div>
             ) : summary.readyQueue.map((wp) => (
               <button
                 type="button"
@@ -193,7 +193,7 @@ export default function FabReleaseControlCenter({
 
         <section className="sbp-work-panel">
           <div className="sbp-work-panel__head">
-            <h2>Recorded Releases</h2>
+            <h2>Verified Release Records</h2>
             <button
               type="button"
               className="cmd-btn cmd-btn--ghost"
@@ -208,7 +208,7 @@ export default function FabReleaseControlCenter({
           </div>
           <div>
             {summary.recentlyReleased.length === 0 ? (
-              <div className="sbp-attention__empty">No packages released yet.</div>
+              <div className="sbp-attention__empty">{summary.coverageComplete ? "No release records found." : "No release records in the checked scope; some packages remain unverified."}</div>
             ) : summary.recentlyReleased.map((wp) => (
               <button
                 type="button"

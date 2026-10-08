@@ -216,6 +216,23 @@ describe("buildFabReleaseSummary – KPI counts", () => {
     // 1 released out of 4 total → 25%
     expect(s.percentReleased).toBe(25);
   });
+
+  it("withholds the project-wide release percentage when package checks are incomplete", () => {
+    const released = makeWP("released", { _signals: makeSignals({ releaseGateState: "released" }) });
+    const unchecked = makeWP("unchecked", { _signals: makeSignals({ releaseGateState: "unverified" }) });
+    const metrics = makeMetrics({
+      totalCount: 2,
+      totalTons: 100,
+      releasedTons: 40,
+      enriched: [released, unchecked],
+    });
+
+    const summary = buildFabReleaseSummary(metrics);
+    expect(summary.coverageComplete).toBe(false);
+    expect(summary.releasedCount).toBe(1);
+    expect(summary.kpis.find((kpi) => kpi.label === "Verified Releases")?.sublabel).toContain("1 of 2");
+    expect(summary.kpis.find((kpi) => kpi.label === "% Released")?.value).toBe("—");
+  });
 });
 
 // ---------------------------------------------------------------------------

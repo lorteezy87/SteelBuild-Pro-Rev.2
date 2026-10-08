@@ -140,8 +140,10 @@ describe("Fab Release canonical gate readout", () => {
   });
 
   it("expires stale, paused, or refreshing query results before they can show Ready", () => {
-    const fresh = { isSuccess: true, isFetching: false, isStale: false, isError: false, fetchStatus: "idle" };
+    const fresh = { isSuccess: true, isFetching: false, isStale: false, isError: false, fetchStatus: "idle", dataUpdatedAt: 200 };
     expect(isFabReleaseSnapshotCurrent(fresh, fresh, true, "pilot")).toBe(true);
+    expect(isFabReleaseSnapshotCurrent(fresh, { ...fresh, dataUpdatedAt: 199 }, true, "pilot")).toBe(false);
+    expect(isFabReleaseSnapshotCurrent({ ...fresh, isError: true }, fresh, true, "pilot")).toBe(false);
     expect(isFabReleaseSnapshotCurrent(fresh, { ...fresh, isStale: true }, true, "pilot")).toBe(false);
     expect(isFabReleaseSnapshotCurrent(fresh, { ...fresh, fetchStatus: "paused" }, true, "pilot")).toBe(false);
     expect(isFabReleaseSnapshotCurrent({ ...fresh, isFetching: true }, fresh, true, "pilot")).toBe(false);
@@ -161,5 +163,19 @@ describe("Fab Release canonical gate readout", () => {
     expect(csv).toContain("Release blocked");
     expect(csv).toContain("S-201 has an active drawing hold");
     expect(csv).toContain("material requirement is not received or on hand");
+  });
+
+  it("neutralizes formula-leading package names and release blockers in CSV", async () => {
+    const metrics = applyCanonicalGateReadout(locallyReadyPackage(), projectId, { [packageId]: gate() }, true);
+    metrics.enriched[0].name = "=HYPERLINK(\"https://bad.example\",\"Open\")";
+    metrics.enriched[0]._signals.releaseGate!.blockers = ["+SUM(A1:A2)"];
+    const present = vi.mocked(presentGeneratedFile);
+    present.mockClear();
+    exportFabReleaseCSV(metrics.enriched);
+
+    const csv = await present.mock.calls[0][0].blob.text();
+    expect(csv).toContain("'=");
+    expect(csv).toContain("'+SUM(A1:A2)");
+    expect(csv).not.toContain('\"=HYPERLINK');
   });
 });

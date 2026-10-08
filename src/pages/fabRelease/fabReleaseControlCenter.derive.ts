@@ -31,6 +31,8 @@ export interface FabSummary {
   recentlyReleased: EnrichedWorkPackage[];   // Up to 6: recorded releases, sorted by available WP stamp
   // Headline counts (used by hero chips)
   totalCount: number;
+  verifiedCount: number;
+  coverageComplete: boolean;
   releasedCount: number;            // verified active release records
   readyForReleaseCount: number;
   blockedCount: number;
@@ -178,6 +180,8 @@ export function buildFabReleaseSummary(metrics: FabMetrics): FabSummary {
 
   const releasedPackages = enriched.filter((wp) => wp._signals.releaseGateState === "released");
   const releasedCount = releasedPackages.length;
+  const verifiedCount = enriched.filter((wp) => wp._signals.releaseGateState !== "unverified").length;
+  const coverageComplete = verifiedCount === totalCount && enriched.length === totalCount;
   // "In Fab" = actively in in_fabrication stage (subset of activeShop)
   const inFabCount = activeShop.filter((wp) => wp._signals.stage === "in_fabrication").length;
   // Blocked comes only from the verified release check, not advisory risk.
@@ -190,9 +194,9 @@ export function buildFabReleaseSummary(metrics: FabMetrics): FabSummary {
   // ── KPI cells ──────────────────────────────────────────────────────────
   const kpis: FabKpiRow[] = [
     {
-      label: "Released",
+      label: "Verified Releases",
       value: releasedCount,
-      sublabel: "verified release records",
+      sublabel: coverageComplete ? "release records verified" : `${verifiedCount} of ${totalCount} package checks complete`,
       tone: releasedCount > 0 ? "good" : "neutral",
     },
     {
@@ -215,9 +219,9 @@ export function buildFabReleaseSummary(metrics: FabMetrics): FabSummary {
     },
     {
       label: "% Released",
-      value: `${percentReleased}%`,
-      sublabel: "verified by tonnage",
-      tone: percentReleased >= 80 ? "good" : percentReleased >= 40 ? "warn" : "neutral",
+      value: coverageComplete ? `${percentReleased}%` : "—",
+      sublabel: coverageComplete ? "verified by tonnage" : "Release coverage incomplete",
+      tone: coverageComplete ? (percentReleased >= 80 ? "good" : percentReleased >= 40 ? "warn" : "neutral") : "neutral",
     },
     {
       label: "Labor Burn",
@@ -264,6 +268,8 @@ export function buildFabReleaseSummary(metrics: FabMetrics): FabSummary {
     blockedQueue,
     recentlyReleased,
     totalCount,
+    verifiedCount,
+    coverageComplete,
     releasedCount,
     readyForReleaseCount: readyForRelease.length,
     blockedCount,

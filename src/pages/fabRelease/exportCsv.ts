@@ -4,7 +4,10 @@ import type { EnrichedWorkPackage } from "./types";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 function escapeCsv(value: unknown): string {
-  const text = String(value ?? "");
+  const raw = String(value ?? "");
+  // Spreadsheet applications execute leading =, +, -, and @ as formulas.
+  // A leading apostrophe preserves the displayed value as literal text.
+  const text = /^[\s\uFEFF]*[=+\-@]/.test(raw) ? `'${raw}` : raw;
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

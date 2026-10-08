@@ -180,9 +180,11 @@ export default function FabRelease() {
   const gatesQuery = useQuery({
     queryKey: ["fab-release-canonical-gates", projectId, gatePackageIds],
     queryFn: () => loadCanonicalFabReleaseGates(gatePackageIds),
-    enabled: !!projectId && workPackagesQuery.isSuccess && pieceControlMode !== null && pieceControlMode !== "off" && gatePackageIds.length > 0,
+    enabled: !!projectId && workPackagesQuery.isSuccess && !workPackagesQuery.isFetching &&
+      !workPackagesQuery.isStale && !workPackagesQuery.isError && pieceControlMode !== null &&
+      pieceControlMode !== "off" && gatePackageIds.length > 0,
     staleTime: 120_000,
-    refetchOnMount: "always",
+    refetchOnMount: true,
     refetchOnWindowFocus: true,
   });
   const gatesComplete = isFabReleaseSnapshotCurrent(
@@ -562,7 +564,7 @@ export default function FabRelease() {
         refreshRequiredCount={refreshRequiredCount}
         deferredGateCount={deferredGateCount}
         verificationDisabled={pieceControlMode === "off"}
-        onRefreshGates={() => { void workPackagesQuery.refetch(); void gatesQuery.refetch(); }}
+        onRefreshGates={() => { void workPackagesQuery.refetch(); }}
         toolbar={(
           <Toolbar
             search={search}

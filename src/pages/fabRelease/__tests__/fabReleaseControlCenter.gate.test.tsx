@@ -88,7 +88,7 @@ describe("Fab Release Control Center server gate", () => {
       />,
     );
 
-    expect(screen.getByText(/1 package · 0 released · 1 blocked · 0 unverified/)).toBeTruthy();
+    expect(screen.getByText(/1 package · 0 verified releases · 1 verified blockers · 0 unverified/)).toBeTruthy();
     expect(screen.getByText("Ready to Release: 0")).toBeTruthy();
     expect(screen.queryByText("Release verified")).toBeNull();
     const blockerAction = screen.getByRole("button", { name: /WP-014.*S-201 has an active drawing hold.*Material requirement is not received.*Review release checks/ });
