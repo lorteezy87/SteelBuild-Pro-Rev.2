@@ -80,5 +80,10 @@ describe("Work Package register layout", () => {
       "Field",
       "Risk",
     ]);
+
+    const header = screen.getByRole("row");
+    const packageRow = screen.getByRole("button", { name: "Open WP-01" });
+    expect(packageRow.children).toHaveLength(header.children.length);
+    expect(packageRow.style.gridTemplateColumns).toBe(header.style.gridTemplateColumns);
   });
 });
