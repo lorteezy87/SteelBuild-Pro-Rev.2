@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { LAUNCHER_MODULES, photoFor } from "@/config/launcherConfig";
+import { LAUNCHER_MODULES, photoFor, searchModules } from "@/config/launcherConfig";
 import { getPageIcon } from "@/config/pageIcons";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
@@ -32,11 +32,7 @@ export default function ModuleLauncherGrid({ open, onClose, onNavigate }) {
 
   if (!open) return null;
 
-  const q = search.trim().toLowerCase();
-  const visibleModules = LAUNCHER_MODULES.filter((m) => isPageVisible(m.page));
-  const modules = q
-    ? visibleModules.filter((m) => m.label.toLowerCase().includes(q) || m.page.toLowerCase().includes(q))
-    : visibleModules;
+  const modules = searchModules(search).filter((m) => isPageVisible(m.page));
 
   return (
     <div

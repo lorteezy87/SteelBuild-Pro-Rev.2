@@ -41,6 +41,7 @@ export const PAGE_ICON = {
   ProductionNotes: FileText,
 
   DrawingSubmittalHub: ScanLine,
+  IfcModelViewer: Box,
   Drawings: FileText,
   DrawingViewer: Eye,
   GcDrawingViewer: Eye,

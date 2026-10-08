@@ -75,6 +75,7 @@ const ROUTE_DOMAINS = {
   },
   documents: {
     DrawingSubmittalHub: r(lazyWithRetry(() => import("@/pages/DrawingSubmittalHub")), "Detailing Control Center", { projectScoped: true }),
+    IfcModelViewer:   r(lazyWithRetry(() => import("@/pages/IfcModelViewer")),   "IFC 3D Viewer",       { projectScoped: true }),
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
     Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),

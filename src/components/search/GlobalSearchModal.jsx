@@ -5,6 +5,7 @@ import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { Search } from "lucide-react";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { IFC_VIEWER_MODULE } from "@/config/moduleRegistry";
 
 // Stable empty array — prevents infinite re-render loops from useCallback/useEffect
 // dependency chains when queries are disabled and would otherwise return new [] refs.
@@ -35,6 +36,7 @@ const QUICK_NAV = [
   { icon: "◈", name: "Dashboard",    page: "Dashboard",               group: "Navigate" },
   { icon: "⚑", name: "RFI Hub",      page: "RFIs",                    group: "Navigate" },
   { icon: "▦", name: "Detailing",    page: "DrawingSubmittalHub",     group: "Navigate" },
+  { ...IFC_VIEWER_MODULE, group: "Navigate" },
   { icon: "☰", name: "Work Packages",page: "WorkPackages",            group: "Navigate" },
   { icon: "📦", name: "Deliveries",  page: "Deliveries",              group: "Navigate" },
   { icon: "◎", name: "Budget Control",   page: "CostHub",              group: "Navigate" },
@@ -175,6 +177,17 @@ export default function GlobalSearchModal({ open, onClose }) {
       setResults(searchResults);
       setLoading(false);
       return;
+    }
+
+    // Keep the model entry discoverable by the terms crews use, including
+    // BIM. Its destination retains the existing viewer flag and project gates.
+    if ([IFC_VIEWER_MODULE.name, ...IFC_VIEWER_MODULE.keywords]
+      .some((term) => term.toLowerCase().includes(ql))) {
+      searchResults.push({
+        type: "Module", id: IFC_VIEWER_MODULE.page, title: IFC_VIEWER_MODULE.name,
+        subtitle: "3D model · current project", page: IFC_VIEWER_MODULE.page,
+        icon: IFC_VIEWER_MODULE.icon,
+      });
     }
 
     // Filter from cached data — no network calls!
@@ -614,4 +627,3 @@ export default function GlobalSearchModal({ open, onClose }) {
     </>
   );
 }
-

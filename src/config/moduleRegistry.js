@@ -26,7 +26,7 @@ export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
   { label: "PROJECTS",    pages: ["ProjectsHub", "Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
-  { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Submittals", "DrawingViewer", "Documents", "DocumentControl", "GcDocuments", "GcDrawingViewer"] },
+  { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "IfcModelViewer", "Submittals", "DrawingViewer", "Documents", "DocumentControl", "GcDocuments", "GcDrawingViewer"] },
   { label: "FABRICATION", pages: ["WorkPackages", "PieceRegister", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["ScheduleHub", "ProjectCalendar", "LookAheadSchedule"] },
@@ -50,6 +50,13 @@ export const TAB_DEFAULT_PAGE = {
   CLOSEOUT:    "ProjectCloseout",
 };
 
+// Shared by navigation and search. The entry opens the existing flag-gated
+// model tab; it is shared project tooling, not a fabrication-only module.
+export const IFC_VIEWER_MODULE = {
+  icon: "⬡", name: "IFC 3D Viewer", group: "Detailing", page: "IfcModelViewer",
+  keywords: ["IFC", "3D", "BIM", "model"],
+};
+
 export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
@@ -61,6 +68,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDC65", name: "Project Members",          group: "Projects",      page: "ProjectMembers" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
   { icon: "\u25A6", name: "Detailing Control Center",    group: "Detailing",     page: "DrawingSubmittalHub" },
+  IFC_VIEWER_MODULE,
   { icon: "\u2731", name: "Document Control",            group: "Detailing",     page: "DocumentControl" },
   { icon: "\u25a4", name: "GC Documents",                group: "Detailing",     page: "GcDocuments" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
@@ -138,6 +146,7 @@ const OPERATIONAL_GROUPS = [
     collapsible: true,
     items: [
       { label: "Drawing Control", icon: "▦", page: "DrawingSubmittalHub" },
+      { label: IFC_VIEWER_MODULE.name, icon: IFC_VIEWER_MODULE.icon, page: IFC_VIEWER_MODULE.page, keywords: IFC_VIEWER_MODULE.keywords },
       { label: "GC Documents", icon: "▤", page: "GcDocuments" },
       { label: "Document Control", icon: "✱", page: "DocumentControl" },
       { label: "RFIs", icon: "⚑", page: "RFIs", badgeKey: "rfi" },

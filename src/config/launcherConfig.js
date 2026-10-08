@@ -9,7 +9,7 @@ import { SIDEBAR_GROUPS } from "@/config/moduleRegistry";
 
 /** Flat list: { page, label, category } in sidebar order. */
 export const LAUNCHER_MODULES = SIDEBAR_GROUPS.flatMap((g) =>
-  g.items.map((it) => ({ page: it.page, label: it.label, category: g.label })),
+  g.items.map((it) => ({ page: it.page, label: it.label, category: g.label, keywords: it.keywords || [] })),
 );
 
 /** Rail categories: ALL + each sidebar group, in order. */
@@ -74,7 +74,8 @@ export function searchModules(query) {
   const q = (query || "").trim().toLowerCase();
   if (!q) return LAUNCHER_MODULES;
   return LAUNCHER_MODULES.filter(
-    (m) => m.label.toLowerCase().includes(q) || m.page.toLowerCase().includes(q),
+    (m) => m.label.toLowerCase().includes(q) || m.page.toLowerCase().includes(q)
+      || m.keywords.some((keyword) => keyword.toLowerCase().includes(q)),
   );
 }
 

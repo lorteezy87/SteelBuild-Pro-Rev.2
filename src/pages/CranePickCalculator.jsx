@@ -538,7 +538,8 @@ export default function CranePickCalculator() {
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+          <div>
           <div style={{
             fontFamily: "Space Grotesk, var(--font-display)",
             fontSize: 22, fontWeight: 800, textTransform: "uppercase",
@@ -549,6 +550,8 @@ export default function CranePickCalculator() {
           <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 4 }}>
             Gross load · sling tension · offset CG · sling &amp; shackle WLL · boom geometry · 3D · ASME B30.5 / B30.9 · OSHA 1926 Subpart CC
           </div>
+          </div>
+          <a href="#crane-pick-view" onClick={() => setShow3d(true)} style={{ ...keycapButtonStyle("accent", { compact: true }), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>View 3D plan ↓</a>
         </div>
 
         {/* Disclaimer banner */}
@@ -969,12 +972,12 @@ export default function CranePickCalculator() {
         </div>
 
         {/* SECTION 6 — 3D pick view (full width) */}
-        <div style={{ ...cardStyle, marginTop: 16 }}>
+        <div id="crane-pick-view" tabIndex={-1} style={{ ...cardStyle, marginTop: 16, scrollMarginTop: 100 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 18px", borderBottom: show3d ? "1px solid var(--divider)" : "none", background: "var(--bg-surface-low)", flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <SectionBadge n={6} />
               <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                3D Pick View
+                3D Crane Plan
               </span>
               {sceneSpec.illustrative && show3d && (
                 <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
@@ -982,12 +985,12 @@ export default function CranePickCalculator() {
                 </span>
               )}
             </div>
-            <button type="button" onClick={() => setShow3d((v) => !v)} style={keycapButtonStyle("ghost", { compact: true })}>
+            <button type="button" aria-expanded={show3d} aria-controls="crane-plan-content" onClick={() => setShow3d((v) => !v)} style={keycapButtonStyle("ghost", { compact: true })}>
               {show3d ? "Hide" : "Show"} 3D
             </button>
           </div>
           {show3d && (
-            <div style={{ padding: "14px 18px" }}>
+            <div id="crane-plan-content" style={{ padding: "12px" }}>
               <Suspense fallback={<div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", padding: 16 }}>Loading 3D view…</div>}>
                 <CranePick3D spec={sceneSpec} ariaLabel={sceneLabel} />
               </Suspense>
