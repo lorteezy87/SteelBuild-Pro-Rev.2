@@ -6,7 +6,143 @@ exactly what's needed.
 
 ---
 
-## Phase 0 closure status
+## Current security audit and hardening register
+
+**Updated 2026-10-07 (America/Phoenix; live observations 2026-10-08 UTC).** This is the authoritative current security register. Older dated sections below retain historical context; their original priorities, counts and deployment claims do not override this section. Evidence, exact source references, prerequisites and historical-ID crosswalks are in [the consolidated audit](docs/audits/SECURITY_AUDIT_REGISTER_2026-10-07.md).
+
+Reviewed code: `33abb703df9ea2366134c82ba999c853d67bf345`, including security implementation `219aa4f3e2afebab9984aca69d713d27e908952e`; `742cee35` adds only the documentation claim. Coverage includes identity, tenant/project permissions, all public table/function catalogs, Storage, all nine owned production Edge Function entrypoints, browser/mobile/offline data, CI, dependencies, recovery, telemetry and module boundaries. Live reads were metadata-only. No production writes, customer-data export, deployment or migration application occurred.
+
+**Status:** **Open** = observed gap; **Ready** = source correction prepared, release/acceptance outstanding; **Partial** = named controls verified with a specific remainder; **Unverified** = evidence still needed, not a demonstrated vulnerability; **Design** = required before the proposed feature ships. **P1** means before sensitive release or tenant expansion; **P2** next hardening tranche; **P3** maintenance. Priorities are remediation order, not a count of exploitable vulnerabilities. Owners below are accountable roles to assign, not assertions that a person has accepted the work.
+
+### Prepared hardening and release gates
+
+| ID / mapping | Priority / status | Owner | Evidence and remaining work | Closure evidence required |
+|---|---|---|---|---|
+| SBSEC-01; AUTH-11 server boundary | P1 / Ready; live gap | Backend + release | Removed workspace members can retain authority through explicit project-role rows in live SQL. Migration `20261008032524_require_current_workspace_membership_for_project_roles.sql` fixes all three role resolvers; absent from live ledger. | Review exact SQL/payload, apply through the documented manual process after staged negative/positive cases; removed roles denied, current role precedence and legitimate archived administration preserved. Prior isolated SQL regression: 36 checks passed. |
+| SBSEC-02; email-send caller boundary | P1 / Ready | Edge + release | Caller-JWT active-project and PM-floor checks now precede privileged mail work; existing shared MFA check retained. Implementation `219aa4f3` has 18 handler tests. Exact deployed revision not verified. | Deploy reviewed artifact only through release process; removed/foreign/viewer/archived requests denied before provider work, valid PM accepted, authorization lookup errors fail closed. Coordinate SBSEC-01. |
+| SBSEC-03; AUTH-6 Closeout slice | P1 / Ready | Client + release | Closeout owner-generation checks suppress stale mutation/cache/toast effects; 11 real component tests passed previously. Other active callers remain under AUTH-6. | Reviewed client artifact plus delayed account/org/project-switch acceptance; keep legitimate rollback. This cannot cancel an HTTP request already started or pin its bearer token retroactively. |
+| AUTH-2; H23 | P1 / Ready + enrollment policy open | Identity + backend | Browser MFA race corrected; seven browser Edge entrypoints use verified-user MFA guards. Candidate `20261007073051` supplies DB request/Storage/Realtime enforcement; live hooks/policies absent. | Stage enrolled AAL1 denied and AAL2 allowed across REST/RPC/Storage/Realtime/Edge, including refresh/recovery/revocation. Verify exact deployed guards. Decide required privileged-user enrollment separately; current candidate enforces enrolled factors. |
+| EDGE-5; B41-P1-002/003 | P1 / Ready; live erasure gap | Backend + release | Transactional sole-owner erasure, archived census and fail-closed Storage cleanup prepared; `20260927150000` / `20260927160000` absent live. Nine reviewed candidate versions are absent in total; see audit. | Verify exact ledger payloads, staging schema and all affected erasure fixtures; archive/census/erase succeed for authorized owner, other tenant/current member rights preserved, incomplete file cleanup fails closed. EDGE-6 remains a separate source defect. |
+
+### Identity and shared-device data
+
+| ID | Priority / status | Owner | Finding and remediation | Closure evidence required |
+|---|---|---|---|---|
+| AUTH-4 | P1 / Open, source | Identity | Recovery flag exists only in React; Cancel reload and failed logout can escape reset-only UI. Persist the recovery lifecycle appropriately and make cancellation end the recovery session. | Actual provider/router tests: reload, Cancel, failed logout and successful reset never unexpectedly mount project routes. This requires a valid recovery session; it is not arbitrary unauthenticated access. |
+| AUTH-5 | P1 / Open, source | Identity | Client still uses implicit auth callbacks. Move supported web/native recovery and confirmation flows to PKCE; reject unsolicited callback fragments and redact tokens from URLs/telemetry. | Successful intended callbacks plus unsolicited, mismatched, replayed and expired callback negatives; verify provider redirect configuration. Login-CSRF exploit not exercised here. |
+| AUTH-6 | P1 / Partial | Client | Core sign-out/cache/Notes/outbox ownership corrected. Remaining A: global calculator rates/history; B: Schedule/FieldToday/Production Notes stale rollback or Undo; C: multi-step exports/native sharing completing after identity change. Namespace business data and guard every async continuation/current transport identity. | Deferred actual callbacks under account/org switch and sign-out/re-entry cannot repopulate old rows, toast, Undo, continue requests or download/share stale files; valid current-owner behavior retained. Do not reopen the fixed Closeout slice or treat RLS as cache protection. |
+| AUTH-7 | P1 / Open, source | Identity + client | DesktopConnect exports encrypted access/refresh credentials on mount for a valid supplied handshake. Add explicit device/key confirmation and a user gesture, registered handshake state and stale-session cancellation. | Page load/cancel sends nothing; approval sends once for the current session; altered state/key/challenge and replay fail. Existing ECDH/one-use/2-minute protections stay intact; code capture is an additional attack prerequisite. |
+| AUTH-8 | P1 / Open; provider settings unverified | Identity | Sensitive password changes, MFA removal and account/workspace erasure lack explicit fresh proof. Define recent reauthentication plus enrolled-MFA requirements and verify secure-password-change settings. | Old session or missing/expired nonce denied at the authoritative action; recent proof succeeds. Current enrolled-MFA validation alone does not establish authentication freshness. |
+| AUTH-9 | P2 / Open, source provenance | Identity + privacy | Signup mints terms timestamps/version in user-editable metadata. Record versioned acceptance with a server timestamp and immutable audit provenance; do not describe client metadata as independent proof. | Direct API and later metadata edits cannot fabricate or rewrite the authoritative acceptance event; required onboarding policy enforced. This is evidence integrity, not an auth bypass or legal conclusion. |
+| AUTH-11 UI tail | P2 / Partial | Client + backend | Role-cache invalidation remains an acceptance requirement after membership changes. The historical assertion that revocation is *only* a UI delay was false; server gap is SBSEC-01. | Open screens, fresh REST/RPC, Realtime, offline replay and signed-link behavior tested after removal; clearly distinguish pre-issued URL lifetime from new authorization. |
+| SBSEC-11; Auth configuration | P1 / Unverified | Identity + operations | Leaked-password protection, CAPTCHA/abuse limits, password policy, JWT/OTP lifetimes, signup/provider/redirect rules, privileged enrollment and dashboard access not read. Advisor silence does not prove configuration. | Record non-secret effective settings, rationale and controlled positive/negative tests, plus ownership/rotation for privileged access. No blanket claim that these controls are disabled. |
+
+### Database, company/project isolation and files
+
+| ID | Priority / status | Owner | Finding and remediation | Closure evidence required |
+|---|---|---|---|---|
+| RLS-2 | P2 / Partial, live | Backend | Eleven historical business-table write floors now exist; PMA audit INSERT is closed. `activities` still permits member-level insertion with caller actor pinned. Define authoritatively generated events versus allowed user activity. | Viewer cannot fabricate protected lifecycle/signoff events; legitimate permitted activity works with pinned actor. SBSEC-07 covers the separate submittal RPC. |
+| RLS-3 | P1 / Open, live | Backend + billing | Direct project INSERT bypasses RPC plan checks; concurrent RPC creation lacks an org lock for caps. Direct org insertion can produce orphan rows but is not proven paid-plan escalation. Enforce limits/ownership at every authoritative creation path. | Direct REST and simultaneous RPC creations cannot exceed the agreed cap; entitled creation and bootstrap succeed without orphan ownership/billing mutation. |
+| RLS-4 | P2 / Partial, live | Backend | Direct number-counter writes are closed. `get_next_sequence_number` still permits a project reader to consume numbers. Add the intended writer floor or allocate inside authoritative record creation. | Viewer cannot burn/reset counters, permitted writers create unique official numbers concurrently; preserve RPC-only numbering. |
+| RLS-5 | P1 / Open, live policies | Backend + files | `app-files` read/upload is org-scoped, not project-scoped, with no project write floor; owner update/delete predicates lack fresh membership/project checks. Map objects to authoritative projects and enforce operation-specific roles. Legacy flat-path bypass remains closed. | Same-org nonmember/viewer, removed member and foreign-org list/read/upload/upsert/move/delete negatives plus intended access; existing references/backups retained. Runtime HTTP behavior and signed-object revocation still need staging proof. |
+| RLS-6 | P2 / Partial, live | Backend | Historical guarded routines fixed; four low-impact identifier oracles remain: `set_for_drawing_is_locked`, `set_for_zone_is_locked`, `users_share_org`, `founding_org_id`. Restrict access/output to intended scope. | Foreign/unknown IDs do not reveal unauthorized relationships/state; authorized workflow results remain correct. No broad row leak asserted. |
+| RLS-7 | P2 / Open, live grant | Backend | Authenticated callers can read `feature_flags.user_overrides`, a per-email override map. Return only effective caller flags or safe public projections. | Raw table/RPC access cannot enumerate other users' overrides; own effective flags remain correct. Actual values were not read. |
+| RLS-9 | P2 / Open, live defaults | Backend | Creator default privileges can expose future functions to authenticated roles, and `supabase_admin` defaults include anon. Revoke broad future defaults and explicitly grant reviewed APIs with sibling ownership coordination. | Functions created under each actual migration owner are inaccessible until deliberately granted; published APIs and triggers still work. Current anonymous definer execution is zero. |
+| RLS-10 | P1 / Partial | Backend | Archived-project business writes do not share a uniform active-project contract. Inventory mutation entrypoints and apply active checks where required; retain legitimate restore/erase/census authorization. | Archived field/PM/admin/owner matrix across direct writes and RPCs, including piece/pay-app paths; authorized cleanup works. Never globally add an archive deny to role resolvers just to address this item. |
+| DB-7 | P3 / Open hardening | Backend | Anonymous invoker/trigger EXECUTE residue, storage initplan review and `pg_net` public placement need least-privilege disposition. Advisor warnings are not exploit counts. | Reviewed grants/namespace plan, safe positive controls and denied unwanted entrypoints; document accepted exceptions. |
+| DB-8 | P2 / Partial | Backend + realtime | Seventeen live publication tables inventoried; reproducible publication ownership and session-revocation behavior not fully proven. | Replay produces the intended publication; two-user sockets and AAL1/AAL2 tests verify subscribe/change/delete payloads and role-removal behavior without foreign data. |
+| DB-9 | P1 / Open, live grant | Backend + integrations | Project readers can project `email_accounts.access_token` / `refresh_token` if populated. Move credentials into a service-only/private store; restrict mailbox administration. Export source already strips token columns. | Ordinary direct REST/RPC/export cannot retrieve credentials; intended service send/refresh works. Token values and provider scope were not inspected. Distinct from SBSEC-04. |
+| DB-10; M21 | P2 / Open audit/retention | Backend + privacy | No org-member role/removal audit trigger; only admin client-event prune routine found and no retention pg_cron job. Add server-stamped immutable membership events and an approved retention/legal-hold schedule. | Actor/org/old-new role/outcome preserved, cross-org reads denied, scheduled retention proven on fixtures with holds and required signoff/erasure evidence retained. External schedulers unknown. |
+| DB-11 | P1 / Open recovery assurance | Backend + release | Schema/ACL/ownership drift persists; version presence is not exact SQL equivalence. Live `20260921080604` is present despite stale manifest prose; nine later candidates absent. Historical 171/219 function counts are not current measurements. | Coordinated sibling-aware rebuild plus live catalog comparison of definitions, policies, grants, triggers and publications; exact payload/hash ledger evidence. Never use bulk push, migration repair or permissive manifest overrides. |
+| SBSEC-07; submittal event provenance | P1 / Open, live definition | Backend | `log_submittal_event` trusts separate caller project/submittal IDs and reader-supplied event fields. Derive project from parent and enforce intended writer/internal-call contract. | Viewer and foreign/mismatched parent denied; permitted event stamped with real actor and all legitimate internal workflows retained. Observed exposure is a forged row in the caller's project, not a read of the foreign project's data. |
+
+### Edge Functions, providers and billing
+
+| ID | Priority / status | Owner | Finding and remediation | Closure evidence required |
+|---|---|---|---|---|
+| EDGE-2 residual | P2 / Partial, source | Edge | Project/caller scope and configured quota lookup failures fixed. Caller-controlled `useCase='email-classify'` can pollute trusted classifier counts. Separate trusted source/accounting namespaces. | Caller labels cannot change ingest quota while valid project LLM usage remains accounted. No remaining cross-org attribution claim. |
+| EDGE-6 | P1 / Open, offline reproduced | Identity + backend | Zero-membership snapshot precedes third-party Auth deletion; a user may join another org in between. Prefer keeping other users' identities intact; any orphan cleanup needs a genuinely serialized membership/deletion contract. | Synthetic concurrent join preserves identity/new membership; owner/storage/database failure paths remain fail closed. A second unlocked count is insufficient. Fresh proof is AUTH-8. |
+| EDGE-7 | P2 / Open hardening | Edge | Account deletion and ingest still use wildcard CORS. Apply intended exact browser origins; webhook-only ingest need not expose browser CORS. | Allowed/denied/missing-origin and preflight tests preserve bearer/shared-header auth. Wildcard alone is not an auth bypass. |
+| EDGE-8 | P2 / Partial | Release + backend | Retired endpoints are absent; maintenance implementation files remain and frozen manifest classification allows reappearance. Coordinate negative deployment guard/retirement ownership. | Drift gate rejects a reappearing retired slug and packaging cannot deploy the active maintenance index accidentally; staging bootstrap stays staging-only. |
+| EDGE-9 | P1 / Open, source | Edge + backend | Mail quota counts editable correspondence rows; delete/edit, concurrent sends and successful provider sends with failed storage can evade it. LLM/classifier counters have related race/best-effort gaps. Use private atomic reservations and durable idempotency/accounting; fail closed on invalid caps. | Cap-one test still blocks after message deletion/edit, under concurrent requests and on ledger failure; ambiguous provider completion reconciles without duplicates. Verify actual configured limits separately. |
+| EDGE-10 | P2 / Open | Edge | Several provider fetches lack explicit total deadlines and send/checkout idempotency. Bound time and safely reconcile ambiguous results. | Timeout/lost-response/retry tests avoid duplicate external effects; identify SDK defaults accurately rather than claiming none exist. |
+| EDGE-11 | P2 / Open, config-dependent | Edge | Inbound reject mode stops untrusted mail, but flag mode still classifies/stores attachments before rejection. Limit quarantine to justified metadata/content. | Untrusted flagged message cannot consume paid classification or active attachment storage unexpectedly; live mode recorded without exposing secrets. |
+| EDGE-13 | P2 / Partial | Edge | LLM streaming input is bounded; other handlers buffer JSON/text/multipart before checks, including public webhook/handoff paths. Enforce stream byte limits before materialization. | Oversized/chunked/absent or false Content-Length rejected early, with no privileged/provider work; permitted payloads still accepted. |
+| EDGE-14 | P2 / Partial | Edge + observability | Several handlers echo upstream/schema error text. Return stable public codes/correlation IDs and keep redacted detail in protected logs. | Injected provider/DB/body errors cannot echo credentials or arbitrary raw payloads; troubleshooting correlation retained. No real secret disclosure demonstrated. |
+| EDGE-15 | P2 / Open availability | Edge + operations | Public health accepts arbitrary methods and performs an uncached DB query each time. Separate cheap liveness from bounded/cached deep readiness and verify throttling. | Only intended methods, bounded DB work under repeated probes, meaningful internal readiness and alerting. |
+| EDGE-16 residual | P2 / Partial | Edge + privacy | Token exports and prototype-key lookups fixed in source. Floating imports, sender/reference/error logging, sender/reply-field robustness and command-center failure reporting remain. | Lock approved dependency graph, redact sensitive context, validate provider fields and capture safe failures. Do not relabel JSON header fields as proven SMTP injection. Dependencies/telemetry also CI-7/OBS-2. |
+| SBSEC-04; mailbox authority | P1 / Open, provider-dependent | Integrations + backend | Project-editable mail-account From addresses select a platform Graph/Resend sender credential. Bind provider identities to verified organization-owned mailboxes and restrict management. | Cross-org/unverified/changed mailbox denied before send, verified permitted mailbox works; actual provider credential scope recorded. This does not prove arbitrary internet spoofing. |
+| SBSEC-05; Stripe write acknowledgement | P1 / Open, offline reproduced | Billing + backend | Actual handler ignores returned Supabase errors on billing writes/lookups, records processed marker and returns 200. Validate write result/affected org and make state application plus event acknowledgement atomic/idempotent. | Actual handler with injected returned errors does not mark processed; provider retry eventually applies once. Legitimate duplicate event is safe. |
+| SBSEC-06; Stripe event ordering | P1 / Open, offline reproduced | Billing | Delayed checkout completion can set `plan=pro` from metadata despite a canceled current subscription. Share authoritative current entitlement logic across event types; fail safely on unknown price and old subscription events. | Checkout-after-cancel never restores paid plan, old subscription cannot overwrite new current subscription, valid current paid checkout still upgrades. Signature validation is already present. |
+
+### Browser content, exports and mobile
+
+| ID | Priority / status | Owner | Finding and remediation | Closure evidence required |
+|---|---|---|---|---|
+| SEC-1 | P2 / Open, source | Client | Several active RFI/agenda/fab/action/status/risk CSV exporters quote syntax without neutralizing formula-leading cells. Reuse shared safe serializer and preserve real numbers. | Every real exporter handles `=`, `+`, `-`, `@`, tab/CR and quote/newline cases. Spreadsheet execution depends on recipient software; none was exercised here. |
+| SEC-2 | P2 / Partial | Client + files | Active Daily Logs/Punchlist photo links bypass trusted signing and bind raw record URLs. Scope links already fixed; retired drawing components excluded. | Actual components reject unsupported schemes/hosts and signing failure with no raw fallback; valid private links work. Script execution not demonstrated. |
+| SEC-3 | P2 / Open | Client | Raw email srcdoc can load tracking resources; sandbox excludes scripts. Sanitize HTML, add in-frame restrictive CSP and block remote content until chosen. | Pixels/CSS/forms/meta refresh blocked by default; intended email rendering preserved and sandbox not weakened. Not a confirmed XSS finding. |
+| SEC-4; EDGE-12 | P2 / Open | Files + Edge | Attachment content type is sender-controlled; SVG/active-content classification and email bucket MIME restrictions incomplete. Derive/allowlist server MIME and use safe rendering/disposition. | Spoofed extension/MIME and active formats handled safely; inspect actual delivered headers and preserve normal construction documents. No app-origin execution claimed. |
+| SEC-5 | P2 / Partial | Client + files | IFC gzip inflation lacks an output cap; signed-URL hook cache has no TTL/owner boundary. Bound decompressed bytes/work, expire scoped URL entries and clarify revocation expectations. Dead PDF helper/random ID advice is maintenance, not proven auth weakness; Stripe prototype lookup fixed. | Oversized expansion aborts without tab exhaustion; URL expiration/owner-switch tests reauthorize or fail safely. No uploaded bomb or cross-user file discovery was exercised. |
+| WEB-1 | P2 / Open | Client | Service worker can cache failed/non-HTML navigation as the app shell. Validate status/content and fallback behavior. | Challenge/error/binary/redirect responses cannot poison the cached shell; valid online/offline navigation works. Worker does not cache cross-origin tenant APIs. |
+| WEB-2 | P2 / Open | Client | Unhashed wasm is served cache-first against a new loader. Version/hash assets or use a compatible refresh strategy. | Two-build upgrade with populated old cache produces matching loader/wasm and real model geometry. |
+| WEB-3 | P3 / Open | Client | Stale-chunk detector omits Firefox's error family. Add recognition while retaining one-shot reload guard. | Firefox stale-chunk recovery and no infinite reload; supported Chromium/WebKit cases remain valid. |
+| WEB-4 | P1 / Ready policy; compatibility open | Client + release | Production currently has Report-Only CSP. Prepared enforcing source omits signed Supabase iframe fallback host. Review minimum hosts and drawing/email/native compatibility before promotion. | Actual fallback/file flows pass and deployed response contains enforcing CSP for exact intended hosts. Header source alone does not close this. |
+| WEB-5 | P3 / Partial, availability | Client + release | Historical delivery-header/cache observations require host-specific review; existing HSTS/DENY/nosniff/referrer/permissions controls verified. Do not classify optional preload/COOP as automatic vulnerabilities. | Correct HTML revalidation/assets caching and preview indexing/privacy behavior tested on actual hosting without breaking integrations. |
+| MOB-1 | P2 / Unverified target | Mobile | Android target absent from reviewed tree; no Play Console/store-state conclusion. Establish target-specific acceptance if Android is shipped. | Signed artifact, auth/files/offline/privacy tests and release ownership for that target. |
+| MOB-2–MOB-10 | P2 / Partial, source | Mobile + release | iOS project/plugins, native exports, privacy manifest, version tags, native pricing gate and key plist/config fixes now exist. Universal Links provisioning, compiled-device behavior, late transfer identity guards and privacy/store metadata remain unverified. | Signed iPhone/iPad build checks camera/share/reset/background/offline/session cleanup, SDK privacy aggregation and store disclosures. Individual MOB-2 through MOB-10 dispositions are in the audit; do not repeat the old “no iOS/plugin call sites” claim. |
+
+### Release, recovery, privacy and assurance
+
+| ID | Priority / status | Owner | Finding and remediation | Closure evidence required |
+|---|---|---|---|---|
+| CI-2 | P1 / Open source; live settings unverified | Release + security | Web publishers have no environment restriction; actual credential placement unknown. Scope production/preview credentials and protect workflow/environment branch access. | Non-main/fork workflow cannot obtain production publishing credentials; reviewed main release succeeds. Do not claim secret exposure without inspecting effective policy. |
+| CI-3; B41-P1-005 | P1 / Partial, live | Repository admin | Main ruleset is active with PR requirement, no force/delete and one strict CI context; zero approving reviews. Another rule has empty include and concatenated context. Local deploy script guarded. Reconcile exact required check names, scope and review policy. | Effective main rules require intended checks/review; controlled failing PR cannot merge/publish; intended release path works. Old “blocked by repository plan” status is obsolete. |
+| CI-5 | P2 / Open | Release | HTTP 200 deploy probe does not prove correct build boot/backend readiness. Add deployed SHA plus essential auth/browser/backend validation and bounded rollback. | Wrong build, broken boot and failed backend yield failed promotion/alert; successful artifact matches intended SHA. |
+| CI-6; B41-P1-004 | P1 / Partial | QA + release | Persistent isolated staging exists; critical mutation E2E remains opt-in and is not a pre-promotion acceptance gate. | Disposable fixtures execute critical fabrication/erection authorization and release invariants in the actual gated workflow; save artifact/SHA and teardown proof. |
+| CI-7 | P2 / Open | Release | Action tags/remote imports are mutable; advisory dependency-audit need not block publishers. Pin immutable dependencies and define security exceptions/expiration. | Reviewed locks/SHA refs, toolchain parity and seeded failing audit/check prove the intended blocking policy. Coordinate DEP-1. |
+| CI-9 | P1 / Partial | Backend + release | Drift checks compare versions/slugs, not every body/policy/grant; frozen retired slug blind spot remains. | Exact-payload/catalog comparison and negative retired-slug test, with shared production ownership preserved; DB-11/EDGE-8 track substantive work. |
+| CI-10 | P1 / Unverified publishers | Release + operations | Historical Netlify/Workers Builds publisher observations require current connection/hostname/credential inventory. No fresh external publisher settings read. | Only approved gated path can publish production hostnames; document or disable residual integrations and verify branch previews remain isolated. |
+| OBS-1 | P1 / Unverified | Operations | Uptime and Sentry alert configuration/delivery not observed. Repo checklist gaps do not prove monitoring absent. | Controlled liveness/error signal reaches the responsible recipient with documented triage/escalation; record monitor coverage and drill date. |
+| OBS-2 | P2 / Partial | Client + Edge + privacy | Default PII/replay masking present; URL fragments/navigation/console/context and sender/reference logs not uniformly scrubbed. Preview/prod labels also collide. | Synthetic token/PII markers absent from captured telemetry at all entrypoints; useful correlation/release/environment preserved. No real secrets used in tests. |
+| DR-1 | P1 / Unverified | Operations + backend | Current PITR/database backup settings and full isolated restore not verified. Code migration replay is not recovery proof. | Record approved RPO/RTO, restore database plus files into isolated target, validate permissions/attachments and measure recovery; document rollback and cleanup. |
+| DR-2; B41-P1-006 | P1 / Partial, live run | Operations | Scheduled Storage backup run `37645251418` succeeded with nonexpired manifest artifact; activation gap closed. Full contents/retention/restore and other bucket ownership remain unverified. | Correlate database recovery point and file manifests, restore sampled and complete required scope, verify alerting/retention and explicitly assign retired/shared bucket ownership. |
+| DR-3 | P2 / Open capacity/documentation | Operations | Runner's 9 GB cap can halt future backups; older runbook snapshot semantics differ from native-version contract. | Capacity forecast/threshold alerts, proven retention/restore under overwrite/delete and aligned operating docs without weakening history preservation. |
+| SBSEC-10; backup ref guard | P1 / Open source; environment unknown | Release + operations | Backup workflow admits non-main manual dispatch despite main-only runbook promise; environment restriction could mitigate but was not verified. | Enforce intended trusted ref in workflow/runner and environment; non-main manual request receives no backup credentials, scheduled/main run still succeeds. |
+| DEP-1 | P2 / Open tooling advisory | Client + release | Fresh npm audit: production 0; complete tree 5 high entries from Braces/tooling chain. Older blanket “cleared” statement superseded. | Reviewed compatible remediation, full audit evidence and affected build/tests; no forced broad major upgrades. [Dependency report](docs/audits/DEPENDENCY_TOOLCHAIN_2026-10-07.md). |
+| COMP-1 | P2 / Partial | Privacy + product + operations | Processor list corrected but legal pages remain DRAFT; actual retention/regions/agreements/export-erasure coverage unverified. AUTH-9/DB-10 cover evidence and retention mechanics. | Review actual deployed processing/disclosures, agreements and rights workflows; save bounded evidence without claiming certification from drafted pages. |
+| HYG-1 | P2 / Open classification | Repository admin + privacy | Tracked snapshots/workbooks need authorized data classification. Filenames alone do not prove customer leakage. | Review contents/access/history, remove unnecessary artifacts appropriately, scan safely and document any exposure response; no unapproved history rewrite. |
+| TEST-2 | P1 / Partial assurance | QA + security + backend | Prior 7,966 tests and 36 SQL checks passed for the implementation snapshot; 45 selected live routine bodies reviewed. Exhaustive role/tenant/RPC tests, deployment parity and independent adversarial review remain. | Traced matrix across all exposed boundaries including direct APIs, two tenants, revoked users, archives, MFA, files, Realtime, concurrent billing/quota, native/offline and exact release artifacts. A green suite alone cannot close unrelated gaps. |
+
+### Fabrication/erection configuration security requirements
+
+| ID | Priority / status | Owner | Required design | Closure evidence required before launch |
+|---|---|---|---|---|
+| SBSEC-08; company capabilities | P1 / Design | Product + backend + client | Support fabrication-and-erection and erection-only companies through explicit server-owned capabilities. Existing UI module flags are display gates. Define who may configure modules, retained data/export access, role permissions and dependencies. | Erection-only accounts cannot invoke disabled fab actions through REST/RPC/Edge/deep links/imports/offline jobs; approved mode changes are audited and preserve data; mixed-mode and intended shared modules work. Hiding navigation does not prove enforcement. |
+| SBSEC-09; supplier collaboration | P1 / Design | Product + backend | An erection-only customer may receive another fabricator's drawings/status. Use explicit project/package sharing with minimal fields, revocation and audit; do not expand org-wide access implicitly. | Fabricator, erector and third-company fixtures prove only deliberately shared records/files/actions are accessible; revoked collaboration blocks future requests and offline replay; signed-link lifetime is documented. |
+
+### Verified controls and disposition of older IDs
+
+- **Live verified:** AUTH-1, AUTH-3, RLS-1 and RLS-8 owner/invitation/audit/immutable-membership protections; all 143 public tables have RLS, all four buckets private, invoker view configured, all 227 definers pin search path and none grant anon EXECUTE. These are bounded controls, not proof of every table policy or function body. B41-P1-001 remains closed; direct number-sequence writes and PMA audit INSERT are closed live.
+- **Source verified, exact deployed revision separate:** EDGE-1 token bounds, EDGE-3 export actor, EDGE-4 Stripe signature/config failure behavior, EDGE-16 token redaction/prototype-key checks; CI-1 publisher secret/drift gates, CI-4 real no-new-JS base check, CI-8 released-Edge typecheck and DR-4 Cloudflare rollback documentation. Do not reopen these as absent because adjacent findings remain.
+- **Historical-only or consolidated:** EDGE-12 maps to SEC-4; AUTH-11 server defect to SBSEC-01 and cache acceptance above; AUTH-10 is functional invite-onboarding debt, not a newly demonstrated security defect. DB-1 through DB-6 are schema/data/replay items in the September report; this pass does not re-certify their functional status. Security implications of relational consistency and replay remain DB-11/TEST-2. HYG-2 documentation drift is addressed here only for security assertions; unrelated product/performance items remain below.
+- **Production acceptance still required:** nine candidate migrations absent, exact Edge/browser artifact parity unverified, MFA hooks absent, enforcing CSP not live. No item is closed merely by this documentation update.
+
+### Execution and closure order
+
+1. Complete staged acceptance and coordinated release of prepared membership, email authorization, MFA and erasure corrections. Fix the destructive-identity race before treating account deletion as ready. Preserve the manual SQL/payload protocol and shared-database ownership.
+2. Fix server-boundary P1 items: credential visibility, file project isolation, mailbox bindings, Stripe acknowledgement/order, atomic quotas, creation caps and audit provenance; add regression tests at the actual handler/RPC boundary.
+3. Finish identity/recovery/async client boundaries and compatible CSP enforcement; validate direct APIs and shared devices, then implement capability-mode authorization alongside the product feature.
+4. Bind release checks/credentials, obtain effective Auth/monitoring settings and execute a database-plus-files restore. Finish P2 content, supply-chain, retention and mobile acceptance in parallel where independent.
+
+For closure, append implementation SHA, exact migration/artifact identifier, test fixture/results, live acceptance date and remaining limitation to the canonical row or its linked evidence. Assign a named owner before scheduling. No recurring automation or production change is implied by this register.
+
+---
+
+
+## Phase 0 closure status (historical snapshot)
+
+> Current security priorities and deployment status are in the register above. The following describes the earlier Phase 0 checks, not a current production-security verdict.
 
 The Phase 0 release-candidate baseline is reconciled through Batch 40 on
 `agent/handoff-cleanup`. The local closure gates passed without a production
@@ -32,36 +168,14 @@ consolidated feature-flag and dead-path disposition record.
 
 ## Batch 41 P1 finding status
 
-These findings were rechecked against the Batch 40 HEAD. No local source defect
-was reproducible, so no speculative security, RLS, migration, or workflow fix
-was made:
+The original Batch 40/41 observations are reconciled against the October 7 audit:
 
-- **B41-P1-001 - legacy flat Storage isolation residual:** ~~**requires
-  staging**~~ → **RESOLVED in production 2026-07-21.** See
-  [Storage isolation — B41-P1-001 closure](#storage-isolation--b41-p1-001-closure)
-  below for the live evidence. The original finding is kept verbatim for the
-  audit trail: Batch 40's evidence identifies 775 legacy
-  `app-files/uploads/...` objects whose historical policy permits founding-org
-  reads across projects. A local repository search cannot verify remote
-  objects, policy execution, or storage references. The safe correction remains
-  owner-run copy, reference backfill, verification, then policy cutover; do not
-  do this from the browser.
-- **B41-P1-002 - staging database and migration alignment:** **requires
-  staging**. `supabase --version` and `supabase migration list --local` are not
-  available in this environment. The six committed feature-flag seed
-  migrations remain unapplied by Batch 41 and require staging verification.
-- **B41-P1-003 - Edge Function deployment and configuration:** **requires
-  staging**. Local source identifies the eight function dependencies but cannot
-  prove deployed revisions, secrets, quotas, or kill-switch configuration.
-- **B41-P1-004 - critical staging smoke coverage:** **requires staging**.
-  Existing Playwright smoke and fab-release specs are fixture-gated and
-  nonblocking; no dedicated staging credentials or mutation fixture is present.
-- **B41-P1-005 - required branch protection:** **blocked by repository plan**.
-  The read-only GitHub API check returned HTTP 403: branch protection requires
-  GitHub Pro or a public repository. No repository setting was changed.
-- **B41-P1-006 - backup and rollback readiness:** **requires owner/staging
-  evidence**. Local source cannot prove remote backup freshness, restore
-  rehearsal, Vercel rollback, or Edge Function rollback readiness.
+- **B41-P1-001 — legacy flat Storage isolation:** **resolved live**, independently rechecked in this audit. UUID org-prefix/current-member policies exclude legacy `uploads/` paths. The retained historical objects are rollback material, not a reopened access path. See the closure evidence below; RLS-5 is a separate project-scope issue.
+- **B41-P1-002 — database/migration alignment:** **release acceptance open**. Nine reviewed candidate versions are absent from the live ledger; `20260921080604` is present. Current migration ownership/payload evidence, not historical local CLI availability, controls this status. See SBSEC-01, AUTH-2, EDGE-5 and DB-11.
+- **B41-P1-003 — Edge deployment/configuration:** **unverified exact parity**. Nine production entrypoints are in scope. Source review does not prove hosted revisions, provider permissions, caps or kill-switch settings. See SBSEC-02 and the Edge register.
+- **B41-P1-004 — staging acceptance:** **partial**. Persistent isolated staging exists; critical mutation/security acceptance needs recorded fixtures, results and artifact IDs. The old claim that no staging environment exists is obsolete. See CI-6/TEST-2.
+- **B41-P1-005 — branch protection:** **partial, live protection confirmed**. Main has an active PR/strict-CI ruleset; exact checks/review/environment policy still need reconciliation. This is no longer blocked by the previously reported repository-plan error. See CI-2/CI-3.
+- **B41-P1-006 — backup/recovery:** **partial**. Scheduled Storage run `37645251418` and its manifest artifact succeeded. Complete database-plus-files recovery, measured RPO/RTO and current PITR/retention remain unverified. Cloudflare is the active host. See DR-1/2/3 and SBSEC-10.
 
 ~~The local Node 24 versus CI Node 20 difference remains a P2 environment
 deviation.~~ **Closed 2026-09-22** — every job in `.github/workflows/ci.yml`
@@ -172,99 +286,19 @@ files ran 2026-09-18 and is the recovery window.
 
 ## Active items
 
-> **2026-08-05:** Enterprise Tier 1 **code** gaps closed via PR #236 — see
-> [`docs/runbooks/tier1-enterprise-status.md`](docs/runbooks/tier1-enterprise-status.md).
-> Remaining blockers are owner-only (PITR, secrets, Stripe Tax dashboard, counsel,
-> branch protection). PR hygiene playbook:
-> [`.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md`](.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md).
+> Historical Tier 1 and July status notes described the source at those dates. Current security work includes both implementation gaps and operational verification; it is not limited to owner settings. RLS being enabled does not prove every role/tenant boundary. See the current register above. Historical context remains in [the Tier 1 runbook](docs/runbooks/tier1-enterprise-status.md) and [PR hygiene guidance](.claude/agent-memory/construction-pm-dev/pr-supersede-hygiene.md).
 
+### Production-readiness audit (2026-09-21) — historical cross-reference
 
-_Updated 2026-07-14. RLS is enabled everywhere and the **org boundary is wired
-into the access layer** (no cross-tenant reads), billing + plan enforcement are
-live, and data export works. A 2026-07-01 enterprise-readiness audit
-(`origin/main@642ce154`) is driving a remediation pass — see the entries below
-and `docs/runbooks/`. These are go-to-market, typing, and platform-maturity
-follow-ups._
+The [September report](docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md) was taken at `ada5426` and reconciled against `main@7227d32`. Its counts, P0/P1 labels, source paths and remote settings are dated observations, not a current aggregate vulnerability count. The October security register above supersedes its security disposition and keeps the same IDs.
 
-### Production-readiness audit (2026-09-21) — open items
+Do not re-open verified owner/invite/RPC controls, direct number-counter writes, PMA audit INSERT, retired endpoints or corrected source MFA/cache/iOS mechanisms from old descriptions. Do not mark prepared membership/MFA/erasure fixes deployed: the current audit records the remaining live gaps. Branch protection and scheduled Storage backup activation are now positively evidenced; PITR, alerts, publisher settings, complete restore and store artifacts still require current operational proof.
 
-Full report with evidence per finding:
-[`docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md).
-Taken at `ada5426`; **§9 reconciles it against `main@7227d32`** after PRs
-#460–#464, so check a finding's status there before working it. Counts after
-that reconciliation: 0 critical · 20 high (3 closed) · 54 medium (8 closed) ·
-~45 low. No committed credential was found in the tree or its history.
+Non-security functional/performance work from that report remains independently tracked: DATA-1/4/5, LOGIC-2/3/4/5/6/12, and PERF-1 through PERF-10 need their own current-source reconciliation. Historical closure of DATA-2/DATA-3 (PR #480), LOGIC-1 (PR #477) and PERF-11 is not reversed by this security documentation. AUTH-10 is functional invite onboarding; DB-1 through DB-6 retain historical schema/data follow-ups without a new closure claim here.
 
-**Already closed by `main` / production — do not re-open:** AUTH-1 (org admin
-could delete the sole owner), AUTH-3 (invite tokens readable by every member),
-RLS-1 (cross-tenant audit-row RPCs), RLS-8, CI-1 (secret-scan and drift are now
-deploy gates), CI-4, CI-8, EDGE-1, EDGE-3, EDGE-4, PERF-11, DR-4, **DATA-2 and
-DATA-3** (PR #480: schedule bulk/field status-percent reconciliation, NULL
-preservation, and field actual-date stamping), **LOGIC-1** (PR #477: ZonePanel
-fails closed when official RFI number allocation is unavailable). Narrowed:
-RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
+Mobile source now includes an iOS project, native plugin calls, exports, privacy manifest and release tags. MOB-1 still has no Android target in the reviewed tree; compiled-device/store acceptance is unverified. See the individual MOB-1 through MOB-10 crosswalk in the [current audit](docs/audits/SECURITY_AUDIT_REGISTER_2026-10-07.md) and [submission runbook](docs/app-store/SUBMISSION.md).
 
-**P0 — before the next production deploy:**
-
-- **Session hardening.** AUTH-5 (`src/lib/supabase.ts` sets no `flowType`, so
-  auth runs the implicit flow and tokens land in the URL fragment), AUTH-2 (the
-  TOTP gate is browser-only and racy — `AuthContext` sets `isAuthenticated`
-  before `refreshMfaRequired()` resolves), AUTH-4 (a password-recovery session
-  reaches the full app), AUTH-6 (sign-out leaves tenant caches populated and
-  swallows the error).
-- **Invariant regressions that corrupt records.** DATA-1 (the Pay Applications
-  contract query is permanently broken by the global `['projects']` select
-  default), DATA-4 (two shipping importers write `deliveries` in a shape
-  production rejects), DATA-5, LOGIC-5, LOGIC-6.
-- **Release pipeline.** CI-2 — the deploy jobs declare no `environment:`, so the
-  production Cloudflare token is reachable from any branch's workflow. Branch
-  protection remains blocked by the repository plan (B41-P1-005). **CI-10 (new):**
-  the Netlify site is still connected and builds every PR — confirm it cannot
-  publish to the production hostnames, then disconnect it. An ungated publisher
-  is the same risk class as Cloudflare Workers Builds.
-- **Recovery and monitoring (owner).** OBS-1 (no uptime monitor and no Sentry
-  alert rules), DR-1 (PITR off, no restore ever rehearsed), DR-2 (the nightly
-  Storage backup's activation is unverified). Enable leaked-password protection.
-- **RLS remainder.** RLS-2's tail: `activities` and `pma_audit_logs` INSERT are
-  still membership-only, so a viewer can write audit noise.
-
-**P1 — before another tenant or a store submission:** RLS-3, RLS-4
-(`number_sequences` is writable below the RPC — the same surface the
-number-sequence rule protects), RLS-5, RLS-7, RLS-9, AUTH-7, AUTH-8, EDGE-5
-(self-deletion fails for a sole owner with live projects), EDGE-7, DB-9,
-LOGIC-2/3/4/12, WEB-1…WEB-4, SEC-1…SEC-4, CI-5, and the App Store code-level
-list (§6.1).
-
-**P2 — scale cliffs, at the project sizes this repo already documents:** PERF-1
-(the Piece Register renders ~28k rows unvirtualised from a `select *`), PERF-2
-(the 3D tab re-pages the whole table every 30 s), PERF-3 (canonical realtime has
-no debounce), PERF-4 (every entity read ships every column), PERF-5…PERF-10.
-
-**Mobile — neither store build exists.** MOB-1: no Android platform at all.
-MOB-2…MOB-10 for iOS: no `ios/` project is committed, the four native plugins
-the App Store 4.2 defence cites have **zero call sites**, auth e-mails redirect
-to `capacitor://localhost`, signed-out users see plan prices in the native
-shell (the pricing section in `src/components/landing/MarketingLanding.tsx`
-has no native gate at all), and downloads are dead in WKWebView. See
-[`docs/app-store/SUBMISSION.md`](docs/app-store/SUBMISSION.md).
-
-**New, found while reconciling these docs (2026-09-22):** the drift gate has a
-blind spot. `compareAssets` (`scripts/supabase-drift-check.mjs`) sorts manifest
-entries into four buckets — `required`, `staging-only`, `deprecated`,
-`unresolved` — and `hasDrift` is the OR of those. A slug marked
-`intentionally-frozen` lands in none of them, and it is in the `byValue` map so
-it is not reported as unknown either. `legacy-app-files-copy` is the one such
-function entry, so **redeploying that retired function to production would leave
-the check green**. Either reclassify it `deprecated` in
-`supabase/production-ownership-manifest.json` under the review procedure in
-`docs/runbooks/supabase-production-ownership.md`, or make `compareAssets` bucket
-frozen slugs that are present remotely. This is a manifest/config change, so it
-was deliberately left out of the docs-only PR that found it.
-
-**Owner-only, unverifiable from the repo:** PITR, backup restore rehearsal,
-Sentry alert rules, uptime monitoring, branch protection, the Netlify and
-Workers Builds connections, App Store Connect and Play Console accounts. Listed
-in §8 of the audit.
+The retired `legacy-app-files-copy` function still uses the manifest's `intentionally-frozen` classification, which does not reject its reappearance. This remains EDGE-8/CI-9; coordinate the ownership change and add a negative drift test. Documentation does not change its manifest or production.
 
 ### Detailing Control Center — audit remainder (2026-09-07)
 
@@ -375,7 +409,9 @@ rows" evidence can be quoted as current.
   2026-09-14, the same day as the newest migration. It goes stale on every
   schema change, so re-check rather than assume.
 
-### 219 of 351 production functions cannot be rebuilt from this repo (2026-09-15)
+### Historical production-function rebuild gap (2026-09-15)
+
+> The following 219-of-351 inventory is a September snapshot. Current recovery ownership and catalog reconciliation remain DB-11; this audit did not recalculate that historical drift count.
 
 Found while trying to capture the four functions the Supabase drift runbook names
 as undocumented. The gap is far wider than four, and it includes the fab-release
@@ -579,40 +615,13 @@ that resolution instead of pinning it red.
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
   Phase 0 tablet kit is landed; Phases 1-4 domain migrations remain pending.
-- **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
-  2026-06-17).** The 2 remaining `esbuild`-via-`vite` highs were patched within the
-  vite-6 line (`esbuild@0.25.12`), so **`vite@8` is no longer required** to clear
-  the audit. Separately, several direct deps are a major version behind (react
-  18→19, vite 6→8, tailwind 3→4, typescript 5→6, eslint 9→10, react-router-dom 6→7,
-  the Stripe SDKs 3→6 / 5→9, pdfjs-dist 4→6, recharts 2→3, zod 3→4, date-fns 3→4);
-  none are security-driven now — treat each as a discrete, tested upgrade, not
-  `npm audit fix --force`. `web-ifc`/`three` are current.
+- **Dependency vulnerabilities — updated 2026-10-07:** fresh production-only audit has zero advisories; the complete dependency tree has five high entries from the Braces build-tool chain. See DEP-1 and [the dependency/toolchain report](docs/audits/DEPENDENCY_TOOLCHAIN_2026-10-07.md). Remediate with compatible, tested changes and verify the security gate; do not use `npm audit fix --force`. The June zero-advisory result and old major-version shopping list are historical, not current advice.
 
 ### Database / migrations
 
-- **✅ RESOLVED 2026-06-20 — Migration history now bootstraps from zero.**
-  The repo filenames (190) and the recorded `schema_migrations` versions (200) had
-  drifted almost completely apart — MCP `apply_migration` stamps an apply-time
-  version while repo files carried different filename timestamps — so a fresh Supabase
-  branch / `db reset` / CI applied **0** migrations (`MIGRATIONS_FAILED`) and DDL
-  could only be validated read-only against prod. **Fixed** by squashing to 3 baseline
-  files (`20260101000000/10/20` — extensions + `pg_dump --schema public` + guarded
-  storage/cron seed), archiving the 190 originals to `supabase/migrations_archive/`,
-  and reconciling prod `schema_migrations` to exactly the 3 baseline versions (200
-  stale rows reverted, bookkeeping-only). Verified from-zero on a local stack (counts
-  matched prod: 102 tables / 321 policies / 71 functions); `db push` reports up to date.
-  Runbook `docs/db-baseline-cutover.md`; **lockstep discipline to prevent re-drift** in
-  `ARCHITECTURE.md` → Migrations (after each MCP `apply_migration`, commit a repo file
-  named with the recorded version; or use `migration new` + `db push`).
+- **Historical baseline cutover, not current production parity:** the June 20 squash established three baseline files and a local replay at that time; [the cutover record](docs/db-baseline-cutover.md) preserves that history. Later live definitions/policies/grants and shared ownership differ. DB-11 tracks a faithful rebuild and exact-payload evidence. **Current migration rules in CLAUDE.md govern: no `supabase db push`, MCP `apply_migration`, or ledger repair; manually reviewed application/stamping with a matching committed file and verified payload.** Older workflow suggestions are superseded.
 
-- **CI gates the production deploy (since 2026-06-19).** `ci.yml` runs
-  lint→typecheck→typecheck:js→typecheck:strict→typecheck:noimplicitany→test→build,
-  and **only a green `ci` job runs the `deploy` job** (`vercel deploy --prebuilt
-  --prod`). Vercel's git auto-deploy is off (`vercel.json`
-  `git.deploymentEnabled.main:false`), so a **red push cannot reach production**.
-  Remaining gap: no **branch-protection required check** (repo plan), so
-  red/unreviewed commits can still land on `main` (they just can't deploy).
-  Enable branch protection (owner) or move to a PR-gated merge flow.
+- **CI publisher gates and governance:** current production/preview Cloudflare publisher jobs depend on `ci`, `secret-scan`, `supabase-drift`, `edge-typecheck` and `commercial-postgres`; staging has its own scoped dependencies. Main has an active PR/CI ruleset. Environment-scoped credentials, exact required check coverage, advisory dependency policy and external publisher connections remain CI-2/3/7/10. A workflow `needs` graph alone is not proof that every possible publisher is governed. Vercel is retired.
 
 - **Code hygiene (low priority):** `formatCurrency` is still redefined in a few
   places (`hooks/useFinancials.ts`, `components/dashboard/ProjectPulse.jsx`, plus
@@ -625,16 +634,7 @@ that resolution instead of pinning it red.
 
 ### From the 2026-05-26 enterprise-readiness audit (still open)
 
-- **Dashboard / secret hand-offs (need owner access — step-by-step in
-  [`docs/enterprise-readiness-handoff-2026-05-26.md`](docs/enterprise-readiness-handoff-2026-05-26.md)):**
-  two items only the project owner can do — (1) enable Supabase leaked-password
-  protection (the one remaining `auth_leaked_password_protection` WARN; the older
-  "86 anonymous-access" findings are no longer reported by the advisor),
-  (2) optionally add a GitHub branch-protection rule requiring the "CI" status
-  check on `main` (note: only gates PR merges, not the current direct-push deploy
-  flow — see the doc). No E2E / a11y / bundle budgets yet. (Sentry source-map
-  upload is now DONE — confirmed live via release `b5272fd7` + artifact bundle;
-  see the doc §2.)
+- **Historical dashboard/secret handoff:** [the May handoff](docs/enterprise-readiness-handoff-2026-05-26.md) remains historical context. Current Auth leaked-password/abuse settings require explicit non-secret evidence (SBSEC-11); absence of an advisor warning does not prove the setting enabled. Main rulesets are now present (CI-3). Monitoring/alert delivery, environment restrictions and exact release artifacts remain separate assurance work. Prior Sentry source-map evidence does not prove alert delivery.
 
 - **Unused-index review (perf, low priority) — REVIEWED, drops queued:** the
   `unused_index` advisor findings were reviewed against live `pg_stat_user_indexes`
@@ -647,39 +647,13 @@ that resolution instead of pinning it red.
   The rest are low-value either way; revisit with a real traffic window. Do NOT
   bulk-drop.
 
-- **`.vercel/project.json` — RESOLVED / not-an-issue (verified 2026-06-17):** it
-  correctly names `steelbuildpro-og` (the live production project), not the deleted
-  `steelbuild-pro`. No action needed.
+- **Historical Vercel metadata:** the June `.vercel/project.json` check described the retired host. Cloudflare Workers is the current production path; do not reuse that entry as a live hosting assertion.
 
-### Edge-function security follow-ups (from the 2026-06-20 hardening batch)
+### Edge-function security follow-ups — reconciled 2026-10-07
 
-The audit's edge findings — #5 (quota fail-closed + `LLM_KILL_SWITCH`), #6
-(email-classify per-project cap + kill switch), #7 (inbound-attachment count/size/
-extension guards + filename sanitize), #11 (CORS allowlist), #12 (Stripe
-redirect-origin validation) — shipped + deployed 2026-06-20 (commits `4dff88e5`,
-hotfix `e968f48d`). #5 + #11 are field-verified (a live AI call + CORS preflight).
-Remaining:
+June's hardening/deployment observations remain dated history. The current audit reviews all nine owned production entrypoints and preserves EDGE-1 through EDGE-16 dispositions. Deprecated SharePoint/Bluebeam/Stripe/sheets/legacy-copy slugs are absent from the current owned production inventory; do not repeat July's “still deployed” count or old client protocol-3 instructions. EDGE-8/CI-9 prevent retired code from returning.
 
-- **✅ RESOLVED 2026-07-01 — Dangling `stripe-worker` caller.** `pg_cron` job 4
-  `stripe-sync-worker` (`*/1 * * * *`, POSTing `…/functions/v1/stripe-worker`) was
-  the 404 source; unscheduled live via `cron.unschedule(4)`. NOTE: the orphan
-  `stripe-setup`/`stripe-webhook`/`stripe-worker` **edge functions are still
-  deployed** (11 functions live, not the 8 this doc elsewhere claims) alongside the
-  deprecated `sharepoint-proxy`/`bluebeam-proxy`; all five need
-  `supabase functions delete` (owner/CLI) — see `docs/runbooks/owner-checklist.md`.
-- **#10 client protocol bump** — `llm-proxy` returns protocol v8; bump the client
-  `EXPECTED_PROTOCOL_VERSION` (currently 3) → 8 in `src/api/supabaseClient.ts`. Safe
-  now that the live proxy is v8. Ships via the normal git push (frontend).
-- **Activate CORS lockdown (optional)** — CORS is opt-in permissive by default and
-  `ALLOWED_ORIGINS=*` is currently set. To enforce #11, set it to the real app
-  origins (baked prod defaults + localhost + `*.vercel.app` are always allowed on
-  top). Confirm the actual production origin first. Low priority (bearer-token auth,
-  not cookies). See the [[edge-cors-optin-verification]] memory.
-- **Field-verify #6 / #7 / #12** — still need a real-traffic pass: an inbound email
-  (classify cap path), an inbound email with attachments (caps + sanitize), and a
-  Stripe checkout (redirect lands on an allowed origin).
-- **Set a real spend cap** — `LLM_DAILY_COST_LIMIT_USD` is unset, so the #5 quota is
-  a no-op. Set it once a sensible per-user daily ceiling is decided.
+Remaining work is explicit in the current register: staged exact-source/configuration parity; authorization/MFA/erasure release acceptance; safe identity cleanup; private atomic mail/LLM accounting; verified mailbox bindings; Stripe failure/event-order handling; bounded bodies/deadlines; attachment/rendering controls; redacted errors/telemetry; and controlled provider integration tests. Historical `ALLOWED_ORIGINS=*` or unset-spend-cap observations are not assertions of current secret configuration. Read only non-secret effective settings and record evidence when validating them.
 
 ---
 
