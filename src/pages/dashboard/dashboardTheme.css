@@ -353,7 +353,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   white-space: nowrap;
 }
 
-.sb-dashboard-reference-brand > svg {
+.sb-dashboard-reference-brand > img {
   max-width: 100%;
   flex-shrink: 0;
 }

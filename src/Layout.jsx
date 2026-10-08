@@ -295,9 +295,9 @@ export default function Layout({ children, currentPageName }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 {isPhone && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((open) => !open)} />}
                 {isPhone && (
-                  <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-                    <BrandLogo variant="full" height={30} title="SteelBuild Pro" style={{ display: "block" }} />
-                  </div>
+                  <button type="button" aria-label="Go to dashboard" style={{ display: "flex", alignItems: "center", padding: 0, border: 0, background: "none", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
+                    <BrandLogo variant="full" height={46} title="SteelBuild Pro" />
+                  </button>
                 )}
                 {!isPhone && <WorkspaceSelector />}
                 {!isPhone && <ProjectPillDropdown align="left" />}

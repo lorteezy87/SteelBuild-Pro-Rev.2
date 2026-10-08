@@ -16,26 +16,20 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/steelbuild-pro-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/steelbuild-pro-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     },
     {
       "src": "/steelbuild-pro-icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/steelbuild-pro-icon-180.png",
-      "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     }

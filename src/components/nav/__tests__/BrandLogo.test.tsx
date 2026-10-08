@@ -2,40 +2,24 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BrandLogo } from "../BrandLogo";
-import { MARK_PATH } from "../../brand/steelBuildMarkGeometry";
 
 describe("BrandLogo", () => {
-  it("renders the full wordmark lockup by default", () => {
-    render(<BrandLogo />);
+  it("uses the approved steel diamond badge for the full lockup", () => {
+    render(<BrandLogo height={64} />);
 
-    expect(screen.getByRole("img", { name: "SteelBuild Pro" })).toBeInTheDocument();
-    expect(screen.getByText("SteelBuild-Pro")).toBeInTheDocument();
-    expect(screen.getByText("BUILT FOR PEOPLE WHO BUILD")).toBeInTheDocument();
+    const badge = screen.getByRole("img", { name: "SteelBuild Pro" });
+    expect(badge).toHaveAttribute("src", "/marketing/steelbuild-pro-logo.jpg");
+    expect(badge).toHaveAttribute("width", "96");
+    expect(badge).toHaveAttribute("height", "64");
+    expect(badge).toHaveStyle({ objectFit: "contain" });
   });
 
-  it("renders the compact mark without the wordmark", () => {
-    render(<BrandLogo variant="mark" />);
+  it("uses the same uncropped badge in compact navigation", () => {
+    render(<BrandLogo variant="mark" height={40} title="SteelBuild Pro home" />);
 
-    expect(screen.queryByText("SteelBuild-Pro")).not.toBeInTheDocument();
-    expect(screen.queryByText("BUILT FOR PEOPLE WHO BUILD")).not.toBeInTheDocument();
-  });
-
-  it("draws the shared hex-S geometry rather than an inline copy of it", () => {
-    const { container } = render(<BrandLogo variant="mark" />);
-
-    const path = container.querySelector("path");
-    expect(path?.getAttribute("d")).toBe(MARK_PATH);
-    // evenodd is what keeps the carved S transparent on any surface.
-    expect(path?.getAttribute("fill-rule")).toBe("evenodd");
-  });
-
-  it("pins both text lines to a fixed width so the fallback font cannot overflow the viewBox", () => {
-    const { container } = render(<BrandLogo />);
-
-    const texts = Array.from(container.querySelectorAll("text"));
-    expect(texts.map((t) => t.getAttribute("textLength"))).toEqual(["168", "168"]);
-    // The rule line is nearly twice the wordmark's character count, so it
-    // reaches 168 by tracking out rather than by fattening its glyphs.
-    expect(texts.map((t) => t.getAttribute("lengthAdjust"))).toEqual(["spacingAndGlyphs", "spacing"]);
+    const badge = screen.getByRole("img", { name: "SteelBuild Pro home" });
+    expect(badge).toHaveAttribute("src", "/marketing/steelbuild-pro-logo.jpg");
+    expect(badge).toHaveAttribute("width", "60");
+    expect(badge).toHaveAttribute("height", "40");
   });
 });
