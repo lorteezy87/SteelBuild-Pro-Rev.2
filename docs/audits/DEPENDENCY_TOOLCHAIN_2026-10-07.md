@@ -54,6 +54,21 @@ resolve patched releases themselves; rerun the complete dependency audit,
 CSS comparison, local Worker/Images checks, and repository quality gates when
 doing so.
 
+## 2026-10-08 utility source coverage
+
+The Tailwind 3 source list previously scanned `src/**/*.js(x)` but omitted
+TypeScript components. `PieceRegisterArchiveDialog.tsx` uses the unique
+`z-[1000]` utility, which was absent from the built CSS before this follow-up.
+The source list now includes `.ts` and `.tsx`; a fresh build emits that exact
+selector. The main CSS asset grew from 127,659 to 129,095 bytes. The production
+build and bundle budget check pass at 162.8 KB gzip initial and 3,248.8 KB
+gzip total, below the 320/3,600 KB limits. This fixes missing utilities but
+does not change or conceal the five audit findings above.
+
+The native Xcode target is iOS 15. Tailwind 4's documented browser floor is
+Safari 16.4, so a major upgrade needs a browser-support decision and a
+separate design regression review before it can replace Tailwind 3 safely.
+
 ## Upstream references
 
 - [Depcheck maintenance notice and Knip recommendation](https://github.com/depcheck/depcheck)
