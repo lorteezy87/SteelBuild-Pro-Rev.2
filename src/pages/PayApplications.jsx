@@ -37,10 +37,11 @@ import { Button } from "@/components/design-system";
 import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
 import PayApplicationVoidDialog from "./payApplications/PayApplicationVoidDialog";
 import { buildVoidPayApplicationPatch, canMovePayApplication } from "./payApplications/payApplicationStatus";
+import "./payApplications/payApplicationsLayout.css";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
-const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
-const input = { ...mono, boxSizing: "border-box", fontSize: 12, padding: "6px 8px", borderRadius: 3, background: "var(--bg-input, var(--bg-surface-low))", border: "1px solid var(--border-default)", color: "var(--text-primary)", outline: "none" };
+const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "var(--payapp-card-padding, 16px)" };
+const input = { ...mono, boxSizing: "border-box", fontSize: "var(--payapp-input-font-size, 12px)", padding: "6px 8px", borderRadius: 3, background: "var(--bg-input, var(--bg-surface-low))", border: "1px solid var(--border-default)", color: "var(--text-primary)", outline: "none" };
 const lbl = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: 4 };
 const btn = { ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "7px 14px", borderRadius: 3, border: "1px solid var(--border-default)", cursor: "pointer" };
 const btnP = { ...btn, background: "var(--accent-muted)", borderColor: "var(--accent)", color: "var(--accent)" };
@@ -52,16 +53,16 @@ function NewAppModal({ open, defaultRetainage, onClose, onCreate, busy }) {
   const [retainage, setRetainage] = useState(String(defaultRetainage ?? 10));
   if (!open) return null;
   return (
-    <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={onClose}>
-      <div style={{ ...card, width: 440, maxWidth: "92vw" }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 14px", fontSize: 16, color: "var(--text-primary)" }}>New Pay Application</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+    <div role="dialog" aria-modal="true" aria-labelledby="payapp-new-modal-title" className="payapp-new-modal" onClick={onClose}>
+      <div className="payapp-new-modal__card" style={card} onClick={(e) => e.stopPropagation()}>
+        <h3 id="payapp-new-modal-title" style={{ margin: "0 0 14px", fontSize: 16, color: "var(--text-primary)" }}>New Pay Application</h3>
+        <div className="payapp-new-modal__fields">
           <div><span style={lbl}>Period from</span><input style={{ ...input, width: "100%" }} type="date" value={periodFrom} onChange={(e) => setFrom(e.target.value)} /></div>
           <div><span style={lbl}>Period to</span><input style={{ ...input, width: "100%" }} type="date" value={periodTo} onChange={(e) => setTo(e.target.value)} /></div>
           <div><span style={lbl}>Retainage %</span><input style={{ ...input, width: "100%" }} type="number" value={retainage} onChange={(e) => setRetainage(e.target.value)} /></div>
         </div>
         <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginBottom: 14 }}>Lines are drafted from this project&apos;s Schedule of Values; prior completed work carries forward.</div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <div className="payapp-new-modal__actions">
           <button style={{ ...btn, background: "var(--bg-page)", color: "var(--text-muted)" }} onClick={onClose} disabled={busy}>Cancel</button>
           <button style={btnP} disabled={busy} onClick={() => onCreate({ periodFrom: periodFrom || null, periodTo: periodTo || null, retainagePercent: num(retainage) })}>{busy ? "Creating…" : "Create"}</button>
         </div>
@@ -288,21 +289,21 @@ export default function PayApplications() {
         />
         {(sovQuery.isError || changesQuery.isError || contractQuery.isError) && <p role="alert">Could not load current SOV, contract, or change orders. <button onClick={() => { sovQuery.refetch(); changesQuery.refetch(); contractQuery.refetch(); }}>Retry contract data</button></p>}
         {selectedApp && (
-          <div style={{ padding: "0 20px 20px", maxWidth: 1240, margin: "0 auto" }}>
+          <div className="payapp-editor">
             <PayAppReconciliationPanel result={lineMut.isPending ? null : reconciliation} linesError={linesQuery.isError}
               liveState={sovQuery.isError || changesQuery.isError || contractQuery.isError ? "error" : sourcesReady ? "ready" : "loading"}
               historical={!isDraft} busy={appsFetching || linesQuery.isFetching || sovQuery.isFetching || changesQuery.isFetching || contractQuery.isFetching || lineMut.isPending}
               onRefresh={() => { refresh(); sovQuery.refetch(); changesQuery.refetch(); contractQuery.refetch(); }} />
-            <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
-              <div style={card}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div className="payapp-editor__grid">
+              <div className="payapp-editor__summary" style={card}>
+                <div className="payapp-editor__summary-heading">
                   <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>G702 Summary — App #{selectedApp.application_number}</div>
-                  <button onClick={() => setSelectedId(null)} style={{ ...btn, padding: "3px 7px" }}>✕</button>
+                  <button aria-label="Close pay application" onClick={() => setSelectedId(null)} style={{ ...btn, padding: "3px 7px" }}>✕</button>
                 </div>
                 {summary && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 12 }}>
                     {summary.map(([k, v], i) => (
-                      <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0", borderTop: i > 0 ? "1px solid var(--border-subtle, var(--border-default))" : "none" }}>
+                      <div key={k} className="payapp-editor__summary-row" style={{ borderTop: i > 0 ? "1px solid var(--border-subtle, var(--border-default))" : "none" }}>
                         <span style={{ ...mono, fontSize: 10, color: k.includes("CURRENT") ? "var(--accent)" : "var(--text-muted)", fontWeight: k.includes("CURRENT") ? 700 : 400 }}>{k}</span>
                         <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: k.includes("CURRENT") ? "var(--accent)" : "var(--text-primary)" }}>{formatMoney(v)}</span>
                       </div>
@@ -324,9 +325,11 @@ export default function PayApplications() {
                   <button style={{ ...btn, color: "var(--status-error)", borderColor: "var(--status-error)", opacity: isDraft ? 1 : 0.4, cursor: isDraft ? "pointer" : "not-allowed" }} disabled={!isDraft} title={isDraft ? "" : "Only a draft pay application can be deleted — set status to void instead."} onClick={() => { if (confirm("Delete this pay application?")) delMut.mutate(selectedApp.id); }}>Delete</button>
                 </div>
               </div>
-              <div style={{ ...card, overflowX: "auto" }}>
+              {/* The focusable region lets keyboard users scroll a locked G703 sheet. */}
+              <div className="payapp-editor__sheet" style={card} role="region" aria-label="G703 continuation sheet" aria-describedby="payapp-sheet-scroll-note" tabIndex={0}>
                 <div style={{ ...lbl, marginBottom: 8 }}>G703 Continuation Sheet — {isDraft ? "enter % complete & stored" : <span style={{ color: "var(--status-warning, var(--accent))" }}>🔒 {PAY_APP_STATUS_LABELS[selectedApp.status] || selectedApp.status} — figures locked</span>}</div>
-                <table style={{ ...mono, width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <p id="payapp-sheet-scroll-note" className="payapp-editor__scroll-note">Scroll within this sheet to review all G703 columns.</p>
+                <table className="payapp-editor__table" style={{ ...mono, width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
                     <tr style={{ color: "var(--text-muted)", textAlign: "right" }}>
                       <th style={{ textAlign: "left", padding: 4 }}>#</th>
@@ -352,11 +355,11 @@ export default function PayApplications() {
                           <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(l.work_completed_previous)}</td>
                           <td style={{ padding: 4, color: "var(--text-primary)" }}>{formatMoney(l.work_completed_this_period)}</td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft || !linesReady || lineMut.isPending}
+                            <input aria-label={`Line ${l.line_item_number} percent complete`} style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft || !linesReady || lineMut.isPending}
                               onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.percent_complete)) lineMut.mutate({ line: l, edit: { percentComplete: v } }); }} />
                           </td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft || !linesReady || lineMut.isPending}
+                            <input aria-label={`Line ${l.line_item_number} materials stored`} style={{ ...input, width: 104, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft || !linesReady || lineMut.isPending}
                               onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.materials_stored)) lineMut.mutate({ line: l, edit: { materialsStored: v } }); }} />
                           </td>
                           <td style={{ padding: 4, color: "var(--text-primary)", fontWeight: 700 }}>{formatMoney(f.totalCompletedStored)}</td>
