@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-10-08T18:26:00Z | codex-crane-viewport-guard | Crane-pick phone viewport acceptance | e2e/mobile-overflow.spec.ts | Include the exact crane-pick tab in the existing phone overflow guard without changing app behavior. |
 | 2026-10-08T18:13:00Z | codex-fab-gate-freshness-review | Fab Release peer-review corrections | src/pages/FabRelease.tsx; src/pages/fabRelease/{FabReleaseControlCenter.tsx,fabReleaseControlCenter.derive.ts,fabReleaseGateLoader.ts,exportCsv.ts,__tests__/**} | Prevent prior gate results from appearing current after package refresh, qualify partial-coverage totals, and neutralize CSV formula cells without doubling the RPC batch. |
 | ~~2026-10-08~~ released | codex-payapp-viewport-fit | Pay Applications editor and new-app dialog fit | src/pages/PayApplications.jsx; src/pages/payApplications/payApplicationsLayout.css | Responsive G702/G703 editor, keyboard-scrollable sheet, and narrow new-app dialog committed in `690a55642`; 14 focused tests, lint/typechecks, and build passed. Rendered QA pending. |
 | ~~2026-10-08~~ released | codex-converter-phone-fit | Converter controls on narrow screens | src/pages/DecimalFractionConverter.jsx; src/components/calculators/calc.css; scoped calculator tests | Fraction and unit controls fit narrow phones and sidebar-constrained widths in `22192b8ec`; 36 focused tests and scoped lint passed. |
