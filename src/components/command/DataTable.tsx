@@ -110,10 +110,15 @@ function VirtualDataTable<Row extends { id?: string }>({
   const allSelected = selectable && rows.length > 0 && selectedCount === rows.length;
   const someSelected = selectedCount > 0 && !allSelected;
 
-  const gridCols = [
+  const gridTracks = [
     ...(selectable ? ["36px"] : []),
     ...columns.map((c) => defaultGridTrack(c)),
-  ].join(" ");
+  ];
+  const gridCols = gridTracks.join(" ");
+  const gridMinWidth = gridTracks.reduce((sum, track) => {
+    const minimum = track.match(/^\s*(?:minmax\()?\s*(\d+)px/);
+    return sum + (minimum ? Number(minimum[1]) : 96);
+  }, 0);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -123,11 +128,22 @@ function VirtualDataTable<Row extends { id?: string }>({
   });
 
   return (
-    <div className="cmd-table-wrap" style={{ overflow: "hidden" }}>
+    <div
+      className="cmd-table-wrap"
+      role="region"
+      aria-label="Scrollable table columns"
+      tabIndex={0}
+      style={{ overflowX: "auto", overflowY: "hidden" }}
+    >
+      {/* Extra width leaves room for a non-overlay vertical scrollbar; stable
+          gutters keep the header and row tracks aligned when it appears. */}
+      <div style={{ width: "max-content", minWidth: `max(100%, ${gridMinWidth + 32}px)` }}>
       <div
         style={{
           display: "grid",
           gridTemplateColumns: gridCols,
+          overflowY: "auto",
+          scrollbarGutter: "stable",
           borderBottom: "1px solid var(--cmd-border)",
         }}
       >
@@ -172,7 +188,7 @@ function VirtualDataTable<Row extends { id?: string }>({
           </div>
         ))}
       </div>
-      <div ref={parentRef} style={{ maxHeight: virtualMaxHeight, overflowY: "auto" }}>
+      <div ref={parentRef} style={{ maxHeight: virtualMaxHeight, overflowY: "auto", scrollbarGutter: "stable" }}>
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index];
@@ -240,6 +256,7 @@ function VirtualDataTable<Row extends { id?: string }>({
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );
