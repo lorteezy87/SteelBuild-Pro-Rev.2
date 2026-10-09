@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { APP_ORIGIN, STAGING_ORIGIN, allowsStagingBrowserRequest as allows } from '../../e2e/stagingNetworkGuard.js';
+import { describe, expect, it, vi } from 'vitest';
+import type { BrowserContext, Route } from '@playwright/test';
+import { APP_ORIGIN, STAGING_ORIGIN, TELEMETRY_ORIGIN, TELEMETRY_PATH, TELEMETRY_DISCARD_LIMIT,
+  allowsStagingBrowserRequest as allows, isLocalTelemetryDiscard, installStagingNetworkGuard } from '../../e2e/stagingNetworkGuard.js';
 
 describe('shared staging browser policy', () => {
   it.each([
@@ -34,4 +36,45 @@ describe('shared staging browser policy', () => {
     ['https://user:password@ndyfjffsulfbwpmwdmic.supabase.co/rest/v1/projects', 'GET'],
     ['not a URL', 'GET'], ['https://fonts.gstatic.com/font', 'POST'],
   ])('rejects unapproved egress: %s %s', (url, method) => expect(allows(url, method)).toBe(false));
+});
+
+describe('local telemetry discard boundary', () => {
+  const envelope = TELEMETRY_ORIGIN + TELEMETRY_PATH;
+  it.each(['POST', 'OPTIONS'])('discards only the exact envelope %s without granting egress', method => {
+    expect(isLocalTelemetryDiscard(envelope + '?sentry_key=public-key', method)).toBe(true);
+    expect(allows(envelope, method)).toBe(false);
+  });
+  it.each([
+    [envelope, 'GET'], [envelope, 'PUT'], [envelope, 'DELETE'],
+    [envelope + '#fragment', 'POST'], [envelope.replace('/4511458819375104/', '/other/'), 'POST'],
+    [envelope.replace('o4511458803253248', 'other'), 'POST'],
+    [envelope.replace('https://', 'https://user:password@'), 'POST'],
+    [envelope.replace('/envelope/', '/store/'), 'POST'], ['not a URL', 'POST'],
+  ])('rejects a different endpoint or method %s %s', (url, method) => {
+    expect(isLocalTelemetryDiscard(url, method)).toBe(false);
+  });
+  it('never reads payloads or forwards; stops after the finite discard budget', async () => {
+    let dispatch!: (route: Route) => Promise<void>;
+    const context = {
+      route: vi.fn(async (_pattern, callback) => { dispatch = callback; }),
+      routeWebSocket: vi.fn(),
+    } as unknown as BrowserContext;
+    const guard = await installStagingNetworkGuard(context);
+    const request = { url: () => envelope, method: () => 'POST', postData: vi.fn(), headers: vi.fn() };
+    const route = {
+      request: () => request, fulfill: vi.fn(), abort: vi.fn(async () => undefined),
+      fetch: vi.fn(), continue: vi.fn(), fallback: vi.fn(),
+    };
+    for (let index = 0; index < TELEMETRY_DISCARD_LIMIT; index++) await dispatch(route as unknown as Route);
+    await guard.settle(); guard.assertHealthy();
+    expect(route.fulfill).toHaveBeenCalledTimes(TELEMETRY_DISCARD_LIMIT);
+    expect(route.fulfill.mock.calls[0][0]).toMatchObject({ status: 204 });
+    for (const spy of [request.postData, request.headers, route.fetch, route.continue, route.fallback]) expect(spy).not.toHaveBeenCalled();
+    expect(guard.diagnostics()).toEqual({ telemetryDiscarded: TELEMETRY_DISCARD_LIMIT, failureCategories: [] });
+    await dispatch(route as unknown as Route);
+    await guard.settle();
+    expect(route.abort).toHaveBeenCalledExactlyOnceWith('blockedbyclient');
+    expect(() => guard.assertHealthy()).toThrow('forbidden route');
+    expect(guard.diagnostics()).toEqual({ telemetryDiscarded: TELEMETRY_DISCARD_LIMIT, failureCategories: ['telemetry-budget'] });
+  });
 });
