@@ -150,3 +150,13 @@ blocked by other pending required SQL; the Tailwind build dependency advisory is
 separate. The matching billing handler has not been deployed. Durable checkout
 and real Stripe test-mode acceptance remain open; this SQL alone does not prevent
 duplicate subscription charges.
+
+### Temporary frontend publication hold
+
+On October 9, the repository variable `CLOUDFLARE_ENABLED` was changed from
+`true` to `false` while the combined source and database release is integrated.
+This preserves the current live Worker and prevents an intervening green main
+push from publishing before its reviewed Edge dependencies and staging browser
+acceptance are ready. Staging remains enabled. Restore this exact variable to
+`true` after those checks, then publish the tested main commit through the normal
+five-gate workflow; leaving the hold set is not a completed production update.
