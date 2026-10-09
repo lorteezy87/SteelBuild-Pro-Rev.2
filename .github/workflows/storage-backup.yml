@@ -15,7 +15,8 @@ concurrency:
 jobs:
   backup:
     name: Back up Supabase Storage offsite
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    # Evaluate before the credential-bearing job is sent to a runner.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 180
     environment: storage-backup-production
