@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import { APP_ORIGIN, installStagingNetworkGuard } from './stagingNetworkGuard';
+import { DrawingEvidenceTransport } from './drawingEvidenceTransport';
 
 async function listen(server: Server, port = 0): Promise<number> {
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
@@ -86,4 +87,20 @@ test('approved local assets remain readable', async ({ browser }) => {
     await page.goto(APP_ORIGIN);
     await expect(page.getByRole('heading', { name: 'Reviewed local build' })).toBeVisible();
   } finally { await context.close(); await close(allowed); }
+});
+
+test('setup sign-in cannot forward its POST body through a redirect', async () => {
+  let deniedHits = 0;
+  const denied = createServer((_request, response) => { deniedHits++; response.end('denied'); });
+  const port = await listen(denied);
+  const allowed = createServer((_request, response) => { response.writeHead(307, { Location: `http://127.0.0.1:${port}/provider` }); response.end(); });
+  try {
+    const allowedPort = await listen(allowed);
+    // Replace only the initial host with loopback; retain the production fetch
+    // options so this exercises Node's actual redirect boundary without secrets.
+    const network: typeof fetch = (_input, options) => fetch(`http://127.0.0.1:${allowedPort}/auth`, options);
+    const auth = new DrawingEvidenceTransport('sb_publishable_synthetic', undefined, network);
+    await expect(auth.send('/auth/v1/token?grant_type=password', 'POST', { email: 'synthetic', password: 'synthetic' })).rejects.toThrow('Protected drawing setup request failed');
+    expect(deniedHits).toBe(0);
+  } finally { await close(allowed); await close(denied); }
 });
