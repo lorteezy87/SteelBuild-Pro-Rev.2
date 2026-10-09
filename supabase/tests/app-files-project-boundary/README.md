@@ -38,6 +38,16 @@ Auth anonymization, project FK behavior, and existing policy/object preservation
 Concurrent tests use separate backend PIDs and observe actual lock waits;
 same-session calls are not reported as concurrency evidence.
 
+Verified source `b6c99b4659a18b6ccd44c5572a86739d2f63e322` passes 39 behavioral
+checks in each engine and 16 concurrent PostgreSQL scenarios. The Auth-erasure
+case includes the actual membership trigger: a held Auth user row must return
+`FILE_RESERVATION_BUSY` / `55P03` immediately, so the reservation does not wait
+organization-to-user against the erasure's user-to-organization lock order.
+Other cases prove same-request serialization, conflicting payload denial, and
+fresh authorization after parent and receipt-row waits. See the
+[source evidence](../../../docs/audits/APP_FILE_RESERVATIONS_SOURCE_2026-10-09.md)
+for the exact CI job and SQL checksum.
+
 The RPC requires `{kind:'project',orgId,projectId}` and a named upload profile.
 It returns only `{request_id,bucket,path}`. Receipt metadata is private, exact
 actor/request payload reuse is stable, and a changed payload is refused. An

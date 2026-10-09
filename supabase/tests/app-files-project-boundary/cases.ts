@@ -90,7 +90,7 @@ export async function cases(db: Database) {
     assert.equal(Number((await db.query('SELECT count(*) n FROM steelbuild_storage.object_bindings')).rows[0].n),0);
     assert.equal(Number((await db.query('SELECT count(*) n FROM storage.objects')).rows[0].n),1);
   });
-  await check('user deletion anonymizes bindings without deleting object bytes and disables stale JWT reservation',async()=> {
+  await check('user deletion anonymizes bindings while retaining object metadata and disables stale JWT reservation',async()=> {
     await actor(db); await reserve(db); await db.exec(`RESET ROLE; DELETE FROM auth.users WHERE id='${ids.pm}'`);
     assert.equal((await db.query('SELECT actor_id FROM steelbuild_storage.object_bindings')).rows[0].actor_id,null);
     assert.equal(Number((await db.query('SELECT count(*) n FROM storage.objects')).rows[0].n),1);
