@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-09 | codex-synthetic-session-setup | Synthetic staging session validation | e2e/synthetic-pdf/{fixture,setup,reporter}.ts; scripts/__tests__/syntheticPdfAcceptanceGuard.test.ts; scoped setup tests and audit note | Reuse typed auth expiry and staging-ref validation, clear stale auth state, and report sanitized setup stages; no hosted calls. |
+
 
 
 
