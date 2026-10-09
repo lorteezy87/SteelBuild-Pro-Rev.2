@@ -6,7 +6,7 @@ type Payload=Awaited<ReturnType<typeof request>>;
 const sheet=(p:Payload)=>(p.sheets as Record<string,unknown>[])[0];
 export const tables=['public.drawing_sets','public.drawings','public.drawing_revisions','public.drawing_zones','public.drawing_links',
   'public.drawing_zone_dependencies','public.drawing_activity','public.drawing_zone_activity','public.alerts','public.submittals',
-  'public.submittal_rounds','public.submittal_round_revision_evidence','steelbuild_drawing_revision.requests'];
+  'public.submittal_rounds','public.submittal_round_revision_evidence','steelbuild_drawing_revision.requests','steelbuild_drawing_revision.source_observations'];
 export async function snapshot(db:Database){
   const result:Record<string,unknown>={};
   for(const table of tables)result[table]=(await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]') value from ${table} t`)).rows[0].value;
@@ -20,7 +20,7 @@ export async function denied(db:Database,work:()=>Promise<unknown>,pattern:RegEx
 }
 async function allowed(db:Database,payload:Payload,key?:string){
   await db.exec('set local role authenticated');
-  try{return await execute(db,payload,key);}finally{await db.exec('reset role');}
+  const result=await execute(db,payload,key);await db.exec('reset role');return result;
 }
 export async function runCases(db:Database){
   let checks=0;
@@ -28,6 +28,16 @@ export async function runCases(db:Database){
     await db.exec('begin');await actor(db);
     try{await run();checks++;console.log(`PASS ${name}`);}finally{await db.exec('rollback;reset role');}
   }
+  await check('replacement without harvested extraction clears current unknowns and preserves actual prior source observation',async()=>{
+    await db.query('update public.drawings set extracted_text=$1,callouts=$2 where id=$3',['OLD CONNECTION NOTE',JSON.stringify([{targetSheetNumber:'S2',text:'3/S2'}]),ids.drawing]);
+    const prior=(await db.query('select * from public.drawings where id=$1',[ids.drawing])).rows[0];
+    await allowed(db,await request(db));
+    assert.deepEqual((await db.query('select extracted_text,callouts from public.drawings where id=$1',[ids.drawing])).rows[0],{extracted_text:null,callouts:null});
+    const observed=(await db.query('select * from steelbuild_drawing_revision.source_observations where drawing_id=$1',[ids.drawing])).rows[0];
+    assert.equal(observed.parent_file_url,prior.file_url);assert.equal(observed.parent_pdf_page,prior.pdf_page);assert.equal(observed.parent_revision_number,prior.revision_number);
+    assert.equal(observed.extracted_text,'OLD CONNECTION NOTE');assert.deepEqual(observed.callouts,prior.callouts);
+    assert.equal(observed.observed_current_revision_id,ids.revision);
+  });
   await check('whole reviewed revision carries internal topology and preserves originals',async()=>{
     const payload=await request(db),before=await snapshot(db);
     const result=await allowed(db,payload);
@@ -46,6 +56,81 @@ export async function runCases(db:Database){
     assert.equal(link.link_source,'inherited');assert.equal((link.metadata as Record<string,unknown>).test,'retained');
     assert.deepEqual((await db.query('select to_jsonb(z) row from public.drawing_zones z where id=any($1) order by id',[[zoneA,zoneB]])).rows.map(r=>r.row),before['public.drawing_zones']);
     assert.ok((await db.query('select count(*)::int n from public.alerts')).rows[0].n as number>0,'Existing watch trigger must execute');
+  });
+  for(const [text,callouts] of [['',[]],['NEW CONNECTION NOTE',[{targetSheetNumber:'S9',text:'9/S9'}]]] as const)
+    await check('explicit harvested values including inspected-empty are preserved exactly',async()=>{
+      const p=await request(db);sheet(p).extraction={text:{state:'harvested',value:text},callouts:{state:'harvested',value:callouts}};
+      const result=await allowed(db,p);
+      assert.deepEqual((await db.query('select extracted_text,callouts from public.drawings where id=$1',[ids.drawing])).rows[0],{extracted_text:text,callouts});
+      assert.equal(Object.hasOwn(result,'extraction'),false);assert.equal(JSON.stringify(result).includes('NEW CONNECTION NOTE'),false);
+    });
+  for(const known of ['text','callouts'])await check(`independent ${known} harvest never implies the other field was inspected`,async()=>{
+    const p=await request(db);sheet(p).extraction={text:{state:'unavailable'},callouts:{state:'unavailable'},[known]:{state:'harvested',value:known==='text'?'NEW NOTE':[]}};
+    await allowed(db,p);
+    assert.deepEqual((await db.query('select extracted_text,callouts from public.drawings where id=$1',[ids.drawing])).rows[0],
+      {extracted_text:known==='text'?'NEW NOTE':null,callouts:known==='callouts'?[]:null});
+  });
+  for(const extraction of [undefined,null,{}, {text:{state:'unavailable'}},
+    {text:{state:'unavailable',value:''},callouts:{state:'unavailable'}},
+    {text:{state:'harvested',value:null},callouts:{state:'unavailable'}},
+    {text:{state:'harvested',value:4},callouts:{state:'unavailable'}},
+    {text:{state:'unavailable'},callouts:{state:'harvested',value:{}}},
+    {text:{state:'unavailable'},callouts:{state:'unknown'}},
+    {text:{state:'unavailable'},callouts:{state:'unavailable'},provenance:'inferred'},
+    {text:{state:'harvested',value:'x'.repeat(65537)},callouts:{state:'unavailable'}},
+    {text:{state:'unavailable'},callouts:{state:'harvested',value:['x'.repeat(65537)]}},
+  ])await check('missing malformed or oversized extraction state refuses the whole command',async()=>{
+    const p=await request(db);sheet(p).extraction=extraction;await denied(db,()=>execute(db,p),/EXTRACTION/);
+  });
+  await check('receipt hash binds exact extraction and replay retains one private observation',async()=>{
+    const p=await request(db);await allowed(db,p);await allowed(db,p);
+    assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.source_observations')).rows[0].n,1);
+    sheet(p).extraction={text:{state:'harvested',value:''},callouts:{state:'unavailable'}};
+    await denied(db,()=>execute(db,p),/REQUEST_CONFLICT/);
+  });
+  await check('observed parent mismatch is preserved without attributing extraction to historical revision',async()=>{
+    await db.query('update public.drawings set revision_number=$1,file_url=$2,pdf_page=42,extracted_text=$3 where id=$4',['UNVERIFIED-LEGACY','legacy-parent.pdf','PRIVATE PRIOR NOTE',ids.drawing]);
+    const old=(await db.query('select file_url,pdf_page,revision_code from public.drawing_revisions where id=$1',[ids.revision])).rows[0];
+    const result=await allowed(db,await request(db));
+    const o=(await db.query('select * from steelbuild_drawing_revision.source_observations')).rows[0];
+    assert.deepEqual([o.parent_file_url,o.parent_pdf_page,o.parent_revision_number,o.extracted_text],['legacy-parent.pdf',42,'UNVERIFIED-LEGACY','PRIVATE PRIOR NOTE']);
+    assert.deepEqual((await db.query('select file_url,pdf_page,revision_code from public.drawing_revisions where id=$1',[ids.revision])).rows[0],old);
+    assert.equal(JSON.stringify(result).includes('PRIVATE PRIOR NOTE'),false);
+  });
+  for(const value of ["'null'::jsonb",'null'])await check(`prior ${value} callouts retain their exact SQL value`,async()=>{
+    await db.exec(`update public.drawings set callouts=${value} where id='${ids.drawing}'`);
+    await allowed(db,await request(db));
+    assert.equal((await db.query('select callouts is null unknown from steelbuild_drawing_revision.source_observations')).rows[0].unknown,value==='null');
+  });
+  for(const column of ['extracted_text','callouts'])await check(`oversized prior ${column} refuses retention without truncation`,async()=>{
+    await db.query(`update public.drawings set ${column}=${column==='callouts'?'to_jsonb($1::text)':'$1'} where id=$2`,['x'.repeat(65537),ids.drawing]);
+    const p=await request(db);await denied(db,()=>execute(db,p),/OBSERVATION_LIMIT/);
+  });
+  await check('maximum per-field prior extraction is retained exactly',async()=>{
+    await db.query("update public.drawings set extracted_text=$1,callouts=to_jsonb($2::text) where id=$3",['x'.repeat(65536),'y'.repeat(65534),ids.drawing]);
+    await allowed(db,await request(db));
+    assert.deepEqual((await db.query('select octet_length(extracted_text) text_bytes,octet_length(callouts::text) callout_bytes from steelbuild_drawing_revision.source_observations')).rows[0],{text_bytes:65536,callout_bytes:65536});
+  });
+  await check('Auth anonymization retains observations and exact business source context',async()=>{
+    await allowed(db,await request(db));const observations=(await snapshot(db))['steelbuild_drawing_revision.source_observations'];
+    await db.query('delete from auth.users where id=$1',[ids.pm]);
+    assert.equal((await db.query('select actor_id from steelbuild_drawing_revision.requests')).rows[0].actor_id,null);
+    assert.deepEqual((await snapshot(db))['steelbuild_drawing_revision.source_observations'],observations);
+  });
+  await check('soft archives retain observations and do not add captured-source deletion authority',async()=>{
+    await roundExecute(db,command(await parent(db,ids.submittal),submit));
+    await allowed(db,await request(db));const observations=(await snapshot(db))['steelbuild_drawing_revision.source_observations'];
+    await db.query('update public.drawings set is_deleted=true,deleted_at=now() where id=$1',[ids.drawing]);
+    assert.deepEqual((await snapshot(db))['steelbuild_drawing_revision.source_observations'],observations);
+    await denied(db,()=>db.query('delete from public.drawings where id=$1',[ids.drawing]),/IMMUTABLE|foreign key/);
+    await denied(db,()=>db.query('delete from public.drawing_sets where id=$1',[ids.set]),/IMMUTABLE|foreign key/);
+  });
+  await check('authorized project erasure cascades private receipts and observations',async()=>{
+    await allowed(db,await request(db));
+    await db.query('select public.soft_delete_project($1)',[ids.project]);
+    await db.query('select public.hard_delete_project($1,$2)',[ids.project,'Synthetic drawing observation erasure verification']);
+    assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,0);
+    assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.source_observations')).rows[0].n,0);
   });
   await check('captured source and round evidence remain intact while new source becomes unapproved',async()=>{
     await roundExecute(db,command(await parent(db,ids.submittal),submit));
@@ -87,8 +172,10 @@ export async function runCases(db:Database){
     for(const role of ['anon','authenticated','service_role']){
       const privileges=(await db.query(`select has_schema_privilege($1,'steelbuild_drawing_revision','USAGE') schema,
         has_table_privilege($1,'steelbuild_drawing_revision.requests','SELECT,INSERT,UPDATE,DELETE') table_access,
-        has_function_privilege($1,'steelbuild_drawing_revision.assert_access(uuid)','EXECUTE') helper`,[role])).rows[0];
-      assert.deepEqual(privileges,{schema:false,table_access:false,helper:false});
+        has_function_privilege($1,'steelbuild_drawing_revision.assert_access(uuid)','EXECUTE') helper,
+        has_table_privilege($1,'steelbuild_drawing_revision.source_observations','SELECT,INSERT,UPDATE,DELETE') observations,
+        has_function_privilege($1,'steelbuild_drawing_revision.observe_source(public.drawings,public.drawing_revisions)','EXECUTE') observation_helper`,[role])).rows[0];
+      assert.deepEqual(privileges,{schema:false,table_access:false,helper:false,observations:false,observation_helper:false});
       assert.equal((await db.query("select has_function_privilege($1,'public.apply_drawing_set_revision(uuid,jsonb)','EXECUTE') allowed",[role])).rows[0].allowed,role==='authenticated');
     }
   });
@@ -186,10 +273,12 @@ export async function runCases(db:Database){
     const result=await allowed(db,p);assert.deepEqual([result.added,result.removed,result.sheet_count],[1,1,1]);
     assert.equal((await db.query('select is_superseded from public.drawings where id=$1',[ids.drawing])).rows[0].is_superseded,true);
     assert.equal((await db.query('select count(*)::int n from public.drawing_zones where drawing_revision_id=$1',[ids.revision])).rows[0].n,2);
+    assert.deepEqual((await db.query("select extracted_text,callouts from public.drawings where sheet_number='S3'")).rows[0],{extracted_text:null,callouts:null});
+    assert.deepEqual((await db.query('select drawing_id from steelbuild_drawing_revision.source_observations')).rows,[{drawing_id:ids.drawing}]);
   });
-  for(const table of ['drawing_revisions','drawing_zones','drawing_links','drawing_zone_dependencies','drawings','drawing_sets','requests'])
+  for(const table of ['drawing_revisions','drawing_zones','drawing_links','drawing_zone_dependencies','drawings','drawing_sets','requests','source_observations'])
     await check(`failure at ${table} rolls back every preceding source and activity write`,async()=>{
-      const schema=table==='requests'?'steelbuild_drawing_revision':'public';
+      const schema=['requests','source_observations'].includes(table)?'steelbuild_drawing_revision':'public';
       await db.exec(`create function public.fail_reviewed_write() returns trigger language plpgsql as $$ begin raise exception 'INJECTED_FAILURE'; end $$;
         create trigger zzz_injected_failure before ${['drawings','drawing_sets'].includes(table)?'update':'insert'} on ${schema}.${table} for each row execute function public.fail_reviewed_write()`);
       const p=await request(db);await denied(db,()=>execute(db,p),/INJECTED_FAILURE/);

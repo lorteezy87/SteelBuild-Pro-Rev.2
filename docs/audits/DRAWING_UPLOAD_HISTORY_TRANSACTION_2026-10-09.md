@@ -234,11 +234,64 @@ Verification at source `3c367c994f29745961f6df2d3a6f4208bf738dbe`:
   blocker in the SQL/lock/topology/default-grant contract. That review did not
   rerun the suite or establish hosted RLS acceptance.
 
-Candidate SQL SHA-256 (unchanged since initial source commit):
+Historical SQL SHA-256 before the extraction correction below:
 `ac15f5a8633dff924cc3cb516d8f6b4ec983e0f4d1d562b386bbcffd06a59b29`.
 The first actual PostgreSQL attempt passed the 58 behaviors but exposed a test
 fixture reset missing public-schema USAGE; the isolated fixture was corrected,
 and the full subsequent run above passed. No application grants were broadened.
+
+## Source-bound extraction correction (source only, verification in progress)
+
+Review reproduced a blocking association defect: retaining absent extraction on a
+revised page displayed prior callout coordinates and text against a different PDF.
+For added sheets, the default empty callout array falsely indicated an inspected
+page. `sectionCutLinks.ts` treats NULL as unavailable and an array as harvested;
+`CalloutOverlay.jsx` renders those coordinates on the current parent PDF.
+
+Every revised/added roster entry now supplies both explicit states, within the
+same reviewed file path, page and Storage-token payload:
+
+```json
+{"extraction":{"text":{"state":"unavailable"},"callouts":{"state":"harvested","value":[]}}}
+```
+
+`harvested` requires an exact string (text) or array (callouts); empty values mean
+inspected-empty. `unavailable` forbids a value and writes SQL NULL, including new
+sheets. The two fields are independent. The request hash includes both states and
+values; a retry with different extraction is rejected. Existing revision source
+fields and all approval/evidence records remain untouched.
+
+Before changing/removing an existing parent, the transaction records its actual
+file URL, page, revision code, update timestamp, text and callouts in private
+`steelbuild_drawing_revision.source_observations`. The observed current revision
+ID/version is explicitly **pointer context, not provenance**: mismatched legacy
+metadata is neither reconciled nor attributed to that revision. SQL NULL versus
+JSON null callouts is preserved. Added sheets have no fabricated prior observation.
+
+The receipt has a UUID primary key. Composite receipt/project/set and
+drawing/set/project FKs bind each observation; inserts occur in the same transaction
+after the receipt. Explicit schema/table/helper revokes and RLS deny application
+roles, including service_role, access. No public reader, response text or new
+deletion authority is introduced. Auth anonymization nulls receipt actor IDs while
+retaining business observations; soft archives retain them. Existing immutable and
+FK guards still govern hard deletion. Authorized project erasure cascades receipts
+and observations in the fixture with the existing erasure functions.
+
+Prior and incoming text/callout fields are each bounded to 65,536 UTF-8 bytes;
+prior observations, including JSON punctuation/context, are bounded to 4,194,304
+serialized bytes per command. Exceeding a bound rejects the entire request without
+truncation. This private retention can grow with repeated legitimate revisions;
+it is not a quota/retention policy. **These private records are not included in the
+current v2 project export/restore.** No complete backup or immutable PDF-byte claim
+is made. A scoped reader/export/retention contract remains a promotion dependency.
+
+Current source candidate SHA-256:
+`562699f68482d6a3f85a2c6edd0719dadba3d5808460f36d188c594ef2d3fa06`.
+The correction passes 86 PGlite behaviors and scoped strict TypeScript. Added
+PostgreSQL acceptance covers exactly 4 MiB of prior observations alongside the
+maximum existing workload, one-byte overflow, late observation failure rollback,
+and observation-trigger timeout/revocation. Actual PostgreSQL results for this new
+hash are pending; earlier 58/26 evidence does not validate this correction.
 
 ## Mandatory adoption and direct-write cutover
 

@@ -28,3 +28,7 @@
 - [x] Verify behavioral rejection/rollback at revision, zone, link, dependency, parent, header and receipt writes under actual PostgreSQL.
 - [x] Exercise independent concurrent identical/different requests, request-wait permission revocation, explicit row contention/reverse parent locks and bounded implicit waits; measure stated input/coordination bounds. Actual hosted erasure remains a release gate.
 - [x] Add isolated PostgreSQL CI workflow, independent read-only review and exact source evidence; keep candidate uninstalled.
+- [x] Reproduce stale extraction association, require explicit source-bound harvested/unavailable states, and preserve actual prior parent observations privately without attributing uncertain history.
+- [x] Add strict payload/hash, privacy, erasure and observation-write rollback regressions; preserve NULL versus inspected-empty semantics.
+- [ ] Verify corrected candidate under actual PostgreSQL, including exact 4 MiB prior observation commit/late rollback at maximum coordination workload and post-observation-wait revocation.
+- [ ] Obtain independent delta review and freeze corrected source/hash. Private observations are not currently in v2 export/restore; no complete backup claim or hosted activation.

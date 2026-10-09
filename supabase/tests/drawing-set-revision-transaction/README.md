@@ -26,6 +26,13 @@ predicates represent revocation. This is not hosted-policy or authenticated UI
 acceptance. The full concurrent/boundary job and candidate source must be reviewed
 again before any promotion.
 
+Revised/added pages require explicit per-field extraction states. Tests distinguish
+unavailable (NULL) from inspected-empty, retain actual old parent observations
+privately, bind extraction to idempotent payloads, and preserve existing erasure
+and immutable-evidence behavior. The PostgreSQL maximum workload includes exactly
+4 MiB of serialized prior observations, over-bound refusal and late-write rollback.
+These private observations are not in the current v2 project export/restore.
+
 The four intentionally failing upload UI tests remain uncommitted in the owning
 worktree, pending the coordinated typed adapter. They are not waived, deleted or
 weakened by this server-only candidate.

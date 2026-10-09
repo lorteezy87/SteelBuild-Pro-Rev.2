@@ -4,6 +4,7 @@ BEGIN;
 CREATE SCHEMA steelbuild_drawing_revision;
 REVOKE ALL ON SCHEMA steelbuild_drawing_revision FROM PUBLIC,anon,authenticated,service_role;
 CREATE TABLE steelbuild_drawing_revision.requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   request_id uuid NOT NULL,
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -11,12 +12,41 @@ CREATE TABLE steelbuild_drawing_revision.requests (
   payload_sha256 text NOT NULL CHECK(payload_sha256 ~ '^[0-9a-f]{64}$'),
   result jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  UNIQUE(actor_id,request_id)
+  UNIQUE(actor_id,request_id), UNIQUE(id,project_id,set_id)
 );
 ALTER TABLE steelbuild_drawing_revision.requests ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON steelbuild_drawing_revision.requests FROM PUBLIC,anon,authenticated,service_role;
 CREATE INDEX drawing_revision_requests_project ON steelbuild_drawing_revision.requests(project_id);
 CREATE INDEX drawing_revision_requests_set ON steelbuild_drawing_revision.requests(set_id);
+
+-- Observed parent values are retained as observations, never attributed to an
+-- uncertain historic revision. No public read surface or export claim is added.
+CREATE TABLE steelbuild_drawing_revision.source_observations (
+  receipt_id uuid NOT NULL, drawing_id uuid NOT NULL, project_id uuid NOT NULL, drawing_set_id uuid NOT NULL,
+  parent_file_url text, parent_pdf_page integer, parent_revision_number text, parent_updated_at timestamptz,
+  observed_current_revision_id uuid, observed_current_revision_version integer,
+  extracted_text text, callouts jsonb,
+  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY(receipt_id,drawing_id),
+  FOREIGN KEY(receipt_id,project_id,drawing_set_id) REFERENCES steelbuild_drawing_revision.requests(id,project_id,set_id) ON DELETE CASCADE,
+  FOREIGN KEY(drawing_id,drawing_set_id,project_id) REFERENCES public.drawings(id,drawing_set_id,project_id) ON DELETE CASCADE,
+  CHECK(coalesce(octet_length(extracted_text),0)<=65536),
+  CHECK(coalesce(octet_length(callouts::text),0)<=65536)
+);
+ALTER TABLE steelbuild_drawing_revision.source_observations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON steelbuild_drawing_revision.source_observations FROM PUBLIC,anon,authenticated,service_role;
+CREATE INDEX drawing_source_observations_drawing ON steelbuild_drawing_revision.source_observations(drawing_id);
+COMMENT ON COLUMN steelbuild_drawing_revision.source_observations.observed_current_revision_id IS
+  'Pointer observed with the parent; this does not prove that its extraction belongs to this revision.';
+
+CREATE FUNCTION steelbuild_drawing_revision.observe_source(p_parent public.drawings,p_current public.drawing_revisions) RETURNS jsonb
+LANGUAGE sql STABLE SET search_path='' SET timezone='UTC' AS $$
+  SELECT jsonb_build_object('drawing_id',p_parent.id,'project_id',p_parent.project_id,'drawing_set_id',p_parent.drawing_set_id,
+    'parent_file_url',p_parent.file_url,'parent_pdf_page',p_parent.pdf_page,'parent_revision_number',p_parent.revision_number,
+    'parent_updated_at',p_parent.updated_at,'observed_current_revision_id',p_current.id,'observed_current_revision_version',p_current.version_number,
+    'extracted_text',p_parent.extracted_text,'callouts',p_parent.callouts,'callouts_is_sql_null',p_parent.callouts IS NULL)
+$$;
+REVOKE ALL ON FUNCTION steelbuild_drawing_revision.observe_source(public.drawings,public.drawing_revisions) FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE FUNCTION steelbuild_drawing_revision.assert_access(p_project uuid) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -78,6 +108,8 @@ DECLARE
   v_paths text[]; v_roster_ids uuid[]; v_sheet_ids uuid[];
   v_changed_revisions uuid[]:='{}'; v_removed_revisions uuid[]:='{}';
   v_zone_ids uuid[]:='{}'; v_revision_map jsonb:='{}'; v_zone_map jsonb:='{}';
+  v_observations jsonb:='[]'; v_observation jsonb; v_observation_bytes integer:=2; v_receipt_id uuid;
+  v_field text; v_extraction jsonb; v_extracted_text text; v_callouts jsonb;
   v_new uuid; v_old uuid; v_version integer; v_action text; v_code text; v_page integer;
   v_result jsonb; v_source_pages jsonb:='[]'; v_revised integer:=0; v_added integer:=0; v_removed integer:=0;
   v_zones integer:=0; v_links integer:=0; v_edges integer:=0; v_count integer;
@@ -153,7 +185,7 @@ BEGIN
   FOR v_entry IN SELECT value FROM jsonb_array_elements(v_roster) LOOP
     IF jsonb_typeof(v_entry) IS DISTINCT FROM 'object'
       OR NOT v_entry ?& ARRAY['action','sheet_number']
-      OR EXISTS(SELECT 1 FROM jsonb_object_keys(v_entry) k WHERE k<>ALL(ARRAY['action','drawing_id','expected_updated_at','expected_revision_id','sheet_number','sheet_title','revision_code','file_path','pdf_page','reviewed','discipline','extracted_text','callouts']))
+      OR EXISTS(SELECT 1 FROM jsonb_object_keys(v_entry) k WHERE k<>ALL(ARRAY['action','drawing_id','expected_updated_at','expected_revision_id','sheet_number','sheet_title','revision_code','file_path','pdf_page','reviewed','discipline','extraction']))
       OR v_entry->>'action' NOT IN ('same','revised','added','removed')
       OR jsonb_typeof(v_entry->'action') IS DISTINCT FROM 'string' OR jsonb_typeof(v_entry->'sheet_number') IS DISTINCT FROM 'string'
       OR nullif(btrim(v_entry->>'sheet_number'),'') IS NULL OR length(v_entry->>'sheet_number')>120 THEN
@@ -180,6 +212,15 @@ BEGIN
         RAISE EXCEPTION 'DRAWING_REVISION_TRACKING_REQUIRED: Complete explicit tracking before changing existing sheets' USING ERRCODE='22023'; END IF;
       IF v_action='revised' THEN v_changed_revisions:=array_append(v_changed_revisions,v_current.id); END IF;
       IF v_action='removed' THEN v_removed_revisions:=array_append(v_removed_revisions,v_current.id); END IF;
+      IF v_action IN ('revised','removed') THEN
+        IF coalesce(octet_length(v_sheet.extracted_text),0)>65536 OR coalesce(octet_length(v_sheet.callouts::text),0)>65536 THEN
+          RAISE EXCEPTION 'DRAWING_REVISION_OBSERVATION_LIMIT: Prior extraction exceeds the per-field retention bound; nothing was changed' USING ERRCODE='54000'; END IF;
+        v_observation:=steelbuild_drawing_revision.observe_source(v_sheet,v_current);
+        v_observation_bytes:=v_observation_bytes+octet_length(v_observation::text)+CASE WHEN jsonb_array_length(v_observations)>0 THEN 2 ELSE 0 END;
+        IF v_observation_bytes>4194304 THEN
+          RAISE EXCEPTION 'DRAWING_REVISION_OBSERVATION_LIMIT: Prior source observations exceed the transaction retention bound; nothing was changed' USING ERRCODE='54000'; END IF;
+        v_observations:=v_observations||jsonb_build_array(v_observation);
+      END IF;
     END IF;
     IF v_action IN ('revised','added') AND (
       v_entry->'reviewed' IS DISTINCT FROM 'true'::jsonb OR nullif(btrim(v_entry->>'sheet_title'),'') IS NULL OR length(v_entry->>'sheet_title')>500
@@ -187,10 +228,24 @@ BEGIN
       OR jsonb_typeof(v_entry->'file_path') IS DISTINCT FROM 'string' OR jsonb_typeof(v_entry->'pdf_page') IS DISTINCT FROM 'number'
       OR nullif(btrim(v_entry->>'revision_code'),'') IS NULL OR length(v_entry->>'revision_code')>80
       OR coalesce(v_entry->>'pdf_page','') !~ '^[1-9][0-9]{0,5}$' OR nullif(v_entry->>'file_path','') IS NULL
-      OR (v_entry ? 'extracted_text' AND jsonb_typeof(v_entry->'extracted_text')<>'string')
       OR (v_entry ? 'discipline' AND jsonb_typeof(v_entry->'discipline') NOT IN ('string','null'))
-      OR (v_entry ? 'callouts' AND jsonb_typeof(v_entry->'callouts')<>'array')) THEN
+      ) THEN
       RAISE EXCEPTION 'DRAWING_REVISION_INVALID: Changed sheet needs reviewed code, title and source page' USING ERRCODE='22023'; END IF;
+    IF v_action IN ('revised','added') THEN
+      IF jsonb_typeof(v_entry->'extraction') IS DISTINCT FROM 'object' OR NOT (v_entry->'extraction') ?& ARRAY['text','callouts']
+        OR EXISTS(SELECT 1 FROM jsonb_object_keys(v_entry->'extraction') k WHERE k NOT IN ('text','callouts')) THEN
+        RAISE EXCEPTION 'DRAWING_REVISION_EXTRACTION: Explicit source-bound text and callout states are required' USING ERRCODE='22023'; END IF;
+      FOREACH v_field IN ARRAY ARRAY['text','callouts'] LOOP
+        v_extraction:=v_entry->'extraction'->v_field;
+        IF jsonb_typeof(v_extraction) IS DISTINCT FROM 'object' OR coalesce(v_extraction->>'state','') NOT IN ('harvested','unavailable')
+          OR EXISTS(SELECT 1 FROM jsonb_object_keys(v_extraction) k WHERE k NOT IN ('state','value'))
+          OR (v_extraction->>'state'='unavailable' AND v_extraction ? 'value')
+          OR (v_extraction->>'state'='harvested' AND (
+            jsonb_typeof(v_extraction->'value') IS DISTINCT FROM CASE WHEN v_field='text' THEN 'string' ELSE 'array' END
+            OR CASE WHEN v_field='text' THEN octet_length(v_extraction->>'value') ELSE octet_length((v_extraction->'value')::text) END>65536)) THEN
+          RAISE EXCEPTION 'DRAWING_REVISION_EXTRACTION: Harvested fields require bounded exact values; unavailable fields have no value' USING ERRCODE='22023'; END IF;
+      END LOOP;
+    END IF;
   END LOOP;
   SELECT coalesce(array_agg((e->>'drawing_id')::uuid ORDER BY (e->>'drawing_id')::uuid),'{}') INTO v_roster_ids
     FROM jsonb_array_elements(v_roster) e WHERE e->>'action'<>'added';
@@ -248,13 +303,15 @@ BEGIN
 
   FOR v_entry IN SELECT value FROM jsonb_array_elements(v_roster) LOOP
     v_action:=v_entry->>'action'; IF v_action='same' THEN CONTINUE; END IF;
+    v_extracted_text:=CASE WHEN v_entry->'extraction'->'text'->>'state'='harvested' THEN v_entry->'extraction'->'text'->>'value' ELSE NULL END;
+    v_callouts:=CASE WHEN v_entry->'extraction'->'callouts'->>'state'='harvested' THEN v_entry->'extraction'->'callouts'->'value' ELSE NULL END;
     IF v_action='added' THEN
       IF EXISTS(SELECT 1 FROM public.drawings WHERE drawing_set_id=v_set_id AND NOT is_deleted AND deleted_at IS NULL
         AND upper(btrim(sheet_number))=upper(btrim(v_entry->>'sheet_number'))) THEN
         RAISE EXCEPTION 'DRAWING_REVISION_DUPLICATE: Sheet mark already exists' USING ERRCODE='23505'; END IF;
-      INSERT INTO public.drawings(project_id,drawing_set_id,drawing_set_name,sheet_number,title,discipline,revision_number,file_url,pdf_page,stage,set_approval_status)
+      INSERT INTO public.drawings(project_id,drawing_set_id,drawing_set_name,sheet_number,title,discipline,revision_number,file_url,pdf_page,stage,set_approval_status,extracted_text,callouts)
       VALUES(v_project,v_set_id,v_set.set_name,btrim(v_entry->>'sheet_number'),btrim(v_entry->>'sheet_title'),coalesce(v_entry->>'discipline',v_set.discipline),
-        btrim(v_entry->>'revision_code'),v_entry->>'file_path',(v_entry->>'pdf_page')::integer,'Not Started','pending_review') RETURNING * INTO v_sheet;
+        btrim(v_entry->>'revision_code'),v_entry->>'file_path',(v_entry->>'pdf_page')::integer,'Not Started','pending_review',v_extracted_text,v_callouts) RETURNING * INTO v_sheet;
       v_old:=NULL; v_version:=1; v_added:=v_added+1;
     ELSE
       SELECT * INTO v_sheet FROM public.drawings WHERE id=(v_entry->>'drawing_id')::uuid;
@@ -277,8 +334,7 @@ BEGIN
         (p_request->>'issued_date')::date,p_request->>'notes','received',v_actor) RETURNING id INTO v_new;
     IF v_old IS NOT NULL THEN v_revision_map:=v_revision_map||jsonb_build_object(v_old::text,v_new); END IF;
     UPDATE public.drawings SET title=btrim(v_entry->>'sheet_title'),revision_number=v_code,file_url=v_entry->>'file_path',pdf_page=v_page,
-      extracted_text=CASE WHEN v_entry ? 'extracted_text' THEN v_entry->>'extracted_text' ELSE extracted_text END,
-      callouts=CASE WHEN v_entry ? 'callouts' THEN v_entry->'callouts' ELSE callouts END,
+      extracted_text=v_extracted_text,callouts=v_callouts,
       stage='Not Started',set_approval_status='pending_review',set_approved_date=NULL,ifc_status=NULL,updated_at=clock_timestamp() WHERE id=v_sheet.id;
     v_source_pages:=v_source_pages||jsonb_build_array(jsonb_build_object('drawing_id',v_sheet.id,'revision_id',v_new,'file_path',v_entry->>'file_path','pdf_page',v_page));
   END LOOP;
@@ -321,7 +377,14 @@ BEGIN
     'revised',v_revised,'added',v_added,'removed',v_removed,'sheet_count',v_count,
     'zones_cloned',v_zones,'links_cloned',v_links,'dependencies_cloned',v_edges,'source_pages',v_source_pages);
   INSERT INTO steelbuild_drawing_revision.requests(actor_id,request_id,project_id,set_id,payload_sha256,result)
-    VALUES(v_actor,p_request_id,v_project,v_set_id,v_hash,v_result);
+    VALUES(v_actor,p_request_id,v_project,v_set_id,v_hash,v_result) RETURNING id INTO v_receipt_id;
+  INSERT INTO steelbuild_drawing_revision.source_observations(receipt_id,drawing_id,project_id,drawing_set_id,
+    parent_file_url,parent_pdf_page,parent_revision_number,parent_updated_at,observed_current_revision_id,observed_current_revision_version,extracted_text,callouts)
+    SELECT v_receipt_id,o.drawing_id,o.project_id,o.drawing_set_id,o.parent_file_url,o.parent_pdf_page,o.parent_revision_number,
+      o.parent_updated_at,o.observed_current_revision_id,o.observed_current_revision_version,o.extracted_text,
+      CASE WHEN o.callouts_is_sql_null THEN NULL ELSE coalesce(o.callouts,'null'::jsonb) END
+    FROM jsonb_to_recordset(v_observations) AS o(drawing_id uuid,project_id uuid,drawing_set_id uuid,parent_file_url text,parent_pdf_page integer,
+      parent_revision_number text,parent_updated_at timestamptz,observed_current_revision_id uuid,observed_current_revision_version integer,extracted_text text,callouts jsonb,callouts_is_sql_null boolean);
   PERFORM steelbuild_drawing_revision.assert_access(v_project);
   RETURN v_result;
 EXCEPTION WHEN lock_not_available OR deadlock_detected THEN

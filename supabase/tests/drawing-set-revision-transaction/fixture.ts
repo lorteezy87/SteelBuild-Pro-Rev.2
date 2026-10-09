@@ -58,7 +58,8 @@ export async function request(db:Database):Promise<Record<string,unknown>>{
   return { project_id:ids.project,set_id:ids.set,expected_set_updated_at:set.updated_at,expected_set_revision:set.revision,
     revision_label:'B',issued_date:'2026-10-09',file_path:path,
     source_objects:sources,sheets:[{action:'revised',drawing_id:ids.drawing,expected_updated_at:drawing.updated_at,
-      expected_revision_id:ids.revision,sheet_number:'S1',sheet_title:'Reviewed connections',revision_code:'B',file_path:path,pdf_page:7,reviewed:true}]};
+      expected_revision_id:ids.revision,sheet_number:'S1',sheet_title:'Reviewed connections',revision_code:'B',file_path:path,pdf_page:7,reviewed:true,
+      extraction:{text:{state:'unavailable'},callouts:{state:'unavailable'}}}]};
 }
 export async function execute(db:Database,payload:Record<string,unknown>,key='dddddddd-dddd-4ddd-8ddd-dddddddddddd'){
   return (await db.query('select public.apply_drawing_set_revision($1::uuid,$2::jsonb) result',[key,JSON.stringify(payload)])).rows[0]?.result as Record<string,unknown>;

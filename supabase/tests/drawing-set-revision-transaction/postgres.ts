@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
 import { initialize, candidateUrl, ids, actor, request, execute, path, zoneA, zoneB, type Database } from './fixture.ts';
-import { runCases, snapshot } from './cases.ts';
+import { runCases, snapshot, tables } from './cases.ts';
 
 assert.equal(process.env.DRAWING_UPLOAD_POSTGRES_TEST,'1','Explicit disposable fixture opt-in required');
 const connectionString=process.env.DRAWING_UPLOAD_POSTGRES_URL;
@@ -99,9 +99,9 @@ try{
     await consumer.query('commit');consumer.release();await write;await writer.query('rollback');writer.release();
     assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,1);
   });
-  for(const revoke of [false,true])await check(`implicit late trigger wait ${revoke?'rechecks permission':'times out and rolls back all prior writes'}`,async()=>{
+  for(const target of ['requests','source_observations'])for(const revoke of [false,true])await check(`implicit late ${target} trigger wait ${revoke?'rechecks permission':'times out and rolls back all prior writes'}`,async()=>{
     await admin.query(`create function public.late_fixture_wait() returns trigger language plpgsql as $$ begin perform pg_advisory_xact_lock(777000111);return new;end $$;
-      create trigger late_fixture_wait before insert on steelbuild_drawing_revision.requests for each row execute function public.late_fixture_wait()`);
+      create trigger late_fixture_wait before insert on steelbuild_drawing_revision.${target} for each row execute function public.late_fixture_wait()`);
     const p=await request(db),before=await snapshot(db),lock=await connect();await lock.query('begin;select pg_advisory_xact_lock(777000111)');
     const consumer=await session(),result=finish(consumer,p).then(()=>null,e=>e);await waiting(consumer);
     if(revoke){await admin.query('update auth.test_access set is_pm=false where user_id=$1',[ids.pm]);await lock.query('commit');}
@@ -131,16 +131,47 @@ try{
       select $1,z.id,$2,r.relationship from public.drawing_zones z cross join(values('blocks'),('relates_to'))r(relationship)
       where z.drawing_revision_id=$3 and z.id<>$2 and not(z.id=$4 and r.relationship='blocks')`,[ids.project,zoneB,ids.revision,zoneA]);
     await admin.query(`insert into public.drawing_zone_dependencies(project_id,source_zone_id,target_zone_id,relationship) values($1,$2,$3,'depends_on'),($1,$3,$2,'depends_on')`,[ids.project,zoneA,zoneB]);
+    // Exercise the full private retention bound together with every other row bound.
+    // All updates share this transaction timestamp, so serialized timestamp lengths stay fixed.
+    await admin.query("update public.drawings d set extracted_text=repeat('x',15000) where drawing_set_id=$1 and not is_deleted",[ids.set]);
+    const observationSize=async()=>Number((await admin.query(`select octet_length(jsonb_agg(steelbuild_drawing_revision.observe_source(d,r) order by d.id)::text) n
+      from public.drawings d join public.drawing_revisions r on r.drawing_id=d.id and r.is_current where d.drawing_set_id=$1 and not d.is_deleted`,[ids.set])).rows[0].n);
+    let remaining=4194304-await observationSize();assert.ok(remaining>0);
+    const filling=(await admin.query('select id from public.drawings where drawing_set_id=$1 and not is_deleted order by id',[ids.set])).rows;
+    for(const row of filling){if(remaining===0)break;const addition=Math.min(remaining,65536-15000);
+      await admin.query("update public.drawings set extracted_text=extracted_text||repeat('x',$1) where id=$2",[addition,row.id]);remaining-=addition;}
+    assert.equal(await observationSize(),4194304,'Exact maximum serialized observation array required');
     await admin.query('commit');
     const p=await request(db);const existing=p.sheets as Record<string,unknown>[];
     const others=(await admin.query('select d.id,d.updated_at,d.sheet_number,r.id revision_id from public.drawings d join public.drawing_revisions r on r.drawing_id=d.id and r.is_current where d.drawing_set_id=$1 and d.id<>$2 order by d.id',[ids.set,ids.drawing])).rows;
     for(const [index,row] of others.entries())existing.push({action:'revised',drawing_id:row.id,expected_updated_at:row.updated_at,expected_revision_id:row.revision_id,
-      sheet_number:row.sheet_number,sheet_title:'Reviewed boundary sheet',revision_code:'B',file_path:`${prefix}${index+1}.pdf`,pdf_page:1,reviewed:true});
+      sheet_number:row.sheet_number,sheet_title:'Reviewed boundary sheet',revision_code:'B',file_path:`${prefix}${index+1}.pdf`,pdf_page:1,reviewed:true,
+      extraction:{text:{state:'unavailable'},callouts:{state:'unavailable'}}});
     p.source_objects=(await admin.query('select public.get_drawing_revision_sources($1,$2) sources',[ids.project,existing.map(e=>e.file_path)])).rows[0].sources;
+    const fingerprints=async()=>Promise.all(tables.map(async table=>(await admin.query(`select md5(coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]')::text) digest from ${table} t`)).rows[0].digest));
+    const before=await fingerprints();
+    // An over-bound prior observation refuses before writes, even when each field fits.
+    // Disable only the synthetic timestamp trigger so this fixture changes exactly one byte.
+    const fillTarget=filling[filling.length-1].id;
+    await admin.query('alter table public.drawings disable trigger user');
+    await admin.query("update public.drawings set extracted_text=extracted_text||'x' where id=$1",[fillTarget]);
+    await admin.query('alter table public.drawings enable trigger user');
+    assert.equal(await observationSize(),4194305);
+    const overBefore=await fingerprints();await assert.rejects(finish(await session(),p),/OBSERVATION_LIMIT/);assert.deepEqual(await fingerprints(),overBefore);
+    await admin.query('alter table public.drawings disable trigger user');
+    await admin.query('update public.drawings set extracted_text=left(extracted_text,length(extracted_text)-1) where id=$1',[fillTarget]);
+    await admin.query('alter table public.drawings enable trigger user');
+    assert.deepEqual(await fingerprints(),before);
+    await admin.query(`create function public.fail_max_observation() returns trigger language plpgsql as $$ begin raise exception 'MAX_OBSERVATION_FAILURE';end $$;
+      create trigger fail_max_observation before insert on steelbuild_drawing_revision.source_observations for each row execute function public.fail_max_observation()`);
+    const rollbackStarted=Date.now();await assert.rejects(finish(await session(),p),/MAX_OBSERVATION_FAILURE/);
+    const rollbackElapsed=Date.now()-rollbackStarted;assert.deepEqual(await fingerprints(),before);
+    await admin.query('drop trigger fail_max_observation on steelbuild_drawing_revision.source_observations;drop function public.fail_max_observation()');
     const started=Date.now(),result=await finish(await session(),p);const elapsed=Date.now()-started;
     assert.deepEqual([result.sheet_count,result.zones_cloned,result.links_cloned,result.dependencies_cloned],[250,1000,2000,2000]);
     assert.ok(elapsed<10000,`Boundary request exceeded 10s fixture budget: ${elapsed}ms`);
-    console.log(`MEASURE 250 revised sheets/sources, 1000 parent rows, 10000 history rows, 1000 holds/zones, 2000 links/edges: ${elapsed}ms; payload ${Buffer.byteLength(JSON.stringify(p))} bytes`);
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.source_observations')).rows[0].n,250);
+    console.log(`MEASURE 250 revised sheets/sources, 1000 parent rows, 10000 history rows, 1000 holds/zones, 2000 links/edges, 4194304 observation bytes: commit ${elapsed}ms; late rollback ${rollbackElapsed}ms; payload ${Buffer.byteLength(JSON.stringify(p))} bytes`);
   });
   console.log(`${count} independent-session PostgreSQL checks passed`);
 }catch(error){console.error(error instanceof Error?error.stack:error);process.exitCode=1;}
