@@ -30,7 +30,7 @@ Notes:
 
 ## Active claims
 
-| 2026-10-09 | codex-explicit-submittal-type | Preserve strict Shop Drawing classification | src/api/client/submittal{Workflow,Lifecycle}.ts; src/hooks/submittals/{roundWorkflow,useSubmittalRoundMutations}.ts; src/pages/submittals/{SubmittalDetail,SubmittalFormModal}.tsx; src/components/submittals/processBoard.derive.ts; related tests; e2e/drawing-revision-evidence.spec.ts | Parent-approved alignment with canonical exact-type authority; preserve legacy NULL and require explicit typed browser fixtures; no hosted data changes. |
+| 2026-10-09 | codex-explicit-submittal-type | Preserve strict Shop Drawing classification | src/api/client/submittal{Workflow,Lifecycle}.ts; src/hooks/submittals/{roundWorkflow,useSubmittalRoundMutations}.ts; src/pages/submittals/{SubmittalDetail,SubmittalFormModal}.tsx; src/components/submittals/processBoard.derive.ts; related tests; e2e/drawing-revision-evidence.spec.ts; .github/workflows/drawing-evidence-acceptance.yml; supabase/tests/drawing-evidence-browser/draft-fixture.sql | Parent-approved alignment with canonical exact-type authority; preserve legacy NULL and require explicit typed browser fixtures; no hosted data changes. |
 
 
 
