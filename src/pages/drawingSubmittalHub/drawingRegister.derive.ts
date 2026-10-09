@@ -8,6 +8,7 @@
  */
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { effectiveDetailingState, isPackageReleasedForFab } from "@/lib/detailingPackageState";
+import { submittalRevisionEvidenceBlockReason } from '@/lib/submittalRevisionEvidence';
 import {
   currentRevisionForPackage,
   isClosedPackage,
@@ -16,6 +17,7 @@ import {
 import type { CurrentRevisionInfo, DueInfo } from "./types";
 
 export interface DrawingRegisterRow {
+  revisionEvidenceReason?: string | null;
   pkg: any;
   due: DueInfo;
   sheetCount: number;
@@ -80,6 +82,7 @@ export function buildDrawingRegisterRows({
     const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     return {
       pkg, due, sheetCount, releasedCount, discipline, maxRev, dominantStage,
+      revisionEvidenceReason: ['IFC', 'Released', 'Partially Released', 'Released for Erection'].includes(effectiveState) ? submittalRevisionEvidenceBlockReason(latestSubmittal) : null,
       status: latestSubmittal?.status || null,
       effectiveState, done, late: !!due.overdue && !terminal,
       health: healthByKey?.get(pkg.key) || null,

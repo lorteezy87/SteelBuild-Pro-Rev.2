@@ -44,6 +44,7 @@ import {
 import { LinkedDrawingSets } from "./LinkedDrawingSets";
 import { SubmittalDrawingTypeComponents } from "./SubmittalDrawingTypeComponents";
 import type { DrawingSet, Submittal, SubmittalRoundRecord } from "./types";
+import SubmittalRevisionEvidence from './SubmittalRevisionEvidence';
 
 type GenericProps = Record<string, unknown>;
 
@@ -364,6 +365,7 @@ export function SubmittalDetail({
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 20px" }}>
+        {submittal.id && (submittal.submittal_type ?? 'Shop Drawing') === 'Shop Drawing' && <SubmittalRevisionEvidence submittal={{ ...submittal, id: submittal.id }} />}
         <SubmittalReviewStrip
           submittal={submittal}
           allSubmittals={allSubmittals}

@@ -16,6 +16,7 @@ import {
   type CommentDispositionLike,
 } from "@/lib/commentDispositionGate";
 import { computeSubmittalRiskAging } from "@/lib/submittalRiskAging";
+import { submittalRevisionEvidenceBlockReason } from '@/lib/submittalRevisionEvidence';
 import type {
   DrawingRevisionEvidence,
   ReadinessDrawing,
@@ -149,6 +150,8 @@ export function isGoverningDrawingReleaseReady(
     };
   }
   if (stage && RELEASE_READY_STAGES.has(stage)) {
+    const evidenceBlock = submittalRevisionEvidenceBlockReason(submittal);
+    if (evidenceBlock) return { ready: false, stage, reason: evidenceBlock, governingSubmittalId: submittal.id };
     return {
       ready: true,
       stage,

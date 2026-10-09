@@ -30,12 +30,14 @@ import {
 import { dueInfoFor, sheetNeedsAction } from "@/pages/drawingSubmittalHub/format";
 import type { DueInfo } from "@/pages/drawingSubmittalHub/types";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
+import { hasExactSubmittalRevisionEvidence } from '@/lib/submittalRevisionEvidence';
 
 const ACTION_STATUSES = new Set(["Rejected", "Revise and Resubmit"]);
 const CLOSED_SUBMITTAL_STATUSES = new Set(["Released for Fabrication", "Void"]);
 
 /** One board card — the shape the legacy `buildBoardItems` produces. */
 export interface BoardItem {
+  revisionEvidenceReady?: boolean;
   id: string;
   kind: string;
   title: string;
@@ -202,12 +204,14 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
     // submittal-governed case (a drawing-set/sheet due stays calendar-day).
     const submittalDue = getSubmittalDueDate(latestSubmittal);
     const dueDate = submittalDue || earliestDate((pkg.sheets || []).map(getDrawingDueDate));
-    const closed = stage === "Released" || CLOSED_SUBMITTAL_STATUSES.has(latestSubmittal?.status);
+    const revisionEvidenceReady = hasExactSubmittalRevisionEvidence(latestSubmittal);
+    const closed = latestSubmittal?.status === 'Void' || (stage === 'Released' && revisionEvidenceReady);
     const due = dueInfoFor(dueDate, { closed, useWorkdays: useWorkdays && !!submittalDue });
     const setNumber = pkg.parent ? formatDrawingSetNumber(pkg.parent) : "";
     const submittalNumber = latestSubmittal?.submittal_number || "";
     return {
       id: `set-${pkg.key}`,
+      revisionEvidenceReady,
       kind: "Drawing Set",
       title: pkg.name || "Unnamed drawing set",
       stage,
@@ -219,6 +223,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
       due,
       linked: !!latestSubmittal,
       needsAction:
+        (['IFC', 'Released'].includes(stage) && !revisionEvidenceReady) ||
         ACTION_STATUSES.has(latestSubmittal?.status) ||
         (pkg.sheets || []).some((drawing: any) => sheetNeedsAction(drawing)),
       isRR: isRRStatus(latestSubmittal?.status),
@@ -243,10 +248,14 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
         submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) ||
         "Not Started";
       const dueDate = getSubmittalDueDate(submittal);
+      const revisionEvidenceReady = hasExactSubmittalRevisionEvidence(submittal);
+      const shopDrawing = (submittal.submittal_type ?? 'Shop Drawing') === 'Shop Drawing';
       // Always a submittal due date → working-day-aware when the flag is on.
-      const due = dueInfoFor(dueDate, { closed: CLOSED_SUBMITTAL_STATUSES.has(submittal.status), useWorkdays });
+      const closed = submittal.status === 'Void' || (CLOSED_SUBMITTAL_STATUSES.has(submittal.status) && (!shopDrawing || revisionEvidenceReady));
+      const due = dueInfoFor(dueDate, { closed, useWorkdays });
       return {
         id: `submittal-${submittal.id}`,
+        revisionEvidenceReady,
         kind: "Unlinked Submittal",
         title:
           [submittal.submittal_number, submittal.title || submittal.description]
@@ -260,7 +269,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
         dueDate,
         due,
         linked: false,
-        needsAction: ACTION_STATUSES.has(submittal.status),
+        needsAction: ACTION_STATUSES.has(submittal.status) || (shopDrawing && ['IFC', 'Released'].includes(stage) && !revisionEvidenceReady),
         isRR: isRRStatus(submittal.status),
         sheetCount: 0,
         submittalCount: 1,
@@ -326,7 +335,7 @@ export function summarizeBoard(allItems: BoardItem[]): BoardSummary {
     dueSoon: allItems.filter((item) => item.due.dueSoon).length,
     needsAction: allItems.filter((item) => item.needsAction).length,
     unlinked: allItems.filter((item) => !item.linked).length,
-    released: allItems.filter((item) => item.stage === "Released").length,
+    released: allItems.filter((item) => item.stage === "Released" && item.revisionEvidenceReady === true).length,
     criticalRisk: allItems.filter((item) => item.risk?.tier === "critical").length,
     pendingEor: allItems.filter((item) => item.pendingEorResponse).length,
   };

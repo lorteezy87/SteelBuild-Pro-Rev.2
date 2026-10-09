@@ -18,6 +18,7 @@ import { resolveTransmittalDisplay } from "@/components/drawings/register/docCon
 import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 import type { TransmittalLog, TransmittalRow } from "@/hooks/useTransmittals";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
+import { hasExactSubmittalRevisionEvidence, submittalRevisionEvidenceBlockReason } from '@/lib/submittalRevisionEvidence';
 import { submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { buildApprovalMatrixRows, matrixStatusBucket, summarizeApprovalMatrix } from "./format";
 import { createSubmittalHref, hubHref, submittalRecordHref } from "./hubLinks";
@@ -125,6 +126,8 @@ export type LastSent =
   | { kind: "none" };
 
 export interface MatrixEnrichment {
+  revisionEvidenceReady?: boolean;
+  revisionEvidenceReason?: string | null;
   stage: string;
   stageSource: MatrixStageSource;
   /** Live (non-superseded) sheets in the set; null when the set has no package. */
@@ -448,6 +451,8 @@ export function enrichApprovalMatrixRows<T extends MatrixRowLike>(
       : null;
     return {
       ...row,
+      revisionEvidenceReady: hasExactSubmittalRevisionEvidence(governing),
+      revisionEvidenceReason: governing ? submittalRevisionEvidenceBlockReason(governing) : 'No governing submittal revision evidence.',
       stage: resolvePackageStage(linked, sheets),
       stageSource: mapped ? "submittal" : sheets.length ? "sheets" : "none",
       sheetCount: pkg ? sheets.length : null,
@@ -554,7 +559,7 @@ export function summarizeMatrixCoverage(rows: readonly EnrichedMatrixRow[]): Mat
   for (const row of rows || []) {
     if (row.onHold > 0) setsOnHold++;
     sheetsOnHold += row.onHold;
-    if (row.stage === "Released") released++;
+    if (row.stage === "Released" && row.revisionEvidenceReady === true) released++;
   }
   return { setsOnHold, sheetsOnHold, released };
 }

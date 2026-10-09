@@ -1,11 +1,14 @@
 /** Complete project-scoped reads used by fabrication and turnover exports. */
 import { supabase } from "@/lib/supabase";
+import { hydrateSubmittalRevisionCoverage } from '@/api/client/submittalWorkflow';
 import { fetchAllRows, type PageResult } from "@/lib/pagedQuery";
 
 /** Keep each PostgREST `in` filter short, then page every result in that filter. */
 const DRAWING_ID_CHUNK_SIZE = 500;
 
 export interface FabSubmittalRow {
+  current_round_id?: string | null;
+  revision_coverage?: import('@/lib/submittalRevisionEvidence').RevisionCoverageSummary | null;
   id: string;
   submittal_type: string | null;
   status: string;
@@ -81,7 +84,7 @@ export async function loadFabApprovalEvidence(
       // eslint-disable-next-line no-restricted-syntax
       const { data, error } = await supabase
         .from("submittals")
-        .select("id, submittal_type, status, ball_in_court, drawing_set_ids, submitted_date, updated_at, round_number, is_deleted, deleted_at")
+        .select("id, submittal_type, status, ball_in_court, drawing_set_ids, current_round_id, submitted_date, updated_at, round_number, is_deleted, deleted_at")
         .eq("project_id", projectId)
         .eq("is_deleted", false)
         .order("id")
@@ -112,7 +115,7 @@ export async function loadFabApprovalEvidence(
       return { data: data as FabRevisionRow[] | null, error };
     }),
   ]);
-  return { submittals, drawingSignoffs, drawingRevisions };
+  return { submittals: await hydrateSubmittalRevisionCoverage(submittals), drawingSignoffs, drawingRevisions };
 }
 
 /** RFI numbers are free-text links on sheets, so read the whole project register. */
