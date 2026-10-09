@@ -4,6 +4,28 @@ Seven reviewed Edge functions are deployed to staging with source and gateway
 JWT settings verified. Hosted acceptance remains incomplete. Production Edge
 functions and the production frontend were not changed by this deployment.
 
+## Consolidated release candidate: PR #539
+
+Draft [PR #539](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/539)
+consolidates the reviewed telemetry containment, project-export actor,
+calculator viewport, rigging calculation and Drawing Control corrections onto
+one branch. Its pre-audit source tree at `85d836d31` passed 8,929 Vitest tests in
+882 files, lint, TypeScript and JavaScript typechecks, both strict ratchets,
+hook rules, the no-new-JavaScript gate, the production build and the bundle
+budget. The corrected drawing guard also passed 70 controlled Chromium
+contracts across desktop and mobile. These local results do not replace hosted
+CI or authenticated staging acceptance.
+
+Live release-path inspection on October 9 found repository variable
+`CLOUDFLARE_ENABLED=false`. The latest main workflow skipped production
+publication, and both public domains still serve entry asset
+`index-D7mtDmja.js`, matching the previously recorded production bundle. Main
+`539c5bef0` changes merge ancestry only; its tree matches the prior `32cf2c50`
+checkpoint. The production drift gate still fails for the nine reviewed SQL
+payloads installed in staging but pending in production. Publication must stay
+held until the final main SHA has matching staging function source, passing
+hosted acceptance and all required release gates.
+
 ## Latest checkpoint: `32cf2c50`, hosted acceptance still failing
 
 All seven functions were refreshed from exact merged main
