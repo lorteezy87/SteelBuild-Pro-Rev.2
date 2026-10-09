@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentType } from "react";
 import type { FabApprovalEvidenceRows } from "@/lib/exports/fabReleaseEvidence";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 
 const mocks = vi.hoisted(() => ({
   loadApproval: vi.fn(),
@@ -51,6 +52,7 @@ const approval: FabApprovalEvidenceRows = {
     id: "sub-1", submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC",
     drawing_set_ids: ["set-1"], submitted_date: null, updated_at: null, round_number: 1,
     is_deleted: false, deleted_at: null,
+    ...verifiedSubmittalEvidence('sub-1', 'review-round', 'revision-current'),
   }],
   drawingSignoffs: [],
   drawingRevisions: [],

@@ -1,6 +1,15 @@
 import { applySubmittalWorkflow, hydrateSubmittalRevisionCoverage, isSubmittalWorkflowPatch, validateSubmittalCreate } from './submittalWorkflow';
 import { addAliases, cleanRecord } from './fieldMapping';
 import type { EntityClient, RowWithAliases } from './supabaseTypes';
+import { getActiveOrgGeneration } from '@/lib/activeOrg';
+import type { SubmittalReview } from './submittalWorkflow';
+
+async function readWithCoverage<R extends SubmittalReview>(load: () => Promise<R[]>, client?: Parameters<typeof hydrateSubmittalRevisionCoverage>[1]) {
+  const generation = getActiveOrgGeneration();
+  const rows = await load();
+  if (generation !== getActiveOrgGeneration()) throw new Error('Workspace changed. Reload submittal evidence.');
+  return hydrateSubmittalRevisionCoverage(rows, client);
+}
 
 /** Legacy UI/import entrypoints cannot manufacture a submitted drawing record. */
 export function withSubmittalLifecycle<T extends EntityClient<'submittals'>>(base: T): T {
@@ -27,11 +36,11 @@ export function withSubmittalLifecycle<T extends EntityClient<'submittals'>>(bas
     return addAliases(result.submittal as RowWithAliases<'submittals'>, 'submittals');
   };
   return { ...base, create, update,
-    list: async (...args) => hydrateSubmittalRevisionCoverage(await base.list(...args)),
-    listAll: async (...args) => hydrateSubmittalRevisionCoverage(await base.listAll(...args)),
-    filter: async (...args) => hydrateSubmittalRevisionCoverage(await base.filter(...args)),
-    filterAll: async (...args) => hydrateSubmittalRevisionCoverage(await base.filterAll(...args)),
-    get: async (id, options) => (await hydrateSubmittalRevisionCoverage([await base.get(id, options)], options?.client))[0],
+    list: async (...args) => readWithCoverage(() => base.list(...args)),
+    listAll: async (...args) => readWithCoverage(() => base.listAll(...args)),
+    filter: async (...args) => readWithCoverage(() => base.filter(...args)),
+    filterAll: async (...args) => readWithCoverage(() => base.filterAll(...args)),
+    get: async (id, options) => (await readWithCoverage(async () => [await base.get(id, options)], options?.client))[0],
     bulkCreate: async (records) => { for (const record of records) validateSubmittalCreate(record as Record<string, unknown>); return base.bulkCreate(records); },
     bulkUpdate: async (ids, patch) => {
       if (isSubmittalWorkflowPatch(patch as Record<string, unknown>)) throw new Error('Review each submittal before changing its submission or approval workflow.');

@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FabApprovalEvidenceRows } from "../fabReleaseEvidence";
 import type { SubmittalRevisionCoverage } from '@/api/client/submittalWorkflow';
+import { setActiveOrgId } from '@/lib/activeOrg';
 
 type Row = Record<string, unknown>;
 const database = vi.hoisted(() => ({
   tables: {} as Record<string, Row[]>,
   failTable: "",
   failCoverage: false,
+  switchWorkspaceDuringRead: false,
   coverageCalls: [] as string[][],
   calls: [] as Array<{ table: string; filters: Record<string, unknown>; start: number; end: number; order: string[] }>,
 }));
@@ -35,6 +37,7 @@ vi.mock("@/lib/supabase", () => ({
         in(column: string, values: string[]) { filters[column] = values; return this; },
         order(column: string) { order.push(column); return this; },
         async range(start: number, end: number) {
+          if (database.switchWorkspaceDuringRead) { database.switchWorkspaceDuringRead = false; setActiveOrgId('other-org'); }
           database.calls.push({ table, filters: { ...filters }, start, end, order: [...order] });
           if (database.failTable === table && start >= 500) {
             return { data: null as Row[] | null, error: { message: "page unavailable" } };
@@ -60,14 +63,21 @@ import {
 } from "../fabReleaseEvidence";
 
 beforeEach(() => {
+  setActiveOrgId('org');
   database.tables = {};
   database.failTable = "";
   database.failCoverage = false;
+  database.switchWorkspaceDuringRead = false;
   database.coverageCalls = [];
   database.calls = [];
 });
 
 describe("fabrication package evidence", () => {
+  it('rejects a workspace change during raw evidence reads before requesting coverage', async () => {
+    database.switchWorkspaceDuringRead = true;
+    await expect(loadFabApprovalEvidence('project-1', ['drawing-1'])).rejects.toThrow(/Workspace changed/);
+    expect(database.coverageCalls).toEqual([]);
+  });
   it("reads every project submittal and drawing sign-off through bounded, stable pages", async () => {
     const drawingIds = Array.from({ length: 501 }, (_, index) => `drawing-${String(index).padStart(3, "0")}`);
     database.tables.submittals = Array.from({ length: 1001 }, (_, index) => ({

@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { hydrateSubmittalRevisionCoverage } from '@/api/client/submittalWorkflow';
+import { getActiveOrgGeneration } from '@/lib/activeOrg';
 import type { CommentDispositionLike } from "@/lib/commentDispositionGate";
 import {
   isMissingSchemaObjectError,
@@ -146,6 +147,7 @@ function allSourcesAvailable(
 export async function fetchPieceRelationshipSnapshot(
   projectId: string,
 ): Promise<PieceRelationshipSnapshot> {
+  const generation = getActiveOrgGeneration();
   // Core rows: fail closed — without these the assignment UI cannot run.
   const [pieces, workPackages] = await Promise.all([
     fetchPieceRegister(projectId).catch((error) => {
@@ -223,6 +225,7 @@ export async function fetchPieceRelationshipSnapshot(
     drawingSignoffsSource,
     commentDispositionsSource,
   ];
+  if (generation !== getActiveOrgGeneration()) throw new Error('Workspace changed. Reload piece relationship evidence.');
   try {
     submittalsSource.rows = await hydrateSubmittalRevisionCoverage(submittalsSource.rows);
   } catch (error) {
@@ -230,6 +233,7 @@ export async function fetchPieceRelationshipSnapshot(
     submittalsSource.rows = [];
     submittalsSource.availability = 'unavailable';
   }
+  if (generation !== getActiveOrgGeneration()) throw new Error('Workspace changed. Reload piece relationship evidence.');
 
   return {
     pieces,

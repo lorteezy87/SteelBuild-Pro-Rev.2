@@ -41,6 +41,9 @@ const evidenceFamily = (name: string, projectId?: string | null): RegistryKey =>
 
 const revisionReadinessFamilies = (projectId?: string | null): RegistryKey[] => [
   ["submittals"], ["submittals-all"], ["submittal-revision-coverage"], ["submittal-revision-documents"],
+  ["submittals-dashboard"],
+  evidenceFamily("submittals-for-wps", projectId),
+  evidenceFamily("field-plan-submittals", projectId),
   evidenceFamily("piece-relationships", projectId),
   evidenceFamily("fab-release-canonical-gates", projectId),
 ];

@@ -132,6 +132,53 @@ test("keeps blocking delayed writes after register acceptance returns", async ({
   expect(() => probe.assertHealthy()).toThrow(/runtime, network, or write failures/);
 });
 
+for (const rpc of ["get_submittal_revision_coverage", "get_submittal_revision_coverages"]) {
+  test(`allows the inspected ${rpc} POST read`, async ({ page }) => {
+    const backend = await fixture(page);
+    await visitRegister(page, "submittals", options);
+    const status = await page.evaluate(async ({ api, rpc }) => (
+      await fetch(`${api}/rest/v1/rpc/${rpc}`, { method: "POST", body: "{}" })
+    ).status, { api: API, rpc });
+    expect(status).toBe(200);
+    expect(backend.writesReachedBackend()).toBe(1);
+    const probe = await observeReadOnlyPage(page, API);
+    await probe.settle();
+    probe.assertHealthy();
+  });
+
+  test(`rejects an unsuccessful ${rpc} read`, async ({ page }) => {
+    const backend = await fixture(page, { status: 500, request: false });
+    const probe = await observeReadOnlyPage(page, API);
+    await page.goto("/Submittals");
+    const status = await page.evaluate(async ({ api, rpc }) => (
+      await fetch(`${api}/rest/v1/rpc/${rpc}`, { method: "POST", body: "{}" })
+    ).status, { api: API, rpc });
+    expect(status).toBe(500);
+    expect(backend.writesReachedBackend()).toBe(1);
+    await probe.settle();
+    expect(() => probe.assertHealthy()).toThrow(`Supabase HTTP 500: /rest/v1/rpc/${rpc}`);
+  });
+}
+
+for (const [method, rpc] of [
+  ["POST", "get_submittal_revision_coverages_unreviewed"],
+  ["POST", "apply_submittal_round_workflow"],
+  ["PUT", "get_submittal_revision_coverage"],
+  ["PATCH", "get_submittal_revision_coverages"],
+]) {
+  test(`keeps ${method} ${rpc} blocked`, async ({ page }) => {
+    const backend = await fixture(page);
+    await visitRegister(page, "submittals", options);
+    await page.evaluate(async ({ api, method, rpc }) => {
+      await fetch(`${api}/rest/v1/rpc/${rpc}`, { method, body: "{}" }).catch(() => {});
+    }, { api: API, method, rpc });
+    expect(backend.writesReachedBackend()).toBe(0);
+    const probe = await observeReadOnlyPage(page, API);
+    await probe.settle();
+    expect(() => probe.assertHealthy()).toThrow(`Blocked write during read-only acceptance: ${method} /rest/v1/rpc/${rpc}`);
+  });
+}
+
 test("accepts an exact drawing name beside its nested number badge and quote characters", async ({ page }) => {
   const name = `Owner's "Erection" Drawings`;
   await fixture(page, { table: "drawing_sets", body: [{ id: "set", project_id: PROJECT, set_name: name }],

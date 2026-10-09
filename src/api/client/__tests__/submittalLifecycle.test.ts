@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const workflowRpc = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc: workflowRpc } }));
-import { hydrateSubmittalRevisionCoverage, type SubmittalRevisionCoverage } from '../submittalWorkflow';
+import { getSubmittalRevisionCoverage, hydrateSubmittalRevisionCoverage, type SubmittalRevisionCoverage } from '../submittalWorkflow';
 import { withSubmittalLifecycle } from '../submittalLifecycle';
 import { setActiveOrgId } from '@/lib/activeOrg';
 import type { EntityClient } from '../supabaseTypes';
@@ -9,6 +9,18 @@ const row = { id: 's', status: 'Approved', ball_in_court: 'GC', submittal_type: 
 function coverage(id: string): SubmittalRevisionCoverage { return { project_id: 'p', reason: 'missing_manifest', submittal_id: id, submittal_status: row.status, submittal_updated_at: row.updated_at, round_id: 'r', ok: false, current_revision_ids: ['rev'], captured_revision_ids: [], missing_revision_ids: ['rev'], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [], evidence: [] }; }
 beforeEach(() => { workflowRpc.mockReset(); setActiveOrgId('org'); });
 describe('complete revision coverage reads', () => {
+  it.each(['list', 'listAll', 'filter', 'filterAll', 'get'] as const)('rejects a workspace switch while the base %s read is pending', async method => {
+    const list = async () => { setActiveOrgId('other-org'); return [row]; };
+    const base = { list, listAll: list, filter: list, filterAll: list, get: async () => (await list())[0] } as unknown as EntityClient<'submittals'>;
+    const entity = withSubmittalLifecycle(base);
+    const reads = { list: () => entity.list(), listAll: () => entity.listAll(), filter: () => entity.filter({ project_id: 'p' }), filterAll: () => entity.filterAll({ project_id: 'p' }), get: () => entity.get('s') };
+    await expect(reads[method]()).rejects.toThrow(/Workspace changed/);
+    expect(workflowRpc).not.toHaveBeenCalled();
+  });
+  it('rejects a workspace switch during the detail coverage RPC', async () => {
+    workflowRpc.mockImplementation(async () => { setActiveOrgId('other-org'); return { data: coverage('s'), error: null }; });
+    await expect(getSubmittalRevisionCoverage('s')).rejects.toThrow(/Workspace changed/);
+  });
   it('batches more than a hosted page without truncation or per-row calls', async () => {
     const rpc = vi.fn(async (_name: string, args: { p_submittal_ids: string[] }) => ({ data: args.p_submittal_ids.map(coverage), error: null }));
     const rows = Array.from({ length: 1001 }, (_, i) => ({ ...row, id: String(i) }));
