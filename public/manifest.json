@@ -28,7 +28,7 @@
       "purpose": "maskable"
     },
     {
-      "src": "/steelbuild-pro-icon-512.png",
+      "src": "/steelbuild-pro-icon-512.png?v=128951a18fd1",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"

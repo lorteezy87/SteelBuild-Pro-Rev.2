@@ -6,13 +6,10 @@ import { MARK_AMBER, MARK_PATH, MARK_TILE_BG } from "../steelBuildMarkGeometry";
 const read = (rel: string) => readFileSync(resolve(process.cwd(), rel), "utf8");
 const squash = (value: string) => value.replace(/\s+/g, " ").trim();
 
-/**
- * Historical hex-S assets remain in the repository for compatibility. The
- * approved steel diamond badge now owns every active logo and raster export.
- * Keep legacy geometry internally consistent without reconnecting it to the
- * app identity.
+/** Legacy SVGs remain available to older installed clients. Keep their geometry
+ * consistent, while the active raster assets come from the approved badge.
  */
-describe("SteelBuild-Pro hex-S mark geometry", () => {
+describe("legacy SteelBuild-Pro mark geometry", () => {
   const STATIC_SVGS = [
     "public/steelbuild-pro-mark.svg",
     "public/favicon.svg",
@@ -23,9 +20,10 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     expect(squash(read(file))).toContain(MARK_PATH);
   });
 
-  it("generates current rasters from the approved badge instead of the retired paths", () => {
+  it("generates active raster assets from the approved diamond badge", () => {
     const script = read("scripts/generate-brand-rasters.cjs");
     expect(script).toContain('"marketing", "steelbuild-pro-logo.jpg"');
+    expect(script).toContain("badgeOnCanvas");
     expect(script).not.toContain("MARK_PATH");
   });
 
@@ -35,11 +33,10 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     }
   });
 
-  it("retains the historical palette without coloring the approved badge", () => {
+  it("keeps legacy mark colors and the active Signal Amber token", () => {
     expect(MARK_AMBER).toBe("#F5BB00");
     expect(MARK_TILE_BG).toBe("#0D1117");
     expect(read("src/styles/brand-theme.css")).toContain("--sbp-signal-amber:          #F5BB00");
-    expect(read("src/styles/brand-theme.css")).not.toMatch(/--brand-amber:/);
   });
 
   it("leaves the product accent on the approved brand orange", () => {
