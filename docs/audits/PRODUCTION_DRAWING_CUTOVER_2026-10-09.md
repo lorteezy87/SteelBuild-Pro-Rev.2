@@ -7,7 +7,7 @@ No SQL, ledger, customer record, source PDF, account, or provider state was chan
 
 Source: main `e69d8cb7d5feaa31e2bb6bf79a2185368312513f`.
 Catalog/ledger inspection: production `kjrwqagyeswwoxpjkcko` and staging
-`ndyfjffsulfbwpmwdmic`, October 9, 2026, 14:44–14:54 UTC.
+`ndyfjffsulfbwpmwdmic`, October 9, 2026, 14:44–14:59 UTC.
 Any later application must repeat the preflight against its reviewed main SHA.
 
 All nine versions below are **absent in production** and present as a single
@@ -98,8 +98,15 @@ or that steel has actually been fabricated.
   roster. Five packages have no current round.
 - The linked sets contain **103 current sheet-revision rows**. Every active
   sheet has exactly one current revision. **19** have all source metadata needed
-  for capture; **84** lack file_url, a valid page, and a matching Storage row.
-  All revision codes are present. This is a metadata check, not PDF readback.
+  for capture; **84** lack revision-level file_url and a valid page, so no Storage
+  row can be matched through that revision. All revision codes are present.
+  This is a metadata check, not PDF readback.
+- All 84 incomplete revisions have nonblank PDF references and positive page
+  numbers on their parent drawing, with matching private app-files metadata;
+  their parent sets also reference existing private PDFs. These source hints
+  span eleven packages. This is a revision metadata routing gap, **not a finding
+  that those PDFs are absent**. The parent references remain review material,
+  not proof that the file was part of the original submitted/approved roster.
 - At package level: **3 complete current source rosters, 2 partial, 9 with zero
   eligible current PDF sources, 1 empty package**. Only two of the three complete
   packages also have a matching live round. The third has no round.
@@ -169,8 +176,11 @@ The staging NULL-type legacy fixture is not a production population count.
    review from retained records or project correspondence. Compare every current
    sheet against those originals. The status audit can identify when a recorded
    change occurred, but cannot substitute for that review.
-3. For the 84 missing source references/pages, repair the register only from
-   verified source documents through the approved revision workflow. Never point
+3. For the 84 missing revision source references/pages, compare the available
+   parent sheet/set PDFs and page metadata against the actual reviewed records;
+   repair the register only from verified sources through the approved revision
+   workflow. Do not mechanically copy parent references into historical revisions.
+   Never point
    an old approval at a newly received PDF merely to clear a blocker. Retain old
    sources. Confirm file bytes/readability separately; this census checked only
    Storage metadata.
