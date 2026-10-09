@@ -30,7 +30,7 @@ Notes:
 
 ## Active claims
 
-| 2026-10-09 | codex-revision-manifest-client | Atomic submittal frontend and evidence review | src/hooks/submittals/**; src/pages/submittals/**; src/api/client/entities.ts; submittal evidence components/helpers/tests | Scoped continuation of parent-approved immutable revision manifests; coordinate RPC contract with revision-manifest-db; preserve all prior claims. |
+| 2026-10-09 | codex-revision-manifest-client | Atomic submittal frontend and evidence review | src/hooks/submittals/**; src/hooks/useSubmittals.ts; src/pages/submittals/**; src/api/client/{entities,submittal*,supabaseTypes}.ts; src/lib/{submittalRevisionEvidence,detailingPackageState,fabReleaseGate}*; src/lib/pieceControl/{drawingReleaseReady,readiness,relationshipsRepository}.ts; src/lib/exports/fabRelease.ts; src/pages/{DrawingSubmittalHub.tsx,drawingSubmittalHub/**,drawings/useDrawingsPageController.ts}; related tests | Scoped continuation of parent-approved immutable revision manifests; coordinate RPC contract with revision-manifest-db; preserve all prior claims. |
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
