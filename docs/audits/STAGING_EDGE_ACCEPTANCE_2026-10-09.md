@@ -60,9 +60,15 @@ remain explicitly INCOMPLETE because required configuration is unavailable.
 The synthetic project export returned HTTP 200 with its validated v2 shape:
 96 tables, 155 rows, one file reference, one Storage inventory entry and zero
 mailbox rows. Credential-exclusion shape checks passed, but nonempty mailbox
-redaction remains untested. The subsequent audit verification failed and is
-being diagnosed; the export must not be automatically retried. No passing
-backend release is implied. The sanitized summary and original ZIP are retained
+redaction remains untested. The subsequent audit verification correctly failed:
+a read-only database inspection found the new export activity, with matching
+counts, but its actor is NULL. The installed activity trigger replaces the
+supplied actor with `auth.uid()`; the handler's service-role write therefore
+loses the verified caller. A forward correction must use the caller's existing
+RLS-scoped INSERT/SELECT permission and verify the returned actor before allowing
+export success. No trigger, permission or historical audit row was changed, and
+the export was not retried. No passing backend release is implied.
+The sanitized summary and original ZIP are retained
 locally as `backend-acceptance-37956141828-summary.json` and
 `backend-acceptance-37956141828.zip`.
 
