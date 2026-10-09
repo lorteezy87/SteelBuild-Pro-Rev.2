@@ -48,6 +48,9 @@ export async function runCases(db:Database):Promise<number> {
     await assert.rejects(db.query("update public.submittals set submittal_type='Shop Drawing',status='Draft' where id=$1",[untyped]),/ROUND_EVIDENCE_IMMUTABLE/);
   }));
   await check('NULL legacy approval cannot acquire drawing evidence through attestation',()=>withLegacyTypes(async()=>{
+    // Remove missing date as a competing rejection cause: NULL classification
+    // itself must deny this attestation even with an actual transmission date.
+    await db.query("update public.submittals set submitted_date='2026-10-09' where id=$1",[untyped]);
     const s=await parent(db,untyped);
     await assert.rejects(db.query('select public.reconcile_submittal_round_evidence($1,$2,$3,$4,$5,$6,$7)',
       [s.id,randomUUID(),s.updated_at,s.status,s.current_round_id,[],'I inspected the original transmission and confirm the exact source.']),/ROUND_ATTESTATION_REQUIRED/);
@@ -67,6 +70,9 @@ export async function runCases(db:Database):Promise<number> {
   }));
   await check('NULL and Product Data records cannot displace a typed governing package',()=>withLegacyTypes(async()=>{
     await db.query("update public.submittals set submittal_type='Product Data' where id=$1",[untypedDraft]);
+    // Both non-Shop rows are newer than the typed fixture. Type exclusion,
+    // rather than date precedence, must keep them out of the governing set.
+    await db.query("update public.submittals set submitted_date='2026-10-09' where id=any($1::uuid[])",[[untyped,untypedDraft]]);
     const gate=(await db.query<{result:{submittal_id:string;ok:boolean}}>('select public.evaluate_fab_release_set($1,$2) result',[ids.project,ids.set])).rows[0].result;
     assert.equal(gate.submittal_id,ids.legacy);assert.equal(gate.ok,false);
   }));

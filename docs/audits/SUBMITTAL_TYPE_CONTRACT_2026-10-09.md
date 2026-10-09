@@ -43,11 +43,11 @@ existing workflow guards as the other revision-evidence tests.
 | NULL / Approved / GC / no round or date | Coverage false, `not_shop_drawing`, no evidence |
 | NULL Approved → Shop Drawing | `ROUND_EVIDENCE_IMMUTABLE` |
 | NULL Approved → Shop Drawing and Draft together | `ROUND_EVIDENCE_IMMUTABLE` |
-| PM attempts legacy attestation for the NULL approval | `ROUND_ATTESTATION_REQUIRED` |
+| PM attempts legacy attestation for the NULL approval with a recorded submission date | `ROUND_ATTESTATION_REQUIRED` from the type boundary |
 | NULL Draft → explicit Shop Drawing before first transmission | Allowed; coverage remains inactive |
 | Newly classified Shop Draft → Submitted by direct update | `ROUND_WORKFLOW_REQUIRED` |
 | Pre-transmission Shop Draft → Product Data | Allowed; no drawing approval evidence |
-| NULL and Product Data coexist with a typed governing package | Typed package remains the governing record |
+| Newer NULL and Product Data coexist with an older typed governing package | Typed package remains the governing record despite its older date |
 | Blank or unknown type | Baseline type CHECK rejects the write |
 | Released Shop Drawing history → NULL type | `ROUND_EVIDENCE_IMMUTABLE` |
 | Only NULL or Product Data links exist for a drawing set | No governing submittal, release false, `no_submittal` blocker |
