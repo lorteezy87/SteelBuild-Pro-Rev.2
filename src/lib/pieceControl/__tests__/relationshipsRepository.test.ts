@@ -167,12 +167,13 @@ describe("fetchPieceRelationshipSnapshot", () => {
   });
   it('keeps piece assignment available but marks approvals unavailable when exact revision evidence cannot load', async () => {
     fromMock.mockImplementation((table: string) => chainFor({ data: table === 'submittals'
-      ? [{ id: 's', status: 'Released for Fabrication', current_round_id: 'round', updated_at: '2026-10-09T00:00:00Z' }]
+      ? [{ id: 's', submittal_type: 'Shop Drawing', status: 'Released for Fabrication', current_round_id: 'round', updated_at: '2026-10-09T00:00:00Z' }]
       : [], error: null }));
     rpcMock.mockResolvedValue({ data: null, error: { message: 'Evidence unavailable' } });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const snapshot = await fetchPieceRelationshipSnapshot('project-1');
+      expect(rpcMock).toHaveBeenCalledWith('get_submittal_revision_coverages', { p_submittal_ids: ['s'] });
       expect(snapshot.pieces).toHaveLength(1);
       expect(snapshot.submittals).toEqual([]);
       expect(snapshot.sourceAvailability.approvals).toBe('unavailable');
