@@ -140,6 +140,16 @@ jobs:
           npm ci --prefix supabase/tests/stripe-billing --ignore-scripts
           npm run test:postgres --prefix supabase/tests/stripe-billing
 
+      - name: Verify project plan limits and concurrent admissions
+        env:
+          PROJECT_LIMIT_POSTGRES_TEST: "1"
+          PROJECT_LIMIT_POSTGRES_CREATE_DB: "1"
+          PROJECT_LIMIT_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_project_limits_test
+        run: |
+          npm ci --prefix supabase/tests/project-plan-limits --ignore-scripts
+          npm test --prefix supabase/tests/project-plan-limits
+          npm run test:postgres --prefix supabase/tests/project-plan-limits
+
   edge-typecheck:
     name: Release Edge Function typecheck
     runs-on: ubuntu-latest

@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261009140000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - project plan capacity guard. Serializes active project admission at the organization parent, closes direct INSERT and concurrent RPC bypasses, rechecks authenticated membership after waits, and refuses restore lock inversion with a retryable error. No quota exemption for service/maintenance writes and no new paid-module policy. Requires exact source review, real PostgreSQL concurrency and installed-schema staging rollback before manual application and matching ledger stamp. See docs/audits/PROJECT_PLAN_LIMITS_2026-10-09.md."
+      },
+      {
         "version": "20261008071019",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - atomic Stripe webhook candidate. Service-role-only snapshot/apply RPCs couple the organization billing state, revision check and unique processed-event receipt in one transaction. Requires exact SQL review, staged retry/concurrency/entitlement acceptance and matching ledger payload before deploying the dependent stripe-billing handler. Keep visible in missingMigrations until manually applied and stamped. See supabase/tests/stripe-billing/README.md and docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md."
