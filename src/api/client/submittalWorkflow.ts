@@ -98,7 +98,9 @@ export async function reconcileSubmittalEvidence(input: Omit<WorkflowInput, 'pat
   return executeWorkflow('reconcile_submittal_round_evidence', { ...reviewArgs(input.review, input.revisionIds), p_attestation: input.attestation.trim() }, input);
 }
 export async function getSubmittalRevisionCoverage(submittalId: string): Promise<SubmittalRevisionCoverage> {
+  const generation = getActiveOrgGeneration();
   const { data, error } = await (supabase as unknown as RpcClient).rpc('get_submittal_revision_coverage', { p_submittal_id: submittalId });
+  if (generation !== getActiveOrgGeneration()) throw new Error('Workspace changed. Reload revision evidence.');
   if (error) throw new Error(error.message);
   if (!isRevisionCoverage(data) || data.submittal_id !== submittalId) throw new Error('Revision evidence is unavailable. Refresh before making a workflow decision.');
   return data;

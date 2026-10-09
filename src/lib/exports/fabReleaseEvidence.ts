@@ -1,6 +1,7 @@
 /** Complete project-scoped reads used by fabrication and turnover exports. */
 import { supabase } from "@/lib/supabase";
 import { hydrateSubmittalRevisionCoverage } from '@/api/client/submittalWorkflow';
+import { getActiveOrgGeneration } from '@/lib/activeOrg';
 import { fetchAllRows, type PageResult } from "@/lib/pagedQuery";
 
 /** Keep each PostgREST `in` filter short, then page every result in that filter. */
@@ -79,6 +80,7 @@ export async function loadFabApprovalEvidence(
   projectId: string,
   drawingIds: readonly string[],
 ): Promise<FabApprovalEvidenceRows> {
+  const generation = getActiveOrgGeneration();
   const [submittals, drawingSignoffs, drawingRevisions] = await Promise.all([
     fetchAllRows<FabSubmittalRow>(async (start, end) => {
       // eslint-disable-next-line no-restricted-syntax
@@ -115,6 +117,7 @@ export async function loadFabApprovalEvidence(
       return { data: data as FabRevisionRow[] | null, error };
     }),
   ]);
+  if (generation !== getActiveOrgGeneration()) throw new Error('Workspace changed. Reload fabrication approval evidence.');
   return { submittals: await hydrateSubmittalRevisionCoverage(submittals), drawingSignoffs, drawingRevisions };
 }
 

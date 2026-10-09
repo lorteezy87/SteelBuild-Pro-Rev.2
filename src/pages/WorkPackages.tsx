@@ -19,6 +19,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PauseCircle } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
+import { hydrateSubmittalRevisionCoverage } from "@/api/client/submittalWorkflow";
+import { getActiveOrgGeneration } from "@/lib/activeOrg";
 import { supabase } from "@/lib/supabase";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -194,18 +196,24 @@ export default function WorkPackages() {
 
   const submittalsQuery = useQuery({
     queryKey: ["submittals-for-wps", projectId],
-    queryFn: async () => verifyWorkPackageEvidenceScope(
-      await fetchAllProjectRowsPaged<{
-        id: string; project_id: string; submittal_type: string | null; status: string;
-        ball_in_court: string | null; drawing_set_ids: string[] | null;
-        submitted_date: string | null; updated_at: string | null; created_at: string | null;
-        round_number: number | null; is_deleted: boolean | null; deleted_at: string | null;
-      }>(supabase, "submittals", projectId!, {
-        select: "id,project_id,submittal_type,status,ball_in_court,drawing_set_ids,submitted_date,updated_at,created_at,round_number,is_deleted,deleted_at",
-        maxRows: 100_000,
-        onTruncated: rejectIncompleteWorkPackageEvidence,
-      }), projectId!,
-    ),
+    queryFn: async () => {
+      const generation = getActiveOrgGeneration();
+      const rows = verifyWorkPackageEvidenceScope(
+        await fetchAllProjectRowsPaged<{
+          id: string; project_id: string; submittal_type: string | null; status: string;
+          current_round_id: string | null;
+          ball_in_court: string | null; drawing_set_ids: string[] | null;
+          submitted_date: string | null; updated_at: string | null; created_at: string | null;
+          round_number: number | null; is_deleted: boolean | null; deleted_at: string | null;
+        }>(supabase, "submittals", projectId!, {
+          select: "id,project_id,submittal_type,status,current_round_id,ball_in_court,drawing_set_ids,submitted_date,updated_at,created_at,round_number,is_deleted,deleted_at",
+          maxRows: 100_000,
+          onTruncated: rejectIncompleteWorkPackageEvidence,
+        }), projectId!,
+      );
+      if (generation !== getActiveOrgGeneration()) throw new Error("Workspace changed. Reload work package evidence.");
+      return hydrateSubmittalRevisionCoverage(rows);
+    },
     enabled: !!projectId,
     staleTime: 30 * 1000,
   });
@@ -373,8 +381,10 @@ export default function WorkPackages() {
   const wpQueryKeys = workPackageCacheKeys(projectId);
 
   useRealtimeInvalidation(projectId ? "work_packages" : "", projectId, wpQueryKeys);
-  useRealtimeInvalidation(projectId ? "drawings" : "", projectId, [["drawings", projectId, "wp-evidence"]]);
-  useRealtimeInvalidation(projectId ? "drawing_sets" : "", projectId, [["drawing-sets-for-wps", projectId]]);
+  useRealtimeInvalidation(projectId ? "drawings" : "", projectId, [["drawings", projectId, "wp-evidence"], ["submittals-for-wps", projectId]]);
+  useRealtimeInvalidation(projectId ? "drawing_sets" : "", projectId, [["drawing-sets-for-wps", projectId], ["submittals-for-wps", projectId]]);
+  useRealtimeInvalidation(projectId ? "drawing_revisions" : "", projectId, [["submittals-for-wps", projectId]]);
+  useRealtimeInvalidation(projectId ? "submittal_rounds" : "", projectId, [["submittals-for-wps", projectId]]);
   useRealtimeInvalidation(projectId ? "submittals" : "", projectId, [["submittals-for-wps", projectId]]);
   useRealtimeInvalidation(projectId ? "fab_releases" : "", projectId, [["wp-fab-releases", projectId]]);
   useRealtimeInvalidation(piecesEnabled ? "pieces" : "", projectId, [["wp-piece-counts", projectId]]);

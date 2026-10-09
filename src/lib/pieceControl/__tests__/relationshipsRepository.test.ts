@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setActiveOrgId } from '@/lib/activeOrg';
 
 const fromMock = vi.fn();
 const rpcMock = vi.fn();
@@ -29,6 +30,7 @@ function chainFor(result: { data: unknown; error: unknown }) {
 
 describe("fetchPieceRelationshipSnapshot", () => {
   beforeEach(() => {
+    setActiveOrgId('org');
     vi.clearAllMocks();
     vi.mocked(fetchPieceRegister).mockResolvedValue([
       {
@@ -53,6 +55,12 @@ describe("fetchPieceRelationshipSnapshot", () => {
         deleted_at: null,
       },
     ]);
+  });
+
+  it('rejects a workspace change during the initial raw reads', async () => {
+    fromMock.mockImplementation(() => { setActiveOrgId('other-org'); return chainFor({ data: [], error: null }); });
+    await expect(fetchPieceRelationshipSnapshot('project-1')).rejects.toThrow(/Workspace changed/);
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("soft-fails optional tables so a missing dispositions table still loads core rows", async () => {
