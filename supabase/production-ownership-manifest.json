@@ -35,6 +35,11 @@
         "evidence": "PENDING PRODUCTION APPLY - local membership-revocation candidate. Requires current workspace membership in all three explicit project-role resolvers, including callers that bypass ordinary project RLS; preserves role precedence, execution grants and current archived-project administration. Isolated SQL regressions cover removed viewer/field/PM/admin/owner roles and refused archival. Requires exact reviewed staging application and matching ledger payload before release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/membership-revocation/README.md and docs/audits/MEMBERSHIP_EMAIL_CLOSEOUT_RELEASE_2026-10-09.md."
       },
       {
+        "version": "20261009070300",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Immutable shop-drawing round revision evidence and atomic PM workflow. Exact multi-set revision roster, source/page snapshot, explicit legacy attestation, project-consistent foreign keys, MFA and fail-closed release coverage. Requires dedicated SQL and independent PostgreSQL concurrency acceptance plus hosted staging rehearsal before manual exact-file application and ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/SUBMITTAL_REVISION_EVIDENCE_2026-10-09.md."
+      },
+      {
         "version": "20261008013546",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - Drawing Control governing-submittal gate candidate. Aligns evaluate_fab_release_set with exact drawing-set IDs, live recognized rounds, submitted-date ordering and fail-closed BIC stage mapping. Local SQL return-value tests pass; exact reviewed staging authentication, hold/RFI and release validation are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
