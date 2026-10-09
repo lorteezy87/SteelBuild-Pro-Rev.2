@@ -30,7 +30,6 @@ Notes:
 
 ## Active claims
 
-| 2026-10-09 | codex-acceptance-nodenext | Acceptance tooling NodeNext compatibility | scripts/__tests__/{drawingEvidence*,stagingNetworkGuard,syntheticPdf*}.test.ts; e2e/drawingEvidenceTransport.ts; e2e/drawing-evidence-*.ts; e2e/staging-network.contract.spec.ts; e2e/synthetic-pdf/**; e2e/synthetic-pdf-evidence.spec.ts; playwright.drawing-evidence.config.ts; playwright.synthetic-pdf.config.ts | Correct explicit module paths and transitive Node tooling compatibility under the unchanged scripts TypeScript gate; preserve egress behavior, no hosted calls. |
 
 
 
