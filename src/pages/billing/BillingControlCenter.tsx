@@ -49,9 +49,10 @@ export interface BillingControlCenterProps {
   /** organizations.stripe_customer_id (non-null = portal available). */
   stripeCustomerId: string | null | undefined;
   /** Accepted member count for the workspace (used in seat KPI). */
-  memberCount: number;
+  memberCount: number | null;
   /** Pending invite count (counts against seat limit per the server gate). */
-  pendingCount: number;
+  pendingCount: number | null;
+  seatCountIsWorkspaceTotal?: boolean;
   /** Active project count in this workspace. */
   projectCount: number | null;
   /** Only workspace owners/admins can read the complete project total. */
@@ -70,6 +71,7 @@ const TONE_ICONS = {
   Status: Activity,
   Renewal: CalendarClock,
   "Seats Used": Users,
+  Members: Users,
   Projects: FolderKanban,
   "Projects you can access": FolderKanban,
 } as const;
@@ -83,6 +85,7 @@ export default function BillingControlCenter(props: BillingControlCenterProps) {
     stripeCustomerId,
     memberCount,
     pendingCount,
+    seatCountIsWorkspaceTotal,
     projectCount,
     projectCountIsWorkspaceTotal,
     children,
@@ -99,10 +102,11 @@ export default function BillingControlCenter(props: BillingControlCenterProps) {
         stripeCustomerId,
         memberCount,
         pendingCount,
+        seatCountIsWorkspaceTotal,
         projectCount,
         projectCountIsWorkspaceTotal,
       }),
-    [planKey, subscriptionStatus, currentPeriodEnd, stripeCustomerId, memberCount, pendingCount, projectCount, projectCountIsWorkspaceTotal],
+    [planKey, subscriptionStatus, currentPeriodEnd, stripeCustomerId, memberCount, pendingCount, seatCountIsWorkspaceTotal, projectCount, projectCountIsWorkspaceTotal],
   );
 
   const heroChips = [
