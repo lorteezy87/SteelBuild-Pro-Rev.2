@@ -1,5 +1,11 @@
 # Atomic billing events and production backup boundary
 
+Current hosted state (October 9, 13:09 UTC): the exact migration below is applied
+and stamped in staging and production, with matching payload and function hashes.
+Installed staging acceptance passed all 20 checks and left no synthetic fixture
+rows. See `PRODUCTION_RELEASE_2026-10-08.md`. The matching Edge handler is not yet
+deployed; payment readiness remains incomplete for the reasons below.
+
 This ports only the committed billing/backup changes from `1fc3078f1af7ef79524654d3640ab7015da465f2`. The `stripe-billing` entrypoint and mapping module, migration, backup script/workflow and original focused tests preserve that source. Account deletion is a separately reviewed release. No uncommitted security-worktree files are included.
 
 ## Result and deployment order

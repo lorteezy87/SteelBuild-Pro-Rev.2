@@ -125,3 +125,28 @@ were modified by this release. Hosted browser review/save remains separate.
 
 The five Drawing Control migrations and the new exact-revision manifest still
 hold the frontend release. No frontend or Edge publication has occurred.
+
+## Atomic billing SQL — October 9, 13:09 UTC
+
+After PR #513 merged as `00cc7a70f3bb6eb1d5864f5f3f7358d03bac0aeb`, the
+exact `20261008071019_atomic_stripe_billing_events.sql` payload was applied and
+stamped on staging, then production. SHA-256:
+`3dfc1339eb999c33b5bad396d439958c8a6e6820071a612e33e686db9d5bbe44`.
+The apply refused existing stamps and checked the full payload hash inside the
+same transaction as the DDL and ledger insert. No customer entitlement changed.
+
+The installed staging implementation passed all 20 rollback acceptance checks;
+the subsequent read found zero synthetic users, workspaces or billing receipts.
+Both environments have identical function-definition hashes:
+
+- `apply_stripe_billing_event`: MD5 `6eab633a3ea6894831e03c7b199ee2a5`.
+- `get_stripe_billing_snapshot`: MD5 `2f17457721ddacc9b4f211cd058c1cb0`.
+
+Both functions are SECURITY DEFINER with empty search paths and service-role-only
+execution. The private synchronization table has RLS and no direct SELECT grants
+for anonymous, authenticated or service roles. Exact source CI run `37933404737`
+passed application, secret, Edge and commercial PostgreSQL gates. Drift remains
+blocked by other pending required SQL; the Tailwind build dependency advisory is
+separate. The matching billing handler has not been deployed. Durable checkout
+and real Stripe test-mode acceptance remain open; this SQL alone does not prevent
+duplicate subscription charges.

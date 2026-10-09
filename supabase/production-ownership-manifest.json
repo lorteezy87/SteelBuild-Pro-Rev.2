@@ -27,7 +27,7 @@
       {
         "version": "20261008071019",
         "lifecycle": "required",
-        "evidence": "PENDING PRODUCTION APPLY - atomic Stripe webhook candidate. Service-role-only snapshot/apply RPCs couple the organization billing state, revision check and unique processed-event receipt in one transaction. Requires exact SQL review, staged retry/concurrency/entitlement acceptance and matching ledger payload before deploying the dependent stripe-billing handler. Keep visible in missingMigrations until manually applied and stamped. See supabase/tests/stripe-billing/README.md and docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md."
+        "evidence": "APPLIED staging and production 2026-10-09 13:09 UTC. Exact ledger payload SHA-256 3dfc1339eb999c33b5bad396d439958c8a6e6820071a612e33e686db9d5bbe44; matching function definitions and service-only grants verified. All 20 installed staging acceptance checks passed under rollback. Service-role-only snapshot/apply RPCs couple organization billing state, revision check and unique receipt. Retain required classification so a missing stamp still blocks publication. Matching handler and durable checkout/provider acceptance remain pending. See docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md and docs/audits/PRODUCTION_RELEASE_2026-10-08.md."
       },
       {
         "version": "20261008032524",
