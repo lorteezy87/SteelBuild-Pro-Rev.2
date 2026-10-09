@@ -67,3 +67,30 @@ being reviewed and rehearsed on staging. Provider settings, authenticated
 viewport/business acceptance, security integration, and monetization acceptance
 must remain separately evidenced.
 
+## Release controls and staging prerequisites
+
+On October 9, the five Drawing Control prerequisite ledger payloads were read
+from staging and verified against every SHA-256 in the Drawing Control release
+candidate. They are already present there and were not reapplied. Production
+still has none of those five. The five local drawing-governing harnesses passed
+again; this is separate from the new exact-revision manifest acceptance.
+
+Main `a0a57f316` passed application CI, secret scan, Edge typecheck, and commercial
+PostgreSQL acceptance in run `37895602676`. Its prior drift failure blocked
+publishing; the six SQL changes above do not establish a fresh green drift run.
+
+The reviewed backend workflow now names exactly the seven reviewed handlers
+and also requires the commercial PostgreSQL job. Its executed verification
+tests reject failed required checks, unreviewed functions, non-main production,
+and missing or mismatched staging evidence. All 27 focused tests passed.
+
+GitHub environments `staging-backend` and `production-backend` were created with
+main-only branch policies; production retains the owner-review requirement
+specified in the existing runbook. Both are missing the environment secret
+`SUPABASE_BACKEND_ACCESS_TOKEN`. No repository-wide token was copied. The owner
+has been asked to provision distinct, narrowly scoped deployment credentials.
+
+Both public domains and the retained Cloudflare Worker origin returned 200 with
+the same entry asset `index-D7mtDmja.js`. The separate Sites project currently
+has no custom-domain bindings. Historical Sites migration notes must not be
+treated as current domain routing or permission to repoint the domains.
