@@ -16,7 +16,9 @@ There is no new restore API or relaxation of archived-project RLS. Restoration t
 
 ## Verification
 
-Before the candidate, the dedicated regression using captured live functions and direct authenticated INSERT failed with `Missing expected rejection`. With the candidate, 18 focused PGlite behavior checks pass. Independent PostgreSQL concurrency and installed-schema staging rollback results are pending and must be recorded before this candidate is called ready.
+Before the candidate, the dedicated regression using captured live functions and direct authenticated INSERT failed with `Missing expected rejection`. With the candidate, 18 focused PGlite behavior checks pass. Exact candidate SHA-256 `c79db36e74eda4bac62f1b1921022e8e0af9dd7977153023c443ce4e86b0cdae` also passed 18 installed-schema staging rollback assertions against `ndyfjffsulfbwpmwdmic`, with actual Auth, RLS, project setup and soft-archive triggers. After rollback the candidate and ledger were absent and synthetic users, organizations and projects were all zero. Independent PostgreSQL concurrency remains pending.
+
+The first hosted fixture tried inserting a project already archived, which live setup numbering correctly rejects. The rehearsal now creates the project active and calls the installed `soft_delete_project` before testing privileged restoration. No production change was needed for that fixture correction. The first CI PostgreSQL run found an existing non-BYPASSRLS `service_role` from another disposable suite; the fixture now explicitly mirrors hosted service-role RLS semantics before running behavior tests. Hosted SQL and policies were not modified to work around either fixture issue.
 
 The dedicated suite includes Free/Pro/unknown/unlimited boundaries, direct REST-equivalent writes, ordinary RPC payload/assignments, explicit service/maintenance admissions, privileged restore authorization, multirow atomic rollback, NULL active state, and continued editing of existing over-limit projects. CI owns the full app suite/build and real PostgreSQL checks; broad local app checks are avoided after the host crash.
 
