@@ -66,6 +66,7 @@ describe("deriveDrawingsPageModel", () => {
     const model = derive({
       submittals: [{
         id: "submittal-1",
+        submittal_type: "Shop Drawing",
         drawing_set_ids: ["set-1"],
         status: "Released for Fabrication",
       } as Submittal],

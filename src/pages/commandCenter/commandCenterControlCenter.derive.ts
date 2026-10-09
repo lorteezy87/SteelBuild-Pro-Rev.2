@@ -1,3 +1,4 @@
+import { daysSince as calendarDaysSince, daysUntil as calendarDaysUntil } from "@/lib/dateMath";
 /**
  * Pure derivations for CommandCenterControlCenter (canonical presentation redesign).
  *
@@ -11,7 +12,7 @@
 
 import { riskScore, rfiUrgencyLabel } from "@/pages/rfis/rfiControlCenter.derive";
 import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
-import { isOpenScheduleTask } from "@/components/schedule/scheduleGanttHelpers";
+import { isOpenScheduleTask, taskOwner } from "@/components/schedule/scheduleGanttHelpers";
 import { RFI_OPEN_STATUSES, CO_PENDING_STATUSES } from "@/lib/entityPredicates";
 
 // ── Source record shapes (subset of entity fields we actually read) ────────
@@ -162,26 +163,13 @@ export interface CommandCenterSummary {
 
 // ── Date helpers (local-midnight, same convention as urgencyEngine) ────────
 
-function todayLocalMidnight(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function daysUntilDate(dateStr?: string | null): number | null {
-  if (!dateStr) return null;
-  const due = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(due.getTime())) return null;
-  const today = todayLocalMidnight();
-  return Math.ceil((due.getTime() - today.getTime()) / 86400000);
+  const days = calendarDaysUntil(dateStr);
+  return Number.isFinite(days) ? days : null;
 }
 
 function daysSinceDate(dateStr?: string | null): number {
-  if (!dateStr) return 0;
-  const from = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(from.getTime())) return 0;
-  const today = todayLocalMidnight();
-  return Math.floor((today.getTime() - from.getTime()) / 86400000);
+  return calendarDaysSince(dateStr);
 }
 
 function isOverdueRfi(rfi: RfiSource): boolean {
@@ -371,7 +359,7 @@ function deliveriesToActionItems(dels: DeliverySource[]): ActionItem[] {
     .filter((d) => d.status !== "Delivered")
     .filter((d) => {
       const dueDays = daysUntilDate(d.scheduled_date);
-      return d.status === "Delayed" || (dueDays !== null && dueDays <= 7);
+      return d.status === "Delayed" || (dueDays !== null && dueDays <= 10);
     })
     .map((d): ActionItem => {
       const dueDays = daysUntilDate(d.scheduled_date);
@@ -410,6 +398,33 @@ function workPackagesToActionItems(workPackages: WorkPackageSource[]): ActionIte
     }));
 }
 
+function scheduleTasksToActionItems(tasks: ScheduleTaskSource[]): ActionItem[] {
+  const parentIds = buildParentIdSet(tasks);
+  return tasks
+    .filter((task) => !isSummaryTask(task, parentIds) && isOpenScheduleTask(task))
+    .map((task, index): ActionItem => {
+      const dueDays = daysUntilDate(task.end_date);
+      const urgency: ActionItem["urgency"] = dueDays !== null && dueDays < 0
+        ? "overdue"
+        : task.status === "On Hold" || task.status === "Delayed"
+          ? "blocking"
+          : dueDays !== null && dueDays <= 3 ? "due-soon" : "normal";
+      return {
+        id: task.id || `task:${index}`,
+        itemType: "TASK",
+        title: task.task_name || "Untitled schedule task",
+        status: task.status || null,
+        priority: null,
+        owner: taskOwner(task) || null,
+        dueDate: task.end_date || null,
+        linkedTo: null,
+        projectId: task.project_id || null,
+        urgency,
+        raw: task,
+      };
+    });
+}
+
 function urgencyOrder(u: ActionItem["urgency"]): number {
   switch (u) {
     case "overdue": return 0;
@@ -434,14 +449,12 @@ function deriveScheduleHealth(tasks: ScheduleTaskSource[]): { label: string; ton
   // surfaces agree on what "active" means.
   const activeTasks = leafTasks.filter((t) => isOpenScheduleTask(t));
   if (activeTasks.length === 0) return { label: "On Track", tone: "good" };
-  const delayed = activeTasks.filter((t) => t.status === "Delayed").length;
-  // Overdue = past its end_date only. A task with no end_date has no finish
-  // commitment to miss; its start_date must not stand in as a deadline.
-  const overdueTasks = activeTasks.filter((t) => {
-    const d = daysUntilDate(t.end_date);
-    return d !== null && d < 0;
+  // Count each leaf once even when it is both explicitly delayed and overdue.
+  // A task with no end_date has no finish commitment to miss.
+  const atRiskCount = activeTasks.filter((task) => {
+    const dueDays = daysUntilDate(task.end_date);
+    return task.status === "Delayed" || (dueDays !== null && dueDays < 0);
   }).length;
-  const atRiskCount = delayed + overdueTasks;
   const ratio = atRiskCount / activeTasks.length;
   if (ratio > 0.25 || atRiskCount > 5) return { label: "Behind", tone: "danger" };
   if (ratio > 0.1 || atRiskCount > 2) return { label: "At Risk", tone: "warn" };
@@ -571,6 +584,7 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
     ...changeOrderToActionItems(changeOrders),
     ...deliveriesToActionItems(deliveries),
     ...workPackagesToActionItems(workPackages),
+    ...scheduleTasksToActionItems(scheduleTasks),
   ].sort((a, b) => urgencyOrder(a.urgency) - urgencyOrder(b.urgency));
 
   const assignedPanelItems = new Set<string>();

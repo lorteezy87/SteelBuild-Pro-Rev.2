@@ -48,9 +48,9 @@ describe("entities.SOVItem", () => {
       sov_id: "SOV-099",
     });
 
-    // p_project_id is a separate argument, NOT a payload key — the deployed
-    // function is create_sov_item(p_project_id uuid, p_payload jsonb).
-    expect(supabase.rpc).toHaveBeenCalledWith("create_sov_item", {
+    // The transaction wrapper receives project and operation identity separately.
+    expect(supabase.rpc).toHaveBeenCalledWith("create_numbered_record", {
+      p_kind: "sov_items", p_client_op_id: expect.any(String),
       p_project_id: "project-1",
       p_payload: {
         description: "Structural steel",
@@ -173,8 +173,8 @@ describe("entities.SOVItem", () => {
     // There is no bulk overload deployed; sequential single calls keep the
     // minted numbers in the caller's order.
     expect(vi.mocked(supabase.rpc).mock.calls.map((c) => c[0])).toEqual([
-      "create_sov_item",
-      "create_sov_item",
+      "create_numbered_record",
+      "create_numbered_record",
     ]);
     expect(created.map((row) => row.line_item_number)).toEqual([1, 2]);
   });
@@ -198,16 +198,16 @@ describe("entities.SOVItem", () => {
         { project_id: "project-1", description: "" },
       ]),
     ).rejects.toThrow(
-      "1 of 2 SOV line items were created; row 2 failed: [sov_items.create] description is required",
+      "1 of 2 sov_items records were created; row 2 failed: [sov_items.create] description is required",
     );
   });
 
-  it("writes back the pay-application columns the RPC does not set", async () => {
+  it("persists the pay-application columns inside the creation transaction", async () => {
     // create_sov_item() inserts a fixed column list that omits
     // application_number / period_* / submitted_date / payment_received_date.
     // SOVFormModal collects all four, so dropping them loses what the PM typed.
     vi.mocked(supabase.rpc).mockResolvedValue({
-      data: { id: "sov-1", project_id: "project-1", line_item_number: 3 },
+      data: { id: "sov-1", project_id: "project-1", line_item_number: 3, application_number: 4, period_from: "2026-09-01", period_to: "2026-09-30" },
       error: null,
     } as never);
     updateSingle.mockResolvedValue({
@@ -230,13 +230,13 @@ describe("entities.SOVItem", () => {
       period_to: "2026-09-30",
     } as never);
 
-    // They must not ride along in the RPC payload — the function ignores them.
+    // The wrapper transaction must receive every collected field.
     const rpcArgs = vi.mocked(supabase.rpc).mock.calls[0]?.[1] as
       | Record<string, unknown>
       | undefined;
-    expect(rpcArgs?.p_payload).toMatchObject({ description: "Erection" });
+    expect(rpcArgs?.p_payload).toMatchObject({ description: "Erection", application_number: 4, period_from: "2026-09-01", period_to: "2026-09-30" });
 
-    expect(fromUpdate).toHaveBeenCalledWith("sov_items");
+    expect(fromUpdate).not.toHaveBeenCalled();
     expect(created).toMatchObject({
       application_number: 4,
       period_from: "2026-09-01",

@@ -29,6 +29,7 @@ import { BackchargeFormModal } from "@/pages/Backcharges";
 import { buildBackchargePrefillFromSheet, createBackchargeFromDelta, sheetsWithRevisionBackcharge } from "@/lib/backchargeFromDelta";
 import { listBackcharges } from "@/lib/backcharge/repository";
 import { downloadRevisionImpactPdf } from "@/lib/exports/revisionImpactPDF";
+import { useNumberedCreateDraft } from "@/hooks/useNumberedCreateDraft";
 
 const mono = "var(--font-mono)";
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
@@ -71,6 +72,7 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
   const [rfiDraft, setRfiDraft] = useState(null); // { deltaId, prefill } | null
   const [bcDraft, setBcDraft] = useState(null); // { sheet, prefill } | null
   const [bcSaving, setBcSaving] = useState(false);
+  const backchargeCreate = useNumberedCreateDraft(projectId, open && !!bcDraft, `revision-backcharge:${set?.setId || set?.key || ""}:${bcDraft?.sheet?.sheetNumber || ""}`);
   const [sessionLoggedBc, setSessionLoggedBc] = useState(() => new Set());
 
   // Reset when the set changes or the modal reopens.
@@ -79,7 +81,9 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
     setProgress({ done: 0, total: 0 });
     setResults([]);
     setError("");
-  }, [set?.setId, set?.key, open]);
+    setBcDraft(null);
+    setSessionLoggedBc(new Set());
+  }, [set?.setId, set?.key, open, projectId]);
 
   const summary = useMemo(() => summarizePackageReport(results), [results]);
 
@@ -187,7 +191,8 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
   const saveBackcharge = async (formData) => {
     setBcSaving(true);
     try {
-      await createBackchargeFromDelta({ projectId, formData, sheet: bcDraft?.sheet });
+      await backchargeCreate.save({ project_id: projectId, formData, sheet: bcDraft?.sheet }, (attempted, options) =>
+        createBackchargeFromDelta({ projectId: attempted.project_id, formData: attempted.formData, sheet: attempted.sheet }, options));
       const sn = bcDraft?.sheet?.sheetNumber;
       if (sn) setSessionLoggedBc((prev) => new Set(prev).add(String(sn)));
       setBcDraft(null);
@@ -210,7 +215,7 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && !bcSaving && onClose()}>
       {/* Radix centres this with translateY(-50%), so a box taller than the
           viewport loses half its overflow ABOVE the top edge where it can't be
           scrolled to. max-height + overflow:hidden keeps it bounded; dvh is
@@ -314,7 +319,8 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
             open
             initial={bcDraft.prefill}
             busy={bcSaving}
-            onClose={() => setBcDraft(null)}
+            recoveryPending={backchargeCreate.recoveryPending}
+            onClose={() => { if (!bcSaving) setBcDraft(null); }}
             onSubmit={saveBackcharge}
           />
         )}

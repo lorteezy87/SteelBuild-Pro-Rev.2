@@ -7,6 +7,7 @@ import {
   releaseBlockerSummary,
 } from "../fabReleaseControlCenter.derive";
 import type { FabMetrics, EnrichedWorkPackage, FabSignals } from "../types";
+import type { CanonicalReleaseGate } from "@/lib/pieceControl/releaseRepository";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,6 +71,19 @@ function makeWP(id: string, overrides: Partial<EnrichedWorkPackage> = {}): Enric
   } as unknown as EnrichedWorkPackage;
 }
 
+function makeGate(id: string, blockers: string[], passes = false): CanonicalReleaseGate {
+  const check = { passed: passes, blockers };
+  return {
+    work_package_id: id,
+    project_id: "project-1",
+    passes,
+    already_released: false,
+    checks: { scope: check, drawings: check, material: check, holds: check },
+    blockers,
+    evaluated_at: "2026-10-08T17:00:00Z",
+  };
+}
+
 /** Minimal FabMetrics stub with empty collections. */
 function makeMetrics(overrides: Partial<FabMetrics> = {}): FabMetrics {
   return {
@@ -126,7 +140,7 @@ describe("stageTone", () => {
 
 describe("stageLabel", () => {
   it("returns a human label for every canonical stage id", () => {
-    expect(stageLabel("shop_released")).toBe("Released");
+    expect(stageLabel("shop_released")).toBe("Release Stamp");
     expect(stageLabel("in_fabrication")).toBe("In Fab");
     expect(stageLabel("ready_to_ship")).toBe("Ship Ready");
   });
@@ -151,16 +165,17 @@ describe("buildFabReleaseSummary – KPI counts", () => {
     expect(s.kpis).toHaveLength(6);
   });
 
-  it("counts releasedCount as activeShop + readyToShip", () => {
+  it("counts releasedCount from confirmed releases rather than shop stages", () => {
     const shopWp = makeWP("1", { _signals: makeSignals({ stage: "in_fabrication", inShop: true }) });
-    const shipWp = makeWP("2", { _signals: makeSignals({ stage: "ready_to_ship", complete: true }) });
+    const shipWp = makeWP("2", { _signals: makeSignals({ stage: "ready_to_ship", complete: true, releaseGateState: "released" }) });
     const metrics = makeMetrics({
       totalCount: 2,
+      enriched: [shopWp, shipWp],
       activeShop: [shopWp],
       readyToShip: [shipWp],
     });
     const s = buildFabReleaseSummary(metrics);
-    expect(s.releasedCount).toBe(2);
+    expect(s.releasedCount).toBe(1);
   });
 
   it("counts inFabCount as activeShop packages at in_fabrication stage only", () => {
@@ -171,7 +186,7 @@ describe("buildFabReleaseSummary – KPI counts", () => {
     expect(s.inFabCount).toBe(1); // only the in_fabrication one
   });
 
-  it("counts blockedCount from releaseBlocked with non-clear risk only", () => {
+  it("counts every server-blocked package regardless of advisory risk score", () => {
     const blocked = makeWP("1", { _signals: makeSignals({ needsRelease: true, risk: "high" }) });
     const warn = makeWP("2", { _signals: makeSignals({ needsRelease: true, risk: "medium" }) });
     const ready = makeWP("3", { _signals: makeSignals({ needsRelease: true, risk: "clear", readyForRelease: true }) });
@@ -180,7 +195,7 @@ describe("buildFabReleaseSummary – KPI counts", () => {
       readyForRelease: [ready],
     });
     const s = buildFabReleaseSummary(metrics);
-    expect(s.blockedCount).toBe(2); // high + medium; clear excluded
+    expect(s.blockedCount).toBe(3);
   });
 
   it("computes percentReleased by tonnage when tons > 0", () => {
@@ -190,15 +205,33 @@ describe("buildFabReleaseSummary – KPI counts", () => {
   });
 
   it("falls back to count-based percent when totalTons is 0", () => {
-    const shopWp = makeWP("1", { _signals: makeSignals({ inShop: true }) });
+    const shopWp = makeWP("1", { _signals: makeSignals({ inShop: true, releaseGateState: "released" }) });
     const metrics = makeMetrics({
       totalCount: 4,
       totalTons: 0,
+      enriched: [shopWp],
       activeShop: [shopWp],
     });
     const s = buildFabReleaseSummary(metrics);
     // 1 released out of 4 total → 25%
     expect(s.percentReleased).toBe(25);
+  });
+
+  it("withholds the project-wide release percentage when package checks are incomplete", () => {
+    const released = makeWP("released", { _signals: makeSignals({ releaseGateState: "released" }) });
+    const unchecked = makeWP("unchecked", { _signals: makeSignals({ releaseGateState: "unverified" }) });
+    const metrics = makeMetrics({
+      totalCount: 2,
+      totalTons: 100,
+      releasedTons: 40,
+      enriched: [released, unchecked],
+    });
+
+    const summary = buildFabReleaseSummary(metrics);
+    expect(summary.coverageComplete).toBe(false);
+    expect(summary.releasedCount).toBe(1);
+    expect(summary.kpis.find((kpi) => kpi.label === "Verified Releases")?.sublabel).toContain("1 of 2");
+    expect(summary.kpis.find((kpi) => kpi.label === "% Released")?.value).toBe("—");
   });
 });
 
@@ -210,7 +243,7 @@ describe("buildFabReleaseSummary – decision panel queues", () => {
   it("readyQueue contains readyForRelease packages, sorted by readinessScore desc, capped at 6", () => {
     const wps = Array.from({ length: 8 }, (_, i) =>
       makeWP(String(i), {
-        _signals: makeSignals({ readyForRelease: true, readinessScore: i * 10 }),
+        _signals: makeSignals({ readyForRelease: true, releaseGateState: "ready", readinessScore: i * 10 }),
       })
     );
     const metrics = makeMetrics({ readyForRelease: wps });
@@ -220,27 +253,27 @@ describe("buildFabReleaseSummary – decision panel queues", () => {
     expect(s.readyQueue[0]._signals.readinessScore).toBe(70);
   });
 
-  it("blockedQueue excludes clear-risk packages and sorts high risk first", () => {
+  it("blockedQueue includes clear-risk server blockers and sorts high risk first", () => {
     const high = makeWP("h", { _signals: makeSignals({ needsRelease: true, risk: "high" }) });
     const med  = makeWP("m", { _signals: makeSignals({ needsRelease: true, risk: "medium" }) });
     const clr  = makeWP("c", { _signals: makeSignals({ needsRelease: true, risk: "clear" }) });
     const metrics = makeMetrics({ releaseBlocked: [med, clr, high] });
     const s = buildFabReleaseSummary(metrics);
     expect(s.blockedQueue[0].id).toBe("h");
-    expect(s.blockedQueue.every((wp) => wp._signals.risk !== "clear")).toBe(true);
+    expect(s.blockedQueue.map((wp) => wp.id)).toContain("c");
   });
 
-  it("recentlyReleased shows in-shop packages sorted by released_date descending", () => {
+  it("recentlyReleased shows server-confirmed packages sorted by released_date descending", () => {
     const older = makeWP("old", {
       released_date: isoOffset(-10),
-      _signals: makeSignals({ inShop: true }),
+      _signals: makeSignals({ inShop: true, releaseGateState: "released" }),
     });
     const newer = makeWP("new", {
       released_date: isoOffset(-2),
-      _signals: makeSignals({ inShop: true }),
+      _signals: makeSignals({ inShop: true, releaseGateState: "released" }),
     });
-    const noDate = makeWP("nd", { _signals: makeSignals({ inShop: true }) });
-    const metrics = makeMetrics({ activeShop: [older, newer, noDate] });
+    const noDate = makeWP("nd", { _signals: makeSignals({ inShop: true, releaseGateState: "released" }) });
+    const metrics = makeMetrics({ enriched: [older, newer, noDate], activeShop: [older, newer, noDate] });
     const s = buildFabReleaseSummary(metrics);
     // A missing release date is incomplete metadata, not evidence the release
     // did not happen. It remains visible after dated releases.
@@ -248,9 +281,9 @@ describe("buildFabReleaseSummary – decision panel queues", () => {
   });
 
   it("never reports released packages while showing an empty recently-released panel", () => {
-    const shopWp = makeWP("shop", { _signals: makeSignals({ stage: "shop_released", inShop: true }) });
-    const shipWp = makeWP("ship", { _signals: makeSignals({ stage: "ready_to_ship", complete: true }) });
-    const s = buildFabReleaseSummary(makeMetrics({ activeShop: [shopWp], readyToShip: [shipWp] }));
+    const shopWp = makeWP("shop", { _signals: makeSignals({ stage: "shop_released", inShop: true, releaseGateState: "released" }) });
+    const shipWp = makeWP("ship", { _signals: makeSignals({ stage: "ready_to_ship", complete: true, releaseGateState: "released" }) });
+    const s = buildFabReleaseSummary(makeMetrics({ enriched: [shopWp, shipWp], activeShop: [shopWp], readyToShip: [shipWp] }));
 
     expect(s.releasedCount).toBe(2);
     expect(s.recentlyReleased.map((wp) => wp.id)).toEqual(expect.arrayContaining(["shop", "ship"]));
@@ -261,10 +294,10 @@ describe("buildFabReleaseSummary – decision panel queues", () => {
     const wps = Array.from({ length: 10 }, (_, i) =>
       makeWP(String(i), {
         released_date: isoOffset(-i),
-        _signals: makeSignals({ inShop: true }),
+        _signals: makeSignals({ inShop: true, releaseGateState: "released" }),
       })
     );
-    const metrics = makeMetrics({ activeShop: wps });
+    const metrics = makeMetrics({ enriched: wps, activeShop: wps });
     const s = buildFabReleaseSummary(metrics);
     expect(s.recentlyReleased).toHaveLength(6);
   });
@@ -304,25 +337,22 @@ describe("buildFabReleaseSummary – KPI cells", () => {
 
 
 describe("releaseBlockerSummary", () => {
-  it("summarizes authoritative blocker flags in severity order", () => {
+  it("summarizes server blockers and does not substitute local flags", () => {
     const wp = makeWP("blocked", {
       _signals: makeSignals({
         risk: "high",
-        readyForRelease: false,
-        flags: [
-          { key: "approval", label: "2 IFC sheets missing", severity: "high" },
-          { key: "rfi", label: "RFI 018 unresolved", severity: "high" },
-          { key: "material", label: "Material ETA unconfirmed", severity: "medium" },
-        ],
+        releaseGateState: "blocked",
+        releaseGate: makeGate("blocked", ["S-201 has an active drawing hold", "Material not received"]),
+        flags: [{ key: "local", label: "Advisory issue", severity: "high" }],
       }),
     });
 
     expect(releaseBlockerSummary(wp)).toBe(
-      "RELEASE BLOCKED — 2 IFC sheets missing · RFI 018 unresolved · Material ETA unconfirmed",
+      "RELEASE BLOCKED — S-201 has an active drawing hold · Material not received",
     );
   });
 
-  it("uses existing drawing evidence when links are explicitly missing", () => {
+  it("does not claim a server blocker from local drawing-link evidence", () => {
     const wp = makeWP("drawings", {
       _signals: makeSignals({
         risk: "medium",
@@ -343,20 +373,27 @@ describe("releaseBlockerSummary", () => {
       }),
     });
 
-    expect(releaseBlockerSummary(wp)).toBe("RELEASE BLOCKED — 2 drawing links missing");
+    expect(releaseBlockerSummary(wp)).toMatch(/not verified/);
   });
 
-  it("does not invent a blocker when the evidence is unavailable", () => {
+  it("asks for server review when a blocked gate has no reason text", () => {
     const wp = makeWP("unknown", {
-      _signals: makeSignals({ risk: "high", readyForRelease: false, flags: [] }),
+      _signals: makeSignals({ releaseGateState: "blocked", releaseGate: makeGate("unknown", []) }),
     });
-    expect(releaseBlockerSummary(wp)).toBe("RELEASE BLOCKED — blocker evidence unavailable");
+    expect(releaseBlockerSummary(wp)).toBe("RELEASE BLOCKED — review release checks");
   });
 
-  it("reports ready only from the existing readyForRelease signal", () => {
+  it("does not call a locally ready package server-ready", () => {
     const wp = makeWP("ready", {
       _signals: makeSignals({ risk: "clear", readyForRelease: true }),
     });
-    expect(releaseBlockerSummary(wp)).toBe("Ready for release");
+    expect(releaseBlockerSummary(wp)).toMatch(/not verified/);
+  });
+
+  it("reports ready from a server-passing readout", () => {
+    const wp = makeWP("ready", {
+      _signals: makeSignals({ releaseGateState: "ready", releaseGate: makeGate("ready", [], true) }),
+    });
+    expect(releaseBlockerSummary(wp)).toContain("verified");
   });
 });

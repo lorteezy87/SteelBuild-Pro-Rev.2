@@ -100,11 +100,6 @@
   color: var(--text-primary);
 }
 
-.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-brand__mark {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-nav__item {
   color: var(--text-secondary);
 }
@@ -425,7 +420,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   color: var(--text-muted);
   cursor: pointer;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 10px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -459,7 +454,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
 
 .sb-dashboard-reference-nav__item {
   width: 100%;
-  min-height: 32px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -467,12 +462,12 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   padding: 0 12px;
   border: 0;
   border-left: 3px solid transparent;
-  border-radius: 7px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 12px;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-align: left;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;

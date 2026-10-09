@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { DateRiskCell, DecisionPanel, Pill, StatusBadge, WorkflowStage } from "@/components/command";
 import type { PillTone } from "@/components/command";
-import { adaptControlBoardFocus, buildControlBoardModel, buildProductionReadinessQueue } from "./drawingControlCenter.derive";
+import { adaptControlBoardFocus, buildControlBoardModel, buildProductionReadinessQueue, nextActionForTriageItem } from "./drawingControlCenter.derive";
 import type { HubTabKey } from "./hubLinks";
 import {
   InlineOwnerControl,
@@ -158,6 +158,7 @@ function QueueRow({
           {item.title}
         </div>
         <div className="cmd-row__meta">{item.group} · {item.owner}</div>
+        <div className="cmd-row__meta">Next: {nextActionForTriageItem(item)}</div>
       </div>
       <Pill tone={itemTone(item)}>{item.due?.label || item.status}</Pill>
     </div>
@@ -197,6 +198,9 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
               {/* R&R is a first-class stage (2026-07-25): skip the extra badge
                   when the state chip itself already reads R&R. */}
               {focus.isRR && focus.detailingState !== "R&R" && <RRChip />}
+            </div>
+            <div className="cmd-row__meta" style={{ marginTop: 7 }}>
+              Next: {nextActionForTriageItem(focus)}
             </div>
 
             <div style={{ marginTop: 12 }}>
@@ -309,10 +313,10 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
         <TriageMetric icon={ClipboardList} label="Pending Review" value={kpis.pending} color={warning} sub={`${kpis.total} total submittals`} />
       </div>
 
-      <section className="sbp-work-panel" aria-label="Production Readiness Queue">
+      <section className="sbp-work-panel" aria-label="Drawing release review">
         <div className="sbp-work-panel__head">
-          <h2>Production Readiness Queue</h2>
-          <span className="cmd-row__meta">Approval dates come from the existing backward schedule. Unknown evidence stays unknown.</span>
+          <h2>Drawing release review</h2>
+          <span className="cmd-row__meta">Stage and known exceptions only. Verify the server fab-release gate before authorizing production.</span>
         </div>
         <div className="cmd-table-wrap">
           <table className="cmd-table">
@@ -323,7 +327,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
                 <th>Required IFC</th>
                 <th>Fab Start</th>
                 <th>Float</th>
-                <th>Blocker</th>
+                <th>Review signal</th>
               </tr>
             </thead>
             <tbody>
@@ -334,10 +338,9 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
                     <div className="cmd-row__meta">{row.item.owner || "Owner unknown"}</div>
                   </td>
                   <td>
-                    <StatusBadge
-                      label={row.currentStage}
-                      tone={row.ready ? "success" : row.currentStage === "R&R" ? "danger" : "accent"}
-                    />
+                    <span title="Workflow state only; this is not fabrication or erection authorization.">
+                      <StatusBadge label={row.currentStage} tone={row.currentStage === "R&R" ? "danger" : "neutral"} />
+                    </span>
                   </td>
                   <td>
                     <DateRiskCell
@@ -350,14 +353,14 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
                   <td>
                     <StatusBadge
                       label={row.blocker}
-                      tone={row.ready ? "success" : row.blocker === "Readiness evidence unavailable" ? "neutral" : "warning"}
+                      tone={row.blocker === "Server fab-release check required" || row.blocker.includes("evidence unavailable") ? "neutral" : "warning"}
                     />
                   </td>
                 </tr>
               ))}
               {productionReadiness.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="cmd-table__empty">No open drawing packages.</td>
+                  <td colSpan={6} className="cmd-table__empty">No drawing sets to review.</td>
                 </tr>
               ) : null}
             </tbody>

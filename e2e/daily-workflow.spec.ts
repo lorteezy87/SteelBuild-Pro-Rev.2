@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { readOnlyTest as test, acceptanceOptions, REGISTER_CONTRACTS, visitRegister } from "./acceptance";
 
 /**
  * Daily-driver workflow smoke: each core register in the moat flow
@@ -10,22 +10,8 @@ import { test, expect } from "@playwright/test";
  * (ExportFabReleaseModal), not a route — a deeper, mutation-aware spec for it
  * is a follow-up (see e2e/README.md).
  */
-const REGISTERS = [
-  { path: "/Drawings", term: /drawing/i },
-  { path: "/Submittals", term: /submittal/i },
-  { path: "/RFIs", term: /rfi/i },
-];
-
-for (const reg of REGISTERS) {
-  test(`register renders: ${reg.path}`, async ({ page }) => {
-    const fatal: string[] = [];
-    page.on("pageerror", (e) => fatal.push(String(e)));
-
-    await page.goto(reg.path);
-    await expect(page).toHaveURL(
-      new RegExp(reg.path.replace(/\//g, "\\/") + "\\/?$"),
-    );
-    await expect(page.locator("body")).toContainText(reg.term);
-    expect(fatal, `uncaught errors on ${reg.path}:\n${fatal.join("\n")}`).toEqual([]);
+for (const register of ["drawings", "submittals", "rfis"] as const) {
+  test(`register renders: ${REGISTER_CONTRACTS[register].path}`, async ({ page }) => {
+    await visitRegister(page, register, acceptanceOptions(register));
   });
 }

@@ -131,8 +131,11 @@ export function HoldsPanel({ projectId }: { projectId: string | null }) {
   const activeCount = useMemo(() => holds.filter((hold) => hold.is_active).length, [holds]);
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: [DRAWING_HOLDS_QUERY_KEY, projectId] });
-    queryClient.invalidateQueries({ queryKey: ["drawing-register", projectId] });
+    void queryClient.invalidateQueries({ queryKey: [DRAWING_HOLDS_QUERY_KEY, projectId] });
+    void queryClient.invalidateQueries({ queryKey: ["drawing-register", projectId] });
+    // A hold changes the server's set-release verdict. Reset instead of only
+    // invalidating: an in-flight refetch must not display an old clear result.
+    void queryClient.resetQueries({ queryKey: ["drawing-set-gate", projectId] });
   };
 
   const resetPlaceForm = () => {

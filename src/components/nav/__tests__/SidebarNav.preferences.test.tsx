@@ -19,6 +19,15 @@ beforeEach(() => { localStorage.clear(); prefs.sidebar_mode = "remember"; });
 afterEach(cleanup);
 
 describe("dashboard sidebar preferences", () => {
+  it("keeps destinations named when their labels are hidden in the icon rail", () => {
+    prefs.sidebar_mode = "rail";
+    render(sidebar());
+    expect(screen.getByRole("button", { name: "Dashboard" })).toHaveAccessibleName("Dashboard");
+    expect(screen.getByRole("button", { name: "Drawing Control" })).toHaveAccessibleName("Drawing Control");
+    expect(screen.getByRole("button", { name: "SteelBuild Pro — project dashboard" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button").every(button => Boolean(button.getAttribute("aria-label") || button.textContent?.trim()))).toBe(true);
+  });
+
   it.each([
     ["remember", "1", true],
     ["remember", "0", false],

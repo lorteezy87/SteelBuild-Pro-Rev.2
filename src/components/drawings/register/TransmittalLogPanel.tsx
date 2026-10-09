@@ -7,6 +7,7 @@
  */
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
@@ -326,7 +327,16 @@ export function TransmittalTruncationNotice({ truncation }: { truncation: Transm
 }
 
 export function TransmittalLogPanel({ projectId }: { projectId: string | null }) {
-  const { data: transmittals = [], isLoading, error } = useTransmittals(projectId);
+  const [searchParams] = useSearchParams();
+  const routeFocusId = searchParams.get("transmittal");
+  // useAutoOpenEdit clears the URL parameter after opening. Retain this ID
+  // while the tab is mounted so switching back to the capped log query cannot
+  // make the just-opened older record disappear from the details row.
+  const [focus, setFocus] = useState(() => ({ projectId, id: routeFocusId }));
+  useEffect(() => { if (routeFocusId) setFocus({ projectId, id: routeFocusId }); }, [projectId, routeFocusId]);
+  const { data: transmittals = [], isLoading, error } = useTransmittals(projectId, {
+    focusTransmittalId: routeFocusId || (focus.projectId === projectId ? focus.id : null),
+  });
   // useTransmittals flags a capped read; the log is the reason the flag exists
   // and was the one consumer ignoring it. Derived from the flag, never from
   // `transmittals.length` — soft-deleted headers are filtered out after the

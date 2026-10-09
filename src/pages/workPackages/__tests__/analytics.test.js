@@ -8,6 +8,15 @@ import {
 } from "../analytics";
 import { indexReleasesByWorkPackage, summarizePiecesByWorkPackage } from "../canonical";
 
+const drawingSet = (id) => ({ id });
+const shopApproval = (id, setId, status = "Released for Fabrication", ball_in_court = "Detailer") => ({
+  id, submittal_type: "Shop Drawing", status, ball_in_court, drawing_set_ids: [setId],
+});
+const approvalEvidence = (setIds = ["set-1"]) => ({
+  drawingSets: setIds.map(drawingSet),
+  submittals: setIds.map((setId, index) => shopApproval(`shop-${index}`, setId)),
+});
+
 describe("work package analytics", () => {
   it("parses comma-separated linked drawing ids", () => {
     expect(parseLinkedIds("a, b ,, c")).toEqual(["a", "b", "c"]);
@@ -68,8 +77,9 @@ describe("work package analytics", () => {
           linked_drawing_ids: "",
         },
       ],
-      [{ id: "d1", stage: "IFC" }],
-      []
+      [{ id: "d1", drawing_set_id: "set-1", stage: "IFC" }],
+      [],
+      approvalEvidence(),
     );
 
     expect(metrics.totalCount).toBe(3);
@@ -77,7 +87,7 @@ describe("work package analytics", () => {
     expect(metrics.progress).toBe(58);
     expect(metrics.progressMethod).toBe("tonnage");
     expect(metrics.onHold).toHaveLength(1);
-    expect(metrics.readyForFab.map((wp) => wp.wp_number)).toEqual(["WP-001"]);
+    expect(metrics.drawingStageClear.map((wp) => wp.wp_number)).toEqual(["WP-001", "WP-002"]);
     expect(metrics.drawingGaps.map((wp) => wp.wp_number)).toContain("WP-003");
     expect(metrics.laborBurn).toBe(80);
   });
@@ -116,12 +126,16 @@ describe("fab readiness agrees with the Fab Release gate", () => {
     const metrics = buildWorkPackageMetrics(
       [wpWith("d1,d2")],
       [
-        { id: "d1", stage: "IFC" },      // release-ready
-        { id: "d2", stage: "OFA" },      // still in approval
+        { id: "d1", drawing_set_id: "set-1", stage: "IFC" },
+        { id: "d2", drawing_set_id: "set-2", stage: "OFA" },
       ],
       [],
+      {
+        drawingSets: [drawingSet("set-1"), drawingSet("set-2")],
+        submittals: [shopApproval("shop-1", "set-1"), shopApproval("shop-2", "set-2", "Submitted", "EOR")],
+      },
     );
-    expect(metrics.readyForFab).toHaveLength(0);
+    expect(metrics.drawingStageClear).toHaveLength(0);
     expect(metrics.blockedSheetCount).toBe(1);
     expect(metrics.fabBlocked.map((w) => w.wp_number)).toEqual(["WP-001"]);
   });
@@ -129,10 +143,14 @@ describe("fab readiness agrees with the Fab Release gate", () => {
   it("calls a package ready only when every linked sheet is release-ready", () => {
     const metrics = buildWorkPackageMetrics(
       [wpWith("d1,d2")],
-      [{ id: "d1", stage: "IFC" }, { id: "d2", stage: "Released" }],
+      [
+        { id: "d1", drawing_set_id: "set-1", stage: "IFC" },
+        { id: "d2", drawing_set_id: "set-2", stage: "Released" },
+      ],
       [],
+      approvalEvidence(["set-1", "set-2"]),
     );
-    expect(metrics.readyForFab.map((w) => w.wp_number)).toEqual(["WP-001"]);
+    expect(metrics.drawingStageClear.map((w) => w.wp_number)).toEqual(["WP-001"]);
     expect(metrics.blockedSheetCount).toBe(0);
   });
 
@@ -140,39 +158,61 @@ describe("fab readiness agrees with the Fab Release gate", () => {
     const metrics = buildWorkPackageMetrics(
       [wpWith("d1,d2,d3")],
       [
-        { id: "d1", stage: "IFC" },
-        { id: "d2", stage: "IFC", is_superseded: true },
-        { id: "d3", stage: "IFC", set_approval_status: "Revise and Resubmit" },
+        { id: "d1", drawing_set_id: "set-1", stage: "IFC" },
+        { id: "d2", drawing_set_id: "set-1", stage: "IFC", is_superseded: true },
+        { id: "d3", drawing_set_id: "set-1", stage: "IFC", set_approval_status: "Revise and Resubmit" },
       ],
       [],
+      approvalEvidence(),
     );
-    expect(metrics.readyForFab).toHaveLength(0);
+    expect(metrics.drawingStageClear).toHaveLength(0);
     expect(metrics.blockedSheetCount).toBeGreaterThanOrEqual(2);
   });
 
   it("counts an unresolved current revision as blocked (gate parity)", () => {
     const metrics = buildWorkPackageMetrics(
       [wpWith("d1")],
-      [{ id: "d1", stage: "IFC", current_release_status: "on_hold" }],
+      [{ id: "d1", drawing_set_id: "set-1", stage: "IFC", current_release_status: "on_hold" }],
       [],
+      approvalEvidence(),
     );
-    expect(metrics.readyForFab).toHaveLength(0);
+    expect(metrics.drawingStageClear).toHaveLength(0);
     expect(metrics.blockedSheetCount).toBe(1);
   });
 
   it("treats an unresolvable sheet link as blocked, never as ready", () => {
     const metrics = buildWorkPackageMetrics([wpWith("missing-id")], [], []);
-    expect(metrics.readyForFab).toHaveLength(0);
+    expect(metrics.drawingStageClear).toHaveLength(0);
     expect(metrics.blockedSheetCount).toBe(1);
   });
 
   it("mid-flow approvals alone do not make a package fab-ready", () => {
     // "Approved" / "Approved as Noted" / "OFS" are mid-flow per
     // submittalStageMapping — the old set treated them as release-ready.
-    for (const stage of ["Approved", "Approved as Noted", "OFS"]) {
-      const metrics = buildWorkPackageMetrics([wpWith("d1")], [{ id: "d1", stage }], []);
-      expect(metrics.readyForFab, `stage ${stage}`).toHaveLength(0);
+    for (const status of ["Approved", "Approved as Noted", "Submitted"]) {
+      const metrics = buildWorkPackageMetrics(
+        [wpWith("d1")], [{ id: "d1", drawing_set_id: "set-1", stage: "IFC" }], [],
+        { drawingSets: [drawingSet("set-1")], submittals: [shopApproval("shop-1", "set-1", status)] },
+      );
+      expect(metrics.drawingStageClear, `status ${status}`).toHaveLength(0);
     }
+  });
+
+  it("does not infer governing approval from a sheet stage or unrelated submittal", () => {
+    const sheet = { id: "d1", drawing_set_id: "set-1", stage: "Released" };
+    const unrelated = buildWorkPackageMetrics([wpWith("d1")], [sheet], [], {
+      drawingSets: [drawingSet("set-1"), drawingSet("set-2")],
+      submittals: [shopApproval("shop-2", "set-2")],
+    });
+    expect(unrelated.drawingStageClear).toHaveLength(0);
+    expect(unrelated.blockedSheetCount).toBe(1);
+
+    const wrongType = buildWorkPackageMetrics([wpWith("d1")], [sheet], [], {
+      drawingSets: [drawingSet("set-1")],
+      submittals: [{ ...shopApproval("sub-1", "set-1"), submittal_type: "Material Sample" }],
+    });
+    expect(wrongType.drawingStageClear).toHaveLength(0);
+    expect(wrongType.blockedSheetCount).toBe(1);
   });
 
   it("flags a package that is 100% complete but still has an open status", () => {
@@ -238,11 +278,17 @@ describe("canonical release + pieces feed the signals", () => {
         { id: "wp-rel", wp_number: "WP-1", phase: "Detailing", status: "Not Started", tonnage: 5, linked_drawing_ids: "d1" },
         { id: "wp-plain", wp_number: "WP-2", phase: "Detailing", status: "Not Started", tonnage: 5, linked_drawing_ids: "d1" },
       ],
-      [{ id: "d1", stage: "IFC" }],
+      [{ id: "d1", drawing_set_id: "set-1", stage: "IFC" }],
       [],
-      { releasesByWp, piecesByWp, pieceControlMode: "live" },
+      {
+        releasesByWp, piecesByWp, pieceControlMode: "live", ...approvalEvidence(),
+        pieceDrawingScopeByWp: new Map([
+          ["wp-rel", { drawingIds: ["d1"], missingLinkCount: 0 }],
+          ["wp-plain", { drawingIds: ["d1"], missingLinkCount: 0 }],
+        ]),
+      },
     );
-    expect(metrics.readyForFab.map((w) => w.wp_number)).toEqual(["WP-2"]);
+    expect(metrics.drawingStageClear.map((w) => w.wp_number)).toEqual(["WP-2"]);
     expect(metrics.released.map((w) => w.wp_number)).toEqual(["WP-1"]);
     expect(metrics.exceptionReleases).toHaveLength(1);
     expect(metrics.pieceDrivenCount).toBe(2);
@@ -273,10 +319,26 @@ describe("canonical release + pieces feed the signals", () => {
 
   it("flags a live package with no plan date as low-severity so the date gets filled", () => {
     const s = getWorkPackageSignals({ id: "x", phase: "Fabrication", status: "In Progress", crew: "A", linked_drawing_ids: "d1" }, {
-      drawingsById: new Map([["d1", { id: "d1", stage: "IFC" }]]),
+      drawingsById: new Map([["d1", { id: "d1", drawing_set_id: "set-1", stage: "IFC" }]]),
+      approvalEvidence: approvalEvidence(),
     });
     expect(s.flags.find((f) => f.key === "no_plan_date")?.severity).toBe("low");
     expect(s.risk).toBe("clear");
+  });
+
+  it("blocks drawing clearance when a leaf lot has no link despite an approved WP sheet", () => {
+    const metrics = buildWorkPackageMetrics(
+      [{ id: "wp-plain", wp_number: "WP-2", phase: "Detailing", status: "Not Started", linked_drawing_ids: "d1" }],
+      [{ id: "d1", drawing_set_id: "set-1", stage: "IFC" }],
+      [],
+      {
+        piecesByWp, pieceControlMode: "live", ...approvalEvidence(),
+        pieceDrawingScopeByWp: new Map([["wp-plain", { drawingIds: [], missingLinkCount: 1 }]]),
+      },
+    );
+    expect(metrics.drawingStageClear).toHaveLength(0);
+    expect(metrics.fabBlocked).toHaveLength(1);
+    expect(metrics.enriched[0]._signals.drawing.missingScopeLinks).toBe(1);
   });
 });
 

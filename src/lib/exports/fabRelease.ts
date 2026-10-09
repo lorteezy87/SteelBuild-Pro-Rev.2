@@ -30,6 +30,7 @@ export interface DrawingLike {
   set_approval_status?: string | null;
   ifc_status?: string | null;
   is_deleted?: boolean | null;
+  deleted_at?: string | null;
   is_superseded?: boolean | null;
   current_release_status?: string | null;
   current_revision_status?: string | null;
@@ -43,6 +44,7 @@ export interface DrawingLike {
 export interface FabApprovalEvidence {
   submittals?: Array<{
     id: string;
+    submittal_type?: string | null;
     status: string;
     ball_in_court?: string | null;
     drawing_set_ids?: string[] | null;
@@ -52,6 +54,7 @@ export interface FabApprovalEvidence {
     is_deleted?: boolean | null;
     deleted_at?: string | null;
   }> | null;
+  drawingSets?: Array<{ id: string; is_deleted?: boolean | null; deleted_at?: string | null }> | null;
   drawingSignoffs?: Array<{
     drawing_id: string;
     drawing_revision_id?: string | null;
@@ -168,7 +171,7 @@ export function isApprovedForFab(
   d: DrawingLike | null | undefined,
   evidence: FabApprovalEvidence = {},
 ): boolean {
-  if (!d || d.is_deleted) return false;
+  if (!d || d.is_deleted || d.deleted_at) return false;
   if (d.is_superseded) return false;
   // Never treat a non-current / unresolved revision as fabrication-ready.
   const releaseStatus = String(d.current_release_status || d.current_revision_status || "").toLowerCase();
@@ -185,11 +188,12 @@ export function isApprovedForFab(
       stage: d.stage ?? null,
       set_approval_status: d.set_approval_status ?? null,
       is_deleted: d.is_deleted ?? false,
-      deleted_at: null,
+      deleted_at: d.deleted_at ?? null,
       is_superseded: d.is_superseded ?? false,
     },
     {
       submittals: evidence.submittals ?? undefined,
+      drawingSets: evidence.drawingSets ?? undefined,
       drawingSignoffs: evidence.drawingSignoffs ?? undefined,
       drawingRevisions: evidence.drawingRevisions ?? undefined,
     },
@@ -211,7 +215,7 @@ export function isApprovedForTurnover(
  * superseded revisions get pulled in for legal/insurance.
  */
 export function isClaimable(d: DrawingLike | null | undefined): boolean {
-  return !!d && d.is_deleted !== true;
+  return !!d && d.is_deleted !== true && !d.deleted_at;
 }
 
 /**

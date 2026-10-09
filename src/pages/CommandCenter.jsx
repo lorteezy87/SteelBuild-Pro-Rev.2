@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -9,6 +9,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import EmptyState from "@/components/design-system/EmptyState";
 import CommandBar from "@/components/design-system/CommandBar";
 import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCenter";
+import { loadCommandSource } from "./commandCenter/commandCenterData";
 
 /**
  * Command Center canonical cockpit.
@@ -27,6 +28,10 @@ export default function CommandCenter() {
 
   const [detailItem, setDetailItem] = useState(null);
   const [forwardLookOpen, setForwardLookOpen] = useState(false);
+  useEffect(() => {
+    setDetailItem(null);
+    setForwardLookOpen(false);
+  }, [projectId]);
 
   // ── Data queries ────────────────────────────────────────────────────
   //
@@ -44,41 +49,42 @@ export default function CommandCenter() {
   // no special wiring needed per-mutation site, no cache-key drift.
   const projects = activeProject?.id === projectId ? [activeProject] : EMPTY_LIST;
 
-  const { data: rfis = EMPTY_LIST, isLoading: rfiLoading } = useQuery({
-    queryKey: ["rfis", projectId],
-    queryFn: () => entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
+  // Preserve invalidation prefixes but never reuse a capped register's cache.
+  const rfiQuery = useQuery({
+    queryKey: ["rfis", projectId, "command-complete"],
+    queryFn: () => loadCommandSource(entities.RFI, projectId, "-submitted_date"),
     enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: submittals = EMPTY_LIST, isLoading: submittalsLoading } = useQuery({
-    queryKey: ["submittals", projectId],
-    queryFn: () => entities.Submittal.filter({ project_id: projectId }, "-created_at"),
+  const submittalQuery = useQuery({
+    queryKey: ["submittals", projectId, "command-complete"],
+    queryFn: () => loadCommandSource(entities.Submittal, projectId, "-created_at"),
     enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: changeOrders = EMPTY_LIST } = useQuery({
-    queryKey: ["change-orders", projectId],
-    queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }, "-created_at"),
+  const changeOrderQuery = useQuery({
+    queryKey: ["change-orders", projectId, "command-complete"],
+    queryFn: () => loadCommandSource(entities.ChangeOrder, projectId, "-created_at"),
     enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: deliveries = EMPTY_LIST } = useQuery({
-    queryKey: ["deliveries", projectId],
-    queryFn: () => entities.Delivery.filter({ project_id: projectId }, "-created_at"),
+  const deliveryQuery = useQuery({
+    queryKey: ["deliveries", projectId, "command-complete"],
+    queryFn: () => loadCommandSource(entities.Delivery, projectId, "-created_at"),
     enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: workPackages = EMPTY_LIST } = useQuery({
-    queryKey: ["work-packages", projectId],
-    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }, "-created_at"),
+  const workPackageQuery = useQuery({
+    queryKey: ["work-packages", projectId, "command-complete"],
+    queryFn: () => loadCommandSource(entities.WorkPackage, projectId, "-created_at"),
     enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
@@ -87,15 +93,19 @@ export default function CommandCenter() {
   // Schedule tasks from the Gantt — feeds Installation / Fabrication /
   // Detailing rows into the 48h + 10d windows so everything the user
   // sees on the Gantt also shows up here.
-  const { data: scheduleTasks = EMPTY_LIST } = useQuery({
-    queryKey: ["schedule-tasks", projectId],
-    queryFn: () => entities.ScheduleTask.filter({ project_id: projectId }, "-start_date"),
+  const scheduleQuery = useQuery({
+    queryKey: ["schedule-tasks", projectId, "command-complete"],
+    queryFn: () => loadCommandSource(entities.ScheduleTask, projectId, "-start_date"),
     enabled: !!projectId,
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const isLoading = rfiLoading || submittalsLoading;
+  const queries = [rfiQuery, submittalQuery, changeOrderQuery, deliveryQuery, workPackageQuery, scheduleQuery];
+  const sourceNames = ["RFIs", "Submittals", "Change orders", "Deliveries", "Work packages", "Schedule tasks"];
+  const failedSources = queries.flatMap((query, index) => query.isError ? [sourceNames[index]] : []);
+  const allSourcesReady = queries.every((query) => query.isSuccess);
+  const [rfis, submittals, changeOrders, deliveries, workPackages, scheduleTasks] = queries.map((query) => query.data ?? EMPTY_LIST);
 
   // ── Project map ─────────────────────────────────────────────────────
   const projectMap = useMemo(() => {
@@ -124,7 +134,22 @@ export default function CommandCenter() {
     );
   }
 
-  if (isLoading) {
+  if (failedSources.length > 0) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 32 }}>
+        <CommandBar eyebrow="SteelBuild Pro · Command" title="Command Center" />
+        <div role="alert">
+          <h2>Project briefing unavailable</h2>
+          <p>Complete records could not be verified for: {failedSources.join(", ")}. Reload these sources before assessing priorities.</p>
+          <button type="button" className="cmd-btn" onClick={() => queries.forEach((query) => { void query.refetch(); })}>
+            Retry project sources
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!allSourcesReady || projects.length !== 1) {
     return (
       <div className="sb-dashboard-reference-page">
         <LoadingSkeleton variant="page" />
@@ -149,6 +174,8 @@ export default function CommandCenter() {
           sources={ccSources}
           projectName={activeProjectName}
           projectCount={projects.length}
+          dataUpdatedAt={Math.min(...queries.map((query) => query.dataUpdatedAt))}
+          isRefreshing={queries.some((query) => query.isFetching)}
           search={ccSearch}
           onSearch={setCcSearch}
           typeFilter={ccTypeFilter}
@@ -156,7 +183,7 @@ export default function CommandCenter() {
           onOpenItem={(item) => setDetailItem(item)}
           onForwardLook={() => setForwardLookOpen(true)}
         />
-        <ItemDetailDrawer item={detailItem} onClose={() => setDetailItem(null)} />
+        <ItemDetailDrawer item={detailItem?.projectId === projectId ? detailItem : null} onClose={() => setDetailItem(null)} />
         <ForwardLookDrawer
           open={forwardLookOpen}
           onClose={() => setForwardLookOpen(false)}

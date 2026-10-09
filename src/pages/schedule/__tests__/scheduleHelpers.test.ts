@@ -266,4 +266,14 @@ describe("parseMsProjectXml", () => {
     expect(weld.resources).toEqual(["Crew A"]);
     expect(weld.preds).toEqual([{ predUid: "1", linkType: "1", lagDuration: "4800" }]);
   });
+
+  it("rejects a non-root task missing UID rather than silently dropping steel work", () => {
+    const missingUid = xml.replace("<UID>2</UID><Name>Weld beams</Name>", "<Name>Weld beams</Name>");
+    expect(() => parseMsProjectXml(missingUid)).toThrow(/Weld beams.*UID|UID.*Weld beams/i);
+  });
+
+  it("rejects UID zero on a non-root task", () => {
+    const nonRootZero = xml.replace("<UID>2</UID><Name>Weld beams</Name>", "<UID>0</UID><Name>Weld beams</Name>");
+    expect(() => parseMsProjectXml(nonRootZero)).toThrow(/Weld beams.*UID|UID.*Weld beams/i);
+  });
 });

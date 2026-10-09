@@ -31,6 +31,9 @@ const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>
 // CSS-grid column template shared by the virtualized header + rows so they align.
 const GRID_COLS =
   "minmax(150px, 1.5fr) minmax(52px, 0.45fr) minmax(92px, 0.75fr) minmax(170px, 1.55fr) minmax(130px, 1.1fr) minmax(84px, 0.65fr) minmax(150px, 1.2fr) minmax(78px, 0.6fr)";
+// Eight evidence columns need 906px at their track minima. Keep a little
+// breathing room for labels, then scroll the whole virtual board on phones.
+const VIRTUAL_BOARD_MIN_WIDTH = 960;
 
 const COLUMNS: { label: string; align?: "right"; title?: string }[] = [
   { label: "Changed Sheet" },
@@ -146,15 +149,21 @@ function VirtualBoard({ rows, onCompareRevision, rosterState = "not_loaded" }: {
   });
 
   return (
-    <div className="cmd-table-wrap" style={{ overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: GRID_COLS, borderBottom: "1px solid var(--cmd-border)", borderLeft: "3px solid transparent" }}>
+    <div
+      className="cmd-table-wrap"
+      role="region"
+      aria-label="Revision impact columns"
+      tabIndex={0}
+      style={{ minWidth: 0, maxWidth: "100%", overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch" }}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: GRID_COLS, minWidth: VIRTUAL_BOARD_MIN_WIDTH, overflowY: "auto", scrollbarGutter: "stable", borderBottom: "1px solid var(--cmd-border)", borderLeft: "3px solid transparent" }}>
         {COLUMNS.map((c, i) => (
           <div key={i} style={{ padding: "10px 14px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--cmd-text-muted)", display: "flex", alignItems: "center", justifyContent: c.align === "right" ? "flex-end" : "flex-start", minWidth: 0 }}>
             {c.title ? <span title={c.title}>{c.label}</span> : c.label}
           </div>
         ))}
       </div>
-      <div ref={parentRef} style={{ maxHeight: 600, overflowY: "auto" }}>
+      <div ref={parentRef} style={{ maxHeight: 600, minWidth: VIRTUAL_BOARD_MIN_WIDTH, overflowY: "auto", scrollbarGutter: "stable" }}>
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const r = rows[virtualRow.index];
@@ -205,7 +214,7 @@ export default function RevisionImpactPanel({
   if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <section className="detailing-cc" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <section className="detailing-cc" style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <GitCompareArrows size={15} color="var(--cmd-gold)" />
         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--cmd-text)" }}>Revision Impact</span>

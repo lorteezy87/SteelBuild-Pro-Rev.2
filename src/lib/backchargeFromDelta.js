@@ -52,10 +52,10 @@ export function buildBackchargePrefillFromSheet(sheet) {
  * Create the backcharge from the (reviewed) form data, re-stamping the
  * revision-delta source on metadata so the link can't be edited away.
  */
-export async function createBackchargeFromDelta({ projectId, formData, sheet }) {
+export async function createBackchargeFromDelta({ projectId, formData, sheet }, options) {
   const sourceMeta = buildBackchargePrefillFromSheet(sheet).metadata;
   const metadata = { ...(formData?.metadata || {}), ...sourceMeta };
-  return createBackcharge({ ...formData, project_id: projectId, metadata });
+  return createBackcharge({ ...formData, project_id: projectId, metadata }, options);
 }
 
 /** Sheet numbers that already carry a revision-delta-sourced backcharge. Pure. */

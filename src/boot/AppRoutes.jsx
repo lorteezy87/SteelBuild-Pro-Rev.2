@@ -133,7 +133,7 @@ export const LANDING_REDIRECT_KEY = "sbp-landing-redirected";
  */
 export function IndexRoute() {
   const { default_landing, default_project_id } = useUserPrefs();
-  const { activeProject, loading: projectsLoading } = useProjectContext();
+  const { activeProject, loading: projectsLoading, projectCacheOwner } = useProjectContext();
   const { role, isLoading: roleLoading } = useProjectRole(activeProject?.id);
 
   let alreadyRedirected = true;
@@ -156,7 +156,7 @@ export function IndexRoute() {
   // this logic exists to prevent. hasResolvableProjectSelection cross-checks
   // the pick against the cached project list, whose absence specifically means
   // "the last successful load returned no live projects".
-  const savedSelection = hasResolvableProjectSelection();
+  const savedSelection = hasResolvableProjectSelection(projectCacheOwner);
   const projectPending = savedSelection || !!default_project_id;
 
   // roleReady: the inputs a role decision needs are in. With an active project

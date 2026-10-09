@@ -2,7 +2,8 @@ import { createContext, useState, useEffect, useContext, useMemo, useRef } from 
 import { entities } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 import { subscribeProjectUpdated } from "@/services/projectUpdateEvents";
-import { PROJECTS_CACHE_KEY } from "@/lib/projectSelection";
+import { readOwnedProjects, writeOwnedProjects } from "@/lib/projectSelection";
+import { useOptionalOrg } from "@/components/shared/OrgContext";
 
 export const ProjectContext = createContext({
   activeProject: null,
@@ -25,6 +26,7 @@ export const ProjectContext = createContext({
   activeProjectIds: new Set(),
   loading: false,
   projectLoadError: null,
+  projectCacheOwner: null,
 });
 
 /** Live (non-archived) projects only — never seed the switcher from tombstones. */
@@ -36,46 +38,54 @@ function sortProjects(list) {
   return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
-function readProjectsCache() {
-  try {
-    const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    return sortProjects(list.filter(isLiveProject));
-  } catch {
-    return [];
-  }
+function readProjectsCache(owner) {
+  const owned = /** @type {import("@/api/client/supabaseTypes").RowWithAliases<"projects">[]} */ (readOwnedProjects(owner));
+  return sortProjects(owned);
 }
 
-function writeProjectsCache(projects) {
-  try {
-    const live = projects.filter(isLiveProject);
-    if (live.length > 0) {
-      localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(live));
-    } else {
-      localStorage.removeItem(PROJECTS_CACHE_KEY);
-    }
-  } catch {
-    /* ignore cache writes */
-  }
+function writeProjectsCache(projects, owner) {
+  writeOwnedProjects(projects, owner);
 }
 
 export function ProjectProvider({ children }) {
+  const auth = useContext(AuthContext);
+  const org = useOptionalOrg();
+  const userId = auth?.user?.id ?? null;
+  const orgId = org?.currentOrg?.id ?? null;
+  const cacheOwner = useMemo(
+    () => userId && orgId ? { userId, orgId } : null,
+    [userId, orgId],
+  );
+  // Remount the entire project scope synchronously. Old state cannot paint for
+  // the next account/workspace, and cleanup cancels the old request generation.
+  return (
+    <ProjectProviderState
+      key={JSON.stringify([userId, orgId])}
+      cacheOwner={cacheOwner}
+      workspaceReady={!org || Boolean(orgId)}
+    >
+      {children}
+    </ProjectProviderState>
+  );
+}
+
+function ProjectProviderState({ children, cacheOwner, workspaceReady }) {
   // Pull the user's saved prefs so we can honour `default_project_id`
   // when localStorage doesn't already hold an explicit selection. We
   // can't use `useAuth()` here (it throws when AuthProvider is missing
   // in tests) — useContext returns undefined in that case and we just
   // skip the default-project fallback.
   const auth = useContext(AuthContext);
-  const authAllowsProjectLoad = !auth || (!auth.isLoadingAuth && auth.isAuthenticated);
+  const authAllowsProjectLoad = workspaceReady && (!auth || (!auth.isLoadingAuth && auth.isAuthenticated));
   const defaultProjectIdPref =
     typeof auth?.user?.default_project_id === "string"
       ? auth.user.default_project_id
       : null;
 
   // Seed from cache so pages render immediately on hard refresh
-  const [projects, setProjects] = useState(() => readProjectsCache());
+  const [projects, setProjects] = useState(() => readProjectsCache(cacheOwner));
   const [activeProject, setActiveProject] = useState(() => {
-    const cached = readProjectsCache();
+    const cached = readProjectsCache(cacheOwner);
     const savedId = localStorage.getItem("activeProjectId");
     // Only restore if user explicitly saved a project — never auto-select first
     return savedId ? (cached.find((p) => p.id === savedId) || null) : null;
@@ -98,7 +108,7 @@ export function ProjectProvider({ children }) {
       loadGenerationRef.current += 1;
       setProjects((list) => {
         const next = list.filter((project) => project.id !== id);
-        writeProjectsCache(next);
+        writeProjectsCache(next, cacheOwner);
         return next;
       });
       setActiveProject((current) => {
@@ -112,7 +122,7 @@ export function ProjectProvider({ children }) {
       const next = list.map((project) => (
         project.id === id ? { ...project, ...updated } : project
       ));
-      writeProjectsCache(next);
+      writeProjectsCache(next, cacheOwner);
       return next;
     });
     setActiveProject((current) => (
@@ -123,7 +133,7 @@ export function ProjectProvider({ children }) {
   // Load projects on mount — retries up to 3x in case SDK isn't ready yet
   useEffect(() => {
     if (!authAllowsProjectLoad) {
-      if (auth?.isAuthenticated === false) {
+      if (!workspaceReady || auth?.isAuthenticated === false) {
         setLoading(false);
         setActiveProject(null);
       }
@@ -135,8 +145,12 @@ export function ProjectProvider({ children }) {
     const loadGeneration = ++loadGenerationRef.current;
 
     const fetchProjects = async (attempt = 1) => {
-      const raw = await entities.Project.list("-created_at");
-      const data = sortProjects(raw.filter(isLiveProject));
+      const raw = cacheOwner
+        ? await entities.Project.filterAll({ org_id: cacheOwner.orgId }, "-created_at")
+        : await entities.Project.list("-created_at");
+      const data = sortProjects(raw.filter((project) =>
+        isLiveProject(project) && (!cacheOwner || project.org_id === cacheOwner.orgId)
+      ));
       // If empty and we have retries left, wait and try again. Track the
       // backoff timer so the effect cleanup can clear it on unmount —
       // otherwise a pending setTimeout (1.5–3s) outlives the component and
@@ -161,7 +175,7 @@ export function ProjectProvider({ children }) {
         setProjects(data);
         // Persist only confirmed live projects. A successful empty response
         // means the user has no active projects; never resurrect old cache.
-        writeProjectsCache(data);
+        writeProjectsCache(data, cacheOwner);
 
         // Resolution order for the active project:
         //   1. localStorage `activeProjectId` (most-recent explicit pick)
@@ -230,7 +244,7 @@ export function ProjectProvider({ children }) {
       localStorage.removeItem("activeProjectId");
       return;
     }
-    if (!isLiveProject(project)) {
+    if (!isLiveProject(project) || (cacheOwner && project.org_id !== cacheOwner.orgId)) {
       setActiveProject(null);
       localStorage.removeItem("activeProjectId");
       return;
@@ -256,9 +270,9 @@ export function ProjectProvider({ children }) {
     setActiveProject(merged);
     setProjects((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
     try {
-      const cache = readProjectsCache();
+      const cache = readProjectsCache(cacheOwner);
       const next = cache.map((p) => (p.id === id ? { ...p, ...patch } : p));
-      writeProjectsCache(next);
+      writeProjectsCache(next, cacheOwner);
     } catch { /* ignore */ }
     return merged;
   };
@@ -276,7 +290,7 @@ export function ProjectProvider({ children }) {
     }
     setProjects((list) => {
       const next = list.map((p) => (p.id === projectId ? { ...p, ...patch } : p));
-      try { writeProjectsCache(next); } catch { /* ignore */ }
+      try { writeProjectsCache(next, cacheOwner); } catch { /* ignore */ }
       return next;
     });
     if (activeProject?.id === projectId) {
@@ -291,7 +305,7 @@ export function ProjectProvider({ children }) {
     loadGenerationRef.current += 1;
     setProjects((list) => {
       const next = list.filter((p) => p.id !== projectId);
-      writeProjectsCache(next);
+      writeProjectsCache(next, cacheOwner);
       return next;
     });
     if (activeProject?.id === projectId) {
@@ -336,6 +350,7 @@ export function ProjectProvider({ children }) {
       activeProjectIds,
       loading,
       projectLoadError,
+      projectCacheOwner: cacheOwner,
     }}>
       {children}
     </ProjectContext.Provider>

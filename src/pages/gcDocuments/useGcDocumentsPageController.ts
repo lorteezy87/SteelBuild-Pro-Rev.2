@@ -5,11 +5,12 @@
 
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { entities } from "@/api/supabaseClient";
+import { entities, integrations } from "@/api/supabaseClient";
 import type { Insert, Update } from "@/api/supabaseClient";
 import { invalidateEntities } from "@/services/cacheRegistry";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { sanitizeGcDrawingSetPayload, type SteelImpact } from "@/lib/gcDocuments/gcDocTypes";
+import { replaceGcShopImpactLinks } from "@/lib/gcDocuments/gcShopImpactLinks";
 import {
   planSupersession,
   type GcDrawingRow,
@@ -23,8 +24,24 @@ export interface CreateIssuanceInput {
   set: Record<string, unknown>;
   /** Sheets to create under the new set; may be empty (a contract document). */
   sheets?: Array<Record<string, unknown>>;
+  /** Reviewed GC source PDF. The storage path is persisted, never a signed URL. */
+  file?: File | null;
+  /** Reuse an upload when the previous database save failed. */
+  uploadedPath?: string;
   /** Mark the prior sheets these replace as superseded. */
   supersede?: boolean;
+}
+
+export class GcIssuanceSaveError extends Error {
+  constructor(
+    message: string,
+    readonly setId?: string,
+    readonly uploadedPath?: string,
+    readonly creationUncertain = false,
+  ) {
+    super(message);
+    this.name = "GcIssuanceSaveError";
+  }
 }
 
 export function useGcDocumentsPageController({
@@ -44,57 +61,92 @@ export function useGcDocumentsPageController({
 
   // ── Create an issuance, optionally with its sheets ────────────────────────
   const createMut = useMutation<{ setId: string; sheetCount: number; plan: SupersessionPlan | null }, Error, CreateIssuanceInput>({
-    mutationFn: async ({ set, sheets = [], supersede = true }) => {
+    mutationFn: async ({ set, sheets = [], file = null, uploadedPath, supersede = true }) => {
       if (!projectId) throw new Error("Select a project first.");
+
+      let filePath = uploadedPath;
+      if (file && !filePath) {
+        const uploaded = await integrations.Core.UploadFile({ file, workflow: "drawings" });
+        filePath = uploaded.path || uploaded.file_url;
+        if (!filePath) throw new Error("The GC PDF upload returned no storage path. Nothing was logged.");
+      }
 
       const { record, warnings } = sanitizeGcDrawingSetPayload({
         ...set,
         project_id: projectId,
+        ...(filePath ? { file_url: filePath } : {}),
       });
       if (warnings.length) {
         console.warn("[gcDocuments.create] payload coerced:", warnings);
       }
 
-      const created = await entities.GcDrawingSet.create(
-        record as Insert<"gc_drawing_sets">,
-      );
+      let created: Awaited<ReturnType<typeof entities.GcDrawingSet.create>>;
+      try {
+        created = await entities.GcDrawingSet.create(record as Insert<"gc_drawing_sets">);
+      } catch (error) {
+        if (filePath) throw new GcIssuanceSaveError(
+          `The GC PDF uploaded, but the issuance create outcome could not be confirmed: ${toUserErrorMessage(error)}`,
+          undefined,
+          filePath,
+          true,
+        );
+        throw error;
+      }
       const setId = String(created?.id ?? "");
-      if (!setId) throw new Error("The issuance was created without an id.");
+      if (!setId) throw new GcIssuanceSaveError(
+        "The issuance create response had no id. Inspect the register before trying again.",
+        undefined,
+        filePath,
+        true,
+      );
 
       let createdSheets: GcDrawingRow[] = [];
-      if (sheets.length) {
-        // bulkCreate is a plain insert, not an upsert — safe here because the
-        // set was just minted, so no sheet can already belong to it.
-        createdSheets = await entities.GcDrawing.bulkCreate(
-          sheets.map((sheet) => ({
-            ...sheet,
-            project_id: projectId,
-            gc_drawing_set_id: setId,
-          })) as Insert<"gc_drawings">[],
-        );
-      }
-
-      // Supersession runs against the roster we already paged in full
-      // (filterAll), so it cannot silently miss a prior sheet past the server
-      // row cap and leave two live sheets with the same number.
       let plan: SupersessionPlan | null = null;
-      if (supersede && createdSheets.length) {
-        plan = planSupersession(createdSheets, data.sheets, setId);
-        const byNumber = new Map(
-          createdSheets.map((s) => [String(s.drawing_number ?? ""), String(s.id ?? "")]),
-        );
-        for (const replacement of plan.replacements) {
-          await entities.GcDrawing.update(replacement.priorId, {
-            is_superseded: true,
-            superseded_by_id: byNumber.get(replacement.incomingNumber) ?? null,
-          } as Update<"gc_drawings">);
+      try {
+        if (sheets.length) {
+          // One PostgREST insert, not an upsert. A mismatched returned count is
+          // uncertain evidence and must never yield a success toast.
+          createdSheets = await entities.GcDrawing.bulkCreate(
+            sheets.map((sheet) => ({
+              ...sheet,
+              project_id: projectId,
+              gc_drawing_set_id: setId,
+              ...(filePath ? { file_url: filePath } : {}),
+            })) as Insert<"gc_drawings">[],
+          );
+          if (createdSheets.length !== sheets.length) {
+            throw new Error(`Only ${createdSheets.length} of ${sheets.length} sheet rows were confirmed.`);
+          }
         }
+
+        // Supersession runs against the roster paged in full (filterAll).
+        if (supersede && createdSheets.length) {
+          plan = planSupersession(createdSheets, data.sheets, setId);
+          const byNumber = new Map(
+            createdSheets.map((s) => [String(s.drawing_number ?? ""), String(s.id ?? "")]),
+          );
+          for (const replacement of plan.replacements) {
+            await entities.GcDrawing.update(replacement.priorId, {
+              is_superseded: true,
+              superseded_by_id: byNumber.get(replacement.incomingNumber) ?? null,
+            } as Update<"gc_drawings">);
+          }
+        }
+      } catch (error) {
+        // The set already exists. Refresh the list and force human recovery so
+        // a retry cannot mint a duplicate issuance or silently hide the row.
+        try { await invalidate(); } catch { /* The persisted set id still identifies the partial record. */ }
+        throw new GcIssuanceSaveError(
+          `GC issuance ${setId} was created, but its sheet workflow did not finish: ${toUserErrorMessage(error)}`,
+          setId,
+          filePath,
+        );
       }
 
       return { setId, sheetCount: createdSheets.length, plan };
     },
     onSuccess: async ({ sheetCount, plan }) => {
-      await invalidate();
+      try { await invalidate(); } catch { toast.warning("Issuance saved, but the register did not refresh. Reload to see it."); }
       toast.success(
         sheetCount ? `Issuance logged — ${sheetCount} sheet(s)` : "Issuance logged",
       );
@@ -153,6 +205,32 @@ export function useGcDocumentsPageController({
     },
   });
 
+  const shopImpactLinksMut = useMutation<void, Error, { gcIssuanceId: string; shopSetIds: string[] }>({
+    mutationFn: async ({ gcIssuanceId, shopSetIds }) => {
+      if (!projectId || data.impactLinksStatus !== "available" || data.shopSetsStatus !== "available") {
+        throw new Error("Affected shop-set evidence is unavailable. Try again after the link service is ready.");
+      }
+      const issuance = data.sets.find((set) => set.id === gcIssuanceId && set.project_id === projectId);
+      if (!issuance || issuance.is_deleted || issuance.deleted_at) {
+        throw new Error("The selected GC issuance is no longer active in this project.");
+      }
+      const existingIds = new Set((data.linksByIssuance.get(gcIssuanceId) ?? [])
+        .map((link) => link.drawing_set_id));
+      const activeIds = new Set(data.shopSets.map((set) => set.id));
+      if (shopSetIds.some((id) => !existingIds.has(id) && !activeIds.has(id))) {
+        throw new Error("A selected shop drawing set is not active in this project.");
+      }
+      await replaceGcShopImpactLinks(projectId, gcIssuanceId, shopSetIds);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["gc-issuance-shop-set-links", projectId] });
+      toast.success("Affected shop sets saved");
+    },
+    onError: (err) => {
+      toast.error(`Affected shop sets were not saved: ${toUserErrorMessage(err)}`);
+    },
+  });
+
   // ── Delete an issuance (soft) ─────────────────────────────────────────────
   // gc_drawing_sets is registered in SOFT_DELETE_TABLES, so delete() writes
   // is_deleted rather than removing the row. The sheets go first: the DB's ON
@@ -203,9 +281,10 @@ export function useGcDocumentsPageController({
     try {
       await createMut.mutateAsync(input);
       state.setUploadOpen(false);
-    } catch {
-      // The mutation's onError already surfaced it; keep the modal open so
-      // whatever was typed is not lost.
+    } catch (error) {
+      // Keep the modal open with its reviewed source page mapping, and allow
+      // it to display the partial set id or reusable upload path.
+      throw error;
     } finally {
       state.setSaving(false);
     }
@@ -243,6 +322,19 @@ export function useGcDocumentsPageController({
     }
   };
 
+  const handleSaveImpactLinks = async (shopSetIds: string[]) => {
+    const target = state.impactTarget;
+    if (!target) return;
+    state.setSaving(true);
+    try {
+      await shopImpactLinksMut.mutateAsync({ gcIssuanceId: target.id, shopSetIds });
+    } catch {
+      // Keep the impact editor open and retain the selected IDs for correction.
+    } finally {
+      state.setSaving(false);
+    }
+  };
+
   const handleDelete = (issuance: GcIssuance) => {
     const sheetNote = issuance.sheets.length
       ? ` and its ${issuance.sheets.length} sheet(s)`
@@ -265,6 +357,7 @@ export function useGcDocumentsPageController({
     createIssuance: createMut,
     updateIssuance: updateMut,
     setSteelImpact: setImpactMut,
+    shopImpactLinks: shopImpactLinksMut,
     deleteIssuance: deleteMut,
     toggleExpanded,
     expandAll,
@@ -272,6 +365,7 @@ export function useGcDocumentsPageController({
     handleCreate,
     handleSaveSet,
     handleSaveImpact,
+    handleSaveImpactLinks,
     handleDelete,
   };
 }

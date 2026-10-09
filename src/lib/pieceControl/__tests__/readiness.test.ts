@@ -16,11 +16,11 @@ const drawing: ReadinessDrawing = {
 };
 
 describe("piece-control drawing approval rules (Slice 6 IFC/Released)", () => {
-  it("accepts IFC (Approved + GC), Released for Fab, and fab signoff", () => {
+  it("accepts IFC (Approved + GC) and Released for Fab, but not a standalone fab signoff", () => {
     expect(
       isDrawingApproved(drawing, {
         submittals: [
-          { id: "s1", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] },
+          { id: "s1", submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] },
         ],
       }),
     ).toBe(true);
@@ -29,6 +29,7 @@ describe("piece-control drawing approval rules (Slice 6 IFC/Released)", () => {
         submittals: [
           {
             id: "s1",
+            submittal_type: "Shop Drawing",
             status: "Released for Fabrication",
             ball_in_court: null,
             drawing_set_ids: ["set-1"],
@@ -50,7 +51,7 @@ describe("piece-control drawing approval rules (Slice 6 IFC/Released)", () => {
           },
         ],
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("rejects bare set_approval_status, sheet responses, and review-only evidence", () => {
@@ -101,9 +102,9 @@ describe("piece-control drawing approval rules (Slice 6 IFC/Released)", () => {
     ).toBe(false);
   });
 
-  it("accepts legacy drawings.stage IFC / Released", () => {
-    expect(isDrawingApproved({ ...drawing, stage: "IFC" })).toBe(true);
-    expect(isDrawingApproved({ ...drawing, stage: "Released" })).toBe(true);
+  it("does not authorize from legacy drawings.stage IFC / Released", () => {
+    expect(isDrawingApproved({ ...drawing, stage: "IFC" })).toBe(false);
+    expect(isDrawingApproved({ ...drawing, stage: "Released" })).toBe(false);
     expect(isDrawingApproved({ ...drawing, stage: "OFS" })).toBe(false);
   });
 });
@@ -176,6 +177,7 @@ describe("work-package readiness", () => {
         submittals: [
           {
             id: "s1",
+            submittal_type: "Shop Drawing",
             status: "Approved",
             ball_in_court: "GC",
             drawing_set_ids: ["set-1"],

@@ -239,17 +239,21 @@ describe("Revision Impact mapping evidence retry", () => {
 });
 
 describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
-  it("boots and renders the tab strip", async () => {
+  it("shows the four drawing-control work areas and keeps specialist tools reachable", async () => {
+    const user = userEvent.setup();
     renderHub();
-    expect(await screen.findByText("Drawing Register")).toBeInTheDocument();
-    expect(screen.getByText("Submittal Register")).toBeInTheDocument();
-    expect(screen.getByText("Approval Matrix")).toBeInTheDocument();
+    const tabs = await screen.findByRole("tablist", { name: "Drawing Control work areas" });
+    expect(within(tabs).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Action Queue", "Shop Drawings", "GC Issuances", "Approvals",
+    ]);
+    await user.click(screen.getByRole("button", { name: "More tools" }));
+    expect(screen.getByRole("menuitem", { name: /Approval Matrix/ })).toBeInTheDocument();
   });
 
   it("mounts the clean sheet register on the Drawing Register tab", async () => {
     const user = userEvent.setup();
     renderHub();
-    await user.click(await screen.findByText("Drawing Register"));
+    await user.click(await screen.findByRole("tab", { name: "Shop Drawings" }));
     // DrawingRegisterGridPanel chrome — clean flat register (Doc Control look).
     expect(
       await screen.findByRole("button", { name: "Sets & revisions" }),
@@ -265,21 +269,22 @@ describe("DrawingSubmittalHub (smoke + Drawing Register wiring)", () => {
     expect(screen.queryByRole("link", { name: /Full editor/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Upload set/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /New revision/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Import log/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "More drawing actions" }));
+    expect(screen.getByRole("menuitem", { name: /Import detailer log/i })).toBeInTheDocument();
   });
 
   it("embeds the Submittal Register without stacking a second title and KPI toolbar", async () => {
     const user = userEvent.setup();
     renderHub();
 
-    await user.click(await screen.findByText("Submittal Register"));
+    await user.click(await screen.findByRole("tab", { name: "Approvals" }));
 
     // The Submittal Register is a lazy chunk; under a loaded worker (full-suite
     // run) it can take longer than the 1s default to land.
     expect(
       await screen.findByPlaceholderText("Search # / title / spec section", {}, { timeout: 8000 }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Submittal Register")).toHaveLength(1);
+    expect(screen.getByRole("tab", { name: "Approvals" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByText("At risk")).not.toBeInTheDocument();
   });
 });
@@ -303,20 +308,21 @@ describe("DrawingSubmittalHub — tab history", () => {
     const user = userEvent.setup();
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=overview"] });
 
-    await user.click(await screen.findByRole("tab", { name: /Approval Matrix/ }));
+    await openTool(user, /Approval Matrix/);
     expect(screen.getByTestId("search")).toHaveTextContent("hub_tab=matrix");
     expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
 
     await user.click(screen.getByRole("button", { name: "probe-back" }));
     expect(screen.getByTestId("search")).toHaveTextContent("hub_tab=overview");
-    expect(screen.getByRole("tab", { name: /Control Board/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /Action Queue/ })).toHaveAttribute("aria-selected", "true");
   });
 
   it("adds no history entry when the active tab is clicked again", async () => {
     const user = userEvent.setup();
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix"] });
 
-    await user.click(await screen.findByRole("tab", { name: /Approval Matrix/ }));
+    await user.click(await screen.findByRole("button", { name: /More tools: Approval Matrix/ }));
+    await user.click(screen.getByRole("menuitem", { name: /Approval Matrix/ }));
     expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=matrix");
   });
@@ -325,7 +331,7 @@ describe("DrawingSubmittalHub — tab history", () => {
     const user = userEvent.setup();
     renderHub({ entries: ["/DrawingSubmittalHub?projectId=test-project-id&project=test-project-id&hub_tab=matrix&matrix_filter=hold"] });
 
-    await user.click(await screen.findByRole("tab", { name: /Holds & Blockers/ }));
+    await openTool(user, /Holds & Blockers/);
     await waitFor(() => {
       expect(screen.getByTestId("search").textContent).toBe("?hub_tab=holds");
     });
@@ -335,7 +341,7 @@ describe("DrawingSubmittalHub — tab history", () => {
     const user = userEvent.setup();
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=matrix&targetSetId=s2&recordId=r1&prefilledStatus=IFA&prefilledBallInCourt=EOR&transmittal=t1"] });
 
-    await user.click(await screen.findByRole("tab", { name: /Control Board/ }));
+    await user.click(await screen.findByRole("tab", { name: /Action Queue/ }));
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=overview");
   });
 
@@ -343,7 +349,7 @@ describe("DrawingSubmittalHub — tab history", () => {
     const user = userEvent.setup();
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=overview&hub_view=sets&matrix_filter=hold&keep=1"] });
 
-    await user.click(await screen.findByRole("tab", { name: /Approval Matrix/ }));
+    await openTool(user, /Approval Matrix/);
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=matrix&keep=1");
     expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
   });
@@ -353,18 +359,35 @@ describe("DrawingSubmittalHub — tab history", () => {
 // its body, not its tab. Pinned rather than imported, so a key that stops
 // resolving fails loudly. doccontrol was retired into an alias; its redirect
 // is tested below.
-const LIVE_KEYS = ["overview", "process", "drawings", "submittals", "transmittals", "matrix", "revimpact", "holds", "validation", "model3d"];
+const LIVE_KEYS = ["overview", "process", "drawings", "gc", "submittals", "transmittals", "matrix", "revimpact", "holds", "validation", "model3d"];
+const PRIMARY_KEYS = new Set(["overview", "drawings", "gc", "submittals"]);
+
+async function openTool(user, name) {
+  await user.click(await screen.findByRole("button", { name: /More tools/ }));
+  await user.click(screen.getByRole("menuitem", { name }));
+}
 
 // The hub's own tab strip; some panels (Holds) render a tablist of their own.
 async function selectedTab() {
-  const tablist = await screen.findByRole("tablist", { name: "Detailing Control Center tabs" });
+  const tablist = await screen.findByRole("tablist", { name: "Drawing Control work areas" });
   return within(tablist).getByRole("tab", { selected: true });
+}
+
+async function expectActiveArea(key) {
+  const panel = await screen.findByRole("tabpanel");
+  expect(panel).toHaveAttribute("data-hub-panel", key);
+  if (PRIMARY_KEYS.has(key)) {
+    expect(await selectedTab()).toHaveAttribute("id", `dcc-tab-${key}`);
+  } else {
+    expect(screen.getByRole("button", { name: /More tools:/ })).toHaveAttribute("aria-expanded", "false");
+    expect(within(await screen.findByRole("tablist", { name: "Drawing Control work areas" })).queryByRole("tab", { selected: true })).not.toBeInTheDocument();
+  }
 }
 
 describe("DrawingSubmittalHub — ?hub_tab= links", () => {
   it.each(LIVE_KEYS)("?hub_tab=%s opens its tab and leaves the URL alone", async (key) => {
     renderHub({ entries: [`/DrawingSubmittalHub?hub_tab=${key}`] });
-    expect(await selectedTab()).toHaveAttribute("id", `dcc-tab-${key}`);
+    await expectActiveArea(key);
     expect(screen.getByTestId("search").textContent).toBe(`?hub_tab=${key}`);
     expect(screen.getByTestId("nav-type")).toHaveTextContent("POP");
   });
@@ -398,7 +421,7 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
     flagsState.ready = false;
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
 
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    await expectActiveArea("model3d");
     expect(screen.getByText(MODEL3D_LOADING)).toHaveAttribute("role", "status");
     expect(screen.queryByText(MODEL3D_OFF)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", MODEL3D_OFF_HEADING)).not.toBeInTheDocument();
@@ -411,7 +434,7 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
   it("keeps ?hub_tab=model3d on the 3D tab with the flag off: the notice, no viewer, no roster read", async () => {
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
 
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    await expectActiveArea("model3d");
     const notice = screen.getByRole("heading", MODEL3D_OFF_HEADING).closest("section");
     expect(notice).toHaveTextContent(MODEL3D_OFF);
     expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
@@ -431,7 +454,7 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
     flagsState.on.add("viewer_3d");
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
 
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    await expectActiveArea("model3d");
     expect(await screen.findByTestId("model3d-tab", {}, { timeout: 8000 })).toHaveTextContent("model3d-tab:test-project-id");
     expect(screen.queryByRole("heading", MODEL3D_OFF_HEADING)).not.toBeInTheDocument();
     expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
@@ -441,31 +464,32 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
   it("lists no 3D tab on the bare path when viewer_3d is off", async () => {
     renderHub();
     expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
-    const tablist = screen.getByRole("tablist", { name: "Detailing Control Center tabs" });
+    const tablist = screen.getByRole("tablist", { name: "Drawing Control work areas" });
     expect(within(tablist).queryByRole("tab", { name: /3D Model/ })).not.toBeInTheDocument();
   });
 
-  it("lists the 3D tab on the bare path when viewer_3d is on, without reading the roster", async () => {
+  it("lists the 3D tool on the bare path when viewer_3d is on, without reading the roster", async () => {
+    const user = userEvent.setup();
     flagsState.on.add("viewer_3d");
     renderHub();
     expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
-    const tablist = screen.getByRole("tablist", { name: "Detailing Control Center tabs" });
-    expect(within(tablist).getByRole("tab", { name: /3D Model/ })).toHaveAttribute("aria-selected", "false");
+    await user.click(screen.getByRole("button", { name: "More tools" }));
+    expect(screen.getByRole("menuitem", { name: /3D Model/ })).toBeInTheDocument();
     expect(rosterFetch).not.toHaveBeenCalled();
   });
 
   it("drops the 3D tab once a flag-off user leaves it, and Back brings it back", async () => {
     const user = userEvent.setup();
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    await expectActiveArea("model3d");
 
-    await user.click(screen.getByRole("tab", { name: /Control Board/ }));
+    await user.click(screen.getByRole("tab", { name: /Action Queue/ }));
     expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-overview");
-    const tablist = screen.getByRole("tablist", { name: "Detailing Control Center tabs" });
+    const tablist = screen.getByRole("tablist", { name: "Drawing Control work areas" });
     expect(within(tablist).queryByRole("tab", { name: /3D Model/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "probe-back" }));
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    await expectActiveArea("model3d");
     expect(screen.getByRole("heading", MODEL3D_OFF_HEADING)).toBeInTheDocument();
     expect(rosterFetch).not.toHaveBeenCalled();
   });
@@ -476,7 +500,7 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
     flagsState.error = true;
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
 
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    await expectActiveArea("model3d");
     const alert = screen.getByText(MODEL3D_FLAGS_FAILED).closest('[role="alert"]');
     expect(alert).not.toBeNull();
     // Not an endless load, not "turned off", no viewer and no roster read.
@@ -502,7 +526,7 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
     flagsState.fetching = true; // v5: isError false here; errorUpdateCount kept
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
 
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    await expectActiveArea("model3d");
     expect(screen.getByText(MODEL3D_FLAGS_FAILED)).toBeInTheDocument();
     expect(screen.queryByText(MODEL3D_LOADING)).not.toBeInTheDocument();
     const retrying = screen.getByRole("button", { name: "Retrying…" });
@@ -522,7 +546,7 @@ describe("DrawingSubmittalHub — 3D Model tab (viewer_3d)", () => {
     });
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=model3d"] });
 
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-model3d");
+    await expectActiveArea("model3d");
     const retry = screen.getByRole("button", { name: "Retry" });
     await user.click(retry);
     expect(flagsState.refetch).toHaveBeenCalledTimes(1);
@@ -557,8 +581,8 @@ const MOVED_NOTICE = { name: "Doc Control has moved" };
 describe("DrawingSubmittalHub — Doc Control retired", () => {
   it("has no Doc Control tab", async () => {
     renderHub();
-    const tablist = await screen.findByRole("tablist", { name: "Detailing Control Center tabs" });
-    expect(within(tablist).getByRole("tab", { name: /Drawing Register/ })).toBeInTheDocument();
+    const tablist = await screen.findByRole("tablist", { name: "Drawing Control work areas" });
+    expect(within(tablist).getByRole("tab", { name: /Shop Drawings/ })).toBeInTheDocument();
     expect(within(tablist).queryByRole("tab", { name: /Doc Control/ })).not.toBeInTheDocument();
   });
 
@@ -597,8 +621,8 @@ describe("DrawingSubmittalHub — Doc Control retired", () => {
     renderHub({ entries: ["/DrawingSubmittalHub?hub_tab=doccontrol"] });
     expect(await screen.findByRole("heading", MOVED_NOTICE)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: /Holds & Blockers/ }));
-    await user.click(screen.getByRole("tab", { name: /Drawing Register/ }));
+    await openTool(user, /Holds & Blockers/);
+    await user.click(screen.getByRole("tab", { name: /Shop Drawings/ }));
     expect(await screen.findByPlaceholderText(SHEET_GRID_FILTER)).toBeInTheDocument();
     expect(screen.queryByRole("heading", MOVED_NOTICE)).not.toBeInTheDocument();
 
@@ -675,16 +699,18 @@ describe("DrawingSubmittalHub — holds", () => {
     ];
     renderHub();
 
-    const holdsTab = await screen.findByRole("tab", { name: /Holds & Blockers/ });
-    expect(within(holdsTab).getByText("2")).toBeInTheDocument();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "More tools" }));
+    expect(screen.getByRole("menuitem", { name: /Holds & Blockers/ })).toHaveTextContent("2");
     expect(await screen.findByText("2 Sheets On Hold")).toBeInTheDocument();
   });
 
-  it("keeps the last-known holds on screen when a background refetch fails", async () => {
+  it("does not present cached holds as verified when a background refetch fails", async () => {
     holdsState.data = [{ id: "h1", drawing_id: "d1", is_active: true, placed_at: "2026-09-01T00:00:00Z" }];
     holdsState.isError = true;
     renderHub();
-    expect(await screen.findByText("1 Sheet On Hold")).toBeInTheDocument();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "More tools" }));
+    expect(screen.queryByRole("button", { name: /Sheet On Hold|No holds/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Holds & Blockers/ })).toBeInTheDocument();
   });
 
   it("claims nothing about holds when they never loaded", async () => {
@@ -692,7 +718,8 @@ describe("DrawingSubmittalHub — holds", () => {
     holdsState.isError = true;
     renderHub();
     // The header has rendered (its tabs are here) but shows no holds badge.
-    expect(await screen.findByRole("tab", { name: /Holds & Blockers/ })).toBeInTheDocument();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "More tools" }));
+    expect(screen.getByRole("menuitem", { name: /Holds & Blockers/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /On Hold$|^No holds$/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/On Hold$|No holds/)).not.toBeInTheDocument();
   });
@@ -706,7 +733,7 @@ describe("DrawingSubmittalHub — holds", () => {
 
 // Owner decision 2 (2026-09-11): 2026's compact header, with the KPI strip
 // moved into the Control Board tab.
-const STATUS_LINE = /sets · .+ open · .+ overdue · .+ at risk · Fab Ready/;
+const STATUS_LINE = /sets · .+ open · .+ overdue · .+ at risk · Shop submittal marked released/;
 
 describe("DrawingSubmittalHub — compact header", () => {
   it("shows the KPI strip on the Control Board, beside the board's own scoped tile", async () => {
@@ -734,7 +761,7 @@ describe("DrawingSubmittalHub — compact header", () => {
     await panelLoaded();
     const h1s = screen.getAllByRole("heading", { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect(h1s[0]).toHaveTextContent("Detailing Control Center");
+    expect(h1s[0]).toHaveTextContent("Drawing Control");
   });
 
   it("opens Holds & Blockers from the header's holds badge, as a new history entry", async () => {
@@ -745,7 +772,7 @@ describe("DrawingSubmittalHub — compact header", () => {
     await user.click(await screen.findByRole("button", { name: "1 Sheet On Hold" }));
     expect(screen.getByTestId("search").textContent).toBe("?hub_tab=holds");
     expect(screen.getByTestId("nav-type")).toHaveTextContent("PUSH");
-    expect(await selectedTab()).toHaveAttribute("id", "dcc-tab-holds");
+    await expectActiveArea("holds");
   });
 
   it("names the project in the eyebrow without a project number the project doesn't have", async () => {
@@ -780,7 +807,7 @@ describe("DrawingSubmittalHub — record deep links", () => {
 
     expect(await screen.findByRole("dialog", { name: "New Submittal" }, { timeout: 8000 })).toBeInTheDocument();
     // The modal hides the page behind it from the accessibility tree.
-    expect(screen.getByRole("tab", { name: /Submittal Register/, hidden: true })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /Approvals/, hidden: true })).toHaveAttribute("aria-selected", "true");
     await waitFor(() => {
       expect(screen.getByTestId("search").textContent).toBe("?hub_tab=submittals");
     });

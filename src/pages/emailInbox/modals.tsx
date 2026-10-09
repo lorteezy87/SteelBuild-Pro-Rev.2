@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileText, Link2, Paperclip, Reply, ReplyAll, Send, X } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
+import { useNumberedCreateDraft } from "@/hooks/useNumberedCreateDraft";
+import { getActiveOrgGeneration } from "@/lib/activeOrg";
 import { Modal as ModalRaw } from "@/components/design-system";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
@@ -54,8 +56,33 @@ interface CreateRecordModalProps {
   onSuccess: () => void;
 }
 
+type EmailCreateAttempt = {
+  entityType: string;
+  record: { id: string } | null;
+  title: string;
+  description: string;
+  attachments: EmailAttachment[];
+  linked: boolean;
+  filed: Set<string>;
+  failed: Map<string, string>;
+  busy: boolean;
+};
+// Preserve confirmed creates through a link failure and modal reopening. These
+// receipts belong to this account session; never reuse them across org changes.
+const emailCreateAttempts = new Map<string, EmailCreateAttempt>();
+let emailAttemptGeneration = getActiveOrgGeneration();
+
 export function CreateRecordModal({ message, attachments, projectId, onClose, onSuccess }: CreateRecordModalProps) {
   const qc = useQueryClient();
+  const draft = useNumberedCreateDraft(projectId, true, `email-change-order:${message.id}`);
+  const generation = getActiveOrgGeneration();
+  if (emailAttemptGeneration !== generation) { emailCreateAttempts.clear(); emailAttemptGeneration = generation; }
+  const attemptKey = `${projectId}:${message.id}`;
+  const origin = useRef({ messageId: message.id, invalidated: false, closed: false });
+  if (origin.current.messageId !== message.id) origin.current.invalidated = true;
+  const isCurrent = () => draft.isCurrent() && !origin.current.invalidated && !origin.current.closed;
+  const busy = useRef(false);
+  const attempt = useRef<EmailCreateAttempt | null>(emailCreateAttempts.get(attemptKey) ?? null);
 
   const extracted = useMemo<any>(() => {
     if (!message.parsed_metadata) return null;
@@ -69,130 +96,142 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
   const parsedType = message.parsed_type ?? "";
   const defaultType = validTypes.includes(parsedType) ? parsedType : "action_item";
 
-  const [entityType, setEntityType] = useState(defaultType);
-  const [title, setTitle] = useState(message.subject || "");
+  const [entityType, setEntityType] = useState(attempt.current?.entityType ?? (draft.recoveryPending ? "change_order" : defaultType));
+  const [title, setTitle] = useState(attempt.current?.title ?? message.subject ?? "");
   const [description, setDescription] = useState(
-    `From: ${message.sender_name || message.sender_email}\n\n${message.body_text || ""}`
+    attempt.current?.description ?? `From: ${message.sender_name || message.sender_email}\n\n${message.body_text || ""}`
   );
   const [selectedAttachments, setSelectedAttachments] = useState<Set<string>>(
-    new Set(attachments.map((a) => a.id))
+    new Set((attempt.current?.attachments ?? attachments).map((a) => a.id))
   );
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const locked = saving || Boolean(attempt.current?.busy) || draft.recoveryPending || Boolean(attempt.current?.record) || !isCurrent();
 
   const handleCreate = async () => {
+    if (busy.current) return;
+    if (!isCurrent()) { toast.error("This draft belongs to a previous email or workspace. Close and reopen it."); return; }
+    if (message.project_id && message.project_id !== projectId) { toast.error("This email belongs to another project."); return; }
     if (!title.trim()) { toast.error("Title is required"); return; }
-    setSaving(true);
+    const current: EmailCreateAttempt = attempt.current ?? {
+      entityType, record: null, title, description, linked: false, filed: new Set(), failed: new Map(), busy: false,
+      attachments: attachments.filter(att => selectedAttachments.has(att.id)).map(att => ({ ...att })),
+    };
+    if (current.busy) { toast.error("Wait for the original email operation to finish before retrying."); return; }
+    if (current.attachments.some(att => att.message_id && att.message_id !== message.id)) { toast.error("An attachment belongs to another email."); return; }
+    attempt.current = current;
+    emailCreateAttempts.set(attemptKey, current);
+    const recovering = draft.recoveryPending;
+    current.busy = true;
+    busy.current = true; setSaving(true); setSaveError("");
+    const assertOrigin = () => { if (!isCurrent()) throw new Error("Email or workspace changed. Reopen the original email to review its result."); };
     try {
-      let createdRecord: any;
-      const priorityMap: Record<string, string> = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
-      const aiPriority = extracted?.priority ? (priorityMap[extracted.priority] || "Medium") : "Medium";
-
-      if (entityType === "rfi") {
-        createdRecord = await entities.RFI.create(withProjectId({
-          subject: title, question: description,
-          status: "Open", priority: aiPriority,
-          ...(extracted?.rfi_number ? { rfi_number: extracted.rfi_number } : {}),
-          ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
-          ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
-        }, projectId) as any);
-        invalidateEntity(qc, "rfi", projectId);
-      } else if (entityType === "action_item") {
-        createdRecord = await entities.ActionItem.create(withProjectId({
-          title, description, status: "Open", priority: aiPriority,
-          ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
-          ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
-        }, projectId) as any);
-        invalidateEntity(qc, "action_item", projectId);
-      } else if (entityType === "submittal") {
-        createdRecord = await entities.Submittal.create(withProjectId({
-          // "Draft" is the canonical not-yet-submitted status. ("Open" is valid
-          // for RFI/ActionItem above but is rejected by submittals_status_check,
-          // which previously made this create always throw.)
-          title, description, status: "Draft",
-          ...(extracted?.submittal_number ? { submittal_number: extracted.submittal_number } : {}),
-        }, projectId) as any);
-        invalidateEntity(qc, "submittal", projectId);
-      } else if (entityType === "change_order") {
-        createdRecord = await entities.ChangeOrder.create(withProjectId({
-          title, description, status: "Pending",
-          ...(extracted?.due_date ? { response_due: extracted.due_date } : {}),
-        }, projectId) as any);
-        invalidateEntity(qc, "change_order", projectId);
+      if (!current.record) {
+        const priorityMap: Record<string, string> = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
+        const aiPriority = extracted?.priority ? (priorityMap[extracted.priority] || "Medium") : "Medium";
+        if (current.entityType === "rfi") {
+          current.record = await entities.RFI.create(withProjectId({
+            subject: title, question: description, status: "Open", priority: aiPriority,
+            ...(extracted?.rfi_number ? { rfi_number: extracted.rfi_number } : {}),
+            ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
+            ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
+          }, projectId) as any);
+        } else if (current.entityType === "action_item") {
+          current.record = await entities.ActionItem.create(withProjectId({
+            title, description, status: "Open", priority: aiPriority,
+            ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
+            ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
+          }, projectId) as any);
+        } else if (current.entityType === "submittal") {
+          current.record = await entities.Submittal.create(withProjectId({
+            title, description, status: "Draft",
+            ...(extracted?.submittal_number ? { submittal_number: extracted.submittal_number } : {}),
+          }, projectId) as any);
+        } else if (current.entityType === "change_order") {
+          current.record = await draft.save(withProjectId({
+            title: title.trim(), description, status: "Draft", co_amount: null,
+            metadata: { origin: { source: "email", message_id: message.id }, ...(extracted?.due_date ? { source_due_date: String(extracted.due_date) } : {}) },
+          }, projectId), (payload, options) => entities.ChangeOrder.create(payload, options));
+        } else throw new Error("Select a supported record type.");
+        if (!current.record?.id) throw new Error("The created record was not returned. Review the register before retrying.");
+        void invalidateEntity(qc, current.entityType, projectId);
       }
-      if (createdRecord) {
+      assertOrigin();
+      // A confirmed record survives link failure. Retry this id, never create again.
+      if (!current.linked) {
         await entities.EmailMessage.update(message.id, {
-          import_status: "approved", linked_entity_type: entityType,
-          linked_entity_id: createdRecord.id, reviewed_at: new Date().toISOString(),
+          import_status: "approved", linked_entity_type: current.entityType,
+          linked_entity_id: current.record.id, reviewed_at: new Date().toISOString(),
         });
-
-        // File selected attachments as documents
-        if (selectedAttachments.size > 0) {
-          const attsToFile = attachments.filter((a) => selectedAttachments.has(a.id));
-          const today = new Date().toISOString();
-          let filedCount = 0;
-          for (const att of attsToFile) {
-            try {
-              const ext = (att.filename || "").split(".").pop()?.toLowerCase() || "other";
-              const knownTypes = ["pdf","dwg","dxf","ifc","rvt","jpg","jpeg","png","xlsx","xls","docx","doc","csv","zip"];
-              await entities.Document.create(withProjectId({
-                display_name: att.filename,
-                description: `Filed from email: ${message.subject || "(no subject)"}\nFrom: ${message.sender_name || message.sender_email}`,
-                file_name: att.filename,
-                // Bucket-prefixed storage path — resolveFileUrl signs it against
-                // the private email-attachments bucket on display. A bare
-                // /storage/v1/object/ URL would be fetched with no auth header
-                // and is blocked by the bucket's project-scoped RLS.
-                file_url: att.storage_path
-                  ? `email-attachments/${att.storage_path}`
-                  : null,
-                file_type: knownTypes.includes(ext) ? ext : "other",
-                file_size_kb: att.size_bytes ? Math.round(att.size_bytes / 1024) : 0,
-                mime_type: att.content_type || "application/octet-stream",
-                category: "Correspondence",
-                status: "Final",
-                revision_number: "0",
-                revision_date: today.split("T")[0],
-                tags: ["email-attachment", entityType],
-                uploaded_date: today,
-                source_type: "email",
-                source_id: message.id,
-              }, projectId) as any);
-              filedCount++;
-            } catch (docErr) {
-              console.error(`[EmailInbox] Failed to file attachment ${att.filename}:`, docErr);
-            }
-          }
-          if (filedCount > 0) {
-            invalidateEntity(qc, "document", projectId);
-          }
-        }
+        current.linked = true;
       }
-      const typeName = ENTITY_TYPE_OPTIONS.find((o) => o.value === entityType)?.label || "Record";
-      const attMsg = selectedAttachments.size > 0 ? ` (${selectedAttachments.size} attachment${selectedAttachments.size > 1 ? "s" : ""} filed)` : "";
-      toast.success(`${typeName} created from email${attMsg}`);
+      assertOrigin();
+      void invalidateEntity(qc, "email_message", projectId);
+      const today = new Date().toISOString();
+      for (const att of current.attachments) {
+        assertOrigin();
+        if (current.filed.has(att.id) || current.failed.has(att.id)) continue;
+        try {
+          if (!att.storage_path) throw new Error("No stored attachment is available.");
+          const ext = (att.filename || "").split(".").pop()?.toLowerCase() || "other";
+          const knownTypes = ["pdf", "dwg", "dxf", "ifc", "rvt", "jpg", "jpeg", "png", "xlsx", "xls", "docx", "doc", "csv", "zip"];
+          await entities.Document.create(withProjectId({
+            display_name: att.filename,
+            description: `Filed from email: ${message.subject || "(no subject)"}\nFrom: ${message.sender_name || message.sender_email}`,
+            file_name: att.filename,
+            file_url: att.storage_path ? `email-attachments/${att.storage_path}` : null,
+            file_type: knownTypes.includes(ext) ? ext : "other",
+            file_size_kb: att.size_bytes ? Math.round(att.size_bytes / 1024) : 0,
+            mime_type: att.content_type || "application/octet-stream",
+            category: "Correspondence", status: "Final", revision_number: "0",
+            revision_date: today.split("T")[0], tags: ["email-attachment", current.entityType],
+            uploaded_date: today, source_type: "email", source_id: message.id,
+          }, projectId) as any);
+          current.filed.add(att.id);
+        } catch { current.failed.set(att.id, att.filename || "Unnamed attachment"); }
+      }
+      assertOrigin();
+      const filedCount = current.filed.size;
+      const failedAttachments = [...current.failed.values()];
+      if (filedCount) void invalidateEntity(qc, "document", projectId);
+      const typeName = ENTITY_TYPE_OPTIONS.find(option => option.value === current.entityType)?.label || "Record";
+      if (failedAttachments.length) {
+        toast.error(`${typeName} created and email linked; ${filedCount} of ${current.attachments.length} attachments filed. Could not confirm: ${failedAttachments.join(", ")}. Review Documents before retrying those files.`);
+      } else {
+        const filed = filedCount ? ` (${filedCount} attachment${filedCount === 1 ? "" : "s"} filed)` : "";
+        toast.success(`${typeName} created from email${filed}`);
+      }
+      origin.current.closed = true;
+      emailCreateAttempts.delete(attemptKey);
       onSuccess();
-    } catch (err: any) {
-      toast.error(`Failed: ${toUserErrorMessage(err)}`);
-    } finally { setSaving(false); }
+    } catch (error) {
+      if (!current.record && !recovering && !(error && typeof error === "object" && "outcomeUnknown" in error && error.outcomeUnknown)) {
+        attempt.current = null;
+        if (emailCreateAttempts.get(attemptKey) === current) emailCreateAttempts.delete(attemptKey);
+      }
+      if (isCurrent()) { const detail = toUserErrorMessage(error); setSaveError(detail); toast.error(`Failed: ${detail}`); }
+    } finally { current.busy = false; busy.current = false; setSaving(false); }
   };
-
+  const close = () => { if (!busy.current) { origin.current.closed = true; onClose(); } };
   return (
-    <Modal open={true} onClose={onClose} title="Create Record from Email" width={540}
+    <Modal open={true} onClose={close} title="Create Record from Email" width={540}
       footer={
         <>
-          <button onClick={onClose} style={secondaryBtnStyle}>Cancel</button>
-          <button onClick={handleCreate} disabled={saving} style={primaryBtnStyle}>
-            {saving ? "Creating..." : "Create Record"}
+          <button onClick={close} disabled={saving} style={secondaryBtnStyle}>Cancel</button>
+          <button onClick={handleCreate} disabled={saving || !isCurrent()} style={primaryBtnStyle}>
+            {saving ? "Creating..." : attempt.current?.record ? "Retry email link" : draft.recoveryPending ? "Recover saved record" : "Create Record"}
           </button>
         </>
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {saveError && <p role="alert" style={{ color: "var(--status-error)" }}>{saveError}</p>}
+        {draft.recoveryPending && <p role="status">The original save has an uncertain result. Recover it using the original values before creating another record.</p>}
         <div>
           <label style={labelStyle}>Record Type</label>
           <div style={{ display: "flex", gap: 6 }}>
             {ENTITY_TYPE_OPTIONS.map((opt) => (
-              <button key={opt.value} onClick={() => setEntityType(opt.value)} style={{
+              <button key={opt.value} disabled={locked} onClick={() => setEntityType(opt.value)} style={{
                 flex: 1, padding: "8px 0",
                 background: entityType === opt.value ? "var(--accent-muted)" : "var(--bg-surface-low)",
                 border: `1px solid ${entityType === opt.value ? "var(--accent-border)" : "var(--border-default)"}`,
@@ -208,12 +247,12 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
         </div>
         <div>
           <label style={labelStyle}>Title</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+          <input type="text" value={title} disabled={locked} onChange={(e) => setTitle(e.target.value)}
             style={inputStyle} placeholder="Record title" />
         </div>
         <div>
           <label style={labelStyle}>Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+          <textarea value={description} disabled={locked} onChange={(e) => setDescription(e.target.value)}
             rows={5} style={{ ...inputStyle, resize: "vertical", minHeight: 80 }} />
         </div>
         {extracted && (
@@ -265,7 +304,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
                   borderRadius: 6, cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12,
                   color: "var(--text-primary)",
                 }}>
-                  <input type="checkbox" checked={selectedAttachments.has(att.id)}
+                  <input type="checkbox" disabled={locked} checked={selectedAttachments.has(att.id)}
                     onChange={(e) => {
                       const next = new Set(selectedAttachments);
                       if (e.target.checked) next.add(att.id); else next.delete(att.id);

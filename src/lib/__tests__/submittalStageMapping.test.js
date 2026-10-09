@@ -5,6 +5,7 @@ import {
   isRRStatus,
   pickMostRecentSubmittal,
   derivedSetStage,
+  isUsableShopDrawingSubmittal,
   dominantStage,
   isStageInReview,
 } from "@/lib/submittalStageMapping";
@@ -174,9 +175,54 @@ describe("pickMostRecentSubmittal", () => {
     expect(pickMostRecentSubmittal(subs).id).toBe("b");
   });
 
+  it("compares timestamp offsets as instants rather than local clock text", () => {
+    const subs = [
+      { id: "a", submitted_date: "2026-04-01", updated_at: "2026-04-01T13:00:00+03:00" },
+      { id: "b", submitted_date: "2026-04-01", updated_at: "2026-04-01T11:00:00Z" },
+    ];
+    expect(pickMostRecentSubmittal(subs)?.id).toBe("b");
+  });
+
+  it("keeps an older submitted approval round governing over a newer unsent draft", () => {
+    const subs = [
+      { id: "draft", status: "Draft", submitted_date: null, created_at: "2026-04-02T08:00:00Z", updated_at: "2026-04-02T08:00:00Z" },
+      { id: "review", status: "Under Review", submitted_date: "2026-04-01", created_at: "2026-03-30T08:00:00Z", updated_at: "2026-04-01T08:00:00Z" },
+    ];
+    expect(pickMostRecentSubmittal(subs)?.id).toBe("review");
+  });
+
+  it("uses submitted day before a later update to an older approval round", () => {
+    const subs = [
+      { id: "older-edited", submitted_date: "2026-04-01", updated_at: "2026-04-10T12:00:00Z" },
+      { id: "newer-submitted", submitted_date: "2026-04-09", updated_at: "2026-04-09T08:00:00Z" },
+    ];
+    expect(pickMostRecentSubmittal(subs)?.id).toBe("newer-submitted");
+  });
+
+  it("uses round number when the submitted and updated dates tie", () => {
+    const subs = [
+      { id: "round-1", submitted_date: "2026-04-01", updated_at: "2026-04-01T12:00:00Z", round_number: 1 },
+      { id: "round-2", submitted_date: "2026-04-01", updated_at: "2026-04-01T12:00:00Z", round_number: 2 },
+    ];
+    expect(pickMostRecentSubmittal(subs)?.id).toBe("round-2");
+  });
+
+  it("breaks otherwise equal rounds by creation time, then ID", () => {
+    const subs = [
+      { id: "z", submitted_date: "2026-04-01", updated_at: "2026-04-01T12:00:00Z", round_number: 1, created_at: "2026-03-30T08:00:00Z" },
+      { id: "a", submitted_date: "2026-04-01", updated_at: "2026-04-01T12:00:00Z", round_number: 1, created_at: "2026-03-31T08:00:00Z" },
+    ];
+    expect(pickMostRecentSubmittal(subs)?.id).toBe("a");
+    expect(pickMostRecentSubmittal([
+      { id: "a", submitted_date: "2026-04-01", updated_at: "2026-04-01T12:00:00Z", round_number: 1, created_at: "2026-03-31T08:00:00Z" },
+      { id: "b", submitted_date: "2026-04-01", updated_at: "2026-04-01T12:00:00Z", round_number: 1, created_at: "2026-03-31T08:00:00Z" },
+    ])?.id).toBe("b");
+  });
+
   it("filters out soft-deleted rows", () => {
     const subs = [
       { id: "a", submitted_date: "2026-03-01", is_deleted: true },
+      { id: "timestamp-deleted", submitted_date: "2026-04-01", deleted_at: "2026-04-02T08:00:00Z" },
       { id: "b", submitted_date: "2026-01-01" },
     ];
     expect(pickMostRecentSubmittal(subs).id).toBe("b");
@@ -190,26 +236,40 @@ describe("pickMostRecentSubmittal", () => {
 });
 
 describe("derivedSetStage", () => {
+  it("never lets a Product Data or untyped approval govern a drawing stage", () => {
+    const shop = { id: "shop", submittal_type: "Shop Drawing", status: "Submitted", ball_in_court: "EOR", submitted_date: "2026-09-01" };
+    const product = { id: "product", submittal_type: "Product Data", status: "Approved", ball_in_court: "GC", submitted_date: "2026-09-02" };
+    const untyped = { id: "untyped", submittal_type: null, status: "Released for Fabrication", submitted_date: "2026-09-03" };
+    expect(isUsableShopDrawingSubmittal(shop)).toBe(true);
+    expect(isUsableShopDrawingSubmittal(product)).toBe(false);
+    expect(isUsableShopDrawingSubmittal(untyped)).toBe(false);
+    expect(derivedSetStage([shop, product, untyped], [])).toBe("OFA");
+  });
+
+  it("ignores deleted sheets when showing a legacy stage fallback", () => {
+    expect(derivedSetStage([], [{ stage: "Released", deleted_at: "2026-10-01" }, { stage: "IFA" }])).toBe("IFA");
+  });
+
   it("uses the most-recent submittal's stage when active submittals exist", () => {
     const subs = [
-      { id: "s1", submitted_date: "2026-04-01", status: "Approved", ball_in_court: "Detailer" },
-      { id: "s2", submitted_date: "2026-03-01", status: "Submitted", ball_in_court: "EOR" },
+      { id: "s1", submittal_type: "Shop Drawing", submitted_date: "2026-04-01", status: "Approved", ball_in_court: "Detailer" },
+      { id: "s2", submittal_type: "Shop Drawing", submitted_date: "2026-03-01", status: "Submitted", ball_in_court: "EOR" },
     ];
     expect(derivedSetStage(subs, [])).toBe("OFS");
   });
 
   it("derives R&R for a set whose governing submittal came back Revise and Resubmit", () => {
     const subs = [
-      { id: "s1", submitted_date: "2026-04-01", status: "Revise and Resubmit", ball_in_court: "Detailer" },
-      { id: "s2", submitted_date: "2026-03-01", status: "Approved", ball_in_court: "Detailer" },
+      { id: "s1", submittal_type: "Shop Drawing", submitted_date: "2026-04-01", status: "Revise and Resubmit", ball_in_court: "Detailer" },
+      { id: "s2", submittal_type: "Shop Drawing", submitted_date: "2026-03-01", status: "Approved", ball_in_court: "Detailer" },
     ];
     expect(derivedSetStage(subs, [])).toBe("R&R");
   });
 
   it("skips Voided submittals when picking most-recent", () => {
     const subs = [
-      { id: "s1", submitted_date: "2026-05-01", status: "Void" },
-      { id: "s2", submitted_date: "2026-03-01", status: "Submitted", ball_in_court: "EOR" },
+      { id: "s1", submittal_type: "Shop Drawing", submitted_date: "2026-05-01", status: "Void" },
+      { id: "s2", submittal_type: "Shop Drawing", submitted_date: "2026-03-01", status: "Submitted", ball_in_court: "EOR" },
     ];
     expect(derivedSetStage(subs, [])).toBe("OFA");
   });
@@ -217,6 +277,10 @@ describe("derivedSetStage", () => {
   it("falls back to dominant sheet stage when no submittals exist", () => {
     const sheets = [{ stage: "OFA" }, { stage: "OFA" }, { stage: "IFA" }];
     expect(derivedSetStage([], sheets)).toBe("OFA");
+  });
+
+  it("does not treat a revision distributed to the shop as package fabrication release", () => {
+    expect(derivedSetStage([], [{ stage: "Not Started", release_status: "released_for_shop" }])).toBe("Not Started");
   });
 
   it("returns Not Started when neither submittals nor sheets give a signal", () => {

@@ -5,12 +5,27 @@
 
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
-/** Stamp active project on an RFI create payload. */
+/** Resolve once before number allocation and persistence. Never silently move an RFI. */
+export function resolveRfiProjectId(
+  selected: unknown,
+  active: string | null | undefined,
+): string {
+  const selectedId = typeof selected === "string" ? selected.trim() : "";
+  const activeId = active?.trim() ?? "";
+  if (activeId && selectedId && activeId !== selectedId) {
+    throw new Error("The RFI project must match the active project.");
+  }
+  const resolved = activeId || selectedId;
+  if (!resolved) throw new Error("Select a project before creating an RFI.");
+  return resolved;
+}
+
+/** Resolve the selected portfolio project or require the active page project. */
 export function buildRfiCreatePayload(
   data: Record<string, unknown>,
   projectId: string | null | undefined,
 ): Record<string, unknown> & { project_id: string } {
-  return withProjectId(data, projectId);
+  return { ...data, project_id: resolveRfiProjectId(data.project_id, projectId) };
 }
 
 /** Stamp project scope for an RFI PDF attachment Document row. */

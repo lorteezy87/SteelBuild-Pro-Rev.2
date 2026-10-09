@@ -9,7 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as Sentry from "@sentry/react";
 import "./rfis/RFIs.css";
 import { entities } from "@/api/supabaseClient";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
@@ -18,7 +18,6 @@ import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import RfiLogImportModal from "@/components/rfis/RfiLogImportModal";
 import RfiBulkEditModal from "@/components/rfis/RfiBulkEditModal";
@@ -42,12 +41,29 @@ import { scopeRfiPortfolioRows } from "./rfis/rfiPortfolioScope";
 import { buildOperationalHealthIndex } from "@/lib/projectHealth";
 import { matchesRfiOperationalFilter } from "./rfis/rfiControlCenter.derive";
 import { localToday } from "@/utils/dates";
-import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { useOrg } from "@/components/shared/OrgContext";
+import { projectsInWorkspace, readProjectRows } from "@/lib/portfolioScope";
 
 export default function RFIs() {
+  const { currentOrg, isLoadingOrgs } = useOrg();
+  const orgId = currentOrg?.id;
+  const projectId = useProjectId();
+  const scope = useMemo(() => ({ orgId, projectId, isLoadingOrgs }), [orgId, projectId, isLoadingOrgs]);
+  const currentScopeRef = useRef(scope);
+  currentScopeRef.current = scope;
+  useEffect(() => {
+    currentScopeRef.current = scope;
+    return () => { if (currentScopeRef.current === scope) currentScopeRef.current = null; };
+  }, [scope]);
+  if (isLoadingOrgs) return <div role="status" style={{ padding: 24 }}>Loading workspace…</div>;
+  if (!orgId) return <div role="status" style={{ padding: 24 }}>Select a workspace to view RFIs.</div>;
+  return <WorkspaceRFIs key={JSON.stringify([orgId, projectId])} orgId={orgId} projectId={projectId} scope={scope} currentScopeRef={currentScopeRef} />;
+}
+
+function WorkspaceRFIs({ orgId, projectId, scope, currentScopeRef }) {
+  const qc = useQueryClient();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const projectId = useProjectId();
   const isPortfolio = !projectId;
   const { can } = usePermissions();
 
@@ -78,62 +94,68 @@ export default function RFIs() {
   });
 
   /* ── Data ── */
-  const {
-    data: projects = [],
-    isLoading: projectsLoading,
-    isError: projectsError,
-    error: projectsQueryError,
-    refetch: refetchProjects,
-  } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => entities.Project.listAll(),
+  const projectKey = ["projects", "rfi-workspace", orgId];
+  const projectQuery = useQuery({
+    queryKey: projectKey,
+    queryFn: () => entities.Project.filterAll({ org_id: orgId }),
     staleTime: 5 * 60 * 1000,
   });
+  const projects = useMemo(() => projectsInWorkspace(projectQuery.data || [], orgId), [projectQuery.data, orgId]);
+  const projectAllowed = !projectId || projects.some((project) => project.id === projectId);
+  const projectIds = useMemo(() => (projectId ? projects.filter((project) => project.id === projectId) : projects).map((project) => project.id).sort(), [projects, projectId]);
+  const childReadsEnabled = projectQuery.isSuccess && projectAllowed;
+  const rfiKey = ["rfis", projectId || "portfolio", orgId, projectIds];
+  const workPackageKey = ["work-packages", "rfi-evidence", projectId || "portfolio", orgId, projectIds];
+  const scheduleKey = ["schedule-tasks-rfis", projectId || "portfolio", orgId, projectIds];
 
-  const {
-    data: rawRfis = [],
-    isLoading: rfisLoading,
-    isError: rfisError,
-    error: rfiQueryError,
-    isSuccess: rfisSuccess,
-    refetch: refetchRfis,
-  } = useQuery({
-    queryKey: ["rfis", projectId || "portfolio"],
-    queryFn: () => projectId
-      ? entities.RFI.filter({ project_id: projectId }, "-submitted_date")
-      : entities.RFI.listAll("-submitted_date"),
+  const rfiQuery = useQuery({
+    queryKey: rfiKey,
+    queryFn: () => readProjectRows(entities.RFI, projectIds, "-submitted_date"),
+    enabled: childReadsEnabled,
   });
+  const { data: rawRfis = [], isSuccess: rfisSuccess } = rfiQuery;
   const rfis = useMemo(
     () => isPortfolio ? scopeRfiPortfolioRows(projects, rawRfis) : rawRfis,
     [isPortfolio, projects, rawRfis],
   );
-  useAutoOpenEdit(rfis, setSelectedRFI, { enabled: !rfisLoading, param: "recordId" });
-  const { data: rawWorkPackages = [] } = useQuery({
-    queryKey: ["work-packages", projectId || "portfolio"],
-    queryFn: () => projectId
-      ? entities.WorkPackage.filter({ project_id: projectId })
-      : entities.WorkPackage.listAll(),
+  const workPackageQuery = useQuery({
+    queryKey: workPackageKey,
+    queryFn: () => readProjectRows(entities.WorkPackage, projectIds),
+    enabled: childReadsEnabled,
     staleTime: 5 * 60 * 1000,
   });
+  const { data: rawWorkPackages = [] } = workPackageQuery;
   const workPackages = useMemo(
     () => isPortfolio ? scopeRfiPortfolioRows(projects, rawWorkPackages) : rawWorkPackages,
     [isPortfolio, projects, rawWorkPackages],
   );
-  const {
-    data: rawScheduleTasks = [],
-    isSuccess: scheduleTasksSuccess,
-  } = useQuery({
-    queryKey: ["schedule-tasks-rfis", projectId || "portfolio"],
-    queryFn: () => projectId
-      ? entities.ScheduleTask.filter({ project_id: projectId }, "-start_date")
-      : entities.ScheduleTask.listAll("-start_date"),
+  const scheduleQuery = useQuery({
+    queryKey: scheduleKey,
+    queryFn: () => readProjectRows(entities.ScheduleTask, projectIds, "-start_date"),
+    enabled: childReadsEnabled,
   });
+  const { data: rawScheduleTasks = [], isSuccess: scheduleTasksSuccess } = scheduleQuery;
   const scheduleTasks = useMemo(
     () => isPortfolio ? scopeRfiPortfolioRows(projects, rawScheduleTasks) : rawScheduleTasks,
     [isPortfolio, projects, rawScheduleTasks],
   );
 
-  const rfiQueryKeys = [["rfis", projectId || "portfolio"], ["rfis"]];
+  const sources = [["Projects", projectQuery], ["RFIs", rfiQuery], ["Work packages", workPackageQuery], ["Schedule tasks", scheduleQuery]];
+  const failedSource = sources.find(([, query]) => query.isError);
+  const evidenceReady = projectAllowed && sources.every(([, query]) => query.isSuccess);
+  const writesReady = evidenceReady && sources.every(([, query]) => !query.isFetching);
+  const assertMutationScope = (recordId, targetProjectId) => {
+    if (currentScopeRef.current !== scope || !projectAllowed) throw new Error("Workspace or project changed. Reopen the RFI and try again.");
+    for (const key of [projectKey, rfiKey, workPackageKey, scheduleKey]) {
+      const state = qc.getQueryState(key);
+      if (state?.status !== "success" || state.fetchStatus !== "idle" || state.isInvalidated) throw new Error("RFI evidence is refreshing or unavailable. Retry after it has loaded.");
+    }
+    const ownedIds = new Set(projectsInWorkspace(qc.getQueryData(projectKey) || [], orgId).map((project) => project.id));
+    if (targetProjectId && (!projectIds.includes(targetProjectId) || !ownedIds.has(targetProjectId))) throw new Error("The RFI project is outside this workspace.");
+    if (recordId && !(qc.getQueryData(rfiKey) || []).some((rfi) => rfi.id === recordId && projectIds.includes(rfi.project_id) && ownedIds.has(rfi.project_id))) throw new Error("The RFI is outside the current project scope.");
+  };
+  useAutoOpenEdit(rfis, setSelectedRFI, { enabled: evidenceReady, param: "recordId" });
+  const rfiQueryKeys = [rfiKey, ["rfis"]];
   useRealtimeInvalidation("rfis", projectId, rfiQueryKeys);
 
   /* ── URL-driven selection (from cross-page deep links) ── */
@@ -141,10 +163,10 @@ export default function RFIs() {
   const urlSearch = searchParams.get("search");
   useEffect(() => { if (urlSearch) setSearch(urlSearch); }, [urlSearch]);
   useEffect(() => {
-    if (!urlRfiId || !rfis.length) return;
+    if (!evidenceReady || !urlRfiId || !rfis.length) return;
     const found = rfis.find((r) => r.id === urlRfiId);
     if (found) setSelectedRFI(found);
-  }, [urlRfiId, rfis]);
+  }, [urlRfiId, rfis, evidenceReady]);
   // Auto-open the create modal when QuickAddFAB navigated here with ?new=1.
   // The hook strips the param via `replace: true`, so a refresh of the
   // page doesn't re-open the modal and the back button still returns
@@ -153,7 +175,7 @@ export default function RFIs() {
     if (isPortfolio) return;
     setEditingRFI(null);
     setShowForm(true);
-  });
+  }, { enabled: writesReady && !isPortfolio && can("create", "rfi") });
 
   /* ── Today's RFI Agenda (meeting view) ── */
   const [agendaOpen, setAgendaOpen] = useState(false);
@@ -204,6 +226,9 @@ export default function RFIs() {
     saveRfi,
     isSaving,
   } = useRfiPageMutations({
+    assertMutationScope,
+    isCurrentScope: () => currentScopeRef.current === scope,
+    queryKeys: [rfiKey],
     projectId,
     projects,
     projectMap,
@@ -220,7 +245,7 @@ export default function RFIs() {
   /* ── Overdue → Alert background effect ── */
   const alertsCreatedRef = useRef(new Set());
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !writesReady) return;
     if (!rfis.length) return;
     const createRFIAlerts = async () => {
       try {
@@ -228,7 +253,8 @@ export default function RFIs() {
         // sequences, so an unscoped title dedupe collided across projects
         // (silently suppressing the second project's alerts) and downloaded
         // the tenant-wide alert list on every visit.
-        const existing = await entities.Alert.filter({ alert_type: "RFI_Overdue", project_id: projectId });
+        const existing = await entities.Alert.filterAll({ alert_type: "RFI_Overdue", project_id: projectId });
+        if (currentScopeRef.current !== scope) return;
         const existingIds = new Set(existing.map((a) => a.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((a) => a.title));
         const planned = planRfiOverdueAlerts(rfis, {
@@ -238,6 +264,7 @@ export default function RFIs() {
           projectMap,
         });
         for (const item of planned) {
+          if (currentScopeRef.current !== scope) return;
           await entities.Alert.create(buildRfiAlertPayload(item.alertFields, item.projectId));
           alertsCreatedRef.current.add(item.rfiId);
         }
@@ -248,7 +275,7 @@ export default function RFIs() {
     };
     const t = setTimeout(createRFIAlerts, 2500);
     return () => clearTimeout(t);
-  }, [projectId, rfis, projectMap]);
+  }, [projectId, rfis, projectMap, writesReady, currentScopeRef, scope]);
 
   // Memoized: O(projects × (rfis + tasks)) — unmemoized this re-ran on every
   // keystroke/selection. Local today (not UTC) so evening sessions don't
@@ -263,7 +290,13 @@ export default function RFIs() {
   );
 
   /* ── Loading ── */
-  if (rfisLoading || projectsLoading) {
+  if (failedSource || (projectQuery.isSuccess && !projectAllowed)) return (
+    <div role="alert" style={{ padding: 24, color: "var(--status-error)" }}>
+      {!projectAllowed && projectQuery.isSuccess ? "This project is not active in the selected workspace. Select a project from this workspace." : `${failedSource[0]} could not be loaded. RFI metrics are unavailable.`}
+      {failedSource && <button onClick={() => { sources.forEach(([, query]) => { void query.refetch(); }); }}>Retry</button>}
+    </div>
+  );
+  if (!evidenceReady) {
     return (
       <div style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
@@ -339,7 +372,8 @@ export default function RFIs() {
         open={showLogImport}
         projectId={projectId}
         projectName={projects.find((p) => p.id === projectId)?.name}
-        projects={projects}
+        projects={projects.filter((project) => project.id === projectId)}
+        assertCanImport={(targetProjectId) => assertMutationScope(undefined, targetProjectId)}
         onClose={() => setShowLogImport(false)}
       />}
 
@@ -410,8 +444,8 @@ export default function RFIs() {
         onToggleInsights={handleToggleInsights}
         onOpenRfi={setSelectedRFI}
         onExport={() => exportRFIsToCSV(filtered)}
-        onImport={!isPortfolio && can("create", "rfi") ? () => setShowLogImport(true) : null}
-        onCreate={!isPortfolio && can("create", "rfi") ? () => {
+        onImport={writesReady && !isPortfolio && can("create", "rfi") ? () => setShowLogImport(true) : null}
+        onCreate={writesReady && !isPortfolio && can("create", "rfi") ? () => {
           setEditingRFI(null);
           setShowForm(true);
         } : null}
@@ -419,18 +453,12 @@ export default function RFIs() {
         percentComplete={percentComplete}
         portfolioProjectCount={projects.length}
         portfolioAtRiskCount={projects.filter((project) => healthByProjectId[project.id]?.label === "At Risk").length}
-        loadError={
-          projectsError
-            ? toUserErrorMessage(projectsQueryError, "Project data unavailable")
-            : rfisError
-              ? toUserErrorMessage(rfiQueryError, "RFI data unavailable")
-              : null
-        }
-        onRetryLoad={() => { void refetchProjects(); void refetchRfis(); }}
+        loadError={null}
+        onRetryLoad={() => { sources.forEach(([, query]) => { void query.refetch(); }); }}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
         onToggleAll={toggleAll}
-        listTruncationNotice={<ListTruncationNotice count={rfis.length} label="RFIs" />}
+        listTruncationNotice={null}
         bulkActions={(
           <BulkActionBar
             count={selectedIds.size}

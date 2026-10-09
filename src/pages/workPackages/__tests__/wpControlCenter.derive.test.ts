@@ -61,7 +61,7 @@ function makeMetrics(partial: Partial<WpMetrics> = {}): WpMetrics {
     onHold: [],
     drawingGaps: [],
     overdue: [],
-    readyForFab: [],
+    drawingStageClear: [],
     fabBlocked: [],
     blockedSheetCount: 0,
     readyForShip: [],

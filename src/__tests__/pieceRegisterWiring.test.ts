@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { resolveDashboardNavigation } from "@/pages/dashboardCC/dashboardNavigation";
 
 const root = process.cwd();
 
@@ -36,7 +37,8 @@ describe("Piece Register wiring regression guards", () => {
     const routes = read("src/config/routes.js");
 
     expect(routes).toContain('PieceRegister:      r(lazyWithRetry(() => import("@/pages/PieceRegister"))');
-    expect(dashboard).toContain('"piece-register": "/PieceRegister"');
+    expect(dashboard).toContain("resolveDashboardNavigation(target, opts)");
+    expect(resolveDashboardNavigation("piece-register")).toBe("/PieceRegister");
     expect(controlCenter).toContain('import { PieceControlDashboardPanel } from "@/components/pieceControl/PieceControlDashboardPanel"');
     expect(controlCenter).toContain("PieceControlDashboardPanel");
     expect(controlCenter).toContain('onNavigate?.("piece-register")');

@@ -50,6 +50,8 @@ export interface SovStagedRow {
   valid: boolean;
   reason: string | null;
   autoMapped: boolean;
+  sourceLineReference?: string | null;
+  sourceRow?: number;
 }
 
 export interface BuildSovStagedOptions {
@@ -338,6 +340,8 @@ export function buildSovStaged(
             ? `Unknown status "${String(row.status).trim()}" (use Draft/Submitted/Certified/Paid)`
             : null;
 
-    return { record, valid, reason, autoMapped };
+    const sourceLine = String(row.line_item_number ?? "").trim();
+    const sourceLineReference = sourceLine ? (Number.isFinite(Number(sourceLine)) ? String(Number(sourceLine)) : sourceLine) : null;
+    return { record, valid, reason, autoMapped, sourceLineReference, sourceRow: idx + 1 };
   });
 }

@@ -400,6 +400,8 @@ export default function ContractManagement() {
     isLoading,
     isError,
     loadError,
+    hasSnapshot,
+    writesDisabled,
     refetchAll,
     showSOVForm,
     editingSOV,
@@ -409,7 +411,12 @@ export default function ContractManagement() {
     openSOVEdit,
     closeSOVForm,
     saveSOV,
+    recoverSOV,
+    requiresSOVRecovery,
+    sovInitialValues,
+    isSavingSOV,
     deleteSOV,
+    isDeletingSOV,
     editingContract,
     contractForm,
     setContractForm,
@@ -444,9 +451,9 @@ export default function ContractManagement() {
     );
   }
 
-  if (isError) {
+  if (isError && !hasSnapshot) {
     return (
-      <div className="sb-dashboard-reference-page" style={{
+      <div role="alert" className="sb-dashboard-reference-page" style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -467,6 +474,10 @@ export default function ContractManagement() {
 
   return (
     <div className="sb-dashboard-reference-page" style={{ padding: "24px 28px", background: "var(--bg-page)", minHeight: "100vh" }}>
+      {isError && <div role="alert" style={{ color: "var(--status-error)", marginBottom: 16 }}>
+        <p>{toUserErrorMessage(loadError, "Contract data could not be refreshed.")} Showing the last verified snapshot. Refresh before saving.</p>
+        <Button variant="outline" onClick={refetchAll}>Retry</Button>
+      </div>}
       <CommandBar
         eyebrow={project?.name || activeProject?.name || "PROJECT"}
         title="Contract Management"
@@ -477,6 +488,7 @@ export default function ContractManagement() {
         {activeTab === "BILLING & SOV" && can("create", "sov_item") && (
           <button
             onClick={openSOVCreate}
+            disabled={writesDisabled}
             className="sbd-btn"
             style={{
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
@@ -499,10 +511,11 @@ export default function ContractManagement() {
         editingContract={editingContract}
         contractForm={contractForm}
         setContractForm={setContractForm}
-        onEditContract={can("edit", "contract") ? openContractEdit : null}
+        onEditContract={!writesDisabled && can("edit", "contract") ? openContractEdit : null}
         onSaveContract={saveContract}
         onCancelContract={cancelContractEdit}
         isSaving={isSavingContract}
+        writesDisabled={writesDisabled}
       />
 
       {/* Tab bar */}
@@ -521,8 +534,8 @@ export default function ContractManagement() {
           sovItems={sovItems}
           expenses={expenses}
           onAddSOV={can("create", "sov_item") ? openSOVCreate : null}
-          onEditSOV={can("edit", "sov_item") ? openSOVEdit : null}
-          onDeleteSOV={can("delete", "sov_item") ? setDeleteSOVTarget : null}
+          onEditSOV={!writesDisabled && can("edit", "sov_item") ? openSOVEdit : null}
+          onDeleteSOV={!writesDisabled && can("delete", "sov_item") ? setDeleteSOVTarget : null}
         />
       )}
       {activeTab === "CONTRACT SUMMARY" && (
@@ -539,6 +552,11 @@ export default function ContractManagement() {
         open={showSOVForm}
         onClose={closeSOVForm}
         onSave={saveSOV}
+        onRecover={recoverSOV}
+        requiresRecovery={requiresSOVRecovery}
+        initialValues={sovInitialValues}
+        isSaving={isSavingSOV}
+        writesDisabled={writesDisabled}
         sov={editingSOV}
         projects={[project].filter(Boolean)}
         activeProject={project || activeProject}
@@ -549,6 +567,7 @@ export default function ContractManagement() {
         open={!!deleteSOVTarget}
         onClose={() => setDeleteSOVTarget(null)}
         onConfirm={deleteSOV}
+        busy={isDeletingSOV}
         title="Delete SOV Line Item"
         description={`Delete line item "${deleteSOVTarget?.description || ""}"? This cannot be undone.`}
       />

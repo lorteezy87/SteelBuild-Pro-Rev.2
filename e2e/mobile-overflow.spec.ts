@@ -27,6 +27,7 @@ const PAGES = [
   { name: "Work Packages", path: "/WorkPackages" },
   { name: "Scope & Exclusions", path: "/ScopeExclusions" },
   { name: "Calculators", path: "/CalculatorsHub" },
+  { name: "Crane Pick calculator", path: "/CalculatorsHub?calc_tab=cranepick" },
   { name: "Feet & Inches calculator", path: "/FeetInchesCalculator" },
 ];
 

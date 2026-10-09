@@ -30,9 +30,19 @@ The drift checker (`scripts/supabase-drift-check.mjs`) enforces all of this:
 4. The entry still classifies the version, so if it ever appears in the remote
    ledger the report names it instead of calling it unknown — and an
    `unresolved` entry keeps failing drift. **Quarantine does not silence an open
-   question.** `20260727232000` still fails the drift check today, deliberately.
+   question.** An `unresolved` entry still fails the drift check deliberately.
 
 ## Contents
+
+### `20261008032840_transactional_reviewed_shop_drawing_revision.sql` — `intentionally-frozen`
+
+Local candidate only. Its reviewed revision RPC is not wired to the app and
+cannot safely update an already approved shop set: submittal rounds lack an
+immutable exact-revision manifest, and active drawing zones cannot yet be
+carried forward in the same transaction. It must stay outside the runner's
+directory until a new forward migration supplies those prerequisites and
+passes hosted authorization and concurrency tests. See
+`docs/audits/DRAWING_REVISION_ATOMIC_CANDIDATE_2026-10-08.md`.
 
 ### `20260913084700_expense_atomic_creation.sql` — `intentionally-frozen`
 

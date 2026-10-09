@@ -15,17 +15,20 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
     Project: {
-      list: mocks.projectList,
+      filterAll: mocks.projectList,
       update: mocks.projectUpdate,
     },
-    ChangeOrder: { filter: vi.fn().mockResolvedValue([]) },
-    SOVItem: { filter: vi.fn().mockResolvedValue([]) },
-    Expense: { filter: vi.fn().mockResolvedValue([]) },
+    ChangeOrder: { filterAll: vi.fn().mockResolvedValue([]) },
+    SOVItem: { filterAll: vi.fn().mockResolvedValue([]) },
+    Expense: { filterAll: vi.fn().mockResolvedValue([]) },
   },
 }));
 
 vi.mock("@/components/shared/ProjectContext", () => ({
   useProjectContext: () => ({ activeProject: { id: mocks.activeProjectId } }),
+}));
+vi.mock("@/components/shared/OrgContext", () => ({
+  useOrg: () => ({ currentOrg: { id: "org-1" }, isLoadingOrgs: false }),
 }));
 
 vi.mock("@/hooks/useRealtimeInvalidation", () => ({
@@ -88,20 +91,23 @@ describe("ContractManagement contract save", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.activeProjectId = "project-1";
-    mocks.projectList.mockResolvedValue([
+    const projects = [
       {
         id: "project-1",
+        org_id: "org-1",
         name: "Test Project",
         original_contract_value: 100000,
         contract_type: "Lump Sum",
       },
       {
         id: "project-2",
+        org_id: "org-1",
         name: "Second Project",
         original_contract_value: 200000,
         contract_type: "Unit Price",
       },
-    ]);
+    ];
+    mocks.projectList.mockImplementation(async ({ id }: { id: string }) => projects.filter(project => project.id === id));
   });
 
   it("discards the first project's contract draft before editing the selected project", async () => {

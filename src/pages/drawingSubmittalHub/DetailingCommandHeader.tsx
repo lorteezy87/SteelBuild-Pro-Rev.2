@@ -20,7 +20,7 @@ import type { ReactNode } from "react";
 import { ShieldAlert } from "lucide-react";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 
-export const DCC_TITLE = "Detailing Control Center";
+export const DCC_TITLE = "Drawing Control";
 
 /**
  * Where a set's stage comes from, stated as REV2 actually derives it
@@ -29,7 +29,7 @@ export const DCC_TITLE = "Detailing Control Center";
  * applies when no submittal governs, so this never says otherwise.
  */
 export const DCC_SUBTITLE =
-  "Stage follows each set's governing submittal. Manual release states override it; with no submittal, drafting states or sheet stage apply.";
+  "Track shop sheets, GC issuances and approvals. Approval follows the governing submittal; sheet stage is a fallback, and fabrication release is checked separately.";
 
 /**
  * The eyebrow's project line. The number follows the user's Show Project

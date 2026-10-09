@@ -6,8 +6,12 @@
  * hardcodes a surface, text or border hex.
  */
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { resolveFileUrl } from "@/api/client/storage";
+import { hubHref } from "@/pages/drawingSubmittalHub/hubLinks";
+import type { RowWithAliases } from "@/api/supabaseClient";
+import type { GcShopImpactLink } from "@/lib/gcDocuments/gcShopImpactLinks";
 import {
   GC_DOC_TYPE_LABELS,
   STEEL_IMPACT_SHORT_LABELS,
@@ -108,9 +112,38 @@ function SheetRow({ sheet }: { sheet: GcDrawingRow }) {
   );
 }
 
+function SourcePdfPanel({ fileUrl }: { fileUrl: string }) {
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setResolvedUrl(null);
+    setError(false);
+    void resolveFileUrl(fileUrl).then((url) => {
+      if (!active) return;
+      if (url) setResolvedUrl(url);
+      else setError(true);
+    }).catch(() => { if (active) setError(true); });
+    return () => { active = false; };
+  }, [fileUrl]);
+
+  if (error) return <div role="alert" style={{ color: "var(--status-error)", fontSize: 12 }}>The source PDF could not be opened. Check your access or retry the register.</div>;
+  if (!resolvedUrl) return <div role="status" style={{ color: "var(--text-muted)", fontSize: 12 }}>Preparing private GC source PDF…</div>;
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontSize: 12, justifySelf: "start" }}>Open GC source PDF</a>
+      <iframe title="GC source PDF preview" src={resolvedUrl} style={{ width: "100%", height: 360, border: "1px solid var(--border-default)", borderRadius: 6, background: "#fff" }} />
+    </div>
+  );
+}
+
 export default function GcIssuanceTable({
   issuances,
   expanded,
+  linksByIssuance = new Map(),
+  shopSets = [],
+  impactLinksStatus = "unavailable",
   canEdit,
   canDelete,
   onToggleExpand,
@@ -120,6 +153,9 @@ export default function GcIssuanceTable({
 }: {
   issuances: GcIssuance[];
   expanded: ReadonlySet<string>;
+  linksByIssuance?: ReadonlyMap<string, GcShopImpactLink[]>;
+  shopSets?: RowWithAliases<"drawing_sets">[];
+  impactLinksStatus?: "loading" | "available" | "unavailable";
   canEdit: boolean;
   canDelete: boolean;
   onToggleExpand: (id: string) => void;
@@ -127,6 +163,7 @@ export default function GcIssuanceTable({
   onSetImpact: (issuance: GcIssuance) => void;
   onDelete: (issuance: GcIssuance) => void;
 }) {
+  const shopById = new Map(shopSets.map((set) => [set.id, set]));
   return (
     <div style={{ overflowX: "auto", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card, 8px)" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--bg-surface-low)" }}>
@@ -150,6 +187,10 @@ export default function GcIssuanceTable({
         <tbody>
           {issuances.map((issuance) => {
             const isOpen = expanded.has(issuance.id);
+            const linked = impactLinksStatus === "available"
+              ? linksByIssuance.get(issuance.id) ?? []
+              : [];
+            const expandable = issuance.sheets.length > 0 || linked.length > 0 || !!issuance.set.file_url;
             return (
               <Fragment key={issuance.id}>
                 <tr>
@@ -159,17 +200,17 @@ export default function GcIssuanceTable({
                       onClick={() => onToggleExpand(issuance.id)}
                       aria-expanded={isOpen}
                       aria-label={`${isOpen ? "Collapse" : "Expand"} ${issuance.label}`}
-                      disabled={issuance.sheets.length === 0}
+                      disabled={!expandable}
                       style={{
                         background: "transparent",
                         border: "none",
-                        color: issuance.sheets.length ? "var(--text-primary)" : "var(--text-muted)",
-                        cursor: issuance.sheets.length ? "pointer" : "default",
+                        color: expandable ? "var(--text-primary)" : "var(--text-muted)",
+                        cursor: expandable ? "pointer" : "default",
                         fontSize: 12,
                         padding: 0,
                       }}
                     >
-                      {issuance.sheets.length ? (isOpen ? "▾" : "▸") : "·"}
+                      {expandable ? (isOpen ? "▾" : "▸") : "·"}
                     </button>
                   </td>
                   <td style={{ ...cell, fontFamily: "var(--font-mono, monospace)", fontWeight: 600 }}>
@@ -183,6 +224,15 @@ export default function GcIssuanceTable({
                         supersedes {issuance.supersededCount} sheet(s)
                       </div>
                     )}
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
+                      {impactLinksStatus === "loading"
+                        ? "Affected shop links: verifying"
+                        : impactLinksStatus === "unavailable"
+                          ? "Affected shop links: unavailable"
+                          : linked.length > 0
+                            ? `${linked.length} affected shop set${linked.length === 1 ? "" : "s"} explicitly linked`
+                            : "No shop sets explicitly linked"}
+                    </div>
                   </td>
                   <td style={cell}>{String(issuance.set.issued_by ?? "—")}</td>
                   <td style={{ ...cell, fontFamily: "var(--font-mono, monospace)", whiteSpace: "nowrap" }}>
@@ -224,9 +274,44 @@ export default function GcIssuanceTable({
                     )}
                   </td>
                 </tr>
+                {isOpen && issuance.set.file_url && (
+                  <tr>
+                    <td style={cell} />
+                    <td style={cell} colSpan={9}>
+                      <strong style={{ display: "block", marginBottom: 7, fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Original GC issuance PDF</strong>
+                      <SourcePdfPanel fileUrl={String(issuance.set.file_url)} />
+                    </td>
+                  </tr>
+                )}
                 {isOpen && issuance.sheets.map((sheet) => (
                   <SheetRow key={String(sheet.id)} sheet={sheet} />
                 ))}
+                {isOpen && linked.length > 0 && (
+                  <tr>
+                    <td style={cell} />
+                    <td style={cell} colSpan={9}>
+                      <strong style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Affected shop drawing sets</strong>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                        {linked.map((link) => {
+                          const shopSet = shopById.get(link.drawing_set_id);
+                          return shopSet ? (
+                            <Link key={link.id} to={hubHref("drawings", { hub_view: "sets", set: link.drawing_set_id })}
+                              style={{ color: "var(--accent)", fontSize: 12 }}>
+                              {String(shopSet.set_name ?? link.drawing_set_id)}
+                            </Link>
+                          ) : (
+                            <span key={link.id} style={{ color: "var(--status-review)", fontSize: 12 }}>
+                              Archived or unavailable set {link.drawing_set_id}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <small style={{ display: "block", color: "var(--text-muted)", marginTop: 5 }}>
+                        Impact mapping only. Shop approval and fabrication release have their own gates.
+                      </small>
+                    </td>
+                  </tr>
+                )}
               </Fragment>
             );
           })}

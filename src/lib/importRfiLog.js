@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { integrations } from "@/api/supabaseClient";
 import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
 import { normalizeBallInCourt } from "@/lib/ballInCourt";
+import { fetchAllRows } from "@/lib/pagedQuery";
 
 const STORAGE_BUCKET  = "app-files";
 const MAX_PDF_BYTES   = 32 * 1024 * 1024;
@@ -200,22 +201,17 @@ export async function extractRfiLog({
   };
 }
 
-export async function resolveProjectForRfiLog(jobNumber) {
+/**
+ * Match only the complete, workspace-owned register supplied by the caller.
+ * @param {unknown} jobNumber
+ * @param {{ id: string, project_number?: string | null, name?: string | null }[]} projects
+ */
+export async function resolveProjectForRfiLog(jobNumber, projects = []) {
   if (!jobNumber) return null;
-  // Strip to digits before interpolating into the PostgREST .or() filter —
-  // jobNumber is AI-extracted (untrusted) and raw values could break out of the
-  // filter. Matches the CSV importers; the ilike fallback still hits
-  // alphanumeric stored project_numbers.
   const cleaned = String(jobNumber).replace(/\D+/g, "");
   if (!cleaned) return null;
-  const { data, error } = await supabase
-    .from("projects")
-    .select("id, name, project_number")
-    .or(`project_number.eq.${cleaned},project_number.ilike.%${cleaned}%`)
-    .eq("is_deleted", false)
-    .limit(1);
-  if (error || !data || data.length === 0) return null;
-  return data[0];
+  const matches = projects.filter((project) => String(project.project_number || "").replace(/\D+/g, "") === cleaned);
+  return matches.length === 1 ? matches[0] : null;
 }
 
 /**
@@ -225,18 +221,21 @@ export async function resolveProjectForRfiLog(jobNumber) {
  * return value tells the caller how many rows landed vs were skipped.
  */
 export async function commitRfiLog({
-  header, rfis, projectId, projectName,
+  header, rfis, projectId, projectName, assertCanImport = (_projectId) => {},
 }) {
   if (!projectId) throw new Error("Select a project before importing.");
+  assertCanImport(projectId);
   if (rfis.length === 0) return { created: 0, skipped: 0 };
 
   // Look up existing RFI numbers for this project so we don't double-insert.
-  const existing = await supabase
-    .from("rfis")
-    .select("rfi_number")
-    .eq("project_id", projectId);
+  const existing = await fetchAllRows(async (start, end) => {
+    assertCanImport(projectId);
+    // eslint-disable-next-line no-restricted-syntax -- complete dedup read with a stable unique ordering
+    return await supabase.from("rfis").select("id,rfi_number").eq("project_id", projectId)
+      .order("id", { ascending: true }).range(start, end);
+  }, "RFI import dedup evidence");
   const existingNumbers = new Set(
-    (existing.data || [])
+    existing
       .map((r) => rfiNumberDedupKey(r.rfi_number))
       .filter(Boolean),
   );
@@ -245,6 +244,7 @@ export async function commitRfiLog({
 
   if (rows.length === 0) return { created: 0, skipped };
 
+  assertCanImport(projectId);
   const { error } = await supabase.from("rfis").insert(rows);
   if (error) throw new Error(`rfis insert failed: ${error.message}`);
   return { created: rows.length, skipped };

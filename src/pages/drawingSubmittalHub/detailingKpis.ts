@@ -27,9 +27,10 @@ export interface DetailingKpis {
   atRisk: number;
   overdueDrawingSets: number;
   overdueUnlinkedSubmittals: number;
-  fabReadyNumerator: number;
-  fabReadyDenominator: number;
-  fabReadyPercent: number;
+  /** Active sheets whose set has a released Shop Drawing submittal marker. */
+  shopReleaseNumerator: number;
+  shopReleaseDenominator: number;
+  shopReleasePercent: number;
   openItems: number;      // triage.openItems.length
   fleetAverageScore: number | null; // from fleetHealth.averageScore (null if no data)
 }
@@ -69,10 +70,10 @@ export function buildDetailingKpiCells(kpis: DetailingKpis, pending: boolean): K
       Icon: FileStack,
     },
     {
-      label: "Released",
+      label: "Marked Released",
       value: num(kpis.released),
-      sublabel: "sets to fab",
-      tone: tone("good"),
+      sublabel: "workflow state · verify fab gate",
+      tone: "neutral",
       Icon: CheckCircle,
     },
     {
@@ -160,37 +161,35 @@ function fleetTone(score: number): KpiTone {
   return "danger";
 }
 
-/** Sheets fab-ready as "n/d". "—" while loading, or when no sheet counts toward it. */
-function fabReadyText(kpis: DetailingKpis, pending: boolean): string {
-  return !pending && kpis.fabReadyDenominator > 0
-    ? `${kpis.fabReadyNumerator}/${kpis.fabReadyDenominator}`
+/** Shop Drawing submittal workflow marker, never a fabrication release verdict. */
+function shopReleaseText(kpis: DetailingKpis, pending: boolean): string {
+  return !pending && kpis.shopReleaseDenominator > 0
+    ? `${kpis.shopReleaseNumerator}/${kpis.shopReleaseDenominator}`
     : KPI_PENDING;
 }
 
 /**
- * Fab Ready alone, for the Control Board. Its KPI strip has no cell for it:
+ * Shop submittal release marker alone, for the Control Board. Its KPI strip has no cell for it:
  * the strip's grid is shared by every Control Center.
  */
-export function buildFabReadyLine(kpis: DetailingKpis, pending: boolean): string {
-  return `Fab Ready ${fabReadyText(kpis, pending)}`;
+export function buildShopReleaseLine(kpis: DetailingKpis, pending: boolean): string {
+  return `Shop submittal marked released ${shopReleaseText(kpis, pending)}`;
 }
 
 /**
  * One compact line for the tabs that don't show the KPI strip:
- * "4 sets · 2 open · 5 overdue · 1 at risk · Fab Ready 1/4". Same numbers as
- * the old header chips and Fab Ready stat, with the same em-dash rule while
- * loading. Fab Ready is also "—" when no sheet counts toward it, as the old
- * header stat was.
+ * "4 sets · 2 open · 5 overdue · 1 at risk · Shop submittal marked released 1/4".
+ * This shows a set-linked Shop Drawing workflow marker, not a fab gate result.
  */
 export function buildStatusLine(kpis: DetailingKpis, pending: boolean): string {
   const num = (v: number): string => (pending ? KPI_PENDING : String(v));
   const sets = !pending && kpis.totalSets === 1 ? "set" : "sets";
-  const fabReady = fabReadyText(kpis, pending);
+  const shopRelease = shopReleaseText(kpis, pending);
   return [
     `${num(kpis.totalSets)} ${sets}`,
     `${num(kpis.openItems)} open`,
     `${num(totalOverdue(kpis))} overdue`,
     `${num(kpis.atRisk)} at risk`,
-    `Fab Ready ${fabReady}`,
+    `Shop submittal marked released ${shopRelease}`,
   ].join(" · ");
 }

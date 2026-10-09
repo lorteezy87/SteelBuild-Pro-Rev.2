@@ -14,6 +14,7 @@ interface CanonicalFabReleasePanelProps {
   projectId: string;
   workPackageId: string;
   pieceControlMode: string;
+  assertCanRelease?: () => void;
 }
 
 const CHECK_LABELS: Array<{ key: keyof CanonicalReleaseGate["checks"]; label: string }> = [
@@ -189,6 +190,7 @@ export default function CanonicalFabReleasePanel({
   projectId,
   workPackageId,
   pieceControlMode,
+  assertCanRelease,
 }: CanonicalFabReleasePanelProps) {
   const queryClient = useQueryClient();
   const enabled = Boolean(projectId && workPackageId && pieceControlMode !== "off");
@@ -202,10 +204,27 @@ export default function CanonicalFabReleasePanel({
     enabled,
     staleTime: 5_000,
   });
-  const gate = gateQuery.data;
+  const gateMatchesPackage = gateQuery.data?.work_package_id === workPackageId
+    && gateQuery.data?.project_id === projectId
+    && typeof gateQuery.data?.passes === "boolean"
+    && typeof gateQuery.data?.already_released === "boolean"
+    && CHECK_LABELS.every(({ key }) =>
+      typeof gateQuery.data?.checks?.[key]?.passed === "boolean"
+      && Array.isArray(gateQuery.data?.checks?.[key]?.blockers),
+    );
+  // A failed/background refresh must never leave a cached green release action
+  // on screen. The mutation rechecks server-side, but the displayed decision
+  // must also reflect current, correctly scoped evidence.
+  const gate = !gateQuery.isFetching && !gateQuery.isError && !gateQuery.isStale
+    && gateQuery.fetchStatus !== "paused" && gateMatchesPackage
+    ? gateQuery.data
+    : null;
 
   const releaseMutation = useMutation({
-    mutationFn: (reason: string | null) => releaseCanonicalWorkPackage(workPackageId, reason),
+    mutationFn: (reason: string | null) => {
+      assertCanRelease?.();
+      return releaseCanonicalWorkPackage(workPackageId, reason);
+    },
     onSuccess: async (result) => {
       setExceptionOpen(false);
       setExceptionReason("");
@@ -271,12 +290,23 @@ export default function CanonicalFabReleasePanel({
       {gateQuery.isLoading && (
         <p style={{ marginTop: 16, fontSize: 14, ...muted }}>Checking fabrication release…</p>
       )}
+      {gateQuery.isFetching && !gateQuery.isLoading && (
+        <p style={{ marginTop: 16, fontSize: 14, ...muted }}>Rechecking fabrication release…</p>
+      )}
+      {!gateQuery.isFetching && !gateQuery.isError && gateQuery.data && (gateQuery.isStale || gateQuery.fetchStatus === "paused") && (
+        <p style={{ marginTop: 16, fontSize: 14, ...muted }}>Release checks need a fresh connection. Refresh before acting.</p>
+      )}
       {gateQuery.error && (
         <p style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: "var(--cmd-danger-text, var(--status-error))" }}>
           {presentPieceControlError(
             gateQuery.error,
             "Fabrication release could not be evaluated.",
           )}
+        </p>
+      )}
+      {!gateQuery.isFetching && !gateQuery.isError && gateQuery.data && !gateMatchesPackage && (
+        <p style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: "var(--cmd-danger-text, var(--status-error))" }}>
+          Fabrication release evidence did not match this package.
         </p>
       )}
 

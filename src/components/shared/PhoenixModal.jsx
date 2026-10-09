@@ -1,4 +1,4 @@
-import React, { useEffect, useId } from "react";
+import React, { useId } from "react";
 import { X } from "lucide-react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 
@@ -90,21 +90,10 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
   const titleId = useId();
   const trapRef = useFocusTrap(open);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event) => {
-      if (event.key === "Escape") onClose?.();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
   if (!open) return null;
 
   return (
     <div
-      onClick={onClose}
-      aria-hidden="true"
       style={{
         position: "fixed",
         inset: 0,
@@ -117,13 +106,29 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
         padding: 16,
       }}
     >
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Close dialog backdrop"
+        onClick={onClose}
+        style={{ position: "absolute", inset: 0, border: 0, padding: 0, background: "transparent", cursor: "default" }}
+      />
       <div
         ref={trapRef}
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || event.defaultPrevented) return;
+          // Let nested dialogs and child editors own their Escape interaction.
+          if (event.target.closest('[role="dialog"]') !== event.currentTarget) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onClose?.();
+        }}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         style={{
+          position: "relative",
           background: modalSurface,
           border: `1px solid ${modalBorder}`,
           borderRadius: 16,
@@ -161,6 +166,7 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
             {title}
           </span>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close dialog"
             style={{

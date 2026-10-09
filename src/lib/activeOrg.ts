@@ -12,11 +12,28 @@
  * when signed out / no workspace yet → the uploader falls back to a flat path.
  */
 let _activeOrgId: string | null = null;
+let _activeOrgGeneration = 0;
+const generationListeners = new Set<() => void>();
 
 export function setActiveOrgId(orgId: string | null): void {
-  _activeOrgId = orgId || null;
+  const nextOrgId = orgId || null;
+  const changed = _activeOrgId !== nextOrgId;
+  if (changed) ++_activeOrgGeneration;
+  _activeOrgId = nextOrgId;
+  if (changed) for (const listener of generationListeners) listener();
 }
 
 export function getActiveOrgId(): string | null {
   return _activeOrgId;
+}
+
+/** Invalidates asynchronous work even if a cleared workspace later reopens. */
+export function getActiveOrgGeneration(): number {
+  return _activeOrgGeneration;
+}
+
+/** Synchronous cancellation before auth/workspace React updates commit. */
+export function subscribeActiveOrgChange(listener: () => void): () => void {
+  generationListeners.add(listener);
+  return () => { generationListeners.delete(listener); };
 }

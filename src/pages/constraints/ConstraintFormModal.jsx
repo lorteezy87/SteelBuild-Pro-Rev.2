@@ -21,7 +21,7 @@ import {
 
 const STATUS_OPTIONS = ["Open", "In Progress", "Resolved", "Closed"];
 
-export default function ConstraintFormModal({ projectId, constraint, prefill = null, wps, onClose, onSave }) {
+export default function ConstraintFormModal({ projectId, constraint, prefill = null, wps, onClose, onSave, disabled = false }) {
   // Prefill (e.g. RFI → constraint handoff) is create-only; edit requires a real id.
   const isEdit = !!constraint?.id;
   const [form, setForm] = useState(() => {
@@ -44,6 +44,7 @@ export default function ConstraintFormModal({ projectId, constraint, prefill = n
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = () => {
+    if (disabled) return;
     if (!form.title?.trim()) {
       toast.error("Title is required");
       return;
@@ -284,6 +285,7 @@ export default function ConstraintFormModal({ projectId, constraint, prefill = n
             <button
               type="button"
               onClick={handleSubmit}
+              disabled={disabled}
               style={{
                 background: "var(--status-error)",
                 color: "var(--on-accent)",

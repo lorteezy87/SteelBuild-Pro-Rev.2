@@ -62,19 +62,10 @@ export function buildDrawingRegisterRows({
     const packageDue = resolveDrawingPackageDue(pkg, workdayDues);
     const latestSubmittal = packageDue.governingSubmittal;
     const sheetCount = sheets.length || (pkg.parent?.sheet_count ?? 0);
-    // Per-sheet "released" count is DISPLAY ONLY (the n/total badge). It reads the
-    // legacy columns to show progress but MUST NOT decide the package's
-    // released/done state — that is submittal-governed below.
+    // Legacy sheet flags are a diagnostic count, not fabrication release evidence.
     const releasedCount = sheets.filter((d) => d.stage === "Released" || d.set_approval_status === "approved").length;
-    // Two different questions, two different predicates — they are NOT the same
-    // and a comment here used to claim they were:
-    //   done    — "the shop has this package". Must match the hub's
-    //             "Released / sets to fab" KPI, which uses isPackageReleasedForFab.
-    //   terminal— "nothing more will happen here" (terminal FOR TRIAGE). Also
-    //             fires on a Void-only set and on the deprecated
-    //             set_approval_status="approved" flag, neither of which means
-    //             the shop ever received anything — so it must not colour the
-    //             Released column, only suppress the late flag.
+    // The old `done` field is a workflow marker. It must not imply that the
+    // drawing-set or work-package server gate cleared fabrication release.
     const done = isPackageReleasedForFab(pkg.parent, submittals, sheets);
     const terminal = isClosedPackage(pkg);
     const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);

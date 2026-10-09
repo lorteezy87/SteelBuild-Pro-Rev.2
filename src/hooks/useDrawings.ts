@@ -2,7 +2,7 @@
  * useDrawings.ts — Single source of truth for Drawing CRUD.
  *
  * Replaces scattered mutations in Drawings.jsx, DrawingSetUploadModal, RevisionUploadModal.
- * ONE query. ONE invalidation path. NO silent fallbacks.
+ * ONE complete project-scoped query. ONE invalidation path. NO silent fallbacks.
  *
  * Drawing set naming is enforced:
  *   - drawing_set_name is REQUIRED on every drawing (validation.js enforces)
@@ -59,7 +59,9 @@ export function useDrawings(projectId: string | null | undefined) {
     refetch,
   } = useQuery<Drawing[]>({
     queryKey,
-    queryFn: () => entities.Drawing.filter({ project_id: projectId }, undefined, 2000),
+    // A single filter() request is capped at 1000 rows by hosted PostgREST.
+    // Counts, set grouping, and release evidence cannot use a partial roster.
+    queryFn: () => entities.Drawing.filterAll({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });

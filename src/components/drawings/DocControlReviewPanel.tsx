@@ -13,7 +13,7 @@
  * reintroduced here first.
  */
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { AlertTriangle, Check, Copy, FileWarning, HelpCircle, Stamp } from "lucide-react";
 import {
   attestFromHuman,
@@ -42,10 +42,13 @@ export type AttestHandler = (
  * records from the same attestations without each inventing a store. The panel
  * itself stays presentational: it decides nothing.
  */
-export function useDocControlAttestations(reviewerName = "") {
+export function useDocControlAttestations(
+  reviewerName = "",
+  initialAttestations: Record<string, Partial<DocControlAttestations>> = {},
+) {
   const [attestationsBySheetNumber, setAttestations] = useState<
     Record<string, Partial<DocControlAttestations>>
-  >({});
+  >(() => initialAttestations);
 
   const attest = useCallback<AttestHandler>(
     (sheetNumber, kind, state) => {
@@ -57,7 +60,20 @@ export function useDocControlAttestations(reviewerName = "") {
     [reviewerName],
   );
 
-  return { attestationsBySheetNumber, attest };
+  const resetAttestations = useCallback(() => setAttestations({}), []);
+
+  return { attestationsBySheetNumber, attest, resetAttestations };
+}
+
+type AttestationState = ReturnType<typeof useDocControlAttestations>;
+const AttestationContext = createContext<AttestationState | null>(null);
+
+/** Let the upload wizard own reviewed attestations while its comparison panel renders them. */
+export function DocControlAttestationProvider({
+  value,
+  children,
+}: { value: AttestationState; children: React.ReactNode }) {
+  return <AttestationContext.Provider value={value}>{children}</AttestationContext.Provider>;
 }
 
 export type DocControlReviewPanelProps = {
@@ -65,9 +81,13 @@ export type DocControlReviewPanelProps = {
   records: DocControlRecord[];
   /** Omit to render read-only — every attest control disappears. */
   onAttest?: AttestHandler | null;
+  /** Original 1-indexed PDF page for each identified sheet. */
+  sourcePages?: Record<string, number>;
+  /** Browser-local URL for the selected source PDF. Never uploaded by this panel. */
+  sourcePdfUrl?: string | null;
 };
 
-export default function DocControlReviewPanel({ records, onAttest }: DocControlReviewPanelProps) {
+export default function DocControlReviewPanel({ records, onAttest, sourcePages = {}, sourcePdfUrl = null }: DocControlReviewPanelProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -119,6 +139,8 @@ export default function DocControlReviewPanel({ records, onAttest }: DocControlR
             <SheetCard
               key={key}
               record={record}
+              sourcePage={sourcePages[sheetNumber ?? ""]}
+              sourcePdfUrl={sourcePdfUrl}
               open={open}
               onToggle={() => setExpanded((prev) => ({ ...prev, [key]: !open }))}
               onAttest={
@@ -148,7 +170,9 @@ export function DocControlIntakePanel({
   intake: Omit<IntakeInput, "attestationsBySheetNumber">;
   reviewerName?: string;
 }) {
-  const { attestationsBySheetNumber, attest } = useDocControlAttestations(reviewerName);
+  const local = useDocControlAttestations(reviewerName);
+  const shared = useContext(AttestationContext);
+  const { attestationsBySheetNumber, attest } = shared ?? local;
   const records = useMemo(
     () => buildIntakeRecords({ ...intake, attestationsBySheetNumber }),
     [intake, attestationsBySheetNumber],
@@ -158,11 +182,15 @@ export function DocControlIntakePanel({
 
 function SheetCard({
   record,
+  sourcePage,
+  sourcePdfUrl,
   open,
   onToggle,
   onAttest,
 }: {
   record: DocControlRecord;
+  sourcePage?: number;
+  sourcePdfUrl?: string | null;
   open: boolean;
   onToggle: () => void;
   onAttest: ((kind: AttestKind, state: "present" | "absent") => void) | null;
@@ -179,6 +207,7 @@ function SheetCard({
         <span style={{ ...bodyTextStyle, color: "var(--text-secondary)", flex: 1, textAlign: "left" }}>
           {record.ingest.values.title || "—"}
         </span>
+        {Number.isInteger(sourcePage) && sourcePage! > 0 && <span style={mutedMonoStyle}>PDF page {sourcePage}</span>}
         <span
           style={{
             ...chipStyle,
@@ -189,6 +218,18 @@ function SheetCard({
           {held ? "HOLD" : "ACCEPT"}
         </span>
       </button>
+
+      {sourcePdfUrl && Number.isInteger(sourcePage) && sourcePage! > 0 && (
+        <a
+          href={`${sourcePdfUrl}#page=${sourcePage}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`View source PDF page ${sourcePage}`}
+          style={{ ...monoStyle, color: "var(--accent)", display: "inline-block", margin: "0 12px 8px" }}
+        >
+          View source PDF page {sourcePage}
+        </a>
+      )}
 
       {open && (
         <div style={{ padding: "0 12px 12px" }}>

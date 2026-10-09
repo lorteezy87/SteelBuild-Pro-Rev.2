@@ -77,6 +77,7 @@ const projectContext: ProjectContextFixture = {
   activeProjectIds: new Set([project.id]),
   loading: false,
   projectLoadError: null,
+  projectCacheOwner: null,
 };
 // The JS context's empty defaults infer null/never under strictNullChecks;
 // its runtime provider supplies project records. Keep that boundary typed here.

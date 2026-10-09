@@ -62,4 +62,8 @@ export interface ParsedMppTask {
   phaseHint?: string | null;
   /** CSV import: DB-legal status already reconciled with percent_complete. */
   statusHint?: string | null;
+  /** CSV import: explicit source Activity ID. Never substitute WBS or row order. */
+  sourceUid?: string | null;
+  /** CSV import: predecessor tokens that could not be matched to source tasks. */
+  unresolvedPredecessors?: string[];
 }

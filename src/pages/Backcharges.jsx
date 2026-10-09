@@ -34,6 +34,7 @@ import {
 import { buildDefensePdf } from "@/lib/backcharge/defensePdf";
 import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { useNumberedCreateDraft } from "@/hooks/useNumberedCreateDraft";
 import {
   BACKCHARGE_REASON_CODES,
   BACKCHARGE_REASON_LABELS,
@@ -67,15 +68,17 @@ function Field({ label, children }) {
   );
 }
 
-export function BackchargeFormModal({ open, initial, onClose, onSubmit, busy, changeOrders = [], rfis = [] }) {
+export function BackchargeFormModal({ open, initial, onClose, onSubmit, busy, recoveryPending = false, changeOrders = [], rfis = [] }) {
   const [form, setForm] = useState(initial || EMPTY_FORM);
   if (!open) return null;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const ready = form.title.trim().length > 0;
+  const ready = recoveryPending || form.title.trim().length > 0;
   return (
     <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16, overflow: "auto" }} onClick={onClose}>
       <div style={{ ...card, width: 560, maxWidth: "94vw", maxHeight: "92vh", overflow: "auto" }} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: "0 0 14px", fontSize: 16, color: "var(--text-primary)" }}>{initial?.id ? "Edit Backcharge" : "New Backcharge"}</h3>
+        {recoveryPending && <p role="status">The save may have completed. Retry to recover the original details; changes entered afterward will not be applied. Check the register before starting another backcharge.</p>}
+        <fieldset disabled={busy || recoveryPending} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <Field label="Title *"><input style={input} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Cleanup of debris left by Acme Erectors" autoFocus /></Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <Field label="Responsible party"><input style={input} value={form.responsible_party} onChange={(e) => set("responsible_party", e.target.value)} placeholder="Sub / vendor name" /></Field>
@@ -113,6 +116,7 @@ export function BackchargeFormModal({ open, initial, onClose, onSubmit, busy, ch
         </div>
         <Field label="Description / basis"><textarea style={{ ...input, minHeight: 64, resize: "vertical" }} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="What happened, what it cost you, why they're responsible." /></Field>
         <Field label="Notes"><textarea style={{ ...input, minHeight: 40, resize: "vertical" }} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
+        </fieldset>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
           <button style={{ ...btn, background: "var(--bg-page)", color: "var(--text-muted)" }} onClick={onClose} disabled={busy}>Cancel</button>
           <button
@@ -127,7 +131,7 @@ export function BackchargeFormModal({ open, initial, onClose, onSubmit, busy, ch
               source_rfi_id: form.source_rfi_id || null,
             })}
           >
-            {busy ? "Saving…" : initial?.id ? "Save" : "Create"}
+            {busy ? "Saving…" : recoveryPending ? "Recover saved backcharge" : initial?.id ? "Save" : "Create"}
           </button>
         </div>
       </div>
@@ -255,6 +259,7 @@ export default function Backcharges() {
   const [selectedId, setSelectedId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const createDraft = useNumberedCreateDraft(projectId, formOpen && !editing, "backcharge-register");
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
 
@@ -288,7 +293,7 @@ export default function Backcharges() {
   };
 
   const createMut = useMutation({
-    mutationFn: (form) => createBackcharge(withProjectId({ ...form }, projectId)),
+    mutationFn: (form) => createDraft.save(withProjectId({ ...form }, projectId), createBackcharge),
     onSuccess: (bc) => { refetchAll(); setFormOpen(false); setEditing(null); setSelectedId(bc.id); toast.success("Backcharge created"); },
     onError: (e) => {
       const msg = toUserErrorMessage(e);
@@ -381,14 +386,15 @@ export default function Backcharges() {
         />
       )}
 
-      <BackchargeFormModal
+      {formOpen && <BackchargeFormModal
         key={editing?.id || "new"}
         open={formOpen}
         initial={editing}
         changeOrders={changeOrders}
         rfis={rfis}
         busy={createMut.isPending || updateMut.isPending}
-        onClose={() => { setFormOpen(false); setEditing(null); }}
+        recoveryPending={createDraft.recoveryPending}
+        onClose={() => { if (!createMut.isPending && !updateMut.isPending) { setFormOpen(false); setEditing(null); } }}
         onSubmit={(form) => {
           if (editing?.id) {
             const { id: _id, ...patch } = form;
@@ -397,7 +403,7 @@ export default function Backcharges() {
             createMut.mutate(form);
           }
         }}
-      />
+      />}
     </>
   );
 }

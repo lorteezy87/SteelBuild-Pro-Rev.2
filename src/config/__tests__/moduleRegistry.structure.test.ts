@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PRIMARY_TABS, SIDEBAR_GROUPS } from "@/config/moduleRegistry";
 
-type NavItem = { page: string };
+type NavItem = { page: string; label: string; icon: string };
 type NavGroup = { label: string; items: NavItem[] };
 type PrimaryTab = { pages: string[] };
 
@@ -40,5 +40,11 @@ describe("SteelBuild navigation hierarchy", () => {
 
   it("keeps every primary tab non-empty", () => {
     expect(primaryTabs.every((tab) => tab.pages.length > 0)).toBe(true);
+  });
+
+  it("provides one drawing-control entry in the detailing sidebar", () => {
+    const detailing = sidebarGroups.find((group) => group.label === "DETAILING");
+    expect(detailing?.items.filter((item) => ["DrawingSubmittalHub", "GcDocuments", "DocumentControl"].includes(item.page)))
+      .toEqual([{ label: "Drawing Control", icon: "▦", page: "DrawingSubmittalHub" }]);
   });
 });

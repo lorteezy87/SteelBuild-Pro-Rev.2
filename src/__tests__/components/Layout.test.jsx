@@ -35,6 +35,13 @@ vi.mock("@/api/supabaseClient", () => {
   };
 });
 
+vi.mock("@/lib/org/repository", () => ({
+  listMyMemberships: async () => [
+    { organization: { id: "workspace-a", name: "Fabricator A" }, role: "owner" },
+    { organization: { id: "workspace-b", name: "Erector B" }, role: "member" },
+  ],
+}));
+
 // Supabase: the only paths Layout transitively touches are auth + a few
 // `.from(...).select(...)` chains. Stub them.
 vi.mock("@/lib/supabase", () => ({
@@ -68,26 +75,28 @@ import Layout from "@/Layout";
 import { ProjectProvider } from "@/components/shared/ProjectContext";
 import { ThemeProvider } from "@/components/shared/ThemeContext";
 import { AuthContext } from "@/lib/AuthContext";
+import { OrgProvider } from "@/components/shared/OrgContext";
 
 function setViewport(width) {
   vi.stubGlobal("innerWidth", width);
   window.dispatchEvent(new Event("resize"));
 }
 
-function renderLayout({ currentPageName = "Dashboard", authUser = null } = {}) {
+function renderLayout({ currentPageName = "Dashboard", authUser = null, withWorkspaces = false } = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const WorkspaceProvider = withWorkspaces ? OrgProvider : React.Fragment;
   return render(
     <ThemeProvider>
       <AuthContext.Provider value={{ user: authUser }}>
         <QueryClientProvider client={qc}>
           <MemoryRouter>
-            <ProjectProvider>
+            <WorkspaceProvider><ProjectProvider>
               <Layout currentPageName={currentPageName}>
                 <div>Test child content</div>
               </Layout>
-            </ProjectProvider>
+            </ProjectProvider></WorkspaceProvider>
           </MemoryRouter>
         </QueryClientProvider>
       </AuthContext.Provider>
@@ -119,6 +128,21 @@ describe("Layout (smoke)", () => {
     renderLayout();
     expect(screen.getByText(/skip to main content/i)).toBeInTheDocument();
   });
+
+  it.each([["Dashboard", 1200], ["RFIs", 1200], ["Dashboard", 834], ["Projects", 390]])(
+    "exposes one workspace selector alongside the project picker on %s at %i pixels", async (currentPageName, width) => {
+      setViewport(width);
+      renderLayout({ currentPageName, authUser: { id: "alice" }, withWorkspaces: true });
+      await waitFor(() => expect(screen.getByRole("combobox", { name: "Workspace" })).toBeEnabled());
+      const selector = screen.getByRole("combobox", { name: "Workspace" });
+      expect(selector).toHaveValue("workspace-a");
+      expect(screen.getAllByRole("combobox", { name: "Workspace" })).toHaveLength(1);
+      expect(screen.getByRole("button", { name: /Project picker:/ })).toBeInTheDocument();
+      fireEvent.change(selector, { target: { value: "workspace-b" } });
+      await waitFor(() => expect(screen.getByRole("combobox", { name: "Workspace" })).toHaveValue("workspace-b"));
+      expect(localStorage.getItem("sbp:current-org")).toBe("workspace-b");
+    },
+  );
 
   it("renders one user-initial badge with an accessible sign-out name", () => {
     const { container } = renderLayout({

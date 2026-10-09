@@ -9,7 +9,7 @@
  * 2, 2026-09-11). The header holds the project eyebrow, the h1 with its holds
  * badge, the subtitle, a status line, and Lead Times, with the tab strip as
  * its bottom row. Every tab but the Control Board gets the full status line;
- * the Control Board gets only Fab Ready, beside its KPI strip. The active
+ * the Control Board gets only the Shop Drawing submittal release marker, beside its KPI strip. The active
  * panel follows, and the KPI strip opens the Control Board's panel.
  * DetailingNoProject is the explicit empty state for "no project selected".
  *
@@ -18,6 +18,7 @@
 
 import type { ReactNode } from "react";
 import "@/styles/command.css";
+import "@/styles/drawing-control.css";
 import { OperationalSummary, useCommandSkin } from "@/components/command";
 import { DetailingCommandHeader } from "./DetailingCommandHeader";
 import {
@@ -26,7 +27,7 @@ import {
   detailingTabId,
 } from "./DetailingTabStrip";
 import type { DetailingTabDef } from "./DetailingTabStrip";
-import { buildDetailingKpiCells, buildFabReadyLine, buildStatusLine } from "./detailingKpis";
+import { buildDetailingKpiCells, buildShopReleaseLine, buildStatusLine } from "./detailingKpis";
 import type { DetailingKpis } from "./detailingKpis";
 
 export type { DetailingKpis } from "./detailingKpis";
@@ -39,6 +40,7 @@ export type TabDef = DetailingTabDef;
 
 interface DetailingCommandShellProps {
   tabs: TabDef[];
+  primaryKeys?: readonly string[];
   activeTab: string;
   onTab: (key: string) => void;
   kpis: DetailingKpis;
@@ -70,6 +72,7 @@ const HOLDS_TAB = "holds";
 
 export function DetailingCommandShell({
   tabs,
+  primaryKeys,
   activeTab,
   onTab,
   kpis,
@@ -97,14 +100,15 @@ export function DetailingCommandShell({
         activeHolds={activeHolds}
         onOpenHolds={hasHoldsTab ? () => onTab(HOLDS_TAB) : undefined}
         // The Control Board carries the KPI strip. That strip's grid is shared
-        // by every Control Center and has no Fab Ready cell, so the Control
+        // by every Control Center and has no shop-submittal marker cell, so the Control
         // Board keeps just that number here. Every other tab gets the headline
         // numbers as one line.
-        statusLine={onKpiTab ? buildFabReadyLine(kpis, pending) : buildStatusLine(kpis, pending)}
+        statusLine={onKpiTab ? buildShopReleaseLine(kpis, pending) : buildStatusLine(kpis, pending)}
         actions={actions}
       >
         <DetailingTabStrip
           tabs={tabs}
+          primaryKeys={primaryKeys}
           activeTab={activeTab}
           onTab={onTab}
           tabCounts={tabCounts}
@@ -117,7 +121,8 @@ export function DetailingCommandShell({
         className="detailing-cc__panel"
         id={DETAILING_PANEL_ID}
         role="tabpanel"
-        aria-labelledby={detailingTabId(activeTab)}
+        aria-labelledby={!primaryKeys || primaryKeys.includes(activeTab) ? detailingTabId(activeTab) : undefined}
+        aria-label={primaryKeys && !primaryKeys.includes(activeTab) ? tabs.find((tab) => tab.key === activeTab)?.label : undefined}
         data-hub-panel={activeTab}
       >
         {onKpiTab && (
@@ -150,7 +155,7 @@ export function DetailingNoProject() {
       <div role="status" className="detailing-cc__empty">
         <div className="detailing-cc__empty-title">No active project</div>
         <div className="detailing-cc__empty-body">
-          Pick a project from the project selector to open its Detailing Control Center.
+          Pick a project from the project selector to open Drawing Control.
         </div>
       </div>
     </div>

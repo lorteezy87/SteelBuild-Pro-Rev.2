@@ -350,53 +350,55 @@ describe("supabase entity client", () => {
   });
 
   describe("bulkUpdate", () => {
+    // Ordinary entities share the chunked update contract. SOV lines use
+    // reviewed saves and deliberately reject non-empty bulk updates.
     it("applies one patch via a single .in('id', ids) UPDATE", async () => {
-      await entities.SOVItem.bulkUpdate(["a", "b", "c"], { status: "Certified" });
+      await entities.CostCode.bulkUpdate(["a", "b", "c"], { description: "Field erection" });
 
       const updates = mocks.calls.filter(
         (c): c is Extract<(typeof mocks.calls)[number], { op: "update" }> =>
-          c.table === "sov_items" && c.op === "update",
+          c.table === "cost_codes" && c.op === "update",
       );
       expect(updates).toHaveLength(1);
-      expect(updates[0].value).toMatchObject({ status: "Certified" });
+      expect(updates[0].value).toMatchObject({ description: "Field erection" });
       expect(updates[0].value.updated_at).toEqual(expectIsoTimestamp);
 
       const ins = mocks.calls.filter(
         (c): c is Extract<(typeof mocks.calls)[number], { op: "in" }> =>
-          c.table === "sov_items" && c.op === "in",
+          c.table === "cost_codes" && c.op === "in",
       );
       expect(ins).toHaveLength(1);
       expect(ins[0]).toEqual({
-        table: "sov_items",
+        table: "cost_codes",
         op: "in",
         column: "id",
         value: ["a", "b", "c"],
       });
 
       // Production: .update().in().select()
-      mocks.expectCallOrder("sov_items", ["update", "in", "select"]);
+      mocks.expectCallOrder("cost_codes", ["update", "in", "select"]);
     });
 
     it("chunks large id lists into ≤500-id .in filters sequentially", async () => {
       const ids = Array.from({ length: 1050 }, (_, i) => `id-${i}`);
-      await entities.SOVItem.bulkUpdate(ids, { status: "Paid" });
+      await entities.CostCode.bulkUpdate(ids, { description: "Shop fabrication" });
 
       const ins = mocks.calls.filter(
         (c): c is Extract<(typeof mocks.calls)[number], { op: "in" }> =>
-          c.table === "sov_items" && c.op === "in",
+          c.table === "cost_codes" && c.op === "in",
       );
       expect(ins.map((c) => c.value.length)).toEqual([500, 500, 50]);
 
       const updates = mocks.calls.filter(
-        (c) => c.table === "sov_items" && c.op === "update",
+        (c) => c.table === "cost_codes" && c.op === "update",
       );
       expect(updates).toHaveLength(3);
 
       // Sequential for-await: update → in → select per chunk
-      const sovOps = mocks.calls
-        .filter((c) => c.table === "sov_items")
+      const costCodeOps = mocks.calls
+        .filter((c) => c.table === "cost_codes")
         .map((c) => c.op);
-      expect(sovOps).toEqual([
+      expect(costCodeOps).toEqual([
         "update",
         "in",
         "select",
@@ -410,9 +412,10 @@ describe("supabase entity client", () => {
     });
 
     it("makes no request for an empty id list", async () => {
-      const result = await entities.SOVItem.bulkUpdate([], { status: "Draft" });
+      const result = await entities.CostCode.bulkUpdate([], { description: "Field erection" });
       expect(result).toEqual([]);
       expect(mocks.fromMock).not.toHaveBeenCalled();
+      expect(mocks.rpcMock).not.toHaveBeenCalled();
     });
   });
 });

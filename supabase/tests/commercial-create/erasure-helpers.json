@@ -1,0 +1,10 @@
+[
+  {
+    "proname": "erasure_toggle_user_triggers",
+    "definition": "CREATE OR REPLACE FUNCTION public.erasure_toggle_user_triggers(p_tables text[], p_disable boolean, p_list text[] DEFAULT '{}'::text[])\n RETURNS text[]\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare rec record; v_out text[] := '{}'; x text;\nbegin\n  if coalesce(current_setting('steelbuild.erasure_rpc', true), '') <> 'on' then\n    raise exception 'erasure_toggle_user_triggers is internal to the erasure RPCs' using errcode = '42501';\n  end if;\n  -- ALTER TABLE refuses while deferred trigger events are pending in this transaction: flush them first.\n  set constraints all immediate;\n  if p_disable then\n    for rec in\n      select c.relname, t.tgname from pg_trigger t join pg_class c on c.oid = t.tgrelid\n       where c.relnamespace = 'public'::regnamespace and c.relname = any(p_tables) and not t.tgisinternal and t.tgenabled = 'O'\n       order by c.relname, t.tgname\n    loop\n      execute format('alter table public.%I disable trigger %I', rec.relname, rec.tgname);\n      v_out := v_out || (rec.relname || '|' || rec.tgname);\n    end loop;\n    return v_out;\n  end if;\n  foreach x in array p_list loop\n    execute format('alter table public.%I enable trigger %I', split_part(x, '|', 1), split_part(x, '|', 2));\n  end loop;\n  return p_list;\nend $function$\n"
+  },
+  {
+    "proname": "user_org_role_at_least",
+    "definition": "CREATE OR REPLACE FUNCTION public.user_org_role_at_least(p_org_id uuid, p_min_role text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1 from public.organization_members m\n    where m.org_id = p_org_id and m.user_id = (select auth.uid())\n      and (case m.role when 'owner' then 3 when 'admin' then 2 when 'member' then 1 else 0 end)\n        >= (case p_min_role when 'owner' then 3 when 'admin' then 2 when 'member' then 1 else 0 end)\n  );\n$function$\n"
+  }
+]

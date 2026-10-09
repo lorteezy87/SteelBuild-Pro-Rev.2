@@ -1,0 +1,11 @@
+{
+  "name": "steelbuild-drawing-governing-verification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node verify.mjs && node verify-split.mjs && node verify-links.mjs && node verify-gc-impact-links.mjs && node verify-fab-release-complete.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}

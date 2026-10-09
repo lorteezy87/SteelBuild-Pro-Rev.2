@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { PieceImpactModel } from "@/lib/pieceControl/drawingReleaseReady";
 
 export function PieceImpactPanel({
@@ -31,7 +32,7 @@ export function PieceImpactPanel({
 
   return (
     <div
-      className={`piece-impact${impact.releaseReady ? " is-ready" : " is-blocked"}`}
+      className={`piece-impact${impact.releaseReady ? " is-stage-clear" : " is-blocked"}`}
       data-testid="piece-impact-panel"
     >
       <div className="piece-impact__head">
@@ -42,8 +43,8 @@ export function PieceImpactPanel({
           <strong>{impact.pieceMark}</strong>
           <span>
             {impact.releaseReady
-              ? "Release-ready (IFC / Released)"
-              : impact.releaseBlockReason || "Not release-ready"}
+              ? "Drawing stage/link check clear — fabrication release not verified"
+              : impact.releaseBlockReason || "Drawing stage/link issue"}
           </span>
         </div>
       </div>
@@ -77,8 +78,9 @@ export function PieceImpactPanel({
           ))}
         </ul>
       ) : (
-        <p className="piece-impact__clear">No exposure flags.</p>
+        <p className="piece-impact__clear">No tracked piece exposure flags in this view. Check sheet holds, RFIs, PDFs and material in Fab Release.</p>
       )}
+      <Link to="/FabRelease">Open server Fab Release check</Link>
     </div>
   );
 }

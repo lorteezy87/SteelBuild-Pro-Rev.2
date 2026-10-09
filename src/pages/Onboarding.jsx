@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 
 import { entities } from "@/api/supabaseClient";
+import { getActiveOrgGeneration, subscribeActiveOrgChange } from "@/lib/activeOrg";
+import { assertImportWorkspace, getSessionBulkCreateRecovery } from "@/lib/bulkCreateRecovery";
 import { createPageUrl } from "@/utils";
 import {
   IMPORT_TARGETS,
@@ -55,11 +57,14 @@ import {
   ROLE_OPTIONS,
   bulkCreateWithFallback,
   createSeedRecords,
+  getOrCreateOnboardingSetup,
   readOnboardingImportFile,
 } from "./onboarding/onboardingMutationHelpers";
 import { onboardingStyles } from "./onboarding/onboardingStyles";
 
 export default function Onboarding() {
+  const orgGeneration = useSyncExternalStore(subscribeActiveOrgChange, getActiveOrgGeneration, getActiveOrgGeneration);
+  const openedGeneration = useRef(orgGeneration);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [templateKey, setTemplateKey] = useState("fabrication_erection");
@@ -72,6 +77,15 @@ export default function Onboarding() {
   const [importApproved, setImportApproved] = useState(false);
   const [importSourceName, setImportSourceName] = useState("Pasted sample data");
   const [fileBusy, setFileBusy] = useState(false);
+  const [setupIncomplete, setSetupIncomplete] = useState(false);
+  const setupAttempt = useRef(null);
+  const importRecovery = useRef(getSessionBulkCreateRecovery());
+  useEffect(() => {
+    if (orgGeneration !== openedGeneration.current) {
+      setImportApproved(false);
+      toast.warning("Workspace changed. Reopen Onboarding and review the current project before continuing.");
+    }
+  }, [orgGeneration]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -83,6 +97,9 @@ export default function Onboarding() {
   const isDemoTemplate = templateKey === SAMPLE_PROJECT_TEMPLATE_KEY;
   const projectFormReady = isProjectFormReady(projectForm, templateKey);
   const selectedProject = createdProject || projects.find((project) => project.id === selectedProjectId) || null;
+  const importScopeKey = JSON.stringify([orgGeneration, selectedProject?.id, importTarget, importText, importSourceName]);
+  const currentImportScope = useRef(importScopeKey);
+  currentImportScope.current = importScopeKey;
   const previewProject = useMemo(
     () => buildPreviewProject(selectedProject, projectForm, isDemoTemplate),
     [isDemoTemplate, projectForm.name, projectForm.start_date, selectedProject],
@@ -100,37 +117,70 @@ export default function Onboarding() {
 
   const createProjectMutation = useMutation({
     mutationFn: async () => {
-      const project = await entities.Project.create(
-        buildPayloadWithTeamPlan(projectForm, templateKey, teamRows),
-      );
-      const seedPayloads = buildSeedPayloads(project, templateKey);
-      const createdSeedRows = await createSeedRecords(seedPayloads, entities);
-      return { project, createdSeedRows };
+      assertImportWorkspace(openedGeneration.current);
+      if (!setupAttempt.current) {
+        setupAttempt.current = await getOrCreateOnboardingSetup(
+          buildPayloadWithTeamPlan(projectForm, templateKey, teamRows),
+          templateKey,
+          entities.Project.create,
+        );
+        // Once the project exists, every setup retry belongs to this exact project and seed draft.
+        const { project } = setupAttempt.current;
+        assertImportWorkspace(openedGeneration.current);
+        setCreatedProject(project);
+        setSelectedProjectId(project.id);
+        setSetupIncomplete(true);
+      }
+      const { project, seedPayloads, recovery } = setupAttempt.current;
+      const seedResult = await createSeedRecords(seedPayloads, entities, undefined, recovery);
+      return { project, seedResult };
     },
-    onSuccess: ({ project, createdSeedRows }) => {
+    onSuccess: ({ project, seedResult }) => {
       setCreatedProject(project);
       setSelectedProjectId(project.id);
+      setSetupIncomplete(Boolean(seedResult.skipped || seedResult.unresolved));
       queryClient.invalidateQueries({ queryKey: ["projects"] });
-      for (const key of Object.keys(createdSeedRows)) {
+      for (const key of Object.keys(seedResult.createdByKey)) {
         const entityKey = SEED_ENTITY_MAP[key];
         if (entityKey) queryClient.invalidateQueries({ queryKey: [entityKey] });
       }
-      toast.success("Onboarding project created");
+      if (seedResult.skipped || seedResult.unresolved) {
+        const nextStep = seedResult.unresolved > seedResult.retryable
+          ? "Reconcile unconfirmed rows in the project registers before creating replacements."
+          : "Retry unfinished setup to recover the remaining rows in this project.";
+        toast.warning(`Onboarding project created; ${seedResult.skipped} seed rows failed; ${seedResult.unresolved} unconfirmed. ${nextStep}`);
+      } else {
+        toast.success("Onboarding project created");
+      }
     },
     onError: (err) => toast.error(err?.message || "Could not create onboarding project"),
   });
 
   const importMutation = useMutation({
     mutationFn: async () => {
+      assertImportWorkspace(openedGeneration.current);
       if (!selectedProject?.id) throw new Error("Select or create a project before importing.");
       if (stagedImport.invalidRows.length) throw new Error("Resolve invalid import rows before committing.");
+      if (!importApproved) throw new Error("Review and approve the import before committing records.");
       const entity = entities[stagedImport.target.entityKey];
-      return bulkCreateWithFallback(entity, stagedImport.validRecords);
+      const scope = { scopeKey: importScopeKey, entityKey: stagedImport.target.entityKey, label: stagedImport.target.label };
+      const result = await bulkCreateWithFallback(entity, stagedImport.validRecords, importRecovery.current);
+      return { ...scope, ...result };
     },
-    onSuccess: (rows) => {
-      queryClient.invalidateQueries({ queryKey: [stagedImport.target.entityKey] });
+    onSuccess: ({ created, skipped, unresolved, retryable, scopeKey, entityKey, label }) => {
+      queryClient.invalidateQueries({ queryKey: [entityKey] });
+      if (currentImportScope.current !== scopeKey) return;
       setImportApproved(false);
-      toast.success(`Imported ${rows.length} ${stagedImport.target.label.toLowerCase()}`);
+      if (unresolved) {
+        const nextStep = retryable === unresolved
+          ? "Retry this same reviewed import to recover the original records."
+          : "Reconcile unconfirmed rows before re-importing; their saves may have completed.";
+        toast.warning(`${created.length} ${label.toLowerCase()} confirmed saved; ${skipped} failed; ${unresolved} unconfirmed. ${nextStep}`);
+      } else if (skipped) {
+        toast.warning(`Imported ${created.length} ${label.toLowerCase()}; ${skipped} row creates failed`);
+      } else {
+        toast.success(`Imported ${created.length} ${label.toLowerCase()}`);
+      }
     },
     onError: (err) => toast.error(err?.message || "Import failed"),
   });
@@ -177,8 +227,10 @@ export default function Onboarding() {
     }
   }
 
-  const createDisabled = !projectFormReady || createProjectMutation.isPending;
+  const createDisabled = !projectFormReady || createProjectMutation.isPending || (Boolean(createdProject) && !setupIncomplete)
+    || orgGeneration !== openedGeneration.current;
   const importDisabled = !selectedProject?.id
+    || orgGeneration !== openedGeneration.current
     || stagedImport.validRecords.length === 0
     || stagedImport.invalidRows.length > 0
     || !importApproved
@@ -201,7 +253,7 @@ export default function Onboarding() {
           </button>
           <button type="button" className="onboarding-primary-btn" disabled={createDisabled} onClick={() => createProjectMutation.mutate()}>
             <FolderPlus size={15} />
-            {createProjectMutation.isPending ? "Creating..." : "Create project"}
+            {createProjectMutation.isPending ? "Creating..." : createdProject && setupIncomplete ? "Retry unfinished setup" : "Create project"}
           </button>
         </div>
       </header>
@@ -350,7 +402,7 @@ export default function Onboarding() {
               </label>
               <label className="onboarding-field">
                 <span>Apply to project</span>
-                <select value={selectedProject?.id || selectedProjectId} onChange={(event) => { setCreatedProject(null); setSelectedProjectId(event.target.value); }}>
+                <select value={selectedProject?.id || selectedProjectId} onChange={(event) => { setCreatedProject(null); setSelectedProjectId(event.target.value); setImportApproved(false); }}>
                   <option value="">Select a project</option>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>{project.project_number ? `${project.project_number} - ${project.name}` : project.name}</option>
@@ -363,7 +415,7 @@ export default function Onboarding() {
                 <span>{fileBusy ? "Reading file..." : "Upload CSV/XLSX"}</span>
                 <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" onChange={handleImportFile} disabled={fileBusy} />
               </label>
-              <button type="button" className="onboarding-secondary-btn" onClick={() => { setImportText(IMPORT_EXAMPLES[importTarget] || ""); setImportSourceName("Pasted sample data"); }}>
+              <button type="button" className="onboarding-secondary-btn" onClick={() => { setImportText(IMPORT_EXAMPLES[importTarget] || ""); setImportSourceName("Pasted sample data"); setImportApproved(false); }}>
                 <FileSpreadsheet size={14} />
                 Load sample rows
               </button>
@@ -445,4 +497,3 @@ export default function Onboarding() {
     </div>
   );
 }
-

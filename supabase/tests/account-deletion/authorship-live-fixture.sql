@@ -116,6 +116,7 @@ begin
   if new.is_deleted and not old.is_deleted then new.deleted_at := coalesce(new.deleted_at, now()); end if;
   return new;
 end $function$;
+
 CREATE OR REPLACE FUNCTION public.backcharge_touch_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -187,3 +188,4 @@ begin
   if new.is_deleted and not old.is_deleted then new.deleted_at := coalesce(new.deleted_at, now()); end if;
   return new;
 end $function$;
+

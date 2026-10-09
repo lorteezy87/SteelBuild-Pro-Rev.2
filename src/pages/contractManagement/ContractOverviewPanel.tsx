@@ -22,6 +22,7 @@ interface ContractOverviewPanelProps {
   onSaveContract: () => void;
   onCancelContract: () => void;
   isSaving: boolean;
+  writesDisabled?: boolean;
 }
 
 const FlowArrow = () => (
@@ -42,6 +43,7 @@ export function ContractOverviewPanel({
   onSaveContract,
   onCancelContract,
   isSaving,
+  writesDisabled = false,
 }: ContractOverviewPanelProps) {
   const originalValue = Number(project?.original_contract_value) || 0;
   const details = [
@@ -155,12 +157,12 @@ export function ContractOverviewPanel({
             border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)",
             cursor: "pointer",
           }}>Cancel</button>
-          <button onClick={onSaveContract} disabled={isSaving} style={{
+          <button onClick={onSaveContract} disabled={isSaving || writesDisabled} style={{
             fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
             letterSpacing: "0.10em", textTransform: "uppercase", padding: "6px 16px",
             background: "var(--accent)", color: "var(--bg-base)", border: "none",
             borderRadius: "var(--radius-btn)", cursor: isSaving ? "wait" : "pointer",
-            opacity: isSaving ? 0.6 : 1,
+            opacity: isSaving || writesDisabled ? 0.6 : 1,
           }}>{isSaving ? "Saving..." : "Save Changes"}</button>
         </div>
       )}

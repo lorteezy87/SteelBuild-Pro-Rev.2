@@ -64,7 +64,7 @@ describe("readScheduleCsvFile text encodings", () => {
     expect(hasNul(result)).toBe(false);
     expect(result.tasks.map((task) => task.name)).toEqual(TASK_NAMES);
     expect(result.tasks[2].preds).toEqual([
-      { predUid: "1.1", linkType: "1", lagDuration: "4800" },
+      { predUid: "FAB-010", linkType: "1", lagDuration: "4800" },
     ]);
     expect(result).toEqual(
       parseScheduleCsv(SCHEDULE_CSV_TEMPLATE, { fileName: "schedule.csv" }),

@@ -31,7 +31,27 @@ const selectStyle: React.CSSProperties = {
   outline: "none",
 };
 
+// The hub supplies the command skin. Map this page's existing semantic tokens
+// onto that skin only when embedded, so the standalone route keeps its design.
+const embeddedStyle = {
+  minWidth: 0,
+  background: "var(--cmd-bg)",
+  color: "var(--cmd-text)",
+  "--bg-page": "var(--cmd-bg)",
+  "--bg-surface": "var(--cmd-surface)",
+  "--bg-surface-low": "var(--cmd-surface)",
+  "--text-primary": "var(--cmd-text)",
+  "--text-secondary": "var(--cmd-text-muted)",
+  "--text-muted": "var(--cmd-text-muted)",
+  "--border-default": "var(--cmd-border)",
+  "--accent": "var(--cmd-gold)",
+  "--status-review": "var(--cmd-review-text)",
+  "--status-error": "var(--cmd-danger-text)",
+  "--status-success": "var(--cmd-good-text)",
+} as React.CSSProperties;
+
 export default function GcDocumentsPageView({
+  embedded = false,
   projectId,
   projectName,
   canCreate,
@@ -41,6 +61,7 @@ export default function GcDocumentsPageView({
   state,
   controller,
 }: {
+  embedded?: boolean;
   projectId: string | null;
   projectName?: string | null;
   canCreate: boolean;
@@ -52,7 +73,10 @@ export default function GcDocumentsPageView({
 }) {
   if (!projectId) {
     return (
-      <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
+      <div
+        className={embedded ? "gc-issuances-embedded" : "sb-dashboard-reference-page"}
+        style={{ ...(embedded ? embeddedStyle : {}), textAlign: "center" }}
+      >
         <p style={{ fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.15em" }}>
           SELECT A PROJECT TO VIEW GC DOCUMENTS
         </p>
@@ -74,8 +98,12 @@ export default function GcDocumentsPageView({
     state.search.trim() !== "" || state.docType !== ALL || state.impact !== ALL;
 
   return (
-    <div className="sb-dashboard-reference-page" style={{ minHeight: "100vh", background: "var(--bg-page)" }}>
+    <div
+      className={embedded ? "gc-issuances-embedded" : "sb-dashboard-reference-page"}
+      style={embedded ? embeddedStyle : { minHeight: "100vh", background: "var(--bg-page)" }}
+    >
       <GcDocumentsPageToolbar
+        embedded={embedded}
         projectName={projectName}
         stats={data.stats}
         impact={state.impact}
@@ -184,6 +212,9 @@ export default function GcDocumentsPageView({
         <GcIssuanceTable
           issuances={data.filtered}
           expanded={state.expanded}
+          linksByIssuance={data.linksByIssuance}
+          shopSets={data.shopSets}
+          impactLinksStatus={data.impactLinksStatus}
           canEdit={canEdit}
           canDelete={canDelete}
           onToggleExpand={controller.toggleExpanded}
@@ -195,8 +226,9 @@ export default function GcDocumentsPageView({
 
       <GcIssuanceFormModal
         open={state.uploadOpen}
+        initialSource={state.initialSource}
         saving={state.saving}
-        onSave={(values) => controller.handleCreate({ set: values })}
+        onSave={(values, intake) => controller.handleCreate({ set: values, ...intake })}
         onClose={() => state.setUploadOpen(false)}
       />
 
@@ -212,7 +244,14 @@ export default function GcDocumentsPageView({
         open={!!state.impactTarget}
         issuance={state.impactTarget}
         saving={state.saving}
+        shopSets={data.shopSets}
+        linkedShopSetIds={state.impactTarget
+          ? (data.linksByIssuance?.get(state.impactTarget.id) ?? []).map((link) => link.drawing_set_id)
+          : []}
+        linksStatus={data.impactLinksStatus}
+        shopSetsStatus={data.shopSetsStatus}
         onSave={controller.handleSaveImpact}
+        onSaveLinks={controller.handleSaveImpactLinks}
         onClose={() => state.setImpactTarget(null)}
       />
 

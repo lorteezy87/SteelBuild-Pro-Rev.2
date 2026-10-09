@@ -2,7 +2,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClientInstance } from '@/lib/query-client';
 import PayApplications from '@/pages/PayApplications';
 const fixture = vi.hoisted(() => ({ project: { id: 'project-a', name: 'A' }, contract: vi.fn(), create: vi.fn() }));
 vi.mock('@/components/shared/ProjectContext', () => ({ useProjectContext: () => ({ activeProject: fixture.project }) }));
@@ -16,9 +17,9 @@ vi.mock('@/lib/payapp/repository', () => ({
 vi.mock('../PayApplicationsControlCenter', () => ({ default: ({ canCreate, onCreate }: { canCreate: boolean; onCreate: () => void }) =>
   <button disabled={!canCreate} onClick={onCreate}>New Application</button>,
 }));
-afterEach(() => { cleanup(); vi.clearAllMocks(); fixture.project = { id: 'project-a', name: 'A' }; });
+afterEach(() => { cleanup(); queryClientInstance.clear(); vi.clearAllMocks(); fixture.project = { id: 'project-a', name: 'A' }; });
 function mount() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const client = queryClientInstance;
   const tree = () => <QueryClientProvider client={client}><PayApplications /></QueryClientProvider>;
   return { ...render(tree()), tree };
 }

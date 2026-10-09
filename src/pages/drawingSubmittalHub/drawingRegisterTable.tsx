@@ -18,7 +18,6 @@ import {
   currentRevisionForPackage,
   isClosedPackage,
   mono,
-  success,
   surface1,
   textMuted,
   textPrimary,
@@ -85,8 +84,8 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", minWidth: 0 }}>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.pkg.name}</span>
           {r.locked && (
-            <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "var(--cmd-warn-text)", background: "var(--cmd-chip-warn-bg)", border: "1px solid color-mix(in srgb, var(--cmd-warn) 40%, transparent)", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
-              <Lock size={9} /> Locked
+            <span title={r.lockedReason || "Locked set; review the lock reason"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: "0.6875rem", fontWeight: 600, color: "var(--cmd-text-muted)", background: "var(--cmd-row-hover)", border: "1px solid var(--cmd-border)", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
+              <Lock size={11} aria-hidden="true" /> Locked
             </span>
           )}
           {r.revSummary && (
@@ -102,7 +101,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
       <GridCell align="right">{r.sheetCount}</GridCell>
       <GridCell>{r.effectiveState && r.effectiveState !== "Not Started" ? <OperationalStateChip state={r.effectiveState} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</GridCell>
       <GridCell>{r.health ? <HealthChip health={r.health} onClick={() => h.setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</GridCell>
-      <GridCell style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</GridCell>
+      <GridCell style={{ color: textMuted }}>{r.releasedCount}/{r.sheetCount}</GridCell>
       <GridCell><DueChip info={r.due} /></GridCell>
       <GridCell align="right" style={{ color: textMuted }}>{r.maxRev || "—"}</GridCell>
       <GridCell align="right" style={{ whiteSpace: "nowrap" }}>
@@ -131,7 +130,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
  * RegisterVirtualList — virtualized rendering of the Drawing Register, used only
  * when row count exceeds VIRTUALIZE_THRESHOLD. Uses a sticky CSS-grid header and
  * absolute-positioned grid rows (the repo's useVirtualizer house pattern). The
- * left-border late/done accent and row keys are preserved from the table.
+ * left-border late accent and row keys are preserved from the table.
  */
 function RegisterVirtualList({
   rows, sortByHealth, setSortByHealth, h,
@@ -174,7 +173,7 @@ function RegisterVirtualList({
             Health{sortByHealth === "asc" ? " ▲" : sortByHealth === "desc" ? " ▼" : ""}
           </button>
         </GridHeaderCell>
-        <GridHeaderCell>Released</GridHeaderCell>
+        <GridHeaderCell>Legacy flags</GridHeaderCell>
         <GridHeaderCell>Due</GridHeaderCell>
         <GridHeaderCell align="right">Rev</GridHeaderCell>
         <GridHeaderCell align="right">{""}</GridHeaderCell>
@@ -193,7 +192,7 @@ function RegisterVirtualList({
                   transform: `translateY(${virtualRow.start}px)`,
                   display: "grid", gridTemplateColumns: REGISTER_GRID_COLS,
                   borderTop: virtualRow.index === 0 ? "none" : `1px solid ${border}`,
-                  borderLeft: r.late ? "3px solid var(--status-error)" : r.done ? "3px solid var(--status-success)" : "3px solid transparent",
+                  borderLeft: r.late ? "3px solid var(--status-error)" : "3px solid transparent",
                 }}
               >
                 <RegisterGridCells r={r} h={h} />
@@ -210,11 +209,12 @@ function RegisterVirtualList({
  * DrawingRegisterTable — the Drawing Register as a clean, flat, per-set table,
  * mirroring the Approval/Submittal register look (same Th/Td/OperationalStateChip/DueChip
  * primitives) instead of the dense grouped DrawingsTable. One row per drawing
- * set. Left border: red = late, green = done (good to go), neutral = in progress.
+ * set. Left border identifies lateness; workflow release markers do not prove clearance.
  * Full sheet-level management still lives on the standalone Drawings page.
  */
 export function DrawingRegisterTable({
   setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey, currentRevByDrawingId, summariesBySet, onRevisionUploaded, onOpenSummary, onMarkTitleblock,
+  hasLinkedSet = false, linkedSetId = null, onClearLinkedSet,
 }: {
   setPackages: any[]; projectId?: string; activeProject?: any; drawingSets?: any[]; isLoading?: boolean;
   healthByKey?: Map<string, any>;
@@ -225,6 +225,9 @@ export function DrawingRegisterTable({
   onRevisionUploaded?: (pkgKey: string) => void;
   onOpenSummary?: (summary: any) => void;
   onMarkTitleblock?: (setId: string) => void;
+  hasLinkedSet?: boolean;
+  linkedSetId?: string | null;
+  onClearLinkedSet?: () => void;
 }) {
   const aiDiffEnabled = useFlag("revision_ai_diff");
   // Phase 5 display: the register's Due chip is driven by the governing
@@ -244,6 +247,19 @@ export function DrawingRegisterTable({
   const [logImportOpen, setLogImportOpen] = useState(false);
   const [healthDetail, setHealthDetail] = useState<any>(null);
   const [sortByHealth, setSortByHealth] = useState<null | "asc" | "desc">(null);
+
+  // A deep link must resolve to exactly one shop set from the active project.
+  // Do not fall back to an unfiltered register or to a name-only match when a
+  // target is missing, duplicated, or belongs to a different project.
+  const focusedPackage = useMemo(() => {
+    if (!hasLinkedSet || !linkedSetId || !projectId) return null;
+    const matches = (setPackages || []).filter((pkg: any) =>
+      String(pkg.setId) === linkedSetId
+      && String(pkg.parent?.id) === linkedSetId
+      && String(pkg.parent?.project_id) === projectId,
+    );
+    return matches.length === 1 ? matches[0] : null;
+  }, [hasLinkedSet, linkedSetId, projectId, setPackages]);
 
   const allSheets = useMemo(() => (setPackages || []).flatMap((p: any) => p.sheets || []), [setPackages]);
   const existingSetNames = useMemo(() => [...new Set((setPackages || []).map((p: any) => p.name).filter(Boolean))], [setPackages]);
@@ -266,33 +282,20 @@ export function DrawingRegisterTable({
   };
 
   const rows = useMemo(() => {
-    return (setPackages || [])
+    return (hasLinkedSet ? (focusedPackage ? [focusedPackage] : []) : (setPackages || []))
       .map((pkg: any) => {
         const sheets: any[] = pkg.sheets || [];
         const submittals: any[] = pkg.submittals || [];
         const packageDue = resolveDrawingPackageDue(pkg, workdayDues);
         const latestSubmittal = packageDue.governingSubmittal;
         const sheetCount = sheets.length || (pkg.parent?.sheet_count ?? 0);
-        // Per-sheet "released" count is DISPLAY ONLY (the n/total badge). It still
-        // reads the legacy columns to show progress, but it MUST NOT decide the
-        // package's released/done state — that is submittal-governed below.
+        // This count is a legacy flag diagnostic, not release evidence.
         const releasedCount = sheets.filter((d) => d.stage === "Released" || d.set_approval_status === "approved").length;
-        // Two different questions, two different predicates. The comment here
-        // used to say these were the same and that the column and the KPI
-        // "never disagree" — they did:
-        //   done     — "the shop has this package". The hub's
-        //              "Released / sets to fab" KPI uses isPackageReleasedForFab,
-        //              so this column must too, or the two contradict each other
-        //              on a Void-only set and on the deprecated
-        //              set_approval_status="approved" flag.
-        //   terminal — "nothing more will happen here" (terminal FOR TRIAGE),
-        //              which those dead ends DO satisfy. Good enough to stop
-        //              calling a package late; not evidence the shop received it.
+        // done is retained in the row model for legacy consumers, but it is a
+        // workflow marker only and must not colour the row as fab-clear.
         const done = isPackageReleasedForFab(pkg.parent, submittals, sheets);
         const terminal = isClosedPackage(pkg);
-        // Operational (coalesced) state drives the Status chip so it agrees with the
-        // Released column — a mid-flow submittal can't render alongside a green
-        // "Released", and a released package reads "Released" in both columns.
+        // Operational state drives Status; the server gate controls clearance.
         const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
         const due = packageDue.due;
         const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
@@ -319,7 +322,7 @@ export function DrawingRegisterTable({
         };
       })
       .filter((r) => {
-        if (!search) return true;
+        if (hasLinkedSet || !search) return true;
         const q = search.toLowerCase();
         return (r.pkg.name || "").toLowerCase().includes(q)
           || String(r.setNo).toLowerCase().includes(q)
@@ -334,7 +337,7 @@ export function DrawingRegisterTable({
         }
         return compareDrawingSetPackages(a.pkg.parent || a.pkg, b.pkg.parent || b.pkg);
       });
-  }, [setPackages, search, healthByKey, sortByHealth, summariesBySet, currentRevByDrawingId, workdayDues]);
+  }, [setPackages, hasLinkedSet, focusedPackage, search, healthByKey, sortByHealth, summariesBySet, currentRevByDrawingId, workdayDues]);
 
   // Above this many rows, render the virtualized grid instead of a full <table>
   // so large projects (1000+ sets) stay fast. Small projects keep the exact
@@ -352,12 +355,26 @@ export function DrawingRegisterTable({
       title="Drawing register"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {hasLinkedSet && (
+        <div role={focusedPackage ? "status" : "alert"} style={{
+          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+          border: `1px solid ${focusedPackage ? border : "var(--status-error)"}`,
+          background: "var(--bg-surface-low)", borderRadius: 8, padding: "8px 12px",
+          color: focusedPackage ? textPrimary : "var(--status-error)", fontSize: 12,
+        }}>
+          <span>{focusedPackage
+            ? `Focused on ${focusedPackage.name || focusedPackage.parent?.set_name || "linked set"}`
+            : "Linked set could not be resolved in the active project. Check the link or project."}</span>
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onClearLinkedSet}>Show all sets</button>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: "0 1 440px", minWidth: 200 }}>
           <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            disabled={hasLinkedSet}
             placeholder="Search drawing sets…"
             style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }}
           />
@@ -404,7 +421,7 @@ export function DrawingRegisterTable({
                   Health{sortByHealth === "asc" ? " ▲" : sortByHealth === "desc" ? " ▼" : ""}
                 </button>
               </Th>
-              <Th>Released</Th>
+              <Th>Legacy flags</Th>
               <Th>Due</Th>
               <Th style={{ textAlign: "right" }}>Rev</Th>
               <Th style={{ textAlign: "right" }}>{""}</Th>
@@ -414,20 +431,20 @@ export function DrawingRegisterTable({
             {rows.length === 0 ? (
               <tr>
                 <Td colSpan={10} style={{ textAlign: "center", color: textMuted, padding: 28 }}>
-                  No drawing sets {search ? "match your search" : "yet"}.
+                  {hasLinkedSet ? "No linked set is available in this project." : <>No drawing sets {search ? "match your search" : "yet"}.</>}
                 </Td>
               </tr>
             ) : rows.map((r) => (
               <tr key={r.pkg.key} style={{
                 borderTop: `1px solid ${border}`,
-                borderLeft: r.late ? "3px solid var(--status-error)" : r.done ? "3px solid var(--status-success)" : "3px solid transparent",
+                borderLeft: r.late ? "3px solid var(--status-error)" : "3px solid transparent",
               }}>
                 {/* ⚠ MIRROR of RegisterGridCells (virtualized branch) — edit both when changing columns. */}
                 <Td style={{ color: textPrimary, fontWeight: 600 }}>
                   {r.pkg.name}
                   {r.locked && (
-                    <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "var(--cmd-warn-text)", background: "var(--cmd-chip-warn-bg)", border: "1px solid color-mix(in srgb, var(--cmd-warn) 40%, transparent)", textTransform: "uppercase", letterSpacing: "0.04em", verticalAlign: "middle" }}>
-                      <Lock size={9} /> Locked
+                    <span title={r.lockedReason || "Locked set; review the lock reason"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: "0.6875rem", fontWeight: 600, color: "var(--cmd-text-muted)", background: "var(--cmd-row-hover)", border: "1px solid var(--cmd-border)", textTransform: "uppercase", letterSpacing: "0.04em", verticalAlign: "middle" }}>
+                      <Lock size={11} aria-hidden="true" /> Locked
                     </span>
                   )}
                   {r.revSummary && (
@@ -445,11 +462,11 @@ export function DrawingRegisterTable({
                   // the coalesced state string. OperationalStateChip is still used elsewhere
                   // in this file (triage lists, next-decision panel); only the register
                   // Status cell is swapped here.
-                  ? <StatusPill tone={registerStatusTone(r.effectiveState)}>{r.effectiveState}</StatusPill>
+                  ? <span title="Workflow status only. Verify the drawing-set and work-package fabrication release gates."><StatusPill tone={registerStatusTone(r.effectiveState)}>{r.effectiveState}</StatusPill></span>
                   : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>
                 }</Td>
                 <Td>{r.health ? <HealthChip health={r.health} onClick={() => setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</Td>
-                <Td className="is-num" style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</Td>
+                <Td className="is-num" style={{ color: textMuted }}>{r.releasedCount}/{r.sheetCount}</Td>
                 <Td><DueChip info={r.due} /></Td>
                 <Td className="is-num" style={{ textAlign: "right", color: textMuted }}>{r.maxRev || "—"}</Td>
                 <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -481,7 +498,12 @@ export function DrawingRegisterTable({
 
       {canEdit && revisionSet && (
         <Suspense fallback={<ModalLoadingFallback />}>
-          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => { refetchDrawings(); onRevisionUploaded?.(revisionSet?.key); setRevisionSet(null); }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
+          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={(result: { complete?: boolean } | undefined) => {
+            refetchDrawings();
+            if (result?.complete === false) return;
+            onRevisionUploaded?.(revisionSet?.key);
+            setRevisionSet(null);
+          }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
         </Suspense>
       )}
       {reportSet && (

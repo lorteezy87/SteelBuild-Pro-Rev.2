@@ -14,6 +14,7 @@ type Row = { id: string; project_id: string; is_deleted?: boolean };
 
 const calls: Array<{ table: string; range: [number, number]; eq: Array<[string, unknown]> }> = [];
 let pages: Row[][] = [];
+let failedPage: number | null = null;
 
 function builder(table: string) {
   const eq: Array<[string, unknown]> = [];
@@ -28,7 +29,9 @@ function builder(table: string) {
   self.range = (from: number, to: number) => {
     const index = calls.length;
     calls.push({ table, range: [from, to], eq });
-    return Promise.resolve({ data: pages[index] ?? [], error: null });
+    return Promise.resolve(index === failedPage
+      ? { data: null, error: { message: "Page read failed", code: "NETWORK_FAILURE" } }
+      : { data: pages[index] ?? [], error: null });
   };
   return self;
 }
@@ -42,11 +45,50 @@ import { entities } from "@/api/client/entities";
 const makeRows = (n: number, offset = 0): Row[] =>
   Array.from({ length: n }, (_, i) => ({ id: `r${offset + i}`, project_id: "p1" }));
 
-describe("filterAll", () => {
-  beforeEach(() => {
-    calls.length = 0;
-    pages = [];
+beforeEach(() => {
+  calls.length = 0;
+  pages = [];
+  failedPage = null;
+});
+
+describe.each(["listAll", "filterAll"] as const)("%s completeness boundary", (operation) => {
+  const readAll = () => operation === "listAll"
+    ? entities.RFI.listAll("-number")
+    : entities.RFI.filterAll({ project_id: "p1" }, "-number");
+
+  it("rejects a saturated safety limit instead of publishing an incomplete result", async () => {
+    pages = Array.from({ length: 100 }, (_, i) => makeRows(1000, i * 1000));
+    await expect(readAll().then((rows) => rows.length)).rejects.toMatchObject({
+      name: "SupabaseOperationError", table: "rfis", operation,
+      code: "READ_LIMIT_REACHED", status: 400,
+    });
+    expect(calls).toHaveLength(100);
+    expect(calls.at(-1)?.range).toEqual([99_000, 99_999]);
+    if (operation === "filterAll") {
+      expect(calls.every((call) => call.eq.some(([key, value]) => key === "project_id" && value === "p1"))).toBe(true);
+    }
   });
+
+  it("returns a complete final short page immediately below the safety limit", async () => {
+    pages = Array.from({ length: 99 }, (_, i) => makeRows(1000, i * 1000));
+    pages.push(makeRows(999, 99_000));
+    const rows = await readAll();
+    expect(rows).toHaveLength(99_999);
+    expect(rows.at(-1)?.id).toBe("r99998");
+    expect(calls).toHaveLength(100);
+  });
+
+  it("rejects a later page failure without returning earlier partial rows", async () => {
+    pages = [makeRows(1000), makeRows(12, 1000)];
+    failedPage = 1;
+    await expect(readAll()).rejects.toMatchObject({
+      table: "rfis", operation, code: "NETWORK_FAILURE",
+    });
+    expect(calls).toHaveLength(2);
+  });
+});
+
+describe("filterAll", () => {
 
   it("stops after one request when the first page is short", async () => {
     pages = [makeRows(12)];

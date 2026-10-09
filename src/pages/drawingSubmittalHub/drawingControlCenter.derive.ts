@@ -46,6 +46,23 @@ export interface ControlBoardFocus {
   writeAccess: ControlBoardWriteAccess;
 }
 
+/** A navigation prompt from known queue evidence, never a release decision. */
+export function nextActionForTriageItem(item: TriageItem): string {
+  if (item._readiness?.rfiBlocked) return "Resolve linked RFI";
+  if (item._readiness?.revisionImpacted) return "Review revised sheet impact";
+  if (item._readiness?.materialImpacted) return "Resolve material impact";
+  if (item._readiness?.longLeadImpact) return "Review long-lead impact";
+  if (item.isRR || item.detailingState === "R&R") return "Resolve returned comments";
+  if (!item._releaseEvidence?.governingStage && item._releaseEvidence?.relatedSubmittalCount) {
+    return "Verify linked submittal type or create/link Shop Drawing";
+  }
+  if (item._needsUnlinkedHint) return "Create or relink submittal";
+  if (item.dueDate === null) return "Set due date";
+  if (item.due?.overdue) return "Follow up on overdue response";
+  if (!item._readiness) return "Open record and review evidence";
+  return "Open record";
+}
+
 /** Adapt runtime-only triage fields into the explicit focus-card view model. */
 export function adaptControlBoardFocus(item: TriageItem | null): ControlBoardFocus | null {
   if (!item) return null;
@@ -103,34 +120,54 @@ export interface ProductionReadinessRow {
   fabStart: string | null;
   floatDays: number | null;
   blocker: string;
-  ready: boolean;
   item: TriageItem;
 }
 
 function readinessBlockers(item: TriageItem): string[] {
   const readiness = item._readiness;
-  if (!readiness) return ["Readiness evidence unavailable"];
   const blockers: string[] = [];
-  if (readiness.rfiBlocked) blockers.push("Open RFI");
-  if (readiness.revisionImpacted) blockers.push("Revision impact");
-  if (readiness.materialImpacted) blockers.push("Material impact");
-  if (readiness.longLeadImpact) blockers.push("Long lead impact");
-  if (readiness.scheduleRisk?.atRisk && readiness.scheduleRisk.reasons?.length) {
-    blockers.push(readiness.scheduleRisk.reasons[0]);
+  const release = item._releaseEvidence;
+  if (!release) {
+    blockers.push("Release evidence unavailable");
+  } else {
+    if (!item._drawingSetId) blockers.push("Drawing set link unverified");
+    if (release.sheetCount === 0) blockers.push("No sheets in package");
+    if (release.supersededSheetCount > 0) blockers.push(`${release.supersededSheetCount} superseded sheet`);
+    if (!release.governingStage) {
+      blockers.push(release.relatedSubmittalCount
+        ? "No governing Shop Drawing submittal; linked record type needs verification"
+        : "No set-ID-linked governing submittal");
+    }
+    else if (release.governingStage !== "IFC" && release.governingStage !== "Released") {
+      blockers.push(`Governing submittal at ${release.governingStage}`);
+    }
+    if (release.missingPdfCount > 0) blockers.push(`${release.missingPdfCount} sheet PDF missing`);
+    if (release.activeHoldCount === null) blockers.push("Hold evidence unavailable");
+    else if (release.activeHoldCount > 0) blockers.push(`Active drawing hold (${release.activeHoldCount})`);
   }
-  if (!readiness.fabricationReady && blockers.length === 0) blockers.push("Not fabrication ready");
+  if (!readiness) {
+    blockers.push("Readiness evidence unavailable");
+  } else {
+    if (readiness.rfiBlocked) blockers.push("Open RFI");
+    if (readiness.revisionImpacted) blockers.push("Revision impact");
+    if (readiness.materialImpacted) blockers.push("Material impact");
+    if (readiness.longLeadImpact) blockers.push("Long lead impact");
+    if (readiness.scheduleRisk?.atRisk && readiness.scheduleRisk.reasons?.length) {
+      blockers.push(readiness.scheduleRisk.reasons[0]);
+    }
+  }
+  // The client cannot declare release clearance; only the server gate can.
+  if (blockers.length === 0) blockers.push("Server fab-release check required");
   return blockers;
 }
 
 /**
- * Production-facing detailing queue. This only reshapes readiness evidence the
- * hub already computed; it does not derive new schedule dates, float, or release
- * authority. Unknown fields stay null so the UI renders them explicitly as
- * unknown instead of implying a date or healthy state.
+ * Drawing release review. Every set remains visible, including workflow-closed
+ * sets, because this client model has no authoritative release result. Known
+ * blockers are shown; a clean local read still requires the server gate.
  */
 export function buildProductionReadinessQueue(triage: TriageModel): ProductionReadinessRow[] {
   return triage.setItems
-    .filter((item) => !item.closed)
     .map((item) => {
       const readiness = item._readiness;
       const blockers = readinessBlockers(item);
@@ -143,14 +180,12 @@ export function buildProductionReadinessQueue(triage: TriageModel): ProductionRe
         // fabrication-start date or calculated float. Preserve unknown.
         fabStart: null,
         floatDays: null,
-        blocker: readiness?.fabricationReady ? "Clear" : blockers.join(" · "),
-        ready: Boolean(readiness?.fabricationReady),
+        blocker: blockers.join(" · "),
         item,
       };
       return row;
     })
     .sort((a, b) => {
-      if (a.ready !== b.ready) return a.ready ? 1 : -1;
       const aDue = a.requiredIfc || "9999-12-31";
       const bDue = b.requiredIfc || "9999-12-31";
       if (aDue !== bDue) return aDue.localeCompare(bDue);

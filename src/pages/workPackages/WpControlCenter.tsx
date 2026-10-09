@@ -44,7 +44,7 @@ import { RESPONSIVE_CSS, contentGridStyle, pageStyle } from "./styles";
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Map phase name to the phase's next step label (for "Ready to Advance" panel). */
+/** Map phase name to the phase's next step label (for next-phase review). */
 function nextPhase(phase: string): string {
   const map: Record<string, string> = {
     Detailing: "Fabrication",
@@ -168,20 +168,19 @@ export default function WpControlCenter(props: WpControlCenterProps) {
   const laborBurnTone = metrics.laborBurn > 100 ? "danger" as const : "neutral" as const;
   const kpiCells: KpiCellDef[] = [
     {
-      label: "Ready for Fab",
-      value: metrics.readyForFab.length,
-      sublabel: "packages",
-      tone: metrics.readyForFab.length ? "good" : "neutral",
+      label: "Drawing Stage Clear",
+      value: metrics.drawingStageClear.length,
+      sublabel: "packages · verify release gate",
+      tone: metrics.drawingStageClear.length ? "info" : "neutral",
       Icon: CheckSquare,
     },
     {
-      // Sheet-level blocked count, from the same predicates as the Fab Release
-      // gate — the strip previously showed no blocked figure at all, so a
-      // package with blocked sheets read as fully ready here.
-      label: "Fab Blocked",
+      // Drawing-stage or linkage blockers. Other server release blockers, including
+      // holds and material, belong to the Fab Release gate.
+      label: "Drawing Blockers",
       value: metrics.blockedSheetCount ?? 0,
-      sublabel: `sheets · ${metrics.fabBlocked?.length ?? 0} pkg`,
-      tone: (metrics.blockedSheetCount ?? 0) > 0 ? "danger" : "good",
+      sublabel: `sheet/link issues · ${metrics.fabBlocked?.length ?? 0} pkg`,
+      tone: (metrics.blockedSheetCount ?? 0) > 0 ? "danger" : "neutral",
       Icon: CheckSquare,
     },
     {
@@ -478,8 +477,8 @@ export default function WpControlCenter(props: WpControlCenterProps) {
           )}
         </DecisionPanel>
 
-        {/* Ready to Advance — packages near threshold, not in Erection */}
-        <DecisionPanel title="Ready to Advance" onViewAll={() => scrollToBody(bodyRef.current)}>
+        {/* Checklist candidates for review; the release gate decides fab work. */}
+        <DecisionPanel title="Next Phase Review" onViewAll={() => scrollToBody(bodyRef.current)}>
           {panels.readyToAdvance.map((w) => (
             <div
               className="cmd-row is-clickable"
@@ -496,7 +495,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
                 </div>
               </div>
               <span className="cmd-row__meta">
-                {w._signals?.readinessScore ?? 0}% ready
+                {w._signals?.readinessScore ?? 0}% checks clear
               </span>
             </div>
           ))}

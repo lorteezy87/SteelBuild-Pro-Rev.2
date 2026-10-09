@@ -4,7 +4,7 @@
  * Ink is stored as vector strokes (pressure, undo, paper) in localStorage.
  * Pointer Events: coalesced + predicted samples, palm rejection, Pencil double-tap.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   Eraser,
@@ -29,11 +29,14 @@ import {
 } from "@/lib/notesInk/engine";
 import { INK_COLORS, INK_SIZES } from "@/lib/notesInk/types";
 
-const LS_KEY = "sbp-tools-notes";
+import { AuthContext } from "@/lib/AuthContext";
+import { useOptionalOrg } from "@/components/shared/OrgContext";
+import { hasLegacyNotes, localDataKey } from "@/lib/localDataOwnership";
 
-function loadNotes() {
+/** @param {string} storageKey */
+function loadNotes(storageKey) {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -46,13 +49,14 @@ function loadNotes() {
   }
 }
 
-function persistNotes(notes) {
+/** @param {string} storageKey */
+function persistNotes(notes, storageKey) {
   try {
     const payload = notes.map((n) => ({
       ...n,
       ink: n.ink ? serializeInk(n.ink) : serializeInk(emptyInk()),
     }));
-    localStorage.setItem(LS_KEY, JSON.stringify(payload));
+    localStorage.setItem(storageKey, JSON.stringify(payload));
   } catch {
     /* quota / private mode */
   }
@@ -69,8 +73,26 @@ function newNote() {
 }
 
 export default function Notes() {
-  const [notes, setNotes] = useState(loadNotes);
-  const [activeId, setActiveId] = useState(() => loadNotes()[0]?.id ?? null);
+  const auth = useContext(AuthContext);
+  const org = useOptionalOrg();
+  const owner = auth?.isAuthenticated && auth.user?.id && org?.currentOrg?.id
+    ? { userId: auth.user.id, orgId: org.currentOrg.id }
+    : null;
+  const storageKey = localDataKey("notes", owner);
+  let legacyNotesAvailable = false;
+  try { legacyNotesAvailable = hasLegacyNotes(localStorage); } catch { /* storage unavailable */ }
+  if (!storageKey) {
+    return <div role="status" style={{ padding: 24 }}>Sign in and choose a workspace to use notes.</div>;
+  }
+  // A keyed boundary discards text, ink, active selection and undo/redo state
+  // during the identity change itself, before any new-owner effects can run.
+  return <OwnedNotes key={storageKey} storageKey={storageKey} legacyNotesAvailable={legacyNotesAvailable} />;
+}
+
+/** @param {{ storageKey: string, legacyNotesAvailable: boolean }} props */
+function OwnedNotes({ storageKey, legacyNotesAvailable }) {
+  const [notes, setNotes] = useState(() => loadNotes(storageKey));
+  const [activeId, setActiveId] = useState(() => notes[0]?.id ?? null);
   const [mode, setMode] = useState("text"); // text | ink
   const [tool, setTool] = useState("pen");
   const [color, setColor] = useState(INK_COLORS[0].value);
@@ -91,8 +113,8 @@ export default function Notes() {
   const active = notes.find((n) => n.id === activeId) || null;
 
   useEffect(() => {
-    persistNotes(notes);
-  }, [notes]);
+    persistNotes(notes, storageKey);
+  }, [notes, storageKey]);
 
   const updateActive = useCallback((patch) => {
     if (!activeId) return;
@@ -255,6 +277,11 @@ export default function Notes() {
             <Plus size={14} strokeWidth={2} />
           </button>
         </div>
+        {legacyNotesAvailable && (
+          <p role="status" style={{ padding: "10px 12px", margin: 0, color: "var(--text-muted)", fontSize: 12 }}>
+            Older notes on this device have no verified owner. They are preserved and hidden; contact your workspace administrator for recovery.
+          </p>
+        )}
         <div style={{ flex: 1, overflowY: "auto", padding: 6 }}>
           {notes.length === 0 && (
             <div style={{ padding: 16, color: "var(--text-muted)", fontSize: 12, textAlign: "center" }}>

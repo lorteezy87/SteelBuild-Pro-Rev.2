@@ -34,6 +34,11 @@ interface EntityRegistration {
   families: (id?: any) => RegistryKey[];
 }
 
+// Combined evidence snapshots depend on several tables. Keep known project
+// invalidations narrow, and refresh every snapshot for an unscoped mutation.
+const evidenceFamily = (name: string, projectId?: string | null): RegistryKey =>
+  projectId ? [name, projectId] : [name];
+
 const REGISTRY: Record<string, EntityRegistration> = {
 
   // ── Core entities ─────────────────────────────────────────────────────
@@ -42,12 +47,17 @@ const REGISTRY: Record<string, EntityRegistration> = {
     primary:  (pid) => ["projects"],
     families: (pid) => [
       ["projects"],
+      evidenceFamily("contract-management", pid),
+      evidenceFamily("change-orders", pid),
+      evidenceFamily("sov-items", pid),
+      evidenceFamily("constraints", pid),
     ],
   },
 
   drawing: {
     primary:  (pid) => ["drawings", pid],
     families: (pid) => [
+      evidenceFamily("constraints", pid),
       ["drawings", pid],
       ["drawings"],
       ["drawings-all"],
@@ -101,6 +111,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   delivery: {
     primary:  (pid) => ["deliveries", pid],
     families: (pid) => [
+      evidenceFamily("constraints", pid),
       ["deliveries", pid],
       ["deliveries"],
       ["deliveries-all"],
@@ -118,6 +129,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   expense: {
     primary:  (pid) => ["expenses", pid],
     families: (pid) => [
+      evidenceFamily("contract-management", pid),
       ["expenses", pid],
       ["expenses"],
       ["expenses-all"],             // Dashboard.jsx, Reports.jsx
@@ -127,6 +139,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   cost_code: {
     primary:  (pid) => ["cost-codes", pid],
     families: (pid) => [
+      evidenceFamily("sov-items", pid),
       ["cost-codes", pid],
       ["cost-codes"],
       ["codes-all"],                // Dashboard.jsx
@@ -141,6 +154,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   change_order: {
     primary:  (pid) => ["change-orders", pid],
     families: (pid) => [
+      evidenceFamily("contract-management", pid),
       ["change-orders", pid],
       ["change-orders"],
       ["change-orders-all"],        // Projects.jsx
@@ -172,6 +186,8 @@ const REGISTRY: Record<string, EntityRegistration> = {
   rfi: {
     primary:  (pid) => ["rfis", pid],
     families: (pid) => [
+      evidenceFamily("change-orders", pid),
+      evidenceFamily("constraints", pid),
       ["rfis", pid],
       ["rfis"],
       ["rfis-all"],
@@ -186,6 +202,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   schedule_task: {
     primary:  (pid) => ["schedule-tasks", pid],
     families: (pid) => [
+      evidenceFamily("constraints", pid),
       ["schedule-tasks", pid],
       ["schedule-tasks"],
       ["schedule-tasks-global"],    // ExecutiveView.jsx
@@ -202,6 +219,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   work_package: {
     primary:  (pid) => ["work-packages", pid],
     families: (pid) => [
+      evidenceFamily("constraints", pid),
       ["work-packages", pid],
       ["work-packages"],
       ["wps-all"],                  // ProductionNotes.jsx, FabRelease.jsx, ResourceScheduling.jsx, WorkPackages.jsx
@@ -218,6 +236,8 @@ const REGISTRY: Record<string, EntityRegistration> = {
   sov_item: {
     primary:  (pid) => ["sov-items", pid],
     families: (pid) => [
+      evidenceFamily("contract-management", pid),
+      evidenceFamily("change-orders", pid),
       ["sov-items", pid],
       ["sov-items"],
       ["sovs-cost", pid],           // CostDashboard.jsx
@@ -247,6 +267,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   action_item: {
     primary:  (pid) => ["action-items", pid],
     families: (pid) => [
+      evidenceFamily("constraints", pid),
       ["action-items", pid],
       ["action-items"],
       ["action-items-all"],          // Dashboard.jsx, Reports.jsx
@@ -283,6 +304,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   inspection: {
     primary:  (pid) => ["inspections", pid],
     families: (pid) => [
+      evidenceFamily("constraints", pid),
       ["inspections", pid],
       ["inspections"],
     ],
@@ -419,6 +441,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   submittal: {
     primary:  (pid) => ["submittals", pid],
     families: (pid) => [
+      evidenceFamily("constraints", pid),
       ["submittals", pid],
       ["submittals"],
       ["submittals-all"],

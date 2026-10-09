@@ -46,6 +46,25 @@ describe("readTitleBlock — observed vs unknown", () => {
     }
   });
 
+  it("uses a person's inspected title block values on a scan without pretending it had text", () => {
+    const tb = readTitleBlock({
+      scanned: true,
+      sheet: { sheetNumber: "wrong OCR", revision: "IFC" },
+      manual: {
+        projectName: "Desert Ridge Phase 2",
+        sheetNumber: "S-101",
+        revision: "REV 2",
+        issueDate: "04/02/2026",
+        authorizingEngineer: "J. Ruiz, P.E.",
+      },
+    });
+    expect(tb.sheetNumber).toMatchObject({ value: "S-101", provenance: "human", observed: true });
+    expect(tb.revisionNumber).toMatchObject({ value: "2", provenance: "human", observed: true });
+    expect(tb.issueDate).toMatchObject({ value: "2026-04-02", provenance: "human", observed: true });
+    expect(tb.projectName).toMatchObject({ value: "Desert Ridge Phase 2", provenance: "human", observed: true });
+    expect(tb.authorizingEngineer).toMatchObject({ value: "J. Ruiz, P.E.", provenance: "human", observed: true });
+  });
+
   it("distinguishes 'read it and the box was empty' from 'never read it'", () => {
     const tb = readTitleBlock({
       scanned: false,
