@@ -25,7 +25,6 @@ import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevisi
 import { useMyDrawingWatches, useToggleDrawingWatch } from "@/hooks/useDrawingWatch";
 import { usePermissions } from "@/services/permissions";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
-import { ensureCurrentRevision } from "@/lib/drawingHub/revisions";
 import { batchProcess } from "@/utils/batchProcess";
 import { createPageUrl } from "@/utils";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
@@ -34,7 +33,7 @@ import type { PillTone } from "@/components/command";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
 import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
-import { registerRowToDrawing, rowsNeedingProvisioning } from "./registerProvision";
+import { provisionRegisterRevision, rowsNeedingProvisioning } from "./registerProvision";
 import { TitleblockActionButton } from "./TitleblockActionButton";
 import { SheetContextPanel } from "./SheetContextPanel";
 import {
@@ -220,11 +219,9 @@ export function DrawingRegisterGridPanel({
   };
 
   const provisionRevision = async (row: DrawingRegisterRow) => {
-    const drawing = registerRowToDrawing(row);
-    if (!drawing) { toast.error("This sheet is missing its project — can't set up tracking."); return; }
     setProvisioning((prev) => new Set(prev).add(row.drawing_id));
     try {
-      await ensureCurrentRevision({ drawing, userId: user?.id || null });
+      await provisionRegisterRevision({ row, projectId, userId: user?.id || null });
       await invalidateRegister();
       toast.success(`${row.sheet_number ?? "Sheet"} now has a tracked revision.`);
     } catch (e) {
@@ -242,16 +239,14 @@ export function DrawingRegisterGridPanel({
     if (untracked.length === 0 || bulkProvisioning) return;
     setBulkProvisioning(true);
     try {
-      const { failed } = await batchProcess(untracked, (row: DrawingRegisterRow) => {
-        const drawing = registerRowToDrawing(row);
-        if (!drawing) return Promise.reject(new Error("missing project"));
-        return ensureCurrentRevision({ drawing, userId: user?.id || null });
-      });
+      const { failed } = await batchProcess(untracked, (row: DrawingRegisterRow) =>
+        provisionRegisterRevision({ row, projectId, userId: user?.id || null }));
       await invalidateRegister();
       if (failed.length === 0) {
         toast.success(`Set up revision tracking for ${untracked.length} sheet${untracked.length === 1 ? "" : "s"}.`);
       } else {
-        toast.error(`${untracked.length - failed.length}/${untracked.length} set up; ${failed.length} failed.`);
+        const first = failed[0];
+        toast.error(`${untracked.length - failed.length}/${untracked.length} set up; ${failed.length} failed. ${first.item.sheet_number || "Sheet"}: ${first.error}`);
       }
     } finally {
       setBulkProvisioning(false);
