@@ -131,6 +131,15 @@ jobs:
           npm ci --prefix supabase/tests/commercial-postgres --ignore-scripts
           npm test --prefix supabase/tests/commercial-postgres
 
+      - name: Verify independent concurrent Stripe billing sessions
+        env:
+          BILLING_POSTGRES_TEST: "1"
+          BILLING_POSTGRES_CREATE_DB: "1"
+          BILLING_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_billing_test
+        run: |
+          npm ci --prefix supabase/tests/stripe-billing --ignore-scripts
+          npm run test:postgres --prefix supabase/tests/stripe-billing
+
   edge-typecheck:
     name: Release Edge Function typecheck
     runs-on: ubuntu-latest
@@ -257,6 +266,12 @@ jobs:
         run: |
           npm ci --prefix supabase/tests/server-mfa --ignore-scripts
           npm test --prefix supabase/tests/server-mfa
+
+      - name: Verify atomic Stripe billing and replay boundaries
+        # Required ci gate; isolated SQL fixtures use no provider credentials.
+        run: |
+          npm ci --prefix supabase/tests/stripe-billing --ignore-scripts
+          npm test --prefix supabase/tests/stripe-billing
 
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks

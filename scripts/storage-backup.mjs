@@ -49,6 +49,14 @@ function createRcloneExecutor({ configPath, environment }) {
 }
 
 async function main() {
+  // Defense in depth for reused/misconfigured workflows. Environment branch
+  // restrictions must separately prevent untrusted workflows receiving secrets.
+  if (process.env.GITHUB_ACTIONS === "true" && (
+    process.env.GITHUB_REF !== "refs/heads/main"
+    || !["schedule", "workflow_dispatch"].includes(process.env.GITHUB_EVENT_NAME)
+  )) {
+    throw new Error("Production Storage backups require main and a scheduled or manual dispatch");
+  }
   const config = validateStorageBackupEnvironment(process.env);
   const timestamp = formatStorageBackupTimestamp();
   const b2 = parseB2Config(decodeOffsiteRcloneConfig(process.env.OFFSITE_RCLONE_CONFIG_B64));

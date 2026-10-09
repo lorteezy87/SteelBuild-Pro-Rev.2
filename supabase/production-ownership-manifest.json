@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261008071019",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - atomic Stripe webhook candidate. Service-role-only snapshot/apply RPCs couple the organization billing state, revision check and unique processed-event receipt in one transaction. Requires exact SQL review, staged retry/concurrency/entitlement acceptance and matching ledger payload before deploying the dependent stripe-billing handler. Keep visible in missingMigrations until manually applied and stamped. See supabase/tests/stripe-billing/README.md and docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md."
+      },
+      {
         "version": "20261008013546",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - Drawing Control governing-submittal gate candidate. Aligns evaluate_fab_release_set with exact drawing-set IDs, live recognized rounds, submitted-date ordering and fail-closed BIC stage mapping. Local SQL return-value tests pass; exact reviewed staging authentication, hold/RFI and release validation are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
