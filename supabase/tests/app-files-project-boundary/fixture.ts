@@ -26,7 +26,7 @@ export async function initialize(db: Database) {
     CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claims',true),'')::jsonb $$;
     CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE TABLE auth.mfa_factors(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid REFERENCES auth.users ON DELETE CASCADE,status text);
-    CREATE TABLE public.organizations(id uuid PRIMARY KEY, member_default_project_role text);
+    CREATE TABLE public.organizations(id uuid PRIMARY KEY, member_default_project_role text,plan text DEFAULT 'business');
     CREATE TABLE public.organization_members(org_id uuid REFERENCES organizations ON DELETE CASCADE,user_id uuid REFERENCES auth.users ON DELETE CASCADE,role text,PRIMARY KEY(org_id,user_id));
     CREATE TABLE public.projects(id uuid PRIMARY KEY,org_id uuid NOT NULL REFERENCES organizations ON DELETE CASCADE,is_deleted boolean DEFAULT false);
     CREATE TABLE public.user_projects(project_id uuid REFERENCES projects ON DELETE CASCADE,user_id uuid REFERENCES auth.users ON DELETE CASCADE,role text,PRIMARY KEY(project_id,user_id));
@@ -55,11 +55,20 @@ export async function initialize(db: Database) {
   const mfa = await readFile(new URL('../../migrations/20261007073051_enforce_enrolled_mfa_at_server_boundaries.sql',import.meta.url),'utf8');
   const start = mfa.indexOf('CREATE OR REPLACE FUNCTION steelbuild_security.satisfies_mfa()');
   await db.exec(mfa.slice(start,mfa.indexOf('$function$;',start)+12));
+  const plans=await readFile(new URL('../project-plan-limits/live-functions.sql',import.meta.url),'utf8');
+  for(const name of ['plan_limits','plan_member_limit']) {
+    const at=plans.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    await db.exec(plans.slice(at,plans.indexOf('$function$;',at)+12));
+  }
+  const membership=await readFile(new URL('../../migrations/20260921080604_harden_workspace_membership_and_audit_boundaries.sql',import.meta.url),'utf8');
+  const guard=membership.indexOf('CREATE OR REPLACE FUNCTION public.enforce_org_member_guard()');
+  await db.exec(membership.slice(guard,membership.indexOf('$function$;',guard)+12));
+  await db.exec('CREATE TRIGGER membership_guard BEFORE INSERT OR UPDATE OR DELETE ON public.organization_members FOR EACH ROW EXECUTE FUNCTION public.enforce_org_member_guard()');
 }
 export async function reset(db: Database) {
   await db.exec(`RESET ROLE; TRUNCATE public.organizations,auth.users CASCADE; TRUNCATE storage.objects;
     INSERT INTO auth.users VALUES('${ids.pm}'),('${ids.field}'),('${ids.viewer}'),('${ids.outsider}');
-    INSERT INTO organizations VALUES('${ids.org}',NULL),('${ids.otherOrg}',NULL);
+    INSERT INTO organizations(id,member_default_project_role) VALUES('${ids.org}',NULL),('${ids.otherOrg}',NULL);
     INSERT INTO projects VALUES('${ids.project}','${ids.org}',false),('${ids.otherProject}','${ids.otherOrg}',false);
     INSERT INTO organization_members VALUES('${ids.org}','${ids.pm}','member'),('${ids.org}','${ids.field}','member'),('${ids.org}','${ids.viewer}','member');
     INSERT INTO user_projects VALUES('${ids.project}','${ids.pm}','pm'),('${ids.project}','${ids.field}','field'),('${ids.project}','${ids.viewer}','viewer');

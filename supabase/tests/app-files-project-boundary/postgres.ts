@@ -67,6 +67,20 @@ try {
   await cases(db);
   const orgLock=`SELECT id FROM organizations WHERE id='${ids.org}' FOR UPDATE`;
   const projectLock=`SELECT id FROM projects WHERE id='${ids.project}' FOR UPDATE`;
+  await check('Auth erasure contention fails retryably before reversing membership parent locks',async()=> {
+    await admin.query('BEGIN'); await admin.query('SELECT id FROM auth.users WHERE id=$1 FOR UPDATE',[ids.pm]);
+    const s=await session(); await s.client.query("SET LOCAL lock_timeout='750ms'");
+    let outcome:PromiseSettledResult<Receipt>;
+    try {
+      [outcome]=await Promise.allSettled([finish(s.client)]);
+      assert.equal(outcome.status,'rejected');
+      assert.match(String((outcome as PromiseRejectedResult).reason),/FILE_RESERVATION_BUSY/);
+      // The actual membership trigger locks the organization as Auth cascades.
+      await admin.query('DELETE FROM auth.users WHERE id=$1',[ids.pm]);
+      await admin.query('COMMIT');
+    } catch(error) { await admin.query('ROLLBACK');throw error; }
+    assert.equal(await count(),0);
+  });
   await check('four identical concurrent requests return one exact durable receipt',async()=> {
     const result=await contention(orgLock,[args(),args(),args(),args()]);
     assert.ok(result.every(r=>r.status==='fulfilled'));
@@ -96,7 +110,7 @@ try {
     assert.equal(await count(),0);
   });
   for(const [label,change,aal] of [
-    ['workspace membership',`DELETE FROM organization_members WHERE user_id='${ids.pm}'`,'aal2'],
+    ['project membership',`DELETE FROM user_projects WHERE user_id='${ids.pm}'`,'aal2'],
     ['project role',`UPDATE user_projects SET role='viewer' WHERE user_id='${ids.pm}'`,'aal2'],
     ['MFA enrollment',`INSERT INTO auth.mfa_factors(user_id,status) VALUES('${ids.pm}','verified')`,'aal1'],
   ]) await check(`exact receipt retry rechecks ${label} after its row wait`,async()=> {
@@ -121,7 +135,7 @@ try {
   });
   await check('pinned snapshot is rejected before returning an old receipt',async()=> {
     await finish((await session()).client);
-    const s=await session(ids.pm,'aal2','REPEATABLE READ'); await s.client.query('SELECT count(*) FROM projects');
+    const s=await session(ids.pm,'aal2','REPEATABLE READ'); await s.client.query('SELECT txid_current_snapshot()');
     await assert.rejects(finish(s.client),{code:'40001'});assert.equal(await count(),1);
   });
   console.log(`${passed} independent-session file reservation checks passed`);
