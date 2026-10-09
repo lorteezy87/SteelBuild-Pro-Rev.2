@@ -199,6 +199,11 @@ jobs:
           npm ci --prefix supabase/tests/account-deletion --ignore-scripts
           npm test --prefix supabase/tests/account-deletion
 
+      - name: Verify enrolled MFA database boundaries
+        run: |
+          npm ci --prefix supabase/tests/server-mfa --ignore-scripts
+          npm test --prefix supabase/tests/server-mfa
+
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
