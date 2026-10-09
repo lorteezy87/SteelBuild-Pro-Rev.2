@@ -170,6 +170,15 @@ describe('the real manifest', () => {
     expect(report.missingMigrations).toContain(version);
   });
 
+  it.each(['20261008071019', '20261008032524', '20261009125901'])('requires billing/membership migration %s when its stamp is absent', (version) => {
+    const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
+    expect(entry?.lifecycle).toBe('required');
+    expect(entry?.evidence).toMatch(/2026-10-09/);
+    const report = compareDrift(manifest, local, [...LEDGER].map(version => ({ version })), []);
+    expect(report.missingMigrations).toContain(version);
+    expect(report.hasDrift).toBe(true);
+  });
+
   it('keeps pending account deletion migrations required by the drift gate', () => {
     const pending = ['20260927150000', '20260927160000'].filter((version) => !LEDGER.has(version));
     const entries = pending.map((version) =>

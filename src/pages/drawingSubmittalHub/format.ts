@@ -378,10 +378,10 @@ export function isClosedPackage(pkg: SetPackage | null | undefined): boolean {
   const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
 
   // (1) Explicit manual release states — always terminal.
-  if (detailingState === "Partially Released" || detailingState === "Released for Erection") return true;
+  if (detailingState === "Partially Released" || detailingState === "Released for Erection") return isPackageReleasedForFab(pkg.parent, pkg.submittals, pkg.sheets);
   // (2) "Released" is terminal only when a submittal drove it (RFF), not when it
   //     came from the deprecated sheet-stage majority fallback.
-  if (detailingState === "Released" && governs) return true;
+  if (detailingState === "Released" && governs) return isPackageReleasedForFab(pkg.parent, pkg.submittals, pkg.sheets);
 
   if (!governs) {
     // (3) Dead/Void-only set: no usable submittal governs, but a terminal-status

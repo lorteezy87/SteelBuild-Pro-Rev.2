@@ -59,9 +59,11 @@ export function useSubmittals(
   });
   const roundMutations = useSubmittalRoundMutations({
     projectId,
+    submittals: queryState.submittals,
     invalidateAll,
   });
   const bulkMutations = useSubmittalBulkMutations({
+    submittals: queryState.submittals,
     invalidateAll,
   });
 

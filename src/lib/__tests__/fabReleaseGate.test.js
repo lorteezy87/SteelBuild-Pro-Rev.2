@@ -1,3 +1,4 @@
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import { describe, expect, it } from "vitest";
 import { findBlockingRfis, computeFabReleaseGate, linkedRfiNumbers, isUnresolvedCurrentRevision } from "../fabReleaseGate";
 
@@ -12,7 +13,7 @@ const sheet = (id, linkedCsv, extra = {}) => ({
   ...extra,
 });
 const rfi = (number, status, extra = {}) => ({ id: `id-${number}`, rfi_number: number, status, ...extra });
-const shopApproval = { id: "shop-1", submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] };
+const shopApproval = { id: "shop-1", ...verifiedSubmittalEvidence("shop-1"), submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] };
 const shopGate = (args) => computeFabReleaseGate({ submittals: [shopApproval], ...args });
 
 describe("linkedRfiNumbers", () => {

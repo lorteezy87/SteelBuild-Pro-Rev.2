@@ -6,6 +6,41 @@
 
 import { supabase } from "@/lib/supabase";
 
+/** Exact, RLS-visible usage without a row-cap or another workspace's cache. */
+export async function getWorkspaceProjectCount(orgId: string): Promise<number> {
+  if (!orgId) throw new Error("Select a workspace to load project usage");
+  // eslint-disable-next-line no-restricted-syntax -- HEAD exact count returns no rows, so PostgREST's row cap cannot truncate this usage read.
+  const { count, error } = await supabase.from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .or("is_deleted.is.null,is_deleted.eq.false");
+  if (error) throw error;
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) throw new Error("Project usage is unavailable");
+  return count;
+}
+
+/** All accepted members are visible to workspace members under membership RLS. */
+export async function getWorkspaceMemberCount(orgId: string): Promise<number> {
+  if (!orgId) throw new Error("Select a workspace to load member usage");
+  // eslint-disable-next-line no-restricted-syntax -- Exact HEAD count only; no row/profile payload or row-cap truncation.
+  const { count, error } = await supabase.from("organization_members")
+    .select("id", { count: "exact", head: true }).eq("org_id", orgId);
+  if (error) throw error;
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) throw new Error("Member usage is unavailable");
+  return count;
+}
+
+/** Admin-only under RLS. Callers must never present a member's hidden rows as zero. */
+export async function getWorkspacePendingInvitationCount(orgId: string): Promise<number> {
+  if (!orgId) throw new Error("Select a workspace to load invitation usage");
+  // eslint-disable-next-line no-restricted-syntax -- Exact HEAD count only; invitation bearer tokens are never downloaded.
+  const { count, error } = await supabase.from("organization_invitations")
+    .select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "pending");
+  if (error) throw error;
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) throw new Error("Invitation usage is unavailable");
+  return count;
+}
+
  
 async function invokeBilling(action: string, payload: Record<string, unknown>): Promise<any> {
   const { data, error } = await supabase.functions.invoke("stripe-billing", { body: { action, ...payload } });

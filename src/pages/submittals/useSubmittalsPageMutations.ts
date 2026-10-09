@@ -102,7 +102,8 @@ export function useSubmittalsPageMutations(args: {
   const updateMut = useMutation({
     mutationFn: async ({ id, ...data }: { id: string; [key: string]: unknown }) => {
       const prevStatus = rows.find((r) => r.id === id)?.status ?? null;
-      const updated = await entities.Submittal.update(id, data);
+      const reviewed = rows.find((r) => r.id === id);
+      const updated = await entities.Submittal.update(id, data, { submittalReview: reviewed as import('@/api/client/submittalWorkflow').SubmittalReview });
       // Smart triggers: moves into Rejected / R&R / Approved-as-Noted queue a
       // draft detailing task (deduped inside; never throws).
       if (typeof data.status === "string") {
@@ -202,7 +203,7 @@ export function useSubmittalsPageMutations(args: {
           patch,
           typeof notesAppend === "string" ? notesAppend : undefined,
         );
-        return entities.Submittal.update(id, rowPatch);
+        return entities.Submittal.update(id, rowPatch, { submittalReview: existing as import('@/api/client/submittalWorkflow').SubmittalReview });
       });
     },
     onSuccess: async (results, variables) => {
@@ -294,46 +295,20 @@ export function useSubmittalsPageMutations(args: {
 
   const createRoundMut = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
-      let round: { id?: string } | null = null;
-      // Pre-validate: the round forces the submittal to Submitted, which the
-      // DB gate rejects from a terminal / approved status. Fail before the
-      // round insert so nothing needs rolling back and the user gets a
-      // readable reason instead of a trigger error.
       const current = rows.find((r) => r.id === data.submittal_id);
       const blocked = newRoundBlockReason((current?.status as string | null | undefined) ?? null);
       if (blocked) throw new Error(blocked);
-      try {
-        round = await entities.SubmittalRound.create(withProjectId(data, projectId) as any);
-        if (round?.id && data.submittal_id) {
-          await entities.Submittal.update(data.submittal_id as string, {
-            current_round_id: round.id,
-            total_rounds: Number(data.round_number) || 1,
-            status: NEW_ROUND_STATUS,
-            ball_in_court: String(data.ball_in_court || "EOR"),
-            submitted_date: String(data.submitted_date || new Date().toISOString().split("T")[0]),
-          });
-          await logActivity(
-            "submittal",
-            "round_created",
-            {
-              id: data.submittal_id,
-              project_id: projectId,
-              round_number: data.round_number,
-            },
-            { projectId, description: `Round ${data.round_number || 1} created` },
-          );
-        }
-        return round;
-      } catch (err) {
-        if (round?.id) {
-          try {
-            await entities.SubmittalRound.delete(round.id);
-          } catch {
-            /* preserve original failure */
-          }
-        }
-        throw err;
-      }
+      if (!current?.project_id) throw new Error('Refresh and select this submittal before creating a round.');
+      return addSubmittalRound({
+        submittal: current as Parameters<typeof addSubmittalRound>[0]['submittal'],
+        status: NEW_ROUND_STATUS,
+        ball_in_court: String(data.ball_in_court || 'EOR'),
+        submitted_date: typeof data.submitted_date === 'string' ? data.submitted_date : undefined,
+        notes: typeof data.response_notes === 'string' ? data.response_notes : undefined,
+        revision: typeof data.revision === 'string' ? data.revision : undefined,
+        extraPatch: { submitted_by: typeof data.submitted_by === 'string' ? data.submitted_by : null, reviewer: typeof data.reviewer === 'string' ? data.reviewer : null },
+        newRound: true,
+      });
     },
     onSuccess: async () => {
       await invalidate();

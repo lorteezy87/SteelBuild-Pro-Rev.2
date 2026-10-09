@@ -70,17 +70,7 @@ export default function AuthenticatedApp() {
       ? authError.message
       : null;
 
-  // Password recovery takes precedence over every other state: a user who
-  // followed the emailed reset link is technically "authenticated" with a
-  // recovery session, so gate them straight to the set-new-password screen
-  // rather than into the app or org onboarding (H22).
-  if (isPasswordRecovery) {
-    return (
-      <Suspense fallback={<AppLoader />}>
-        <UpdatePassword />
-      </Suspense>
-    );
-  }
+  if (isLoadingPublicSettings || isLoadingAuth) return <AppLoader />;
 
   // Hold new or unverified sessions until their blocking AAL lookup resolves.
   if (isAuthenticated && isCheckingMfa) return <AppLoader />;
@@ -116,8 +106,15 @@ export default function AuthenticatedApp() {
     );
   }
 
-  if (isLoadingPublicSettings || isLoadingAuth) {
-    return <AppLoader />;
+  // Supabase requires AAL2 to change an enrolled user's password. Recovery
+  // stays held through that challenge, then through confirmed sign-out; it
+  // must never mount org/project providers or desktop handoff in between.
+  if (isPasswordRecovery) {
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <UpdatePassword />
+      </Suspense>
+    );
   }
 
   if (!isAuthenticated) {

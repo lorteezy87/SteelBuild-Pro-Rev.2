@@ -1,0 +1,7 @@
+{
+  "name": "steelbuild-stripe-billing-verification",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node verify.mjs && node verify-checkout.mjs", "test:postgres": "node verify-postgres.mjs" },
+  "devDependencies": { "@electric-sql/pglite": "0.5.8", "pg": "8.23.1" }
+}

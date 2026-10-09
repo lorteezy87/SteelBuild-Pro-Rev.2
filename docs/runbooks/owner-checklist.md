@@ -1,13 +1,13 @@
-# Owner / Human-Only Action Checklist
+# Operational Acceptance Checklist
 
 **SteelBuild Pro — Enterprise Readiness Remediation**
-Date: 2026-07-01
-Scope: Actions that **only a human with owner-level credentials** can perform (dashboard toggles, plan upgrades, secret provisioning, CLI operations not available to automation, legal/entity/tax filings, external vendor sign-up). Each item cites the originating audit finding.
+Original audit: 2026-07-01. Deployment and erasure directions reconciled 2026-10-09.
+Scope: Operational checks requiring authorized account access or an owner decision. Automation may perform authorized technical work where credentials permit; legal/entity/tax filings and commercial choices still require the appropriate owner. Unchecked historical items are not proof of current missing configuration. Verify live state and retain evidence before marking an item complete. Current release status is recorded in [the release audit](../audits/PRODUCTION_RELEASE_2026-10-08.md).
 
 Refs:
 - Supabase project: `kjrwqagyeswwoxpjkcko`
 - Production: `https://steelbuild-pro.com`
-- Vercel project: `steelbuildpro-og`
+- Production Cloudflare Worker: `steelbuild-pro-rev-2`; Vercel is retired.
 - GitHub repo: `lorteezy87/SteelBuild-Pro-Rev.2`
 - Tier 1 code-vs-owner split: [`tier1-enterprise-status.md`](./tier1-enterprise-status.md)
 
@@ -27,18 +27,15 @@ Refs:
   - Why: today `main` is the live deploy branch with ~10 concurrent agent sessions pushing to it; nothing structurally prevents a force-push or a merge that skipped CI. Protection makes the green CI gate mandatory, not conventional.
   - Verify: attempt a trivial push that fails lint on a throwaway branch → PR → confirm merge is blocked.
 
-- [ ] **Recreate `VERCEL_TOKEN` scoped to a single project, 90-day expiry** — [H6 / M12]
-  - In Vercel `Account Settings → Tokens`: delete the current broad token, create a new one **scoped to the `steelbuildpro-og` project only**, expiry **90 days**.
-  - Update the GitHub repo secret `VERCEL_TOKEN` with the new value.
-  - Add a recurring calendar reminder to **rotate every 90 days** before expiry (a lapsed token silently breaks the `deploy` job — deploys stop, prod stays on last good build).
-  - Why: a broad, non-expiring deploy token is a standing blast-radius risk; scoping + expiry limits damage from a leaked secret.
-  - Verify: trigger a deploy after rotation; confirm the `deploy` job in the Action run succeeds.
+- [ ] **Verify scoped Cloudflare publication credentials** — [H6 / M12]
+  - Inspect the active Cloudflare workflow and credential scopes; keep production and preview permissions separate where supported. Do not recreate the retired Vercel deployment path.
+  - Provision or rotate credentials only through the authorized account flow, retain them as encrypted environment secrets, and record expiry/rotation ownership without copying secret values into the repository or conversation.
+  - Verify the tested commit publishes through all five required jobs and both production domains serve that release. A successful credential update alone is not deployment evidence.
 
-- [ ] **Add repo secret `SUPABASE_ACCESS_TOKEN`** — [H4 / H5]
-  - Generate a Supabase personal access token (Supabase dashboard → Account → Access Tokens).
-  - Add as GitHub repo secret `SUPABASE_ACCESS_TOKEN`.
-  - Why: enables CI/automation to deploy edge functions and manage the project via the Supabase CLI (`--project-ref kjrwqagyeswwoxpjkcko`) without interactive login. Also the prerequisite for automating edge-function deploys (currently manual).
-  - Verify: run a no-op `npx supabase functions list --project-ref kjrwqagyeswwoxpjkcko` in the CI environment (or locally with the token exported) and confirm it authenticates.
+- [ ] **Provision distinct reviewed backend deployment credentials** — [H4 / H5]
+  - Follow [reviewed backend releases](./reviewed-backend-release.md). `staging-backend` and `production-backend` are main-only environments; production also requires its release reviewer.
+  - Store a distinct, narrowly scoped `SUPABASE_BACKEND_ACCESS_TOKEN` in each environment. Do not reuse or expose the repository-wide inventory credential, and do not claim branch-level token isolation without verifying the provider's actual scope.
+  - Verify the same function and exact main SHA pass staging deployment and hosted acceptance before the protected production workflow. A listing request alone does not verify deployment or provider delivery.
 
 - [ ] **Add repo secret `SENTRY_AUTH_TOKEN`** — [H8]
   - Create a Sentry auth token with scopes **`project:releases`** + **`org:read`**.
@@ -54,11 +51,11 @@ Refs:
   - Why: full-browser E2E is the only bar that catches wiring/RLS/async failures that unit + build pass through (the documented failure mode behind the "done means field-verified" rule).
   - Verify: the E2E workflow runs green on the next push and exercises login → project list → drawing register.
 
-- [ ] **Stand up staging Supabase + staging Vercel** — [H3]
-  - **Code half shipped** (2026-07-02): `.github/workflows/ci.yml` has a guarded `deploy-staging` job (reuses the prod `ci` gate; **inert** until `STAGING_ENABLED=true`). Full step-by-step is in **`docs/runbooks/staging-setup.md`**.
-  - Owner steps (summary): (1) create a **staging Supabase project**, `supabase db push` the migrations + deploy edge functions to it; (2) create/repurpose a **staging Vercel project** with git auto-deploy off and `VITE_SUPABASE_*` pointing at staging; (3) add secrets `STAGING_VERCEL_PROJECT_ID` + `STAGING_VERCEL_TOKEN` and variables `STAGING_ENABLED=true` (+ optional `STAGING_BASE_URL`); (4) create the `staging` branch.
-  - Why: there is currently no pre-production environment — every schema/edge change is validated against live prod. Staging gives a safe rehearsal surface for DR restores, migrations, and destructive features (H11).
-  - Verify: a push to `staging` deploys to the staging Vercel URL against the staging Supabase project; the post-deploy health check hits `STAGING_BASE_URL`; prod is untouched.
+- [~] **Complete hosted staging acceptance** — [H3]
+  - A separate Cloudflare staging Worker and persistent Supabase branch `ndyfjffsulfbwpmwdmic` exist. Follow [staging setup](./staging-setup.md) and the current release audit for verified installed SQL and remaining provider/browser checks.
+  - Apply only reviewed exact migration payloads and matching ledger stamps manually, following `CLAUDE.md`. Never run `supabase db push`, MCP `apply_migration` or migration repair against this shared lineage.
+  - Use the current `STAGING_E2E_*` secrets and guarded workflows; do not copy production provider credentials or customer records into browser artifacts. Confirm the intended staging project before fixture writes.
+  - Verify login, relevant steel workflows and real provider test-mode behavior on the exact candidate. A staging Worker or database existing does not prove acceptance.
 
 ---
 
@@ -186,11 +183,11 @@ integrations no longer invoked by the client.
   - Why: multi-tenant SaaS handling customer project/financial data needs a documented processor chain; enterprise procurement will ask for it.
   - Verify: signed DPAs on file for each vendor; DPA template available to prospects.
 
-- [ ] **Activate the data-erasure path in production** — [H11]
-  - **Built + rehearsed on staging (2026-07-03).** The full path now exists in code: `hard_delete_project` / `hard_delete_organization` RPCs (dynamic sweep of non-cascading tables + cascade; append-only `account_deletions` audit that survives the erasure), the `account-delete` edge function (owner-verified; erases DB rows via the caller-scoped RPC, purges Storage `app-files/<org_id>/` + `email-attachments/<project_id>/`, and deletes now-orphaned auth users), and a flag-gated owner-only "Danger Zone → Delete workspace" UI (type-the-name confirm) on the Team page. A full org wipe was rehearsed on staging: all 88 project tables + org rows erased, audit row written, no FK errors.
-  - **Inert in production until you do all three:** (1) apply the migration `20260703170000_hard_erasure_rpcs.sql` to prod (MCP `apply_migration` or `supabase db push`); (2) deploy the edge function: `npx supabase functions deploy account-delete --project-ref kjrwqagyeswwoxpjkcko` (JWT verify ON); (3) enable the **`account_deletion`** feature flag (per-owner first, e.g. your account, then broaden). Until the flag is on, the UI renders nothing and no user can reach the flow.
-  - **Field-verify before broad enable:** on prod, enable the flag for your account only, create a throwaway org, and run the full delete end-to-end — confirm DB rows, Storage objects, and the auth user are gone and an `account_deletions` row exists. (The RPC core is staging-verified; the edge function's Storage + auth-user steps still need one real owner-invoked run.)
-  - Why: GDPR/CCPA "right to erasure" and enterprise offboarding require a real, auditable, owner-guarded delete path.
+- [~] **Complete current account-erasure release acceptance** — [H11]
+  - The erasure RPCs and an `account-delete` function already exist. Reviewed SQL corrections were applied and payload-verified during the October release; never replay the historical baseline based on this checklist. Use the [release audit](../audits/PRODUCTION_RELEASE_2026-10-08.md) and [identity-preservation candidate](../audits/WORKSPACE_ERASURE_IDENTITY_2026-10-09.md) for exact state.
+  - The pending handler separates workspace deletion from self-account deletion: deleting a workspace must preserve its members' Auth identities, including people whose other memberships are changing concurrently. Self-account deletion remains its own authorized operation.
+  - Release `account-delete` through the reviewed workflow with gateway JWT verification enabled, after staging MFA/role, Storage and identity acceptance. Preserve immutable financial records and erasure audit evidence according to the tested contract.
+  - Verify with explicitly synthetic staging accounts/workspaces. Do not delete customer records, infer acceptance from SQL rollback tests alone, or broadly enable a feature flag without its reviewed release evidence.
 
 - [ ] **Verify / form the operating legal entity + insurance + continuity** — [M51]
   - Verify or form **`SteelBuild Pro LLC`** with the **AZ Corporation Commission** (operating entity is currently TBD; the app must never name S&H Steel as operator/liable party).

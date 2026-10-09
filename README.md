@@ -299,15 +299,23 @@ disposable-mutation E2E jobs run against it. Details, including what the
 schema restore did and did not cover, are in
 [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
 
-**Current rebuild checkpoint (2026-10-08).** [Draft PR #499](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/499)
-is a source-level checkpoint in the whole-app rebuild, not an enterprise release.
-Its five Drawing Control SQL candidates remain unapplied and unstamped on
-staging and production; see the
-[`Drawing Control release candidate`](./docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md).
-The 2026-10-08 application job at `73664ef16` passed, while production drift
-still reported 15 required migrations and the dependency audit reported five
-high build-tool advisories. Authenticated viewport and steel-workflow acceptance
-remain open. This checkpoint did not deploy a frontend Worker or backend change.
+**Current release work (2026-10-09).** [PR #499](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/499)
+has merged. [PR #516](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/516)
+integrates the reviewed drawing evidence, workspace membership, recovery,
+account-erasure identity and billing changes. Its full combined checks and
+authenticated acceptance must pass before publication. The five Drawing Control
+migrations, membership resolver, revision manifest, durable checkout and project
+capacity changes are installed on staging with verified ledger payloads; these
+remain pending in production. Production has received nine separately reviewed
+SQL migrations during this release, including atomic billing, but the matching
+Edge release and frontend publication remain pending. `CLOUDFLARE_ENABLED` is
+temporarily false to preserve the existing live Worker while dependencies are
+verified; restoring it and publishing through all five gates are required to
+complete the production update. See the current
+[`release evidence`](./docs/audits/PRODUCTION_RELEASE_2026-10-08.md) for exact
+versions, hashes and acceptance limits. Whole-app enterprise and monetization
+readiness, provider delivery, backup restore, authenticated workflow/viewport
+acceptance and the build-tool advisory remain open.
 
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor

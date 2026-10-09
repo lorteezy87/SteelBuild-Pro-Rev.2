@@ -7,10 +7,12 @@ import {
   parseLinkedIds,
 } from "../analytics";
 import { indexReleasesByWorkPackage, summarizePiecesByWorkPackage } from "../canonical";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 
 const drawingSet = (id) => ({ id });
 const shopApproval = (id, setId, status = "Released for Fabrication", ball_in_court = "Detailer") => ({
   id, submittal_type: "Shop Drawing", status, ball_in_court, drawing_set_ids: [setId],
+  ...verifiedSubmittalEvidence(id),
 });
 const approvalEvidence = (setIds = ["set-1"]) => ({
   drawingSets: setIds.map(drawingSet),

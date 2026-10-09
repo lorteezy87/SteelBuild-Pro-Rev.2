@@ -23,6 +23,7 @@
 
 import { WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { derivedSetStage, isUsableShopDrawingSubmittal, isRRStatus, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
+import { hasExactSubmittalRevisionEvidence } from '@/lib/submittalRevisionEvidence';
 
 /** Manual upstream (pre-submittal) drafting states. */
 export const DRAFTING_STATES = ["In Detailing", "Internal Review", "Ready to Submit"];
@@ -75,7 +76,8 @@ const FAB_RELEASED_SET = new Set(["Released", ...RELEASE_STATES]);
  * Display it as a neutral workflow marker, never a clearance or green KPI.
  */
 export function isPackageReleasedForFab(pkg, submittalsForSet, sheetsForSet = []) {
-  return FAB_RELEASED_SET.has(effectiveDetailingState(pkg, submittalsForSet, sheetsForSet));
+  const governing = pickMostRecentSubmittal((submittalsForSet || []).filter(isUsableShopDrawingSubmittal));
+  return !!governing && governing.status === 'Released for Fabrication' && hasExactSubmittalRevisionEvidence(governing) && FAB_RELEASED_SET.has(effectiveDetailingState(pkg, submittalsForSet, sheetsForSet));
 }
 
 /**

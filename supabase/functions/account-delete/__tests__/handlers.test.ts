@@ -13,13 +13,18 @@ function fixture() {
     data_erasure_log: [],
   };
   const objects = new Set([`app-files/${ORG}/file.pdf`, `email-attachments/${PROJECT}/mail.pdf`]);
+  const identities = new Set([CALLER, OTHER]);
   const reads: string[] = [];
   let failTable: string | undefined;
   let missingTable: string | undefined;
-  let countFailure: 'error' | 'null' | undefined;
+  let rpcFailure = false;
   let removeFailure = false;
   let rpcCalls = 0;
-  const deleteUser = vi.fn(async (_id: string) => ({ data: {}, error: null }));
+  const deleteUser = vi.fn(async (id: string) => {
+    identities.delete(id);
+    tables.organization_members = tables.organization_members.filter(member => member.user_id !== id);
+    return { data: {}, error: null };
+  });
   const admin = {
     from(table: string) {
       const filters: Array<(row: Row) => boolean> = [];
@@ -34,10 +39,10 @@ function fixture() {
         maybeSingle() { single = true; return query; },
         then(resolve: (result: unknown) => unknown) {
           reads.push(table);
-          if (failTable === table || (head && countFailure === 'error')) return Promise.resolve(resolve({ data: null, count: null, error: { message: 'read unavailable' } }));
+          if (failTable === table) return Promise.resolve(resolve({ data: null, count: null, error: { message: 'read unavailable' } }));
           if (missingTable === table) return Promise.resolve(resolve({ data: null, count: null, error: null }));
           const rows = (tables[table] ?? []).filter(row => filters.every(filter => filter(row))).sort((a, b) => String(a[column]).localeCompare(String(b[column])));
-          return Promise.resolve(resolve({ data: head ? null : single ? rows[0] ?? null : rows.slice(0, limit), count: countFailure === 'null' ? null : rows.length, error: null }));
+          return Promise.resolve(resolve({ data: head ? null : single ? rows[0] ?? null : rows.slice(0, limit), count: rows.length, error: null }));
         },
       };
       return query;
@@ -61,6 +66,7 @@ function fixture() {
   const userClient = {
     async rpc(_name: string, _args: unknown) {
       rpcCalls++;
+      if (rpcFailure) return { data: null, error: { message: 'erasure refused' } };
       if (!tables.organizations.length) return { data: { org_ids: [], project_ids: [] }, error: null };
       tables.data_erasure_log.push({ id: uid(10), kind: 'organization', org_id: ORG, requested_by: CALLER, row_counts: { projects: 1, per_project: { [PROJECT]: {} } } });
       tables.organizations = [];
@@ -70,11 +76,11 @@ function fixture() {
     },
   };
   return {
-    admin, userClient, tables, objects, reads, deleteUser,
+    admin, userClient, tables, objects, identities, reads, deleteUser,
     get rpcCalls() { return rpcCalls; },
     failRead(table: string) { failTable = table; },
     missingRead(table: string) { missingTable = table; },
-    failCount(value: 'error' | 'null') { countFailure = value; },
+    failRpc() { rpcFailure = true; },
     failRemove(value: boolean) { removeFailure = value; },
   };
 }
@@ -169,25 +175,128 @@ describe('account erasure completion', () => {
   });
 });
 
-describe('workspace erasure uncertain reads', () => {
-  it.each(['projects', 'organization_members'])('requires complete %s snapshots before the RPC', async table => {
+describe('workspace erasure preserves account identities', () => {
+  it('erases the workspace and files while keeping the owner and every member login', async () => {
     const f = fixture();
-    // Membership snapshot must fail after ownership lookup, not instead of it.
-    if (table === 'organization_members') {
-      const from = f.admin.from;
-      let memberReads = 0;
-      f.admin.from = name => { if (name === table && ++memberReads > 1) f.failRead(table); return from(name); };
-    } else f.failRead(table);
-    expect((await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG)).status).toBeGreaterThanOrEqual(400);
+    f.tables.organization_members.push({ org_id: ORG, user_id: OTHER, role: 'member' });
+
+    const response = await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ok: true, org_id: ORG, projects_deleted: 1, storage_objects_removed: 2, users_deleted: 0,
+    });
+    expect(f.tables.organizations).toEqual([]);
+    expect(f.tables.organization_members).toEqual([]);
+    expect(f.objects.size).toBe(0);
+    expect([...f.identities]).toEqual([CALLER, OTHER]);
+    expect(f.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps identities and a membership joined while workspace file cleanup is pending', async () => {
+    const f = fixture();
+    const otherOrg = uid(5);
+    f.tables.organization_members.push({ org_id: ORG, user_id: OTHER, role: 'member' });
+    let notifyRemoval!: () => void;
+    let resumeRemoval!: () => void;
+    const removalStarted = new Promise<void>(resolve => { notifyRemoval = resolve; });
+    const removalResumed = new Promise<void>(resolve => { resumeRemoval = resolve; });
+    const storageFrom = f.admin.storage.from;
+    f.admin.storage.from = bucket => {
+      const storage = storageFrom(bucket);
+      return {
+        ...storage,
+        async remove(paths: string[]) {
+          notifyRemoval();
+          await removalResumed;
+          return storage.remove(paths);
+        },
+      };
+    };
+
+    const deletion = handleOrgDeletion(f.admin, f.userClient, CALLER, ORG);
+    await removalStarted;
+    const newMembership = { org_id: otherOrg, user_id: OTHER, role: 'member' };
+    f.tables.organization_members.push(newMembership);
+    resumeRemoval();
+    const response = await deletion;
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).users_deleted).toBe(0);
+    expect(f.tables.organization_members).toEqual([newMembership]);
+    expect([...f.identities]).toEqual([CALLER, OTHER]);
+    expect(f.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it.each(['organization_members', 'projects'])('keeps accounts and files when %s cannot be read', async table => {
+    const f = fixture();
+    f.failRead(table);
+    expect((await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG)).status).toBe(503);
+    expect(f.rpcCalls).toBe(0);
+    expect(f.objects.size).toBe(2);
+    expect([...f.identities]).toEqual([CALLER, OTHER]);
+    expect(f.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('refuses a non-owner before any erasure or Auth deletion', async () => {
+    const f = fixture();
+    f.tables.organization_members[0].role = 'admin';
+    expect((await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG)).status).toBe(403);
     expect(f.rpcCalls).toBe(0);
     expect(f.objects.size).toBe(2);
     expect(f.deleteUser).not.toHaveBeenCalled();
   });
 
-  it.each(['error', 'null'] as const)('never treats %s membership counts as zero', async failure => {
+  it.each(['rpc', 'journal', 'storage'] as const)('keeps every identity when %s erasure fails', async failure => {
     const f = fixture();
-    f.failCount(failure);
-    expect((await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG)).status).toBe(503);
+    if (failure === 'rpc') f.failRpc();
+    if (failure === 'journal') f.failRead('data_erasure_log');
+    if (failure === 'storage') f.failRemove(true);
+    const response = await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG);
+    expect(response.status).toBe(failure === 'rpc' ? 400 : 503);
+    expect((await response.json()).ok).not.toBe(true);
+    expect(f.objects.size).toBe(2);
+    expect([...f.identities]).toEqual([CALLER, OTHER]);
+    expect(f.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it.each(['journal', 'storage'] as const)('directs failed workspace %s cleanup to support without suggesting account deletion', async failure => {
+    const f = fixture();
+    if (failure === 'journal') f.failRead('data_erasure_log');
+    if (failure === 'storage') f.failRemove(true);
+    const response = await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG);
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body.error).toBe(failure === 'storage' ? 'STORAGE_ERASURE_FAILED' : 'ACCOUNT_CLEANUP_INCOMPLETE');
+    expect(body.detail).toContain('support@steelbuild-pro.com');
+    expect(body.detail).toContain('Account sign-ins were kept');
+    expect(body.detail).not.toMatch(/account deletion/i);
+  });
+
+  it('allows explicit self-deletion after workspace erasure without deleting former members', async () => {
+    const f = fixture();
+    f.tables.organization_members.push({ org_id: ORG, user_id: OTHER, role: 'member' });
+    const workspaceResponse = await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG);
+    expect(workspaceResponse.status).toBe(200);
+    expect(f.deleteUser).not.toHaveBeenCalled();
+
+    const accountResponse = await handleAccountDeletion(f.admin, f.userClient, CALLER);
+    expect(accountResponse.status).toBe(200);
+    expect(await accountResponse.json()).toEqual({
+      ok: true, mode: 'account', orgs_deleted: 0, storage_objects_removed: 0, users_deleted: 1,
+    });
+    expect(f.deleteUser).toHaveBeenCalledExactlyOnceWith(CALLER);
+    expect([...f.identities]).toEqual([OTHER]);
+  });
+
+  it('does not delete the caller or teammates when self-deletion would orphan a shared workspace', async () => {
+    const f = fixture();
+    f.tables.organization_members.push({ org_id: ORG, user_id: OTHER, role: 'member' });
+    const response = await handleAccountDeletion(f.admin, f.userClient, CALLER);
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toBe('SOLE_OWNER_WITH_MEMBERS');
+    expect(f.rpcCalls).toBe(0);
+    expect([...f.identities]).toEqual([CALLER, OTHER]);
     expect(f.deleteUser).not.toHaveBeenCalled();
   });
 });

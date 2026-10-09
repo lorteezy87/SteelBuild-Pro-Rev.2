@@ -644,7 +644,7 @@ export function useDrawingsPageController({
       await entities.Submittal.update(submittalId, {
         drawing_set_ids: nextIds,
       });
-      toast.success("Revision kept linked to open submittal");
+      toast.success("Package link retained. Submit a new review round to capture the revised sheets; earlier review evidence is unchanged.");
       setAttachPrompt(null);
       await invalidate();
       await invalidateEntity(queryClient, "submittal", projectId);

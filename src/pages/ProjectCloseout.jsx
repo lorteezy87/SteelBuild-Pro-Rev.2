@@ -1,5 +1,5 @@
 import { useProjectId } from "@/hooks/useProjectId";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -10,10 +10,28 @@ import { CommandBar } from "@/components/design-system";
 import { buildCloseoutDbPayload } from "@/lib/closeout/closeoutPayload";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
+import { getActiveOrgGeneration } from "@/lib/activeOrg";
 
 export default function ProjectCloseout() {
   const projectId = useProjectId();
   const [activeTab, setActiveTab] = useState("checklist");
+  const orgGeneration = getActiveOrgGeneration();
+  const scope = useRef({ projectId, orgGeneration });
+  if (scope.current.projectId !== projectId || scope.current.orgGeneration !== orgGeneration) {
+    scope.current = { projectId, orgGeneration };
+  }
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  // Clearing queries does not cancel pending mutation callbacks. The generation
+  // also rejects an old session when the same workspace is opened again.
+  const isCurrent = (origin) => mounted.current && scope.current === origin &&
+    origin.orgGeneration === getActiveOrgGeneration();
+  const assertCurrent = (origin) => {
+    if (!isCurrent(origin)) throw new Error("Workspace or project changed. Reopen this operation.");
+  };
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -44,49 +62,74 @@ export default function ProjectCloseout() {
   const qc = useQueryClient();
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.ProjectCloseout.create(withProjectId(data, projectId)),
-    onSuccess: () => {
+    mutationFn: ({ data, origin }) => {
+      assertCurrent(origin);
+      return entities.ProjectCloseout.create(withProjectId(data, origin.projectId));
+    },
+    onSuccess: (_created, { origin }) => {
+      if (!isCurrent(origin)) return;
       qc.invalidateQueries({ queryKey: closeoutQueryKey });
       toast.success("Closeout record created");
     },
-    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
+    onError: (err, { origin }) => {
+      if (isCurrent(origin)) toast.error(toUserErrorMessage(err, "Create failed"));
+    },
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, patch }) => entities.ProjectCloseout.update(id, patch),
-    onMutate: async ({ id, patch }) => {
+    mutationFn: ({ id, patch, origin }) => {
+      assertCurrent(origin);
+      return entities.ProjectCloseout.update(id, patch);
+    },
+    onMutate: async ({ id, patch, origin }) => {
+      assertCurrent(origin);
       await qc.cancelQueries({ queryKey: closeoutQueryKey });
+      assertCurrent(origin);
       const previous = qc.getQueryData(closeoutQueryKey);
       qc.setQueryData(closeoutQueryKey, (current = []) =>
         current.map((row) => row.id === id ? { ...row, ...patch } : row),
       );
       return { previous };
     },
-    onError: (err, _variables, context) => {
+    onError: (err, { origin }, context) => {
+      if (!isCurrent(origin)) return;
       if (context?.previous) qc.setQueryData(closeoutQueryKey, context.previous);
       toast.error(toUserErrorMessage(err, "Update failed"));
     },
-    onSuccess: (updated) => {
+    onSuccess: (updated, { origin }) => {
+      if (!isCurrent(origin)) return;
       qc.setQueryData(closeoutQueryKey, (current = []) =>
         current.map((row) => row.id === updated.id ? updated : row),
       );
       toast.success("Closeout updated");
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: closeoutQueryKey }),
+    onSettled: (_updated, _error, { origin }) => {
+      if (isCurrent(origin)) return qc.invalidateQueries({ queryKey: closeoutQueryKey });
+    },
   });
 
   const handleSave = async (data) => {
-    if (projectCloseout) {
-      await updateMut.mutateAsync({ id: projectCloseout.id, patch: data });
-    } else {
-      await createMut.mutateAsync(data);
+    const origin = scope.current;
+    try {
+      if (projectCloseout) {
+        await updateMut.mutateAsync({ id: projectCloseout.id, patch: data, origin });
+      } else {
+        await createMut.mutateAsync({ data, origin });
+      }
+    } catch (error) {
+      // The form reports rejected saves too. An unmounted form must not leak
+      // the previous account's error into the next account's notifications.
+      if (isCurrent(origin)) throw error;
     }
   };
 
-  const handleChecklistUpdate = async (uiPatch) => {
+  const handleChecklistUpdate = (uiPatch) => {
     if (!projectCloseout) return;
+    const origin = scope.current;
     const patch = buildCloseoutDbPayload(uiPatch, projectCloseout);
-    await updateMut.mutateAsync({ id: projectCloseout.id, patch });
+    // Mutation callbacks own checklist feedback; the click has no promise
+    // consumer to handle mutateAsync's rejected result.
+    updateMut.mutate({ id: projectCloseout.id, patch, origin });
   };
 
   const tabs = [
