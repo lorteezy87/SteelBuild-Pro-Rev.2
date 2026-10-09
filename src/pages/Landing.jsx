@@ -1,7 +1,7 @@
 /** Approved public marketing design with the existing account handlers. */
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { SteelBuildMark } from "@/components/brand/SteelBuildMark";
+import { BrandLogo } from "@/components/nav/BrandLogo";
 import MarketingLanding from "@/components/landing/MarketingLanding";
 import { isNativePlatform } from "@/lib/native/platform";
 
@@ -150,8 +150,8 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
           <div role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "Create account" : "Sign in"} className="lp-card" style={{ width: "100%", maxWidth: 438, padding: 32, borderRadius: 24, position: "relative", boxShadow: "0 34px 90px rgba(15,23,42,.28)" }}>
             {!native && <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "var(--bg-surface-low)", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-              <SteelBuildMark tile size={54} title="SteelBuild-Pro" style={{ borderRadius: 14, display: "block" }} />
-              <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.045em" }}>SteelBuild-Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Built for people who build</div></div>
+              <BrandLogo height={78} title="SteelBuild Pro" />
+              <div style={{ color: C.muted, fontSize: 13 }}>Built for people who build</div>
             </div>
             {(signupNotice || forgotNotice) ? (
               <div style={{ display: "grid", gap: 18 }}>

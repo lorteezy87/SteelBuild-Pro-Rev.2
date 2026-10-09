@@ -9,7 +9,7 @@ export default function CalcKeypad({ columns = 4, children }) {
   return (
     <div
       role="group"
-      className="sbd-calc-keypad"
+      className={`sbd-calc-keypad sbd-calc-keypad--${columns}`}
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${columns}, 1fr)`,

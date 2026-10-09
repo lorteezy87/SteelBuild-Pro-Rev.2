@@ -103,7 +103,7 @@ export default function DecimalFractionConverter() {
   const [subMode, setSubMode] = useState(SUB_MODES.DEC_FRAC);
 
   return (
-    <div className="sb-dashboard-reference-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
+    <div className="sb-dashboard-reference-page converter-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
 
         {/* Header */}
@@ -384,7 +384,7 @@ function FractionToDecimalPanel() {
       <PanelHeader label="Fraction → Decimal" />
       <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.4fr", gap: 10 }}>
+        <div className="converter-fraction-inputs" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr)", gap: 10 }}>
           <div>
             <label style={labelStyle}>Feet</label>
             <input style={inputStyle} inputMode="decimal" value={feet}
@@ -398,7 +398,7 @@ function FractionToDecimalPanel() {
           <div>
             <label style={labelStyle}>Fraction</label>
             {customMode ? (
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div className="converter-custom-fraction-row" style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <input
                   style={{ ...inputStyle, padding: "8px 10px" }}
                   inputMode="numeric"
@@ -561,7 +561,7 @@ function UnitsPanel() {
         </div>
 
         {/* From / To selects */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 10, alignItems: "end" }}>
+        <div className="converter-unit-selectors" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)", gap: 10, alignItems: "end" }}>
           <div>
             <label style={labelStyle}>From</label>
             <select

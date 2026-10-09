@@ -184,7 +184,7 @@ export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onU
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "min(860px, 100%)", maxHeight: "92vh", display: "flex", flexDirection: "column",
+          width: "min(860px, 100%)", maxWidth: "100%", maxHeight: "calc(100dvh - 32px)", minHeight: 0, display: "flex", flexDirection: "column",
           background: "var(--bg-surface)", color: "var(--text-primary)", border: "1px solid var(--border-strong)",
           borderRadius: 10, overflow: "hidden", boxShadow: "var(--shadow-lg)", outline: "none",
         }}
@@ -193,13 +193,13 @@ export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onU
           {view.kind !== "list" && (
             <button type="button" style={buttonStyle()} onClick={() => (view.kind === "config" ? setView({ kind: "crane" }) : toList())}>← Back</button>
           )}
-          <h2 id="crane-library-title" style={{ ...mono, margin: 0, fontSize: 13, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", flex: 1 }}>
+          <h2 id="crane-library-title" style={{ ...mono, margin: 0, fontSize: 13, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
             {title}
           </h2>
           <button type="button" style={buttonStyle()} onClick={onClose} aria-label="Close crane library">Close</button>
         </div>
 
-        <div style={{ padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ padding: 16, minHeight: 0, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", gap: 12 }}>
           {!hasOrg && (
             <div role="alert" style={noticeStyle("red")}>
               No company workspace is active. The crane library is kept per workspace, so nothing here can be saved until one is selected.
