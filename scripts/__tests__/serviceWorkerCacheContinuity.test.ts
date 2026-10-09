@@ -11,8 +11,11 @@ type RequestLike = { url: string; method: string; mode: string };
 class CachedResponse {
   status = 200;
   type = "basic";
+  readonly body: string;
 
-  constructor(readonly body: string) {}
+  constructor(body: string) {
+    this.body = body;
+  }
 
   clone() {
     return new CachedResponse(this.body);
