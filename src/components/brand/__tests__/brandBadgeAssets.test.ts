@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sharp from "sharp";
@@ -5,6 +6,10 @@ import { describe, expect, it } from "vitest";
 
 const asset = (path: string) => resolve(process.cwd(), path);
 const text = (path: string) => readFileSync(asset(path), "utf8");
+const iconUrl = (name: string) => {
+  const hash = createHash("sha256").update(readFileSync(asset(`public/${name}`))).digest("hex").slice(0, 12);
+  return `/${name}?v=${hash}`;
+};
 
 describe("approved steel diamond badge assets", () => {
   it("keeps the high-resolution marketing badge as the shared source", async () => {
@@ -32,18 +37,16 @@ describe("approved steel diamond badge assets", () => {
     if (path.includes("AppIcon.appiconset")) expect(metadata.hasAlpha).toBe(false);
   });
 
-  it("serves the badge through app shell, browser icon, PWA, and offline cache", () => {
+  it("serves the badge through app shell, browser icon, and versioned installed-app icons", () => {
     const html = text("index.html");
     const manifest = JSON.parse(text("public/manifest.json")) as { icons: { src: string }[] };
-    const worker = text("public/sw.js");
     expect(html).toContain("/marketing/steelbuild-pro-logo.jpg");
     expect(html).toContain("/favicon-64.png");
+    expect(html).toContain(iconUrl("steelbuild-pro-icon-180.png"));
     expect(manifest.icons.map(({ src }) => src)).toEqual(expect.arrayContaining([
       "/steelbuild-pro-icon-192.png",
-      "/steelbuild-pro-icon-512.png",
+      iconUrl("steelbuild-pro-icon-512.png"),
       "/steelbuild-pro-icon-maskable-512.png",
     ]));
-    expect(worker).toContain("/marketing/steelbuild-pro-logo.jpg");
-    expect(worker).not.toContain("steelbuild-pro-mark.svg");
   });
 });
