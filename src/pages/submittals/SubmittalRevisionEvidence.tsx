@@ -35,7 +35,7 @@ export function RevisionEvidenceReview({ coverage, revisions, error, loading, su
     {!!coverage.missing_current_drawing_ids.length && <p role="alert">{coverage.missing_current_drawing_ids.length} sheets lack a current PDF revision. Resolve them in the Drawing Register.</p>}
     {!!coverage.foreign_drawing_set_ids.length && <p role="alert">The package contains drawing sets outside this project. Resolve the package links before continuing.</p>}
     {!!coverage.empty_drawing_set_ids.length && <p role="alert">The package contains empty drawing sets. Add the transmitted sheets before capturing evidence.</p>}
-    {!coverage.ok && !submittedDate && !['Draft', 'Void'].includes(coverage.submittal_status) && <p role="alert">The original submission date is missing, so legacy evidence cannot be attested. Return this package for a new review and record the actual date and recipient when resubmitting.</p>}
+    {!coverage.ok && !submittedDate && !['Draft', 'Void'].includes(coverage.submittal_status) && <p role="alert">The original submission date is missing, so legacy evidence cannot be attested. Create a new review package to submit these PDFs with a recorded date and recipient.</p>}
     {coverage.evidence.length > 0 && <ul style={{ paddingLeft: 18 }}>{coverage.evidence.map(row => <li key={row.id} style={{ marginBlock: 5 }}>
       <button type="button" onClick={() => void onOpenDocument(row.file_url, row.pdf_page)} style={{ color: 'var(--accent)', background: 'transparent', border: 0, textDecoration: 'underline', cursor: 'pointer' }}>Revision {row.revision_code || 'unmarked'} · page {row.pdf_page ?? 'unknown'}</button>
       {' · '}{row.capture_kind === 'legacy_attestation' ? 'PM attestation' : 'Submitted snapshot'}
