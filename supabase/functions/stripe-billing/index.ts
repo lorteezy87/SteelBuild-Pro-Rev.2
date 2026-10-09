@@ -7,8 +7,8 @@
 // table (provisioned via the Stripe API), falling back to env (STRIPE_PRICE_PRO /
 // STRIPE_PRICE_BUSINESS / STRIPE_WEBHOOK_SECRET). The client only passes a plan KEY.
 //
-// The Stripe client KEY is chosen by billing_config.livemode: live (the default and
-// the current prod state) uses STRIPE_SECRET_KEY; livemode=false uses STRIPE_SK_TEST.
+// The Stripe client KEY requires an explicit billing_config.livemode: true uses
+// STRIPE_SECRET_KEY; false uses STRIPE_SK_TEST. Missing/invalid mode fails closed.
 // This lets an owner run a test-mode checkout E2E by flipping billing_config alone
 // (livemode + test price ids + test webhook secret) WITHOUT overwriting the live
 // secret key — Stripe never re-reveals a live secret key, so overwriting it would be
@@ -32,9 +32,9 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 // service-role client: bypasses RLS + the billing-tamper trigger (auth.role()='service_role').
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// Built per-invocation. livemode (the default + current prod) uses STRIPE_SECRET_KEY,
-// so the live billing path is UNCHANGED. Only an explicit billing_config.livemode=false
-// selects STRIPE_SK_TEST — a missing test key fails closed instead of using live billing.
+// Built per-invocation. Only an explicit billing_config.livemode=true selects
+// STRIPE_SECRET_KEY; false selects STRIPE_SK_TEST. Missing configuration or a
+// missing selected key fails closed instead of inferring a payment environment.
 function stripeClient(key: string): Stripe {
   return new Stripe(key, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
 }
@@ -47,7 +47,8 @@ const json = (obj: unknown, status = 200, req?: Request) =>
 // Config (price ids + webhook secret) lives in the service-role-only billing_config
 // table so it can be provisioned via the Stripe API without writing env secrets at
 // runtime. Env is the fallback.
-async function loadConfig(): Promise<BillingConfig> {
+type RuntimeBillingConfig = BillingConfig & { livemode: boolean };
+async function loadConfig(): Promise<RuntimeBillingConfig> {
   const { data, error } = await admin
     .from("billing_config")
     .select("stripe_price_pro, stripe_price_business, stripe_webhook_secret, livemode")
@@ -55,12 +56,14 @@ async function loadConfig(): Promise<BillingConfig> {
     .maybeSingle();
   if (error) throw new Error("Billing configuration lookup failed");
   const row = data as Record<string, unknown> | null;
+  if (!row || Array.isArray(row) || typeof row.livemode !== "boolean") {
+    throw new Error("Billing requires an explicitly configured payment mode");
+  }
   return {
     pricePro: (row?.stripe_price_pro as string) || Deno.env.get("STRIPE_PRICE_PRO") || "",
     priceBusiness: (row?.stripe_price_business as string) || Deno.env.get("STRIPE_PRICE_BUSINESS") || "",
     webhookSecret: (row?.stripe_webhook_secret as string) || Deno.env.get("STRIPE_WEBHOOK_SECRET") || "",
-    // A genuinely absent row defaults to LIVE; database failures above abort.
-    livemode: row?.livemode !== false,
+    livemode: row.livemode,
   };
 }
 
@@ -185,9 +188,15 @@ async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
   // Load config FIRST so the Stripe client uses the correct key (live vs test) —
   // billing_config is the single source of truth for the live/test environment.
-  const cfg = await loadConfig();
+  let cfg: RuntimeBillingConfig;
+  try {
+    cfg = await loadConfig();
+  } catch (error) {
+    await reportError(error, "stripe-billing", { configurationUnavailable: true });
+    return json({ error: "Billing configuration is unavailable. Please contact support." }, 503, req);
+  }
   const readiness = billingReadiness({
-    livemode: cfg.livemode !== false,
+    livemode: cfg.livemode,
     liveKey: Deno.env.get("STRIPE_SECRET_KEY"),
     testKey: Deno.env.get("STRIPE_SK_TEST"),
     webhook: url.pathname.endsWith("/webhook"),
@@ -207,7 +216,7 @@ async function handleRequest(req: Request): Promise<Response> {
       return new Response("Webhook signature verification failed", { status: 400 });
     }
     try {
-      if (event.livemode !== (cfg.livemode !== false)) throw new Error("Billing event mode mismatch");
+      if (event.livemode !== cfg.livemode) throw new Error("Billing event mode mismatch");
       if (await eventWasProcessed(event.id)) return new Response("ok (already processed)", { status: 200 });
       await handleEvent(stripe, event, cfg);
     } catch (e) {
@@ -255,7 +264,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
     try {
       const url = await createDurableCheckout(admin, stripe, { orgId: org_id, actorId: user.id,
-        plan: plan!, priceId, livemode: cfg.livemode !== false, returnBase: origin });
+        plan: plan!, priceId, livemode: cfg.livemode, returnBase: origin });
       return json({ url }, 200, req);
     } catch (error) {
       if (error instanceof CheckoutError) return json({ error: error.message, code: error.code, action: error.action }, error.status, req);
