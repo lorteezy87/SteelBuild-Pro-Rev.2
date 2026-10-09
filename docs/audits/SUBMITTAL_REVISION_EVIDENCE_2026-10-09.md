@@ -53,7 +53,9 @@ submittal_id, submittal_status, submittal_updated_at, round_id, ok, reason,
 current_revision_ids, captured_revision_ids, missing_revision_ids,
 stale_revision_ids, missing_current_drawing_ids, foreign_drawing_set_ids,
 empty_drawing_set_ids, evidence. `get_submittal_revision_coverages(uuid[])`
-returns an array of these objects, at most 200 IDs per call. Missing or
+returns an array of these objects with `evidence: []` to omit heavy source
+snapshots from register/dashboard payloads, at most 200 IDs per call. The single
+record endpoint retains full evidence for review. Missing or
 unauthorized IDs fail the whole read. Client hydration must reject a status or
 timestamp mismatch between its parent snapshot and this coverage snapshot.
 
@@ -128,7 +130,7 @@ source replacement. Both captures and return approvals lock source objects befor
 evaluating coverage and recheck authority after those waits.
 
 On 2026-10-09 the exact candidate with SHA-256
-`5133b90df51fd7f8c827f5ed39f3ec18dd8e302bbe98ee21b0d6fd9e2c58df15`
+`72170a79cddc634a25d09cb8a5cdd8679010cf05c2909cd2b8fea2e09605bdec`
 passed **28 hosted staging assertions** on `ndyfjffsulfbwpmwdmic` in one rolled-back
 transaction. The rehearsal used actual Auth/MFA, workspace/project permissions,
 Storage RLS, installed workflow/audit triggers, and installed soft/hard erasure

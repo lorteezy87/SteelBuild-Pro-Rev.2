@@ -226,7 +226,9 @@ LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=''
 AS $$ DECLARE result jsonb; BEGIN
   IF p_submittal_ids IS NULL OR cardinality(p_submittal_ids)>200 OR array_position(p_submittal_ids,NULL) IS NOT NULL THEN
     RAISE EXCEPTION 'ROUND_COVERAGE_LIMIT: Supply at most 200 submittal IDs'; END IF;
-  SELECT coalesce(jsonb_agg(public.get_submittal_revision_coverage(id) ORDER BY id),'[]') INTO result
+  -- Portfolio/register reads need coverage IDs, not every historical PDF source
+  -- snapshot. The single-record endpoint retains full evidence for review.
+  SELECT coalesce(jsonb_agg(public.get_submittal_revision_coverage(id)||jsonb_build_object('evidence','[]'::jsonb) ORDER BY id),'[]') INTO result
     FROM (SELECT DISTINCT unnest(p_submittal_ids) AS id) requested;
   RETURN result;
 END $$;

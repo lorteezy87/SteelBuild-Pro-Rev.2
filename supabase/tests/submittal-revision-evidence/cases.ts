@@ -145,7 +145,8 @@ export async function runCases(db:Database):Promise<number> {
   await check('tenant RLS and MFA apply to evidence and batched coverage reads',async()=>{
     await actor(db,ids.foreign);assert.equal((await db.query('select id from public.submittal_round_revision_evidence')).rows.length,0);
     await assert.rejects(coverage(db),/Not authorized/);await actor(db,ids.viewer);assert.equal((await coverage(db)).ok,true);
-    assert.equal((await db.query<{result:Coverage[]}>('select public.get_submittal_revision_coverages($1) result',[[ids.submittal,ids.legacy]])).rows[0].result.length,2);
+    const summaries=(await db.query<{result:Coverage[]}>('select public.get_submittal_revision_coverages($1) result',[[ids.submittal,ids.legacy]])).rows[0].result;
+    assert.equal(summaries.length,2);assert.ok(summaries.every(summary=>summary.evidence.length===0));assert.equal((await coverage(db)).evidence.length,2);
     await actor(db,ids.pm,'aal1');assert.equal((await db.query('select id from public.submittal_round_revision_evidence')).rows.length,0);await actor(db);
   });
   await check('Auth authorship cleanup clears only actor while preserving immutable evidence',()=>rollback(async()=>{
