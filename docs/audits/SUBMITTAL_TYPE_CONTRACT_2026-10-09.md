@@ -1,6 +1,6 @@
 # Explicit submittal type contract — 2026-10-09
 
-An authenticated staging read found an Approved legacy submittal with
+A read-only staging inspection found an Approved legacy submittal with
 `submittal_type = NULL`, ball-in-court GC, no submission date, no current round
 and no revision evidence. Some new client readers interpreted NULL as Shop
 Drawing, while both the canonical drawing eligibility helper and SQL require
