@@ -227,3 +227,18 @@ treated as verified approval. Client defaults and acceptance fixtures are being
 aligned to this strict contract. A separately identified synthetic Draft can
 test missing-evidence behavior, but does not establish verified or stale PDF
 acceptance. Existing customer and legacy fixture rows remain unchanged.
+
+On October 9 at 14:01 UTC, the separately named synthetic Draft fixture was
+installed on staging after the exact prepared script passed a rollback rehearsal.
+Source: `aa4e1b3069044cb591ccecae35d715a6b0950bfa`, file
+`supabase/tests/drawing-evidence-browser/draft-fixture.sql`, SHA-256
+`a2006e2133c3e9a65e5633b3e8d0bdeb0c5328d1c20d81caf5b8806d17baf9cb`.
+The script locked and compared every existing STG-0001 set, sheet and submittal,
+plus its project and organization, before committing; none changed. Readback
+confirmed one new `SYNTHETIC - Revision Evidence Draft` set, one blank sheet and
+one exact-type `Shop Drawing` Draft, with reciprocal links and zero review
+rounds, revisions, signoffs or evidence. Source files and submission/approval
+dates remain NULL. This is retained test data, not a migration or a ledger stamp.
+The original untyped approval remains unchanged. Four protected desktop/mobile
+browser cases target this Draft and the legacy exclusion; authenticated execution
+and separate real-PDF approval/staleness acceptance remain pending.
