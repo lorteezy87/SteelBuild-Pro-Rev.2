@@ -185,6 +185,20 @@ describe('the real manifest', () => {
     expect(result.hasDrift).toBe(pending.length > 0);
   });
 
+  it('keeps the staged erasure corrections pending in production', () => {
+    const versions = ['20261007084117', '20261007090057'];
+    const entries = versions.map((version) =>
+      (manifest.local.migrationOverrides ?? []).find((entry: { version: string }) => entry.version === version),
+    );
+    for (const entry of entries) {
+      expect(entry?.lifecycle).toBe('required');
+      expect(entry?.evidence).toMatch(/PENDING PRODUCTION APPLY/);
+    }
+    const result = compareDrift(withOverrides(entries), { migrations: versions, functions: [] }, [], []);
+    expect(result.missingMigrations).toEqual(versions);
+    expect(result.hasDrift).toBe(true);
+  });
+
   it('never silently allowlists: a frozen lineage must say how it was settled', () => {
     // The runbook's lifecycle contract: an identifier with uncertain source or
     // lineage is recorded as unresolved and never silently allowlisted.

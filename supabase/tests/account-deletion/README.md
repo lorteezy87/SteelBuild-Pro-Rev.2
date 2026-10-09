@@ -82,15 +82,17 @@ deadlocks; do not accept a final successful HTTP response alone.
 
 ## Deployment checks
 
-1. Land the two migration files before manually applying and stamping the exact
-   committed payloads as `20260927150000` and `20260927160000`. Verify the ledger
-   payload hashes. Do not use `db push` or an automatic apply-time stamp.
+1. Land the two base migrations and both forward fixes before manually applying
+   and stamping their exact committed payloads as `20260927150000`,
+   `20260927160000`, `20261007084117`, and `20261007090057`, in that order.
+   Verify the ledger payload hashes. Do not use `db push` or an automatic
+   apply-time stamp.
 2. The timeout belongs in the function declaration (`proconfig`), not a
    `SET LOCAL` statement in the function body. PostgREST 14 hoists configured
    function settings before the main query; production reported PostgREST 14.5
    on 2026-10-05. Its default `db-hoisted-tx-settings` includes
    `statement_timeout`. The migration reloads the schema cache so the REST API
-sees this declaration. No global or role timeout is changed.
+   sees this declaration. No global or role timeout is changed.
 3. Before deploying the Edge Function, prove the REST path on staging: use a
    disposable owner/account with multiple sole-member workspaces and enough
    data for the atomic RPC to take longer than eight seconds. Call it using

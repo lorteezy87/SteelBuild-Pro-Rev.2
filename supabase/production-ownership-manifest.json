@@ -55,11 +55,6 @@
         "evidence": "PENDING PRODUCTION APPLY - Drawing Control package/release-log gate alignment candidate. Requires every active sibling in a normal drawing-set release and rechecks the complete set gate inside fab_release_log insertion; only an explicit audited PM override may release a subset or blocked set. The public package RPC now includes set blockers and the piece helper uses set ok, not governing stage alone. Local PGlite tests pass; exact reviewed staging authentication, concurrency, override and full release validation are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
       },
       {
-        "version": "20261007112918",
-        "lifecycle": "required",
-        "evidence": "PENDING PRODUCTION APPLY - local atomic numbered-record creation candidate. Creates project-scoped idempotency receipts and transactional CO, delivery, SOV, change-request and backcharge creation while preserving official sequence allocation, project authorization, MFA and existing guards. Requires reviewed staged application and exact ledger-payload verification before frontend release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/commercial-create/README.md and supabase/tests/commercial-postgres/README.md."
-      },
-      {
         "version": "20261007113400",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - local reviewed change-order save candidate. Binds metadata and lifecycle effects to the reviewed timestamp, status and amount in one transaction so competing edits cannot approve an unreviewed amount. Requires reviewed staged application and financial lifecycle acceptance before frontend release. Keep visible in missingMigrations until its exact committed SQL is applied and stamped. See supabase/tests/commercial-lifecycle/README.md."
@@ -72,17 +67,12 @@
       {
         "version": "20261007090057",
         "lifecycle": "required",
-        "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix for the relation-lock/parent-row deadlock confirmed during staging account-erasure overlap validation. Acquires the existing erasure chain's potential trigger-toggle relation set before row locks using atomic NOWAIT attempts, rollback of partial locks, and an eight-second acquisition budget; preserves fresh ownership/membership checks, grants and the 60-second RPC timeout. This deliberately broadens each call's global write-lock set and needs exact reviewed staging HTTP overlap validation before manual application/stamping. Keep visible in missingMigrations until its exact committed payload is applied."
+        "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix for the relation-lock/parent-row deadlock confirmed during staging account-erasure overlap validation. Acquires the existing erasure chain's potential trigger-toggle relation set before row locks using atomic NOWAIT attempts, rollback of partial locks, and an eight-second acquisition budget; preserves fresh ownership/membership checks, grants and the 60-second RPC timeout. This deliberately broadens each call's global write-lock set. The exact payload passed staged HTTP overlap validation under the staging-only approval; production still requires separate reviewed manual application/stamping. Keep visible in missingMigrations until its exact committed payload is applied."
       },
       {
         "version": "20261007084117",
         "lifecycle": "required",
-        "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix discovered by staging account-deletion validation. Permits only FK-driven author-to-NULL cleanup through immutable revision reports and frozen T&M ticket guards after the Auth parent is deleted; preserves report contents, financial totals and events, normal edit restrictions, and all trigger enablement. The existing applied migration files remain unchanged. Local real-FK regression covers direct and nested mixed-write refusal and all frozen ticket states; exact reviewed hosted rollback verification is required before manual application/stamping. Keep this required migration visible in missingMigrations until its exact committed payload is applied."
-      },
-      {
-        "version": "20261007073051",
-        "lifecycle": "required",
-        "evidence": "PENDING PRODUCTION APPLY - local server-MFA candidate only; not applied or stamped. Enforces opted-in MFA through a shared-project PostgREST pre-request hook, restrictive Storage policy, and restrictive policies on the current Realtime publication. Isolated PGlite tests cover AAL1/AAL2, onboarding, definer RPCs, tenant boundaries, public/service access, failed lookup and existing-hook preservation. Shared-app configuration review and staging HTTP/Auth/Storage/Realtime verification are required before manual application; preserve the drift gate's missing-migration report until the exact reviewed SQL is applied and stamped. See supabase/tests/server-mfa/README.md."
+        "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix discovered by staging account-deletion validation. Permits only FK-driven author-to-NULL cleanup through immutable revision reports and frozen T&M ticket guards after the Auth parent is deleted; preserves report contents, financial totals and events, normal edit restrictions, and all trigger enablement. The exact payload passed staged real-FK and rollback validation under the staging-only approval; production still requires separate reviewed manual application/stamping. Keep this required migration visible in missingMigrations until its exact committed payload is applied."
       },
       {
         "version": "20260927160000",
