@@ -4,7 +4,73 @@ Seven reviewed Edge functions are deployed to staging with source and gateway
 JWT settings verified. Hosted acceptance remains incomplete. Production Edge
 functions and the production frontend were not changed by this deployment.
 
-## Exact deployed source
+## Latest checkpoint: `32cf2c50`, hosted acceptance still failing
+
+All seven functions were refreshed from exact merged main
+`32cf2c50a6eb603bc213868de4ffc54c7f196601` after its completed push
+[CI run 37954465036](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37954465036).
+App `113901328976`, commercial PostgreSQL `113901328952`, Edge typecheck
+`113901328959`, and secret scan `113901329307` passed together. Production
+drift remained failed; publishing remained held. None of these gates was waived.
+
+The final staging versions are `project-export` **37**, `llm-proxy` **48**,
+`email-send` **34**, `command-center-read` **17**,
+`command-center-session-handoff` **18**, `stripe-billing` **34**, and
+`account-delete` **7**. Every function was immediately read back as ACTIVE,
+with its prior JWT mode and every local source file byte-identical to the Git
+payload. The seven source closures and eleven prerequisite SQL payloads are
+unchanged from the earlier checkpoint below. Fresh complete inventories also
+verified that `email-ingest` **35** and `health` **16** kept their bundle hashes,
+versions and JWT settings.
+
+The owner's local `Documents/Codex/release-evidence` directory retains:
+
+- `2026-10-09-32cf2c50-staging-edge-before.json`, prior source archive SHA-256
+  `46de614c64de78c18cb66f0f4f7e6cd4c8a04664fc4d994c30b9ca544a87f535`.
+- `2026-10-09-32cf2c50-staging-edge-deployed.json`, complete source/CI/SQL,
+  before/after inventories and readback record SHA-256
+  `cfb9b03674f10ff5531b007c5122d2fe5f11d5e351d54534f8f688142aeb7c22`.
+
+### Drawing browser result
+
+[Run 37956107847](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37956107847)
+passed source verification, build and authenticated browser setup. The previous
+setup failure is resolved for this run. **All four drawing cases still failed**;
+the sanitized report has zero global errors and eight retained screenshots.
+The typed Draft detail correctly renders missing source coverage, and the legacy
+unclassified detail states that it has no drawing authority. These partial
+observations do not establish a passing end-to-end workflow.
+
+Independent inspection found a stale test expectation for the heading
+`Detailing Control Center`; the actual intended page is `Drawing Control`.
+The remaining case failures require diagnosis before another hosted attempt.
+The legacy detail also visibly offers a misleading `Release for Fabrication`
+action despite its exclusion notice; this needs a separately tested UI correction
+while preserving server enforcement. The synthetic two-PDF workflow remains
+undispatched until the read-only cases pass.
+
+### Bounded backend result
+
+[Run 37956141828](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37956141828)
+reports **FAIL at the audit stage**. Fresh authentication and exact synthetic
+parent verification passed. Method rejection and anonymous/safe-invalid request
+checks passed where configuration allowed them. Command Center read and billing
+remain explicitly INCOMPLETE because required configuration is unavailable.
+
+The synthetic project export returned HTTP 200 with its validated v2 shape:
+96 tables, 155 rows, one file reference, one Storage inventory entry and zero
+mailbox rows. Credential-exclusion shape checks passed, but nonempty mailbox
+redaction remains untested. The subsequent audit verification failed and is
+being diagnosed; the export must not be automatically retried. No passing
+backend release is implied. The sanitized summary and original ZIP are retained
+locally as `backend-acceptance-37956141828-summary.json` and
+`backend-acceptance-37956141828.zip`.
+
+These checks did not test AAL2 step-up, erasure, provider delivery/payment,
+cross-tenant/revoked-session cases, Storage bytes or restoration. Production
+functions and frontend remain unchanged.
+
+## Earlier deployment: `04285069`
 
 - Target: `ndyfjffsulfbwpmwdmic` (staging).
 - Main commit: `04285069c26c8e57c59b491cd202be6100a01b79`.
