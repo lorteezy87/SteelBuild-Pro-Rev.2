@@ -48,6 +48,8 @@ CREATE TABLE public.submittal_round_revision_evidence (
   drawing_id uuid NOT NULL, drawing_revision_id uuid NOT NULL,
   file_url text NOT NULL CHECK (btrim(file_url)<>''),
   storage_path text NOT NULL CHECK (btrim(storage_path)<>''),
+  storage_object_id uuid NOT NULL, storage_version text,
+  storage_updated_at timestamptz, storage_etag text, storage_metadata jsonb,
   pdf_page integer NOT NULL CHECK(pdf_page>0), revision_code text NOT NULL CHECK(btrim(revision_code)<>''),
   captured_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   captured_at timestamptz NOT NULL DEFAULT now(),
@@ -99,6 +101,15 @@ BEGIN
     v_sub:=CASE WHEN TG_OP='DELETE' THEN OLD.submittal_id ELSE NEW.submittal_id END;
     SELECT submittal_type='Shop Drawing' INTO v_shop FROM public.submittals WHERE id=v_sub;
     IF NOT coalesce(v_shop,false) THEN RETURN coalesce(NEW,OLD); END IF;
+    -- The installed admin archive command archives the parent before rounds.
+    -- Preserve evidence and lifecycle fields while allowing only that tombstone.
+    IF TG_OP='UPDATE' AND NOT OLD.is_deleted AND NEW.is_deleted AND NEW.deleted_at IS NOT NULL
+       AND to_jsonb(NEW)-ARRAY['is_deleted','deleted_at','updated_at']=to_jsonb(OLD)-ARRAY['is_deleted','deleted_at','updated_at']
+       AND coalesce(steelbuild_security.satisfies_mfa(),false)
+       AND public.user_has_project_access(OLD.project_id)
+       AND public.user_has_project_role_at_least(OLD.project_id,'admin')
+       AND EXISTS(SELECT 1 FROM public.submittals s WHERE s.id=v_sub AND s.project_id=OLD.project_id
+         AND s.is_deleted AND s.deleted_at=NEW.deleted_at) THEN RETURN NEW; END IF;
     IF TG_OP='DELETE' THEN RAISE EXCEPTION 'ROUND_EVIDENCE_IMMUTABLE: Shop drawing round history cannot be deleted' USING ERRCODE='42501'; END IF;
     IF TG_OP='UPDATE' AND (NEW.id,NEW.project_id,NEW.submittal_id,NEW.round_number,NEW.drawing_set_ids,NEW.is_deleted,NEW.deleted_at)
        IS DISTINCT FROM (OLD.id,OLD.project_id,OLD.submittal_id,OLD.round_number,OLD.drawing_set_ids,OLD.is_deleted,OLD.deleted_at) THEN
@@ -187,7 +198,10 @@ BEGIN
   SELECT coalesce(array_agg(x ORDER BY x),'{}') INTO v_missing FROM unnest(v_current) x WHERE NOT x=ANY(v_captured);
   SELECT coalesce(array_agg(x ORDER BY x),'{}') INTO v_stale FROM unnest(v_captured) x WHERE NOT x=ANY(v_current);
   SELECT EXISTS(SELECT 1 FROM public.submittal_round_revision_evidence e JOIN public.drawing_revisions rev ON rev.id=e.drawing_revision_id
-    WHERE e.round_id=r.id AND (e.file_url,e.pdf_page,e.revision_code) IS DISTINCT FROM (rev.file_url,rev.pdf_page,rev.revision_code)) INTO v_snapshot_changed;
+    LEFT JOIN storage.objects obj ON obj.bucket_id='app-files' AND obj.name=e.storage_path
+    WHERE e.round_id=r.id AND ((e.file_url,e.pdf_page,e.revision_code) IS DISTINCT FROM (rev.file_url,rev.pdf_page,rev.revision_code)
+      OR obj.id IS NULL OR (e.storage_object_id,e.storage_version,e.storage_updated_at,e.storage_etag,e.storage_metadata)
+        IS DISTINCT FROM (obj.id,obj.version,obj.updated_at,coalesce(obj.metadata->>'eTag',obj.metadata->>'etag'),obj.metadata))) INTO v_snapshot_changed;
   v_reason:=CASE
     WHEN s.submittal_type IS DISTINCT FROM 'Shop Drawing' THEN 'not_shop_drawing'
     WHEN s.is_deleted OR s.deleted_at IS NOT NULL OR s.status IN ('Draft','Void') THEN 'inactive_submittal'
@@ -224,7 +238,7 @@ CREATE FUNCTION steelbuild_workflow.apply_round(
   p_expected_current_round_id uuid,p_expected_revision_ids uuid[],p_patch jsonb,p_new_round boolean,p_attestation text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $$
-DECLARE s public.submittals; n public.submittals; r public.submittal_rounds; rev record;
+DECLARE s public.submittals; n public.submittals; r public.submittal_rounds; rev record; v_object storage.objects;
   v_actor uuid:=auth.uid(); v_project uuid; v_payload jsonb; v_prior steelbuild_workflow.round_requests;
   v_ids uuid[]; v_expected uuid[]; v_sets uuid[]; v_round_sets uuid[]; v_capture boolean:=false;
   v_legacy boolean:=p_attestation IS NOT NULL; v_result jsonb; v_coverage jsonb; v_path text; v_org uuid;
@@ -233,7 +247,7 @@ BEGIN
   SELECT project_id INTO v_project FROM public.submittals WHERE id=p_submittal_id AND NOT coalesce(is_deleted,false) AND deleted_at IS NULL;
   IF v_actor IS NULL OR v_project IS NULL OR NOT coalesce(steelbuild_security.satisfies_mfa(),false)
      OR NOT public.user_has_project_access(v_project) OR NOT public.user_has_project_role_at_least(v_project,'pm') THEN
-    RAISE EXCEPTION 'ROUND_NOT_AUTHORIZED: PM access and enrolled MFA are required' USING ERRCODE='42501'; END IF;
+    RAISE EXCEPTION 'ROUND_NOT_AUTHORIZED: PM access and the enrolled MFA policy must be satisfied' USING ERRCODE='42501'; END IF;
   IF p_request_id IS NULL OR p_expected_updated_at IS NULL OR p_expected_status IS NULL OR p_expected_revision_ids IS NULL THEN
     RAISE EXCEPTION 'ROUND_REVIEW_REQUIRED: Request ID, parent version and exact revision roster are required'; END IF;
   IF jsonb_typeof(p_patch) IS DISTINCT FROM 'object' OR jsonb_typeof(coalesce(p_patch->'metadata','{}')) IS DISTINCT FROM 'object'
@@ -272,6 +286,17 @@ BEGIN
     PERFORM d.id FROM public.drawings d WHERE d.drawing_set_id=ANY(v_sets) ORDER BY d.id FOR UPDATE;
     PERFORM rr.id FROM public.drawing_revisions rr JOIN public.drawings d ON d.id=rr.drawing_id
       WHERE d.drawing_set_id=ANY(v_sets) ORDER BY rr.id FOR UPDATE OF rr;
+    -- Lock both the current and captured source objects before checking coverage.
+    -- A return approval must refresh Storage metadata after waits just as a new
+    -- capture does. Storage writers hold object locks independently of drawings.
+    PERFORM obj.id FROM storage.objects obj WHERE obj.bucket_id='app-files' AND obj.name IN (
+      SELECT regexp_replace(rr.file_url,'^app-files/','') FROM public.drawing_revisions rr
+        JOIN public.drawings d ON d.id=rr.drawing_id WHERE d.drawing_set_id=ANY(v_sets) AND rr.is_current
+      UNION SELECT e.storage_path FROM public.submittal_round_revision_evidence e WHERE e.round_id=s.current_round_id)
+      ORDER BY obj.name,obj.id FOR SHARE;
+    IF NOT coalesce(steelbuild_security.satisfies_mfa(),false) OR NOT public.user_has_project_access(v_project)
+       OR NOT public.user_has_project_role_at_least(v_project,'pm') THEN
+      RAISE EXCEPTION 'ROUND_NOT_AUTHORIZED: Access changed while waiting; sign in and review again' USING ERRCODE='42501'; END IF;
     v_coverage:=public.get_submittal_revision_coverage(s.id);
     IF jsonb_array_length(v_coverage->'foreign_drawing_set_ids')>0 THEN RAISE EXCEPTION 'ROUND_ROSTER_INVALID: A linked set has inconsistent project ownership'; END IF;
     IF jsonb_array_length(v_coverage->'missing_current_drawing_ids')>0 OR jsonb_array_length(v_coverage->'empty_drawing_set_ids')>0 THEN
@@ -305,7 +330,7 @@ BEGIN
       AND coalesce((v_coverage->>'ok')::boolean,false)=false THEN
       RAISE EXCEPTION 'ROUND_LEGACY_RECONCILIATION_REQUIRED: Missing or stale revision evidence; reconcile the original transmission or resubmit'; END IF;
   END IF;
-  IF v_new AND (n.submitted_date IS NULL OR nullif(btrim(n.ball_in_court),'') IS NULL) THEN
+  IF v_new AND NOT v_legacy AND (n.submitted_date IS NULL OR nullif(btrim(n.ball_in_court),'') IS NULL) THEN
     RAISE EXCEPTION 'ROUND_TRANSMISSION_REQUIRED: Record the actual submission date and recipient'; END IF;
   INSERT INTO steelbuild_workflow.round_context VALUES(txid_current(),pg_backend_pid(),s.id);
   IF v_new THEN
@@ -321,13 +346,16 @@ BEGIN
   END IF;
   IF v_capture THEN
     SELECT org_id INTO v_org FROM public.projects WHERE id=v_project;
+    -- The source locks above are still held. Same-path replacement after commit
+    -- invalidates coverage; this is not immutable PDF byte retention.
     FOR rev IN SELECT rr.*,d.drawing_set_id FROM public.drawing_revisions rr JOIN public.drawings d ON d.id=rr.drawing_id WHERE rr.id=ANY(v_ids) ORDER BY rr.id LOOP
       v_path:=regexp_replace(rev.file_url,'^app-files/','');
+      SELECT * INTO v_object FROM storage.objects WHERE bucket_id='app-files' AND name=v_path;
       IF v_path IS NULL OR v_path NOT LIKE v_org::text||'/uploads/%.pdf' OR v_path~'(^|/)\.\.(/|$)' OR rev.pdf_page IS NULL OR rev.pdf_page<1 OR nullif(btrim(rev.revision_code),'') IS NULL
-         OR NOT EXISTS(SELECT 1 FROM storage.objects WHERE bucket_id='app-files' AND name=v_path) THEN
+         OR v_object.id IS NULL THEN
         RAISE EXCEPTION 'ROUND_SOURCE_INCOMPLETE: Revision % needs its existing private project PDF and confirmed 1-based page',rev.id; END IF;
-      INSERT INTO public.submittal_round_revision_evidence(project_id,submittal_id,round_id,drawing_set_id,drawing_id,drawing_revision_id,file_url,storage_path,pdf_page,revision_code,captured_by,capture_kind,attestation)
-      VALUES(v_project,s.id,r.id,rev.drawing_set_id,rev.drawing_id,rev.id,rev.file_url,v_path,rev.pdf_page,rev.revision_code,v_actor,CASE WHEN v_legacy THEN 'legacy_attestation' ELSE 'submitted' END,p_attestation);
+      INSERT INTO public.submittal_round_revision_evidence(project_id,submittal_id,round_id,drawing_set_id,drawing_id,drawing_revision_id,file_url,storage_path,storage_object_id,storage_version,storage_updated_at,storage_etag,storage_metadata,pdf_page,revision_code,captured_by,capture_kind,attestation)
+      VALUES(v_project,s.id,r.id,rev.drawing_set_id,rev.drawing_id,rev.id,rev.file_url,v_path,v_object.id,v_object.version,v_object.updated_at,coalesce(v_object.metadata->>'eTag',v_object.metadata->>'etag'),v_object.metadata,rev.pdf_page,rev.revision_code,v_actor,CASE WHEN v_legacy THEN 'legacy_attestation' ELSE 'submitted' END,p_attestation);
     END LOOP;
   END IF;
   UPDATE public.submittals SET status=n.status,ball_in_court=n.ball_in_court,submitted_date=n.submitted_date,

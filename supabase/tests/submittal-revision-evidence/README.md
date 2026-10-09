@@ -24,9 +24,17 @@ attestation, subsequent revision invalidation, historical persistence and
 archived publish denial. Concurrent sessions cover identical/different request
 keys, incoming sheets, revision swaps, post-capture insert blocking and removals.
 
-The reduced fixture does not claim full hosted acceptance. Staging must verify
-the complete existing trigger graph, real Auth/MFA and Storage RLS, account
-authorship cleanup, catalog grants, legacy coverage inventory, and actual
-Drawing Control/Fab Release/Piece/Work Package UI agreement. The candidate's
-new private request tables and immutable evidence are not automatically
-backfilled. The quarantined revision-upload migration remains frozen.
+`node hosted-rollback.ts` prints JSON containing a SHA-256 and reviewable SQL.
+It does not connect or read credentials. The SQL runs the exact candidate plus
+synthetic fixtures and 28 assertions in a transaction ending in ROLLBACK, then
+checks that the candidate, ledger stamp and fixtures are absent. Only the explicit
+staging branch may be selected by its caller. This rehearsal passed against the
+actual hosted trigger graph, Auth/MFA, Storage RLS, authorship cleanup, archive
+and erasure functions on 2026-10-09; see the candidate audit for exact hash.
+
+Storage source snapshots record object identity/version/metadata and invalidate
+coverage when replaced; PDF bytes are not an immutable archive. CI concurrency
+includes shared-object-lock ordering and replacement after capture. Actual
+Drawing Control/Fab Release/Piece/Work Package UI agreement and production legacy
+coverage inventory remain separate acceptance work. There is no automatic
+backfill. The quarantined revision-upload migration remains frozen.

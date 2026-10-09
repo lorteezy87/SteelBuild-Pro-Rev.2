@@ -19,10 +19,12 @@ p_expected_current_round_id uuid, p_expected_revision_ids uuid[], p_patch jsonb,
 p_new_round boolean default false)` returns `{submittal, round, evidence}`.
 
 The complete exact current revision roster spans every linked set. Requests
-require PM access and enrolled MFA, expected parent timestamp/status/round, and
+require PM access and satisfaction of the existing enrolled-MFA policy, expected parent timestamp/status/round, and
 a stable request UUID. Same actor plus identical JSONB command replays the prior
 result; a different command using that UUID fails. Dates retain database
 microseconds. Never retry a stale command with silently replaced expectations.
+The policy requires AAL2 when the user has a verified factor; it does not itself
+mandate enrollment for every user.
 
 Patch fields are limited to status, ball_in_court, submitted_date, returned_date,
 response_notes, submitted_by, reviewer, file_url, markup_file_url, revision,
@@ -41,6 +43,10 @@ the precise revision IDs; the text must contain at least 20 characters. It
 creates evidence for a legacy round without granting or changing approval.
 Existing evidence cannot be rewritten. If transmitted revisions do not match
 the current register, resubmit instead. No automatic backfill occurs.
+A released legacy package may have a null current ball-in-court or no round;
+reconciliation supports both without inventing a recipient. The actual submission
+date is still required. A missing date requires explicit correction/review or a
+new submission, never a guessed date.
 
 `get_submittal_revision_coverage(p_submittal_id uuid)` returns project_id,
 submittal_id, submittal_status, submittal_updated_at, round_id, ok, reason,
@@ -56,6 +62,11 @@ timestamp mismatch between its parent snapshot and this coverage snapshot.
 Evidence contains project, submittal, round, set, drawing and revision IDs,
 exact file_url, canonical storage_path, positive 1-based pdf_page, revision_code,
 captured_by/at, capture_kind, and explicit attestation for legacy reconciliation.
+It also captures the Storage object UUID, version, update timestamp, eTag and
+metadata. Same-path replacement, disappearance, or metadata change invalidates
+coverage as `stale_manifest`. This preserves an immutable database source
+snapshot, not immutable PDF bytes: retained versioned copies and independent
+content hashing are outside this candidate.
 Composite foreign keys enforce project/parent consistency; one row exists per
 round/revision and round/drawing. Source files must be existing app-files
 objects at the project's organization's uploads PDF path (optionally the
@@ -69,6 +80,10 @@ PDF/page/code cannot be edited on a captured revision. Historical evidence
 survives sheet soft deletion and supersession. A new revision, added/removed
 sheet, empty set, foreign set, missing current revision or changed round roster
 blocks release. Explicit fab override never fabricates or replaces evidence.
+The actual admin project archive command can tombstone a round only after its
+parent is archived, with the identical archive timestamp and no lifecycle or
+source edits. PM/MFA/workspace checks remain enforced; historical evidence stays
+present until the separately authorized project-erasure command.
 
 The set evaluator retains `drawing-shop-v2` compatibility and all prior
 holds/RFIs/signoffs/distribution checks, adding revision_manifest_mismatch with
@@ -86,6 +101,9 @@ block incoming sheets/revisions until capture finishes. The roster is refreshed
 after waits. Legacy writers using reverse lock order can receive an ordinary
 database deadlock/serialization error; the statement and receipt roll back and
 the user must reload/review before retrying a changed command.
+Storage objects are share-locked in sorted path/UUID order after drawing/revision
+locks. Metadata is re-read after waits; a later Storage update waits for capture
+to commit and then invalidates coverage.
 
 A private context row keyed by transaction, backend and submittal grants the
 temporary write authority; caller-controlled GUCs do not. The private schema,
@@ -101,6 +119,52 @@ PM reconciliation/resubmission; report the actual affected count before release.
 
 ## Verification boundary
 
-The dedicated PGlite behavioral suite passes locally. PostgreSQL concurrency
-checks are a required CI step, and hosted staging acceptance is still required.
-No production migration or source ledger stamp is implied by this document.
+The dedicated PGlite suite passes 24 behavioral checks. The PostgreSQL suite
+includes 18 independent-session scenarios; it is a required CI step. The earlier
+12-scenario head `79306342e` passed commercial CI job `113725795662`; the final
+source additionally tests object-update waits, post-capture replacement,
+PM/workspace/MFA revocation during object waits, and a return approval racing a
+source replacement. Both captures and return approvals lock source objects before
+evaluating coverage and recheck authority after those waits.
+
+On 2026-10-09 the exact candidate with SHA-256
+`5133b90df51fd7f8c827f5ed39f3ec18dd8e302bbe98ee21b0d6fd9e2c58df15`
+passed **28 hosted staging assertions** on `ndyfjffsulfbwpmwdmic` in one rolled-back
+transaction. The rehearsal used actual Auth/MFA, workspace/project permissions,
+Storage RLS, installed workflow/audit triggers, and installed soft/hard erasure
+commands. It covered two-set capture/replay, PM/viewer/foreign-membership/AAL
+denials, existing OFS checks, legacy reconciliation, non-Shop submission, new
+revision invalidation, R&R, storage source changes, Auth FK cleanup and project
+erasure. No policies or triggers were disabled. Storage tests changed only
+synthetic metadata; they did not upload, read or delete PDF bytes.
+
+The rehearsal caught and fixed a round-archive incompatibility that the reduced
+fixture had missed. The local fixture now invokes the real `soft_delete_project`
+function before hard erasure. Post-rollback verification found no candidate table
+or ledger stamp and zero synthetic users, organizations, projects or Storage
+metadata. `hosted-rollback.ts` prints the exact reviewable query; it never connects
+to a database or reads credentials. The separate hosted concurrency check still
+runs in the isolated PostgreSQL 17 CI database, not against customer rows.
+
+Rendered client integration and operational approval of affected legacy records
+remain release acceptance work. No production migration or source ledger stamp
+is implied by this document.
+
+## Production impact inventory (read-only, 2026-10-09)
+
+Active projects contain 22 active Shop Drawing submittals: 9 Approved as Noted,
+6 Released for Fabrication, 3 Submitted, 2 Under Review and 2 Draft. All 20
+non-Draft packages lack this new manifest and require reviewed reconciliation or
+resubmission; none are auto-attested. Five of the 15 approved/released packages
+have no current round. All 22 have a submission date. These are package counts,
+not a claim that every package currently governs a live set. Index targets are
+small at this observation (drawing table 3.74 MB, remaining individual targets
+under 0.65 MB), but application still requires bounded lock timeouts.
+
+The post-rollback staging security advisor reports existing private-table
+[no-policy notices](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy),
+[definer-function review notices](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
+and [leaked-password protection disabled](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+Because the candidate was rolled back, that advisor output does not validate its
+new objects; the rehearsal independently checked public command grants, private
+schema isolation and evidence RLS.

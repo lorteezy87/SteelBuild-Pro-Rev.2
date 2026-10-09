@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
 import { initialize, ids, actor, migrationUrl, sourcePath, type Database } from './fixture.ts';
-import { runCases, parent, command, execute, submit, coverage } from './cases.ts';
+import { runCases, parent, command, execute, submit, coverage, checklist } from './cases.ts';
 
 const connectionString=process.env.ROUND_EVIDENCE_POSTGRES_URL;
 assert.equal(process.env.ROUND_EVIDENCE_POSTGRES_TEST,'1','Explicit isolated fixture opt-in required');
@@ -109,6 +109,37 @@ try{
     const consumer=await session();const result=consumer.query("select public.publish_drawing_revision($1,'released_for_shop')",[ids.revision]).then(()=>null,e=>e);await waiting(consumer);
     await admin.query('update auth.test_access set is_member=false where user_id=$1',[ids.pm]);await lock.query('commit');lock.release();
     assert.match((await result).message,/Not authorized/);await consumer.query('rollback');consumer.release();await admin.query('update auth.test_access set is_member=true where user_id=$1',[ids.pm]);
+  });
+  await check('source metadata is refreshed after waiting for an object update',async()=>{
+    const id=await draft();const c=command(await parent(db,id),submit);const writer=await pool.connect();await writer.query('begin');
+    await writer.query("update storage.objects set version='concurrent-v2' where name=$1",[sourcePath]);
+    const consumer=await session();const result=finish(consumer,c);await waiting(consumer);await writer.query('commit');writer.release();
+    const captured=await result;assert.ok(captured.evidence.every(e=>(e as unknown as {storage_version:string}).storage_version==='concurrent-v2'));
+    assert.equal((await coverage(db,id)).ok,true);await admin.query("update storage.objects set version='fixture-v1' where name=$1",[sourcePath]);
+  });
+  await check('same-path object overwrite waits until capture commits then invalidates coverage',async()=>{
+    const id=await draft();const consumer=await session();await execute(database(consumer),command(await parent(db,id),submit));
+    const writer=await pool.connect();await writer.query('begin');const overwrite=writer.query("update storage.objects set version='post-capture-v2' where name=$1",[sourcePath]);
+    await waiting(writer);await consumer.query('commit');consumer.release();await overwrite;await writer.query('commit');writer.release();
+    assert.equal((await coverage(db,id)).reason,'stale_manifest');await admin.query("update storage.objects set version='fixture-v1' where name=$1",[sourcePath]);
+  });
+  for(const field of ['is_member','is_pm','mfa_satisfied']) {
+    await check(`${field} revoked during source-object wait denies mutation`,async()=>{
+      const id=await draft();const c=command(await parent(db,id),submit);const lock=await pool.connect();await lock.query('begin');
+      await lock.query('select id from storage.objects where name=$1 for update',[sourcePath]);
+      const consumer=await session();const result=finish(consumer,c).then(()=>null,e=>e);await waiting(consumer);
+      await admin.query(`update auth.test_access set ${field}=false where user_id=$1`,[ids.pm]);await lock.query('commit');lock.release();
+      assert.match((await result).message,/ROUND_NOT_AUTHORIZED/);await admin.query(`update auth.test_access set ${field}=true where user_id=$1`,[ids.pm]);
+      assert.equal((await admin.query('select count(*)::int n from public.submittal_rounds where submittal_id=$1',[id])).rows[0].n,0);
+    });
+  }
+  await check('return approval refreshes source identity after object lock wait',async()=>{
+    const id=await draft();await execute(db,command(await parent(db,id),submit));
+    const c=command(await parent(db,id),{status:'Approved',ball_in_court:'GC',metadata:{ofs_checklist:checklist}});
+    const writer=await pool.connect();await writer.query('begin');await writer.query("update storage.objects set version='return-race-v2' where name=$1",[sourcePath]);
+    const consumer=await session();const result=finish(consumer,c).then(()=>null,e=>e);await waiting(consumer);await writer.query('commit');writer.release();
+    assert.match((await result).message,/ROUND_LEGACY_RECONCILIATION_REQUIRED/);assert.equal((await parent(db,id)).status,'Submitted');
+    await admin.query("update storage.objects set version='fixture-v1' where name=$1",[sourcePath]);
   });
   console.log(`${checks} independent-session concurrency checks passed`);
 }catch(error){console.error(error instanceof Error?error.stack:error);process.exitCode=1;}

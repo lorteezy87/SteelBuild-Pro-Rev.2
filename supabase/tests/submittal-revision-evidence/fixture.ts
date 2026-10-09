@@ -42,14 +42,14 @@ export async function initialize(db: Database): Promise<void> {
       select p_project_id='${ids.project}'::uuid and coalesce((select is_pm from auth.test_access where user_id=auth.uid()),false) $$;
     create table public.projects (id uuid primary key, org_id uuid not null, metadata jsonb default '{}');
     insert into public.projects values ('${ids.project}','${ids.org}','{}'),('${ids.foreignProject}','${ids.foreign}','{}');
-    alter table public.projects add column name text default 'Synthetic steel project', add column project_number text default 'P-1', add column is_deleted boolean default false;
+    alter table public.projects add column name text default 'Synthetic steel project', add column project_number text default 'P-1', add column is_deleted boolean default false, add column deleted_at timestamptz;
     create table public.organizations(id uuid primary key,name text);
     insert into public.organizations values('${ids.org}','Synthetic steel company');
     create table public.organization_members(org_id uuid,user_id uuid);
     insert into public.organization_members values('${ids.org}','${ids.pm}');
     create table public.data_erasure_log(kind text,org_id uuid,org_name text,project_id uuid,project_name text,project_number text,requested_by uuid,requested_by_email text,reason text,row_counts jsonb,storage_prefix text);
-    create table storage.objects(bucket_id text,name text,primary key(bucket_id,name));
-    insert into storage.objects values('app-files','${sourcePath}');
+    create table storage.objects(bucket_id text,name text,id uuid default gen_random_uuid(),version text default 'fixture-v1',updated_at timestamptz default now(),metadata jsonb default '{"eTag":"fixture-etag"}',primary key(bucket_id,name));
+    insert into storage.objects(bucket_id,name) values('app-files','${sourcePath}');
   `);
   const baseline = await readFile(new URL('../../migrations/20260101000010_baseline_schema.sql',import.meta.url),'utf8');
   for (const table of ['drawing_sets','drawings','drawing_revisions','submittals','submittal_rounds','rfis']) {
@@ -67,7 +67,7 @@ export async function initialize(db: Database): Promise<void> {
     alter table public.submittal_rounds add foreign key(submittal_id) references public.submittals(id);
     alter table public.submittals add column derived_stage text, add column stage_entered_at timestamptz,
       add column gate_override_reason text,add column gate_override_by uuid,add column gate_override_at timestamptz;
-    create table public.submittal_comment_dispositions(id uuid primary key default gen_random_uuid(),submittal_id uuid,project_id uuid,is_deleted boolean default false,is_required boolean default true,status text);
+    create table public.submittal_comment_dispositions(id uuid primary key default gen_random_uuid(),submittal_id uuid,project_id uuid,is_deleted boolean default false,deleted_at timestamptz,is_required boolean default true,status text);
     create function public.submittal_blocking_rfis(uuid) returns table(rfi_number text) language sql stable as $$ select rfi_number from public.rfis where false $$;
     create function public.fab_release_blocking_rfis(uuid[]) returns table(rfi_number text) language sql stable as $$ select rfi_number from public.rfis where false $$;
     create unique index ux_drawing_revisions_one_current on public.drawing_revisions(drawing_id) where is_current=true;
@@ -81,11 +81,12 @@ export async function initialize(db: Database): Promise<void> {
     insert into public.submittals(id,project_id,submittal_number,title,submittal_type,drawing_set_ids) values
       ('${ids.submittal}','${ids.project}','SUB-001','Steel connection drawings','Shop Drawing',array['${ids.set}'::uuid,'${ids.set2}'::uuid]);
     insert into public.submittals(id,project_id,submittal_number,title,submittal_type,drawing_set_ids,status,ball_in_court,submitted_date) values
-      ('${ids.legacy}','${ids.project}','SUB-002','Legacy shop drawings','Shop Drawing',array['${ids.set}'::uuid,'${ids.set2}'::uuid],'Approved','GC','2026-10-01');
+      ('${ids.legacy}','${ids.project}','SUB-002','Legacy shop drawings','Shop Drawing',array['${ids.set}'::uuid,'${ids.set2}'::uuid],'Released for Fabrication',NULL,'2026-10-01');
   `);
   await db.exec(await readFile(new URL('../function-search-path/live-helper-fixture.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('./live-workflow-guards.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('./live-erasure-functions.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../../migrations/20260914120000_adopt_production_soft_delete_project.sql',import.meta.url),'utf8'));
   await db.exec(`
     create trigger trg_enforce_submittal_status_transition before update on public.submittals for each row execute function public.enforce_submittal_status_transition();
     create trigger trg_enforce_submittal_fab_release_gate before update on public.submittals for each row execute function public.enforce_submittal_fab_release_gate();

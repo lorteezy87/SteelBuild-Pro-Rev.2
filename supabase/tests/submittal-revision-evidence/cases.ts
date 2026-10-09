@@ -93,7 +93,7 @@ export async function runCases(db:Database):Promise<number> {
     const s=await parent(db,ids.legacy);
     const args=[s.id,randomUUID(),s.updated_at,s.status,s.current_round_id,reviewed,'I inspected the actual original transmittal and confirm these exact revisions.'];
     const result=(await db.query<{result:Result}>('select public.reconcile_submittal_round_evidence($1,$2,$3,$4,$5,$6,$7) result',args)).rows[0].result;
-    assert.equal(result.submittal.status,'Approved');assert.ok(result.evidence.every(e=>e.capture_kind==='legacy_attestation'));
+    assert.equal(result.submittal.status,'Released for Fabrication');assert.ok(result.evidence.every(e=>e.capture_kind==='legacy_attestation'));
     assert.equal((await coverage(db,ids.legacy)).ok,true);
   });
   await check('set gate accepts exact approved round with all previous blockers clear',async()=>{
@@ -112,6 +112,14 @@ export async function runCases(db:Database):Promise<number> {
       assert.equal(gate.ok,false);assert.ok(gate.blockers.some(b=>b.kind==='revision_manifest_mismatch'));
     }
     await assert.rejects(flow({status:'Released for Fabrication'},ids.submittal,current),/ROUND_LEGACY_RECONCILIATION_REQUIRED/);
+  }));
+  for(const [name,mutation] of [
+    ['replacement at the same PDF path',"update storage.objects set id=gen_random_uuid(),version='replacement'"],
+    ['missing PDF object','delete from storage.objects'],
+    ['modified PDF metadata',"update storage.objects set metadata=metadata||'{\"contentType\":\"application/octet-stream\"}'::jsonb"],
+  ]) await check(`${name} invalidates coverage without rewriting captured evidence`,()=>rollback(async()=>{
+    const before=(await coverage(db)).evidence;await db.exec('reset role');await db.exec(mutation);await db.exec('set role authenticated');
+    assert.equal((await coverage(db)).reason,'stale_manifest');assert.deepEqual((await coverage(db)).evidence,before);
   }));
   await check('R&R resubmission creates new round and captures new current revision',()=>rollback(async()=>{
     await flow({status:'Revise and Resubmit',returned_date:'2026-10-09'});const current=await newRevision();
@@ -147,7 +155,7 @@ export async function runCases(db:Database):Promise<number> {
     assert.deepEqual(after.map(({captured_by,...e})=>e),before.map(({captured_by,...e})=>e));
   }));
   await check('installed authorized project-erasure functions clear evidence and private replay receipts',()=>rollback(async()=>{
-    await db.query('update public.projects set is_deleted=true where id=$1',[ids.project]);
+    await db.query('select public.soft_delete_project($1)',[ids.project]);
     await db.query('select public.hard_delete_project($1,$2)',[ids.project,'Synthetic manifest erasure acceptance']);
     assert.equal((await db.query('select id from public.submittal_round_revision_evidence')).rows.length,0);
     await db.exec('reset role');assert.equal((await db.query('select request_id from steelbuild_workflow.round_requests where project_id=$1',[ids.project])).rows.length,0);
