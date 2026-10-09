@@ -262,6 +262,13 @@ jobs:
           npm ci --prefix supabase/tests/account-deletion --ignore-scripts
           npm test --prefix supabase/tests/account-deletion
 
+      - name: Verify workspace membership revocation
+        # This stays inside the required ci job so publishers cannot ignore a
+        # failed revocation regression. Uses synthetic in-memory SQL only.
+        run: |
+          npm ci --prefix supabase/tests/membership-revocation --ignore-scripts
+          npm test --prefix supabase/tests/membership-revocation
+
       - name: Verify enrolled MFA database boundaries
         run: |
           npm ci --prefix supabase/tests/server-mfa --ignore-scripts
