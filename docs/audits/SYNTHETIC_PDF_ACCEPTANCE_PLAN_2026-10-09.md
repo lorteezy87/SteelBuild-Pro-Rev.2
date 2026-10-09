@@ -91,3 +91,14 @@ upload-wizard interaction and optional provider integrations remain separate.
 These checks did not authenticate to staging or create hosted records. The
 shared browser guard is `e2e/stagingNetworkGuard.ts`; this runner retains its
 separate strict API mutation policy in `e2e/synthetic-pdf/guard.ts`.
+
+The setup follow-up reuses the typed drawing session/public-key validators:
+raw GoTrue `expires_in` is normalized to `expires_at`, malformed or expired
+sessions and wrong staging references are rejected, and old auth state is
+removed before sign-in. Only the closed environment/identity/project/browser
+failure stage may enter the sanitized summary. Twelve setup regressions and
+the combined focused suites pass (118 checks); strict standalone TypeScript
+and applicable lint pass. Password sign-in sends only the public `apikey`;
+authenticated requests retain the session bearer. A transport regression covers
+publishable-key compatibility. The expanded shared browser suite also passes
+12 loopback cases, including Node sign-in redirect refusal. No hosted login ran.

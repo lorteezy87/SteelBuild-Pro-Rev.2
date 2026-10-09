@@ -4,22 +4,22 @@ import { APP, PROJECT, STAGING, assertPublicKey, assertRuntime, fixtureFor, hash
 import { allowsApi, allowsBrowser, allowsStorage, installBrowserGuard, ScopedTransport } from '../../e2e/synthetic-pdf/guard';
 
 const f = fixtureFor('12345678', '1', new Date('2026-10-09T12:00:00Z'));
-const goodEnv = { GITHUB_ACTIONS: 'true', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', SYNTHETIC_PDF_ACCEPTANCE: 'reviewed-staging-only', E2E_TARGET: 'staging', E2E_SUPABASE_URL: STAGING, E2E_BASE_URL: APP, ACCEPTANCE_CANDIDATE_SHA: 'a'.repeat(40), GITHUB_RUN_ID: '12345678', GITHUB_RUN_ATTEMPT: '1' };
+const goodEnv = { GITHUB_ACTIONS: 'true', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', SYNTHETIC_PDF_ACCEPTANCE: 'reviewed-staging-only', E2E_TARGET: 'staging', E2E_SUPABASE_URL: STAGING, E2E_EXPECTED_SUPABASE_REF: 'ndyfjffsulfbwpmwdmic', E2E_BASE_URL: APP, ACCEPTANCE_CANDIDATE_SHA: 'a'.repeat(40), GITHUB_RUN_ID: '12345678', GITHUB_RUN_ATTEMPT: '1' };
 const rpcBody = (action: keyof typeof f.requests) => ({ p_submittal_id: f.submittal, p_request_id: f.requests[action], p_expected_updated_at: '2026-10-09T12:00:00.123456Z', p_expected_status: action === 'submit' ? 'Draft' : action === 'approve' ? 'Submitted' : 'Approved', p_expected_current_round_id: action === 'submit' ? null : f.requests.submit, p_expected_revision_ids: [action === 'stale' || action === 'void' ? f.revisions.B : f.revisions.A], p_patch: workflowPatch(f, action), p_new_round: false });
 
 describe('bounded synthetic PDF request policy', () => {
   it('rejects privileged keys before sign-in without echoing credential values', () => {
-    const token = (role: string) => `header.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.signature`;
+    const token = (role: string, ref = 'ndyfjffsulfbwpmwdmic') => `header.${Buffer.from(JSON.stringify({ role, ref })).toString('base64url')}.signature`;
     expect(() => assertPublicKey(token('anon'))).not.toThrow();
     expect(() => assertPublicKey('sb_publishable_fixture')).not.toThrow();
-    for (const key of [token('service_role'), 'sb_secret_fixture', 'malformed']) {
+    for (const key of [token('service_role'), token('anon', 'kjrwqagyeswwoxpjkcko'), token('anon', ''), 'sb_secret_fixture', 'malformed']) {
       expect(() => assertPublicKey(key)).toThrow('requires a public');
       try { assertPublicKey(key); } catch (error) { expect(String(error)).not.toContain(key); }
     }
   });
   it('requires protected main dispatch with an exact staging target and run identity', () => {
     expect(() => assertRuntime(goodEnv)).not.toThrow();
-    for (const [key, value] of Object.entries({ GITHUB_ACTIONS: 'false', GITHUB_REF: 'refs/heads/feature', GITHUB_EVENT_NAME: 'pull_request', SYNTHETIC_PDF_ACCEPTANCE: '', E2E_TARGET: 'production', E2E_SUPABASE_URL: 'https://kjrwqagyeswwoxpjkcko.supabase.co', E2E_BASE_URL: 'https://www.steelbuild-pro.com', ACCEPTANCE_CANDIDATE_SHA: 'main', GITHUB_RUN_ID: '../run', GITHUB_RUN_ATTEMPT: '' })) {
+    for (const [key, value] of Object.entries({ GITHUB_ACTIONS: 'false', GITHUB_REF: 'refs/heads/feature', GITHUB_EVENT_NAME: 'pull_request', SYNTHETIC_PDF_ACCEPTANCE: '', E2E_TARGET: 'production', E2E_SUPABASE_URL: 'https://kjrwqagyeswwoxpjkcko.supabase.co', E2E_EXPECTED_SUPABASE_REF: 'kjrwqagyeswwoxpjkcko', E2E_BASE_URL: 'https://www.steelbuild-pro.com', ACCEPTANCE_CANDIDATE_SHA: 'main', GITHUB_RUN_ID: '../run', GITHUB_RUN_ATTEMPT: '' })) {
       expect(() => assertRuntime({ ...goodEnv, [key]: value })).toThrow();
     }
     expect(fixtureFor('12345678', '2').set).not.toBe(f.set);
@@ -86,6 +86,16 @@ describe('bounded synthetic PDF request policy', () => {
     expect(network).toHaveBeenCalledWith(expect.stringContaining(STAGING), expect.objectContaining({ redirect: 'error' }));
     for (let count = 1; count < 179; count++) await api.send(`/rest/v1/projects?id=eq.${PROJECT}&limit=100`);
     await expect(api.send(`/rest/v1/projects?id=eq.${PROJECT}&limit=100`)).rejects.toThrow('Blocked');
+  });
+  it('uses apikey only for password sign-in and a session bearer for authenticated calls', async () => {
+    const network = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}'));
+    const auth = new ScopedTransport(null, 'sb_publishable_fixture', undefined, network);
+    await auth.send('/auth/v1/token?grant_type=password', 'POST', { email: 'test@example.invalid', password: 'test-password' });
+    expect(network.mock.calls[0][1]?.headers).toMatchObject({ apikey: 'sb_publishable_fixture' });
+    expect(network.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
+    const api = new ScopedTransport(f, 'sb_publishable_fixture', 'test-session', network);
+    await api.send(`/rest/v1/projects?id=eq.${PROJECT}&limit=100`);
+    expect(network.mock.calls[1][1]?.headers).toMatchObject({ Authorization: 'Bearer test-session' });
   });
   it('covers popup HTTP requests at context level and never forwards any websocket', async () => {
     let routeHandler: (route: unknown) => Promise<void> = async () => {};

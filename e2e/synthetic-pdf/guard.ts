@@ -73,7 +73,7 @@ export { allowsStagingBrowserRequest as allowsBrowser, installStagingNetworkGuar
 
 export class ScopedTransport {
   private requests = 0;
-  constructor(private fixture: Fixture | null, private key: string, private bearer: string, private network: typeof fetch = fetch) {}
+  constructor(private fixture: Fixture | null, private key: string, private bearer?: string, private network: typeof fetch = fetch) {}
   async send(path: string, method = 'GET', body?: unknown, bytes?: Uint8Array): Promise<Response> {
     const url = `${STAGING}${path}`;
     if (++this.requests > 180 || !(bytes || path.startsWith('/storage/')
@@ -81,7 +81,7 @@ export class ScopedTransport {
       : allowsApi(this.fixture, url, method, body))) throw new Error('Blocked out-of-scope synthetic request');
     const response = await this.network(url, {
       method, redirect: 'error', signal: AbortSignal.timeout(20_000),
-      headers: { apikey: this.key, Authorization: `Bearer ${this.bearer}`, 'Content-Type': bytes ? 'application/pdf' : 'application/json', ...(bytes ? { 'x-upsert': 'false' } : {}), Prefer: 'return=representation' },
+      headers: { apikey: this.key, ...(this.bearer ? { Authorization: `Bearer ${this.bearer}` } : {}), 'Content-Type': bytes ? 'application/pdf' : 'application/json', ...(bytes ? { 'x-upsert': 'false' } : {}), Prefer: 'return=representation' },
       body: bytes ? Buffer.from(bytes) : body === undefined ? undefined : JSON.stringify(body),
     });
     return response;
