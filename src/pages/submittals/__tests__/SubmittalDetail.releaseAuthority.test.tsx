@@ -5,15 +5,15 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { Submittal } from '../types';
 
-vi.mock('@/components/collaboration/CommentThread', () => ({ default: () => null }));
-vi.mock('@/components/submittals/RoundTimeline', () => ({ default: () => null }));
-vi.mock('@/components/submittals/ResponseMatrix', () => ({ default: () => null }));
-vi.mock('@/components/submittals/SubmittalReviewStrip', () => ({ default: () => null }));
-vi.mock('@/components/submittals/ApprovalChainPanel', () => ({ default: () => null }));
-vi.mock('@/components/submittals/ApproverNotesPanel', () => ({ default: () => null }));
-vi.mock('@/components/submittals/CommentDispositionChecklist', () => ({ default: () => null }));
-vi.mock('@/components/submittals/LinkedEntities', () => ({ LinkedRFIs: () => null, LinkedTasks: () => null }));
-vi.mock('../LinkedDrawingSets', () => ({ LinkedDrawingSets: () => null }));
+vi.mock('@/components/collaboration/CommentThread', () => ({ default: (): null => null }));
+vi.mock('@/components/submittals/RoundTimeline', () => ({ default: (): null => null }));
+vi.mock('@/components/submittals/ResponseMatrix', () => ({ default: (): null => null }));
+vi.mock('@/components/submittals/SubmittalReviewStrip', () => ({ default: (): null => null }));
+vi.mock('@/components/submittals/ApprovalChainPanel', () => ({ default: (): null => null }));
+vi.mock('@/components/submittals/ApproverNotesPanel', () => ({ default: (): null => null }));
+vi.mock('@/components/submittals/CommentDispositionChecklist', () => ({ default: (): null => null }));
+vi.mock('@/components/submittals/LinkedEntities', () => ({ LinkedRFIs: (): null => null, LinkedTasks: (): null => null }));
+vi.mock('../LinkedDrawingSets', () => ({ LinkedDrawingSets: (): null => null }));
 vi.mock('../SubmittalRevisionEvidence', () => ({ default: () => <section aria-label="Exact revision evidence" /> }));
 vi.mock('@/components/submittals/IfcIssueDialog', () => ({ default: ({ open, onConfirm }: { open: boolean; onConfirm: (value: unknown) => void }) => open
   ? <div role="dialog" aria-label="Issue for construction"><button onClick={() => onConfirm({ checklist: {}, overrideReason: null })}>Confirm reviewed IFC</button></div> : null }));
