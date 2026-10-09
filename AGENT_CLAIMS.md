@@ -30,13 +30,9 @@ Notes:
 
 ## Active claims
 
-| 2026-10-09 | codex-manifest-ci-fixtures | Exact-evidence readiness fixture reconciliation | src/pages/WorkPackages.tsx; src/pages/workPackages/__tests__/{WorkPackages.evidence.test.tsx,analytics.test.js}; src/pages/drawingSubmittalHub/__tests__/format.test.ts; src/components/drawings/__tests__/{ExportFabReleaseModal.evidence.test.tsx,drawingsUtils.test.js} | Parent-approved corrections from full-suite CI; hydrate raw Work Packages coverage and preserve missing-evidence blocking; supply current-round fixtures only to proven-ready scenarios. |
 
-| 2026-10-09 | codex-manifest-hosted-acceptance | Main-only staging drawing acceptance | .github/workflows/drawing-evidence-acceptance.yml; playwright.drawing-evidence.config.ts; e2e/drawing-revision-evidence.spec.ts; e2e/drawing-evidence-reporter.ts; scripts/__tests__/drawingEvidenceAcceptanceGate.test.ts | Parent-approved exact main-ancestor source gate, existing encrypted staging credentials, read-only desktop/mobile browser checks; screenshots and sanitized summary only. |
 
-| 2026-10-09 | codex-manifest-readonly-acceptance | Revision coverage browser acceptance guard | e2e/acceptance.ts; e2e/acceptance-contract.spec.ts | Parent-approved exact allowlist for two inspected read-only coverage RPCs and browser regressions preserving write blocking. |
 
-| 2026-10-09 | codex-revision-manifest-client | Atomic submittal frontend and evidence review | src/hooks/submittals/**; src/hooks/useSubmittals.ts; src/pages/submittals/**; src/api/client/{entities,submittal*,supabaseTypes}.ts; src/lib/{submittalRevisionEvidence,detailingPackageState,fabReleaseGate}*; src/lib/pieceControl/{drawingReleaseReady,readiness,relationshipsRepository}.ts; src/lib/exports/fabRelease*.ts; src/pages/{DrawingSubmittalHub.tsx,drawingSubmittalHub/**,drawings/useDrawingsPageController.ts}; src/components/submittals/{NewRoundModal.jsx,processBoard.derive.ts}; src/services/cacheRegistry.ts; src/test/fixtures/submittalEvidence.ts; related tests | Scoped continuation of parent-approved immutable revision manifests; coordinate RPC contract with revision-manifest-db; preserve all prior claims. |
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
