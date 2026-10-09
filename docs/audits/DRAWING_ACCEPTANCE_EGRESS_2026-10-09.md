@@ -35,3 +35,11 @@ Verification: 12 loopback browser contracts pass across desktop/mobile; focused
 policy, transport, source-gate and reporter tests pass. Scoped lint and standalone
 strict TypeScript are required before source handoff. Hosted source CI and the
 four authenticated staging cases remain separate release evidence.
+
+The combined candidate includes the synthetic PDF runner and normalized staging
+session setup, plus the independently reviewed margin-risk grouping correction.
+Root verification passed 139 focused acceptance tests, 12 actual loopback browser
+contracts, combined strict E2E TypeScript and scoped lint. The risk correction
+passed 46 focused tests and its own four source CI jobs before integration. The
+combined candidate still requires its own CI; none of these results represents
+hosted acceptance or production publication.
