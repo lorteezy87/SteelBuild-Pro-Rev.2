@@ -85,7 +85,7 @@ export function useResolvedFileUrl(fileUrl: string | null | undefined): {
 
   // A dependency can change before the effect runs. Never expose the previous
   // file/workspace's URL during that render, including a batched A -> null -> A.
-  const currentResolution = active && resolution?.fileUrl === fileUrl &&
+  const currentResolution = active && resolution && resolution.fileUrl === fileUrl &&
     resolution.generation === generation && resolution.expiresAt > Date.now()
     ? resolution : null;
   return {
