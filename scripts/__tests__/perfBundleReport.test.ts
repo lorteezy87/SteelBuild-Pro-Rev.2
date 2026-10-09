@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const reporter = resolve('scripts/perf-bundle-report.cjs');
@@ -19,7 +19,13 @@ function report(html: string, loadedBytes = 10, lazyBytes = 4096) {
       env: { ...process.env, SBP_MAX_INITIAL_GZIP_KB: '1', SBP_MAX_TOTAL_GZIP_KB: '10' },
     });
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    const cleanupTarget = resolve(directory);
+    const allowedPrefix = `${resolve(tmpdir())}${sep}steelbuild-perf-`;
+    if (cleanupTarget !== directory || !cleanupTarget.startsWith(allowedPrefix)
+      || cleanupTarget.slice(allowedPrefix.length).includes(sep)) {
+      throw new Error('Refusing cleanup outside the allocated bundle-test directory');
+    }
+    rmSync(cleanupTarget, { recursive: true, force: true });
   }
 }
 
