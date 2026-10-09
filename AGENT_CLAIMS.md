@@ -31,7 +31,7 @@ Notes:
 ## Active claims
 
 
-| 2026-10-09 | codex-synthetic-pdf-acceptance | Bounded staging PDF evidence acceptance | e2e/synthetic-pdf/**; e2e/synthetic-pdf-evidence.spec.ts; playwright.synthetic-pdf.config.ts; playwright.config.ts exclusion only; .github/workflows/synthetic-pdf-acceptance.yml; scripts/__tests__/syntheticPdfAcceptance*.test.ts; docs/audits/SYNTHETIC_PDF_ACCEPTANCE_PLAN_2026-10-09.md | Source-only protected Actions test using scoped existing staging credentials, real synthetic PDFs, exact RPC evidence and archival cleanup; no hosted dispatch. |
+| 2026-10-09 | codex-synthetic-pdf-acceptance | Bounded staging PDF evidence acceptance | e2e/synthetic-pdf/**; e2e/synthetic-pdf-evidence.spec.ts; playwright.synthetic-pdf.config.ts; playwright.config.ts exclusion only; playwright.foundation.config.ts contract-test inclusion only; .github/workflows/synthetic-pdf-acceptance.yml; scripts/__tests__/syntheticPdfAcceptance*.test.ts; docs/audits/SYNTHETIC_PDF_ACCEPTANCE_PLAN_2026-10-09.md | Source-only protected Actions test using scoped existing staging credentials, real synthetic PDFs, exact RPC evidence and archival cleanup; no hosted dispatch. |
 
 
 
