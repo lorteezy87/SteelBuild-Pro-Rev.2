@@ -72,7 +72,12 @@ The retained artifact reports `status=failed`, `globalErrors=1`,
 Neither setup authentication nor a successful build is a passing drawing case.
 Read-only Supabase logs during the failure show successful Auth and application
 reads with no HTTP errors; this alone does not identify the browser failure.
-The sanitized failure is being diagnosed without relaxing the request guard.
+The failure was subsequently reproduced locally with the same production
+bundle and synthetic API fixtures: blocked monitoring envelopes caused browser
+console errors. The exact local discard correction passes that reproduction
+while preserving the external request guard and real runtime-error detection.
+See [the diagnosis and bounded correction](DRAWING_BROWSER_SETUP_2026-10-09.md).
+The hosted result remains failed until a new exact-source run passes.
 
 The synthetic two-PDF lifecycle has not been dispatched. It remains sequenced
 after the read-only drawing checks pass. No existing drawing revision was
