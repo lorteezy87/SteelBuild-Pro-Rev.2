@@ -26,6 +26,66 @@ export async function runCases(db:Database):Promise<number> {
   async function rollback(run:()=>Promise<void>) {await db.exec('begin');try{await run();}finally{await db.exec('rollback');}}
   async function flow(patch:Record<string,unknown>,id=ids.submittal,revisionIds=reviewed) {return execute(db,command(await parent(db,id),patch,randomUUID(),revisionIds));}
   await db.exec('set role authenticated');
+  const untyped='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaacc';
+  const untypedDraft='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaacd';
+  async function withLegacyTypes(run:()=>Promise<void>) {
+    await rollback(async()=>{
+      // Match the legacy staging shape: Approved/GC, NULL type and no actual
+      // submission date or current round. Never infer its classification.
+      await db.query(`insert into public.submittals(id,project_id,submittal_number,title,submittal_type,drawing_set_ids,status,ball_in_court)
+        values($1,$2,'UNTYPED-APP','Legacy unclassified',NULL,array[$3::uuid],'Approved','GC'),
+              ($4,$2,'UNTYPED-DRAFT','Unclassified draft',NULL,array[$3::uuid],'Draft','Detailer')`,[untyped,ids.project,ids.set,untypedDraft]);
+      await run();
+    });
+  }
+  await check('NULL Approved coverage is non-Shop and has no approval evidence',()=>withLegacyTypes(async()=>{
+    const result=await coverage(db,untyped);assert.equal(result.reason,'not_shop_drawing');assert.equal(result.ok,false);assert.deepEqual(result.evidence,[]);
+  }));
+  await check('NULL Approved cannot acquire Shop Drawing classification in place',()=>withLegacyTypes(async()=>{
+    await assert.rejects(db.query("update public.submittals set submittal_type='Shop Drawing' where id=$1",[untyped]),/ROUND_EVIDENCE_IMMUTABLE/);
+  }));
+  await check('NULL Approved cannot become Shop Drawing and Draft in one write',()=>withLegacyTypes(async()=>{
+    await assert.rejects(db.query("update public.submittals set submittal_type='Shop Drawing',status='Draft' where id=$1",[untyped]),/ROUND_EVIDENCE_IMMUTABLE/);
+  }));
+  await check('NULL legacy approval cannot acquire drawing evidence through attestation',()=>withLegacyTypes(async()=>{
+    const s=await parent(db,untyped);
+    await assert.rejects(db.query('select public.reconcile_submittal_round_evidence($1,$2,$3,$4,$5,$6,$7)',
+      [s.id,randomUUID(),s.updated_at,s.status,s.current_round_id,[],'I inspected the original transmission and confirm the exact source.']),/ROUND_ATTESTATION_REQUIRED/);
+  }));
+  await check('NULL Draft can be explicitly classified before its first transmission',()=>withLegacyTypes(async()=>{
+    await db.query("update public.submittals set submittal_type='Shop Drawing' where id=$1",[untypedDraft]);
+    assert.equal((await coverage(db,untypedDraft)).reason,'inactive_submittal');
+  }));
+  await check('explicitly classified Shop Draft requires the reviewed submission command',()=>withLegacyTypes(async()=>{
+    await db.query("update public.submittals set submittal_type='Shop Drawing' where id=$1",[untypedDraft]);
+    await assert.rejects(db.query("update public.submittals set status='Submitted' where id=$1",[untypedDraft]),/ROUND_WORKFLOW_REQUIRED/);
+  }));
+  await check('pre-transmission Shop Draft can be corrected to Product Data',()=>withLegacyTypes(async()=>{
+    await db.query("update public.submittals set submittal_type='Shop Drawing' where id=$1",[untypedDraft]);
+    await db.query("update public.submittals set submittal_type='Product Data' where id=$1",[untypedDraft]);
+    assert.equal((await coverage(db,untypedDraft)).reason,'not_shop_drawing');
+  }));
+  await check('NULL and Product Data records cannot displace a typed governing package',()=>withLegacyTypes(async()=>{
+    await db.query("update public.submittals set submittal_type='Product Data' where id=$1",[untypedDraft]);
+    const gate=(await db.query<{result:{submittal_id:string;ok:boolean}}>('select public.evaluate_fab_release_set($1,$2) result',[ids.project,ids.set])).rows[0].result;
+    assert.equal(gate.submittal_id,ids.legacy);assert.equal(gate.ok,false);
+  }));
+  await check('blank and unknown classifications fail the schema type constraint',()=>withLegacyTypes(async()=>{
+    for(const value of ['', 'Unknown']) {
+      await db.exec('savepoint invalid_type');
+      await assert.rejects(db.query('update public.submittals set submittal_type=$1 where id=$2',[value,untypedDraft]),/submittals_submittal_type_check/);
+      await db.exec('rollback to savepoint invalid_type');
+    }
+  }));
+  await check('existing released Shop history cannot clear its classification',()=>withLegacyTypes(async()=>{
+    await assert.rejects(db.query('update public.submittals set submittal_type=NULL where id=$1',[ids.legacy]),/ROUND_EVIDENCE_IMMUTABLE/);
+  }));
+  await check('a set linked only to NULL or Product Data has no governing approval',()=>withLegacyTypes(async()=>{
+    await db.query("update public.submittals set submittal_type='Product Data' where id=$1",[untypedDraft]);
+    await db.query('delete from public.submittals where id=any($1::uuid[])',[[ids.submittal,ids.legacy]]);
+    const gate=(await db.query<{result:{submittal_id:string|null;ok:boolean;blockers:{kind:string}[]}}>('select public.evaluate_fab_release_set($1,$2) result',[ids.project,ids.set])).rows[0].result;
+    assert.equal(gate.submittal_id,null);assert.equal(gate.ok,false);assert.ok(gate.blockers.some(blocker=>blocker.kind==='no_submittal'));
+  }));
   await check('direct submission and forged GUC cannot bypass reviewed command',async()=>{
     await db.query("select set_config('steelbuild.round_rpc','on',false)");
     await assert.rejects(db.query("update public.submittals set status='Submitted' where id=$1",[ids.submittal]),/ROUND_WORKFLOW_REQUIRED/);
