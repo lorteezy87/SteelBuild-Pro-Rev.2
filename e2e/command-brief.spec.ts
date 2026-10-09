@@ -1,24 +1,52 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+const FIXTURE_ORIGIN = "http://127.0.0.1:4186";
+
+async function guardFixturePage(page: Page, failures: string[]): Promise<void> {
+  page.on("pageerror", error => failures.push(error.message));
+  page.on("console", message => { if (message.type() === "error") failures.push(message.text()); });
+  await page.route("**/*", async route => {
+    const url = new URL(route.request().url());
+    if (url.origin === FIXTURE_ORIGIN
+      || (url.protocol === "https:" && ["fonts.googleapis.com", "fonts.gstatic.com"].includes(url.hostname))) {
+      await route.continue();
+    } else {
+      failures.push(`Unexpected external request: ${url.origin}${url.pathname}`);
+      await route.fulfill({ status: 200, contentType: "text/plain", body: "" });
+    }
+  });
+}
 
 // Presentation acceptance with controlled records; no auth/RLS/data completeness claim.
 test.use({ timezoneId: "America/Phoenix" });
+test.beforeAll("prepare the real command-brief development fixture", async ({ browser }, testInfo) => {
+  // The server's foundation HTML health check does not compile this entry's
+  // dependency graph. Cold Vite CSS/module transforms consumed 29s in a trace.
+  // Give only fixture readiness a bounded 90s budget; each presentation test
+  // keeps its configured 30s timeout and a fresh context with unchanged checks.
+  test.setTimeout(90_000);
+  const started = Date.now();
+  const failures: string[] = [];
+  const context = await browser.newContext({ timezoneId: "America/Phoenix" });
+  try {
+    const page = await context.newPage();
+    await guardFixturePage(page, failures);
+    await page.goto(`${FIXTURE_ORIGIN}/dev/command-brief.html`, { timeout: 90_000 });
+    await expect(page.getByRole("heading", { name: "Command Center", exact: true })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+  } finally {
+    await context.close();
+  }
+  expect(failures).toEqual([]);
+  console.info(`[command-brief readiness] ${testInfo.project.name}: ${Date.now() - started}ms`);
+});
+
 for (const theme of ["dark", "light"] as const) {
   test(`execution brief preserves source actions and record gaps in ${theme} mode`, async ({ page }, testInfo) => {
     const failures: string[] = [];
-    page.on("pageerror", error => failures.push(error.message));
-    page.on("console", message => { if (message.type() === "error") failures.push(message.text()); });
+    await guardFixturePage(page, failures);
     await page.addInitScript(value => localStorage.setItem("sbp-theme", value), theme);
     await page.clock.setFixedTime(new Date("2026-10-06T18:00:00Z"));
-    await page.route("**/*", async route => {
-      const url = new URL(route.request().url());
-      if (url.origin === "http://127.0.0.1:4186"
-        || (url.protocol === "https:" && ["fonts.googleapis.com", "fonts.gstatic.com"].includes(url.hostname))) {
-        await route.continue();
-      } else {
-        failures.push(`Unexpected external request: ${url.origin}${url.pathname}`);
-        await route.fulfill({ status: 200, contentType: "text/plain", body: "" });
-      }
-    });
     await page.goto("/dev/command-brief.html");
     await page.evaluate(() => document.fonts.ready);
     await expect(page.getByRole("heading", { name: "Command Center", exact: true })).toBeVisible();
