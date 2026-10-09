@@ -179,8 +179,16 @@ export default function CranePick3D({ spec, ariaLabel, height = 360 }: CranePick
       const w = host.clientWidth || 1;
       const h = host.clientHeight || 1;
       renderer.setSize(w, h, false);
+      const previousFitDistance = fitDistance(1, camera);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      // Preserve the current orbit, pan and relative zoom while giving the
+      // narrower field of view the same room around the crane.
+      const distanceScale = fitDistance(1, camera) / previousFitDistance;
+      if (distanceScale !== 1) {
+        camera.position.sub(controls.target).multiplyScalar(distanceScale).add(controls.target);
+        controls.update();
+      }
       render();
     };
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
@@ -289,6 +297,7 @@ export default function CranePick3D({ spec, ariaLabel, height = 360 }: CranePick
     <div>
       <div
         ref={hostRef}
+        className="crane-pick-viewport"
         role="img"
         aria-label={ariaLabel}
         style={{ position: "relative", width: "100%", height, borderRadius: 6, overflow: "hidden", background: "var(--bg-surface-low)", cursor: "grab" }}

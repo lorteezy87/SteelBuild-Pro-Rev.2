@@ -43,6 +43,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@^2.47";
 import { CORS, json, handleOrgDeletion, handleAccountDeletion } from "./handlers.ts";
+import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -78,6 +79,8 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   const callerId = userData?.user?.id;
   if (userErr || !callerId) return json({ error: "unauthorized" }, 401);
+  const mfaDenial = mfaDenialForVerifiedUser(userData.user!, authHeader, req);
+  if (mfaDenial) return mfaDenial;
 
   return mode === "account"
     ? await handleAccountDeletion(admin, userClient, callerId)

@@ -27,6 +27,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
+import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 import {
   isDangerousAttachment,
   MAX_ATTACHMENT_BYTES,
@@ -94,7 +95,7 @@ interface SendResult {
 
 // ── JWT Verification ──────────────────────────────────────────────────────────
 
-async function verifyJwt(req: Request): Promise<{ userId: string; email: string } | null> {
+async function verifyJwt(req: Request): Promise<{ userId: string; email: string } | Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
 
@@ -112,6 +113,9 @@ async function verifyJwt(req: Request): Promise<{ userId: string; email: string 
     });
     if (!resp.ok) return null;
     const user = await resp.json();
+    if (!user?.id) return null;
+    const mfaDenial = mfaDenialForVerifiedUser(user, authHeader, req);
+    if (mfaDenial) return mfaDenial;
     return { userId: user.id, email: user.email };
   } catch {
     return null;
@@ -608,6 +612,7 @@ async function handle(req: Request): Promise<Response> {
 
   // Authenticate
   const user = await verifyJwt(req);
+  if (user instanceof Response) return user;
   if (!user) return errorResponse(401, "Unauthorized — valid JWT required", req);
 
   // Parse body

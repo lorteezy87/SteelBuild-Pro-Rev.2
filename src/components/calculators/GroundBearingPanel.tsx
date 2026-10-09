@@ -50,12 +50,12 @@ export default function GroundBearingPanel() {
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {field("Max outrigger reaction (lb)", reaction, setReaction, "e.g. 85,000",
         "From the manufacturer's outrigger-load chart or calculator — the MAXIMUM single float for the lift's slew range, not the average.")}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+      <div className="ground-bearing-field-grid ground-bearing-field-grid--three" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         {field("Mat length (ft)", len, setLen, "e.g. 4")}
         {field("Mat width (ft)", wid, setWid, "e.g. 4")}
         {field("Mat weight (lb)", matWeight, setMatWeight, "0")}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "end" }}>
+      <div className="ground-bearing-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "end" }}>
         {field("Allowable bearing (psf)", allowable, setAllowable, "From the geotech report")}
         <label style={{ display: "block" }}>
           <span style={labelStyle}>Or presumptive (IBC 1806.2)</span>

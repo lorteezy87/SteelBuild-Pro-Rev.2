@@ -17,11 +17,20 @@ This check does not run the complete production erasure chain. Run
 schema to cover authorship, archival rollback, and shared-workspace isolation.
 That script rolls back its fixtures and migrations.
 
+The test command also runs `verify-authorship.mjs` against real Auth foreign-key
+cascades and immutable financial/report guards, then `verify-lock-order.mjs`
+against the forward erasure lock-order correction. The SQL rollback fixture
+loads both forward migrations. PGlite cannot prove concurrent PostgreSQL writer
+progress; the hosted staging overlap validation is recorded in the reviewed
+erasure follow-up candidate on the source branch.
+
 ## Deployment checks
 
-1. Land the two migration files before manually applying and stamping the exact
-   committed payloads as `20260927150000` and `20260927160000`. Verify the ledger
-   payload hashes. Do not use `db push` or an automatic apply-time stamp.
+1. Land the two base migrations and both forward fixes before manually applying
+   and stamping their exact committed payloads as `20260927150000`,
+   `20260927160000`, `20261007084117`, and `20261007090057`, in that order.
+   Verify the ledger payload hashes. Do not use `db push` or an automatic
+   apply-time stamp.
 2. The timeout belongs in the function declaration (`proconfig`), not a
    `SET LOCAL` statement in the function body. PostgREST 14 hoists configured
    function settings before the main query; production reported PostgREST 14.5

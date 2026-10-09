@@ -1,91 +1,81 @@
 /**
- * generate-brand-rasters — renders the raster brand assets in public/ from the
- * SteelBuild-Pro hex-S vector.
- *
- * The mark geometry is duplicated here as a string because this script runs
- * under plain node outside the Vite/TS graph; it must stay in sync with
- * src/components/brand/steelBuildMarkGeometry.ts (a test asserts they match).
- *
- * The social-card wordmark is set in DejaVu Sans Bold horizontally compressed
- * to 0.80, because no condensed face ships with the build image. It is a close
- * stand-in for Barlow Condensed at social-card sizes; if a licensed Barlow
- * Condensed export ever lands in the repo, render the wordmark from that
- * instead.
+ * Render install icons and social previews from the exact approved badge.
+ * The source is public/marketing/steelbuild-pro-logo.jpg. These exports only
+ * scale and letterbox that image; they never redraw or crop its lettering.
  *
  * Run with: node scripts/generate-brand-rasters.cjs
  */
-
+const fs = require("node:fs/promises");
 const path = require("node:path");
 const sharp = require("sharp");
 
-const PUBLIC_DIR = path.resolve(__dirname, "..", "public");
+const ROOT = path.resolve(__dirname, "..");
+const PUBLIC = path.join(ROOT, "public");
+const SOURCE = path.join(PUBLIC, "marketing", "steelbuild-pro-logo.jpg");
+const NATIVE_ASSETS = path.join(ROOT, "ios", "App", "App", "Assets.xcassets");
+const BACKGROUND = { r: 11, g: 14, b: 17, alpha: 1 };
 
-/** Social-card pixel size. Must match og:image:width / og:image:height in index.html. */
-const SOCIAL_WIDTH = 1200;
-const SOCIAL_HEIGHT = 630;
-
-const MARK_PATH = [
-  "M256 46 L410 142 L410 370 L256 466 L102 370 L102 142 Z",
-  "M158 176 L410 222 L410 250 L200 208 Z",
-  "M354 336 L102 290 L102 262 L312 304 Z",
-].join(" ");
-
-const AMBER = "#F5BB00";
-const FOUNDRY_BLACK = "#0D1117";
-
-/** Places the 512-canvas mark so its hexagon is `height` tall with its top-left at (x, y). */
-function placeMark(height, x, y) {
-  const scale = height / 420;
-  const tx = x - 102 * scale;
-  const ty = y - 46 * scale;
-  return `<g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(5)})"><path fill-rule="evenodd" fill="${AMBER}" d="${MARK_PATH}"/></g>`;
+async function badgeOnCanvas(width, height, badgeWidth) {
+  const { data, info } = await sharp(SOURCE)
+    .resize({ width: badgeWidth })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  // The original JPG's textured black margin differs slightly from the icon
+  // field. Fade only that outer margin, well before the steel plate begins.
+  const feather = Math.max(1, Math.round(badgeWidth * 0.018));
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      const distance = Math.min(x, y, info.width - 1 - x, info.height - 1 - y);
+      if (distance >= feather) continue;
+      data[(y * info.width + x) * 4 + 3] = Math.round(255 * distance / feather);
+    }
+  }
+  const badge = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
+    .png()
+    .toBuffer();
+  return sharp({ create: { width, height, channels: 4, background: BACKGROUND } })
+    .composite([{ input: badge, gravity: "centre" }])
+    .png({ palette: true, colours: 256, dither: 0.8, effort: 10 })
+    .toBuffer();
 }
 
-const socialCard = `<svg xmlns="http://www.w3.org/2000/svg" width="${SOCIAL_WIDTH}" height="${SOCIAL_HEIGHT}" viewBox="0 0 ${SOCIAL_WIDTH} ${SOCIAL_HEIGHT}">
-  <rect width="${SOCIAL_WIDTH}" height="${SOCIAL_HEIGHT}" fill="${FOUNDRY_BLACK}"/>
-  <rect width="${SOCIAL_WIDTH}" height="6" fill="${AMBER}"/>
-  ${placeMark(300, 150, 173)}
-  <g transform="translate(400 8)">
-    <g transform="translate(0 300) scale(0.80 1)">
-      <text x="0" y="0" font-family="DejaVu Sans" font-weight="bold" font-size="104" letter-spacing="-2" fill="#FFFFFF">SteelBuild-Pro</text>
-    </g>
-    <rect x="2" y="330" width="500" height="3" fill="${AMBER}"/>
-    <text x="2" y="376" font-family="DejaVu Sans Mono" font-weight="bold" font-size="22" letter-spacing="6" fill="#98A2B3">BUILT FOR PEOPLE WHO BUILD</text>
-    <text x="2" y="432" font-family="DejaVu Sans" font-size="23" letter-spacing="1" fill="#64748B">Structural steel construction management software</text>
-  </g>
-</svg>`;
+async function writeIcon(filename, size, badgeWidth) {
+  await fs.writeFile(path.join(PUBLIC, filename), await badgeOnCanvas(size, size, badgeWidth));
+}
 
 async function main() {
-  const iconSvg = await require("node:fs/promises").readFile(path.join(PUBLIC_DIR, "favicon.svg"));
-
-  for (const size of [180, 512]) {
-    await sharp(iconSvg, { density: 900 })
-      .resize(size, size)
-      .png({ compressionLevel: 9 })
-      .toFile(path.join(PUBLIC_DIR, `steelbuild-pro-icon-${size}.png`));
+  const sourceMeta = await sharp(SOURCE).metadata();
+  if (sourceMeta.width !== 1248 || sourceMeta.height !== 832) {
+    throw new Error("The approved steel diamond badge source changed dimensions; review the exports before shipping.");
   }
 
-  // Square app logo kept at its historical filename so any stale reference
-  // still serves the current brand rather than the retired diamond mark.
-  await sharp(iconSvg, { density: 900 })
-    .resize(512, 512)
-    .png({ compressionLevel: 9 })
-    .toFile(path.join(PUBLIC_DIR, "logo.png"));
+  await writeIcon("favicon-64.png", 64, 62);
+  await writeIcon("steelbuild-pro-icon-180.png", 180, 170);
+  await writeIcon("steelbuild-pro-icon-192.png", 192, 182);
+  await writeIcon("steelbuild-pro-icon-512.png", 512, 486);
+  await writeIcon("steelbuild-pro-icon-maskable-512.png", 512, 392);
+  await writeIcon("logo.png", 512, 486); // historical app-icon path
 
-  // density 150 oversamples the 1200x630 SVG, then resize brings it back to the
-  // declared size — rendering at the 72dpi baseline instead would alias the
-  // mark's diagonals. The resize is NOT optional: sharp scales an SVG by
-  // density/72, so without it these land at 2500x1313 and contradict the
-  // og:image:width / og:image:height in index.html.
-  const card = sharp(Buffer.from(socialCard), { density: 150 }).resize(SOCIAL_WIDTH, SOCIAL_HEIGHT);
-  await card.clone().png({ compressionLevel: 9 }).toFile(path.join(PUBLIC_DIR, "steelbuild-pro-og.png"));
-  await card.clone().png({ compressionLevel: 9 }).toFile(path.join(PUBLIC_DIR, "steelbuild-pro-logo.png"));
-  await card.clone().jpeg({ quality: 92 }).toFile(path.join(PUBLIC_DIR, "steelbuild-pro-logo.jpg"));
+  const social = await badgeOnCanvas(1200, 630, 942);
+  await fs.writeFile(path.join(PUBLIC, "steelbuild-pro-og.png"), social);
+  await fs.writeFile(path.join(PUBLIC, "steelbuild-pro-logo.png"), social);
+  await sharp(social).jpeg({ quality: 91 }).toFile(path.join(PUBLIC, "steelbuild-pro-logo.jpg"));
 
-  console.log("Brand rasters regenerated in public/.");
+  const nativeIcon = await badgeOnCanvas(1024, 1024, 972);
+  await fs.writeFile(path.join(NATIVE_ASSETS, "AppIcon.appiconset", "AppIcon-512@2x.png"), nativeIcon);
+
+  // LaunchScreen.storyboard uses scaleAspectFill. At 9:19.5 phone aspect this
+  // width leaves clear side space after the square canvas is cropped.
+  const splash = await badgeOnCanvas(2732, 2732, 1200);
+  const splashDir = path.join(NATIVE_ASSETS, "Splash.imageset");
+  await Promise.all([
+    "splash-2732x2732.png",
+    "splash-2732x2732-1.png",
+    "splash-2732x2732-2.png",
+  ].map((name) => fs.writeFile(path.join(splashDir, name), splash)));
+
+  console.log("Steel diamond badge icons and previews rendered from the approved source.");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main().catch((error) => { console.error(error); process.exitCode = 1; });

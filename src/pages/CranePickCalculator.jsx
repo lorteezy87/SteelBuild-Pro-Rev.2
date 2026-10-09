@@ -534,8 +534,8 @@ export default function CranePickCalculator() {
 
   // ── Render ────────────────────────────────────────────────
   return (
-    <div className="sb-dashboard-reference-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
-      <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+    <div className="sb-dashboard-reference-page crane-pick-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
+      <div style={{ width: "100%", maxWidth: 1440, margin: "0 auto" }}>
 
         {/* Header */}
         <div style={{ marginBottom: 14 }}>
@@ -586,7 +586,7 @@ export default function CranePickCalculator() {
                 {field("Piece Weight (lb)", pieceWeight, setPieceWeight, "e.g. 12,500")}
                 {field("Rigging Weight (lb)", riggingWeight, setRiggingWeight, "0",
                   { hint: "Below the hook: slings, shackles, spreader, chokers, tag lines." })}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="crane-pick-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {field("Hook Block / Ball (lb)", hookBlock, setHookBlock, "e.g. 1,200", { small: true })}
                   {field("Other Chart Deductions (lb)", otherDeduct, setOtherDeduct, "0", { small: true })}
                 </div>
@@ -642,7 +642,7 @@ export default function CranePickCalculator() {
                 {/* Offset CG geometry (2-leg only) */}
                 {isOffset && (
                   <div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <div className="crane-pick-field-grid crane-pick-field-grid--three" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                       {field("Hook ↕ Picks H (ft)", offH, setOffH, "e.g. 8", { small: true })}
                       {field("CG → Pick 1 (ft)", offD1, setOffD1, "e.g. 4", { small: true })}
                       {field("CG → Pick 2 (ft)", offD2, setOffD2, "e.g. 12", { small: true })}
@@ -702,7 +702,7 @@ export default function CranePickCalculator() {
                     )}
                     {angleMode === ANGLE_MODES.HEIGHT_SPAN && (
                       <>
-                        <div style={{ display: "grid", gridTemplateColumns: numLegs === 4 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8 }}>
+                        <div className={`crane-pick-field-grid${numLegs === 4 ? " crane-pick-field-grid--three" : ""}`} style={{ display: "grid", gridTemplateColumns: numLegs === 4 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8 }}>
                           {field("Height H (in)", hspanH, setHspanH, "vertical drop", { small: true })}
                           {field(numLegs === 4 ? "Half-length (in)" : "Half-span S (in)", hspanS, setHspanS, "horizontal", { small: true })}
                           {numLegs === 4 && field("Half-width (in)", hspanW, setHspanW, "horizontal", { small: true })}
@@ -717,7 +717,7 @@ export default function CranePickCalculator() {
                     )}
                     {angleMode === ANGLE_MODES.SLING && (
                       <>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        <div className="crane-pick-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                           {field("Sling Length L (ft)", slingLen, setSlingLen, "from the tag", { small: true })}
                           {field("Height H (ft)", slingH, setSlingH, "hook → pick point", { small: true })}
                         </div>
@@ -740,7 +740,7 @@ export default function CranePickCalculator() {
                 )}
 
                 {/* Rigging gear ratings */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="crane-pick-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {field("Sling WLL at Hitch (lb)", slingWll, setSlingWll, "from the tag", { small: true })}
                   {field("Shackle WLL (lb)", shackleWll, setShackleWll, "e.g. 17,000", { small: true })}
                 </div>
@@ -790,7 +790,7 @@ export default function CranePickCalculator() {
                   field("Rated Capacity at Radius (lb)", craneCapacity, setCraneCapacity, "e.g. 180,000",
                     { hint: "From the crane's load chart at the planned working radius, boom configuration, and counterweight setup." })
                 )}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="crane-pick-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {field("Boom Length (ft)", boomLength, setBoomLength, "e.g. 110", { small: true })}
                   {field("Working Radius (ft)", workingRadius, setWorkingRadius, "e.g. 45", { small: true })}
                 </div>
@@ -816,7 +816,7 @@ export default function CranePickCalculator() {
                     {refOpen ? "▾" : "▸"} Reference Details (metadata only)
                   </button>
                   {refOpen && (
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+                    <div className="crane-pick-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
                       {field("Crane Make / Model", craneModel, setCraneModel, "e.g. Grove GMK5150L", { small: true, text: true })}
                       {field("Counterweight", counterweight, setCounterweight, "e.g. 53,000 lb", { small: true, text: true })}
                     </div>
@@ -1000,12 +1000,7 @@ export default function CranePickCalculator() {
           )}
         </div>
 
-        {/* Mobile: collapse the grid */}
         <style>{`
-          @media (max-width: 820px) {
-            .crane-pick-grid { grid-template-columns: 1fr !important; }
-            .crane-pick-grid > div { position: static !important; }
-          }
           @media print {
             body > :not(.pick-summary-print-root),
             .pick-summary-print-root > :not(.pick-summary-print-area) { display: none !important; }
@@ -1530,11 +1525,12 @@ function SummarySection({ title, children }) {
 
 function SummaryRow({ k, v, bold }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 3 }}>
-      <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{k}</span>
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 3 }}>
+      <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)", minWidth: 0, overflowWrap: "anywhere" }}>{k}</span>
       <span style={{
         ...mono, fontSize: bold ? 12 : 11, fontWeight: bold ? 800 : 500,
         color: "var(--text-primary)", fontVariantNumeric: "tabular-nums",
+        minWidth: 0, overflowWrap: "anywhere", textAlign: "right",
       }}>
         {v}
       </span>

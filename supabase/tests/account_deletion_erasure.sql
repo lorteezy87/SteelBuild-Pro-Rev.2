@@ -17,6 +17,15 @@
 BEGIN;
 \ir ../migrations/20260927150000_erasure_census_admits_project_admins.sql
 \ir ../migrations/20260927160000_account_deletion_releases_authorship.sql
+\ir ../migrations/20261007084117_permit_authorship_cleanup_through_immutable_guards.sql
+\ir ../migrations/20261007090057_acquire_erasure_relation_locks_before_rows.sql
+
+do $$ begin
+  assert not exists (select 1 from auth.users where id in ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') or email in ('a@example.invalid','b@example.invalid'))
+    and not exists (select 1 from public.organizations where id::text like '0a000000-0000-4000-8000-%')
+    and not exists (select 1 from public.projects where id::text like '0b000000-0000-4000-8000-%'),
+    'Fixture namespace collision: never reuse an existing account or workspace';
+end $$;
 
 -- A = the user deleting their account, B = a teammate.
 -- OX: A is the only member (owner)          -> erased by the RPC
@@ -50,10 +59,21 @@ insert into public.organization_members (org_id, user_id, role) values
   (:OZ, :A, 'owner'), (:OZ, :B, 'member'),
   (:OW, :A, 'owner'), (:OW, :B, 'owner');
 
+-- Normal project seed triggers require the actual owner's authorization.
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated"}', true);
 insert into public.projects (id, org_id, name) values
   (:PX, :OX, 'Solo live'), (:PY, :OY, 'Shared job'), (:PZ, :OZ, 'Team job');
-insert into public.projects (id, org_id, name, is_deleted) values (:PX2, :OX, 'Solo archived', true);
+insert into public.projects (id, org_id, name, is_deleted) values (:PX2, :OX, 'Solo archived', false);
+select public.soft_delete_project(:PX2);
+select set_config('request.jwt.claims', '', true);
 
+-- Only synthetic authored-row setup bypasses creation-RPC guards. Required
+-- columns and CHECK constraints remain active. Restore normal triggers before
+-- every census, erasure, permission, and Auth-delete assertion below.
+create temp table erasure_trigger_baseline on commit drop as
+  select oid, tgenabled from pg_trigger where tgrelid in
+    (select oid from pg_class where relnamespace='public'::regnamespace);
+set local session_replication_role = replica;
 -- Authored rows in the shared project PY: one per targeted column.
 insert into public.drawing_sets (id, project_id, set_name) values ('0c000000-0000-4000-8000-000000000001', :PY, 'S-100 set');
 insert into public.drawings (id, project_id, drawing_set_id, sheet_number) values ('0c000000-0000-4000-8000-000000000002', :PY, '0c000000-0000-4000-8000-000000000001', 'S-101');
@@ -64,8 +84,10 @@ insert into public.drawing_signoffs (project_id, drawing_revision_id, drawing_id
   values (:PY, '0c000000-0000-4000-8000-000000000003', '0c000000-0000-4000-8000-000000000002', 'reviewed', :A, :A);
 insert into public.drawing_revision_summaries (project_id, drawing_set_id, generated_by) values (:PY, '0c000000-0000-4000-8000-000000000001', :A);
 insert into public.comments (project_id, entity_type, entity_id, body, status_changed_by) values (:PY, 'project', :PY, 'note', :A);
-insert into public.backcharges (id, project_id, title, created_by) values ('0c000000-0000-4000-8000-000000000004', :PY, 'Rework', :A);
-insert into public.backcharge_tm_tickets (backcharge_id, project_id, created_by) values ('0c000000-0000-4000-8000-000000000004', :PY, :A);
+insert into public.backcharges (id, project_id, title, created_by, status, amount, ticket_total)
+  values ('0c000000-0000-4000-8000-000000000004', :PY, 'Rework', :A, 'approved', 123.45, 123.45);
+insert into public.backcharge_tm_tickets (backcharge_id, project_id, created_by, labor_hours, labor_rate, amount)
+  values ('0c000000-0000-4000-8000-000000000004', :PY, :A, 2, 100, 123.45);
 select set_config('steelbuild.bc_rpc', 'on', true);
 insert into public.backcharge_events (backcharge_id, project_id, event_type, actor) values ('0c000000-0000-4000-8000-000000000004', :PY, 'created', :A);
 select set_config('steelbuild.bc_rpc', '', true);
@@ -82,19 +104,28 @@ insert into public.material_requirements (id, project_id, requirement_code, crea
 insert into public.piece_material_requirements (project_id, material_requirement_id, piece_id, created_by) values (:PY, '0c000000-0000-4000-8000-000000000007', '0c000000-0000-4000-8000-000000000006', :A);
 insert into public.material_receipt_events (project_id, material_requirement_id, next_state, recorded_by) values (:PY, '0c000000-0000-4000-8000-000000000007', 'received', :A);
 insert into public.piece_import_batches (project_id, source_type, uploaded_by, approved_by, applied_by) values (:PY, 'csv', :A, :A, :A);
--- Fixture-only: these two guards validate a real release, which is not what is under test.
-alter table public.fab_release_log disable trigger trg_enforce_fab_release_gate;
-alter table public.fab_releases disable trigger trg_guard_canonical_fab_release_write;
 insert into public.fab_release_log (project_id, released_by) values (:PY, :A);
-insert into public.fab_release_overrides (project_id, overridden_by) values (:PY, :A);
+insert into public.fab_release_overrides (project_id, overridden_by, reason) values (:PY, :A, 'Synthetic authorship retention fixture');
 insert into public.fab_releases (project_id, release_number, name, released_by) values (:PY, 'FR-001', 'First release', :A);
-alter table public.fab_release_log enable trigger trg_enforce_fab_release_gate;
-alter table public.fab_releases enable trigger trg_guard_canonical_fab_release_write;
 
 -- Something of A's inside the solo workspace too, erased with it.
 insert into public.drawing_sets (id, project_id, set_name) values ('0c000000-0000-4000-8000-000000000011', :PX, 'Solo set');
 update public.drawing_sets set is_locked = true, locked_by = :A where id = '0c000000-0000-4000-8000-000000000011';
 insert into public.backcharges (project_id, title, created_by) values (:PX, 'Solo backcharge', :A);
+
+set local session_replication_role = origin;
+do $$ begin
+  assert current_setting('session_replication_role')='origin', 'Normal triggers must be restored before assertions';
+  assert not exists (
+    select 1 from erasure_trigger_baseline b left join pg_trigger t on t.oid=b.oid
+    where t.oid is null or b.tgenabled is distinct from t.tgenabled
+  ), 'Synthetic setup changed trigger enablement';
+end $$;
+
+create temp table retained_authorship_snapshot on commit drop as
+  select 'report' as kind, to_jsonb(summary_row)-'generated_by' as row from public.drawing_revision_summaries summary_row where project_id=:PY
+  union all select 'ticket', to_jsonb(ticket_row)-'created_by'-'updated_at' from public.backcharge_tm_tickets ticket_row where project_id=:PY
+  union all select 'backcharge', to_jsonb(charge_row)-'created_by'-'updated_at' from public.backcharges charge_row where project_id=:PY;
 
 \echo '== fixtures loaded'
 
@@ -249,11 +280,23 @@ begin
   assert (select is_locked from public.drawing_sets where id = '0c000000-0000-4000-8000-000000000001'), 'FAIL 6: set unlocked';
   assert not exists (select 1 from public.organization_members where user_id = a), 'FAIL 6: memberships remain';
   assert (select count(*) from public.organization_members where user_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and role = 'owner') = 3, 'FAIL 6: B lost ownership';
+  assert not exists (
+    (select * from retained_authorship_snapshot)
+    except
+    (select 'report', to_jsonb(summary_row)-'generated_by' from public.drawing_revision_summaries summary_row where project_id='0b000000-0000-4000-8000-000000000002'
+     union all select 'ticket', to_jsonb(ticket_row)-'created_by'-'updated_at' from public.backcharge_tm_tickets ticket_row where project_id='0b000000-0000-4000-8000-000000000002'
+     union all select 'backcharge', to_jsonb(charge_row)-'created_by'-'updated_at' from public.backcharges charge_row where project_id='0b000000-0000-4000-8000-000000000002')
+  ), 'FAIL 6: immutable report or frozen ticket/backcharge content changed during authorship cleanup';
+  assert (select count(*) from public.backcharge_events where project_id='0b000000-0000-4000-8000-000000000002')=1,
+    'FAIL 6: authorship cleanup manufactured a financial event';
   raise notice 'OK 6: 16 authorship links cleared, 11 audit ids kept, set still locked, teammate untouched';
 end $$;
 
 -- 7. Nothing in public still blocks an auth.users delete.
 do $$ begin
+  assert current_setting('session_replication_role')='origin', 'FAIL 7: normal triggers not restored';
+  assert not exists (select 1 from erasure_trigger_baseline b left join pg_trigger t on t.oid=b.oid where t.oid is null or b.tgenabled is distinct from t.tgenabled),
+    'FAIL 7: erasure changed trigger enablement';
   assert not exists (
     select 1 from pg_catalog.pg_constraint con join pg_catalog.pg_class cls on cls.oid = con.conrelid
     where con.contype = 'f' and con.confrelid = 'auth.users'::regclass and con.confdeltype in ('a','r')

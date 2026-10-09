@@ -70,7 +70,7 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
           justifyContent: "space-between",
           gap: 12,
         }}>
-          <BrandLogo height={56} title="SteelBuild Pro" style={{ display: "block", maxWidth: "70%", width: "auto" }} />
+          <BrandLogo height={68} title="SteelBuild Pro" style={{ maxWidth: "70%", width: "auto" }} />
           <button
             type="button"
             onClick={onClose}
