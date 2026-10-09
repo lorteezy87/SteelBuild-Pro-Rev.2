@@ -187,3 +187,43 @@ projects, project grants, Storage objects, workflow receipts or erasure receipts
 No PDF bytes or customer rows were changed. These two migrations are still
 pending production application, as are the five Drawing Control prerequisites.
 Authenticated browser acceptance remains separate.
+
+## Installed staging checkout and project capacity — October 9, 13:41–13:43 UTC
+
+Both exact reviewed candidates were manually applied and stamped on staging
+`ndyfjffsulfbwpmwdmic`; neither is installed in production. Checkout source
+`2907a5a47` and capacity source `33c205f8b` passed their application, secret,
+Edge and commercial PostgreSQL jobs. The combined integration remains subject
+to its own complete checks and browser acceptance.
+
+| Version | Staging ledger SHA-256 | Installed rollback checks |
+| --- | --- | --- |
+| `20261009125901` | `ba0d72e62e8df02777f53d653593d7d9f41811798e0cfb0d551e367ce034eebb` | 20 |
+| `20261009140000` | `b22297e7d1c6fd1f3e2f5ae1af080695a28404cf450c563085a73754743f0311` | 18 |
+
+Each apply refused existing candidates, verified its prerequisite payload and
+source hash, and stamped the full original SQL in the same bounded transaction.
+The capacity apply also required the observed original `create_project`
+definition (MD5 `b933684ffdb42e8d4e28a3c013897556`) before replacing it.
+Separate verification found zero synthetic users, organizations, projects,
+project grants, checkout intents, billing receipts or erasure receipts.
+
+The four checkout RPCs remain service-only with empty search paths; the private
+intent table has RLS and no direct SELECT grants for anon, authenticated or
+service roles. The capacity trigger is enabled. `create_project` remains
+authenticated-only; the trigger helper has no caller EXECUTE grants. Installed
+definition hashes are retained with the local release evidence. The capacity
+rule preserves current Free/Pro/Business/Enterprise limits and ordinary edits
+after downgrade; it adds no new paid-module restrictions. Provider test-mode
+delivery, historical subscription reconciliation and Edge deployment remain open.
+
+### Legacy submittal type and browser fixture limits
+
+Read-only staging inspection found that the original STG-0001 erection submittal
+has a NULL type, no current round and no revision roster. The canonical governing
+submittal predicate and installed SQL require exact `Shop Drawing`; the legacy
+record cannot authorize fabrication release. It must not be silently retyped or
+treated as verified approval. Client defaults and acceptance fixtures are being
+aligned to this strict contract. A separately identified synthetic Draft can
+test missing-evidence behavior, but does not establish verified or stale PDF
+acceptance. Existing customer and legacy fixture rows remain unchanged.
