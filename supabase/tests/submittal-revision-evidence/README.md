@@ -38,3 +38,15 @@ includes shared-object-lock ordering and replacement after capture. Actual
 Drawing Control/Fab Release/Piece/Work Package UI agreement and production legacy
 coverage inventory remain separate acceptance work. There is no automatic
 backfill. The quarantined revision-upload migration remains frozen.
+# Installed staging verification
+
+After the exact migration is installed, `node installed-rollback.ts` emits a
+separate acceptance query. Run it only against staging `ndyfjffsulfbwpmwdmic`.
+It checks the ledger against the committed Git blob and reuses the 31 hosted
+assertions without reinstalling the candidate. The legacy pre-migration fixture
+temporarily disables only `aaa_submittal_round_workflow` on `submittals` inside
+the rollback transaction; the transactional DDL lock prevents other sessions
+from seeing that interval, and the guard is re-enabled before assertions.
+All other policies/triggers remain enabled. Always verify fixture cleanup and
+the enabled guard independently afterward. No actual PDF bytes are uploaded or
+deleted. Production application and browser acceptance are separate steps.

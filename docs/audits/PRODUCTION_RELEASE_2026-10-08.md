@@ -160,3 +160,30 @@ push from publishing before its reviewed Edge dependencies and staging browser
 acceptance are ready. Staging remains enabled. Restore this exact variable to
 `true` after those checks, then publish the tested main commit through the normal
 five-gate workflow; leaving the hold set is not a completed production update.
+
+## Installed staging membership and revision evidence — October 9
+
+Staging received the exact reviewed membership and final round-manifest SQL
+in one transaction. The apply checked the five existing Drawing Control ledger
+hashes, refused duplicate stamps and verified each original source payload.
+
+| Version | Staging ledger SHA-256 |
+| --- | --- |
+| `20261008032524` | `281a52c5d64136f81cf30e37240990f575eb2cea920398511d7e08b524984dbf` |
+| `20261009070300` | `b4b77581e51a0c61ee63d47fa34d1010a123bb1759bee6889e0ca0ec719b0ea7` |
+
+The installed membership suite passed 53 checks, including actual archive and
+hard-erasure RPCs. The installed revision suite passed 31 checks covering source
+capture, replay, PM/MFA/workspace guards, legacy reconciliation, stale/replaced
+Storage sources, corrective transitions and erasure. Its pre-migration legacy
+fixture is constructed inside the rollback transaction with only the new
+submittal workflow guard temporarily disabled under its transactional DDL lock;
+the guard is restored before any assertion. Storage edits are scoped to the
+synthetic app-files object and evidence comparisons to the synthetic project.
+
+A separate verification found the guard enabled, matching ledger payloads,
+14 recorded function definitions/grant sets and zero synthetic users, workspaces,
+projects, project grants, Storage objects, workflow receipts or erasure receipts.
+No PDF bytes or customer rows were changed. These two migrations are still
+pending production application, as are the five Drawing Control prerequisites.
+Authenticated browser acceptance remains separate.

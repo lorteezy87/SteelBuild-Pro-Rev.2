@@ -56,7 +56,7 @@ SELECT pg_temp.round_command('{"status":"Approved","ball_in_court":"GC","metadat
 SELECT pg_temp.assert_round('valid return preserves exact evidence',(public.get_submittal_revision_coverage('ba090000-0000-4000-8000-000000000050')->>'ok')::boolean);
 SAVEPOINT missing_pdf_correction;
 RESET ROLE;
-UPDATE storage.objects SET name='ba090000-0000-4000-8000-000000000001/uploads/missing-original.pdf' WHERE name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
+UPDATE storage.objects SET name='ba090000-0000-4000-8000-000000000001/uploads/missing-original.pdf' WHERE bucket_id='app-files' AND name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.round_command('{"status":"Revise and Resubmit"}');
 SELECT pg_temp.expect_round_error('missing PDF still denies resubmission',$q$SELECT pg_temp.round_command('{"status":"Submitted","ball_in_court":"EOR","submitted_date":"2026-10-09"}')$q$,'ROUND_SOURCE_INCOMPLETE');
@@ -83,25 +83,25 @@ SELECT pg_temp.assert_round('public command grants exclude anon and service role
 -- Savepoints retain none of these simulated metadata changes. The actual PDF
 -- bytes are not read, written, deleted or claimed to be independently retained.
 SAVEPOINT original_source;
-UPDATE storage.objects SET version='replacement-version' WHERE name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
+UPDATE storage.objects SET version='replacement-version' WHERE bucket_id='app-files' AND name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
 DO $$ BEGIN IF public.get_submittal_revision_coverage('ba090000-0000-4000-8000-000000000050')->>'reason'<>'stale_manifest' THEN RAISE EXCEPTION 'Replacement version was not detected'; END IF; END $$;
 ROLLBACK TO original_source;
 SELECT pg_temp.assert_round('same-path object replacement invalidates approval',true);
 SAVEPOINT original_source;
-UPDATE storage.objects SET name='ba090000-0000-4000-8000-000000000001/uploads/moved-round-evidence.pdf' WHERE name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
+UPDATE storage.objects SET name='ba090000-0000-4000-8000-000000000001/uploads/moved-round-evidence.pdf' WHERE bucket_id='app-files' AND name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
 DO $$ BEGIN IF public.get_submittal_revision_coverage('ba090000-0000-4000-8000-000000000050')->>'reason'<>'stale_manifest' THEN RAISE EXCEPTION 'Missing source object was not detected'; END IF; END $$;
 ROLLBACK TO original_source;
 SELECT pg_temp.assert_round('missing original object invalidates approval',true);
 SAVEPOINT original_source;
-UPDATE storage.objects SET metadata=coalesce(metadata,'{}')||'{"contentType":"application/octet-stream"}' WHERE name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
+UPDATE storage.objects SET metadata=coalesce(metadata,'{}')||'{"contentType":"application/octet-stream"}' WHERE bucket_id='app-files' AND name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
 DO $$ BEGIN IF public.get_submittal_revision_coverage('ba090000-0000-4000-8000-000000000050')->>'reason'<>'stale_manifest' THEN RAISE EXCEPTION 'Changed source metadata was not detected'; END IF; END $$;
 ROLLBACK TO original_source;
 SELECT pg_temp.assert_round('metadata mutation invalidates approval',true);
 SAVEPOINT original_authorship;
-INSERT INTO round_test_receipts(kind,result) SELECT 'authorship',jsonb_agg(to_jsonb(e)-'captured_by' ORDER BY e.id) FROM public.submittal_round_revision_evidence e;
+INSERT INTO round_test_receipts(kind,result) SELECT 'authorship',jsonb_agg(to_jsonb(e)-'captured_by' ORDER BY e.id) FROM public.submittal_round_revision_evidence e WHERE e.project_id='ba090000-0000-4000-8000-000000000002';
 DELETE FROM auth.users WHERE id='ba090000-0000-4000-8000-000000000010';
-DO $$ BEGIN IF EXISTS(SELECT 1 FROM public.submittal_round_revision_evidence WHERE captured_by IS NOT NULL)
- OR (SELECT jsonb_agg(to_jsonb(e)-'captured_by' ORDER BY e.id) FROM public.submittal_round_revision_evidence e) IS DISTINCT FROM (SELECT result FROM round_test_receipts WHERE kind='authorship')
+DO $$ BEGIN IF EXISTS(SELECT 1 FROM public.submittal_round_revision_evidence WHERE project_id='ba090000-0000-4000-8000-000000000002' AND captured_by IS NOT NULL)
+ OR (SELECT jsonb_agg(to_jsonb(e)-'captured_by' ORDER BY e.id) FROM public.submittal_round_revision_evidence e WHERE e.project_id='ba090000-0000-4000-8000-000000000002') IS DISTINCT FROM (SELECT result FROM round_test_receipts WHERE kind='authorship')
  THEN RAISE EXCEPTION 'Auth removal changed immutable evidence'; END IF; END $$;
 ROLLBACK TO original_authorship;
 SELECT pg_temp.assert_round('actual Auth FK cleanup retains all source snapshots',true);
