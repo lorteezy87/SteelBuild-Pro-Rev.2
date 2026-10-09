@@ -55,6 +55,9 @@ It retains the exact source, CI identities, eleven SQL hash pairs, prior archive
 hash, seven versions/JWT/source hashes, path mappings and deployment metadata.
 It contains no session credentials or provider secrets. This record supersedes
 the same-prefix progress file, which recorded only the first deployment.
+The original complete before/after inventories are retained separately as
+`2026-10-09-04285069-staging-edge-inventories.json` in that directory; SHA-256
+`1c56bbe42a8c52c3844d1dd97dcb0a163e271e38e4bf54e5825b9e09c7b39e7c`.
 
 ## Hosted drawing acceptance: failed setup, no case passed
 
