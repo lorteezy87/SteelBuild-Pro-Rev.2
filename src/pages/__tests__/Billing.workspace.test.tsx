@@ -6,20 +6,19 @@ import { setActiveOrgId } from '@/lib/activeOrg';
 
 const mocks = vi.hoisted(() => ({
   orgId: 'org-a', role: 'owner', native: false,
-  refetch: vi.fn(), checkout: vi.fn(), portal: vi.fn(), count: vi.fn(), list: vi.fn(),
+  refetch: vi.fn(), checkout: vi.fn(), portal: vi.fn(), count: vi.fn(), members: vi.fn(), invites: vi.fn(), list: vi.fn(),
   success: vi.fn(), message: vi.fn(), error: vi.fn(),
 }));
 vi.mock('@/components/shared/OrgContext', () => ({ useOrg: () => ({
   currentOrg: { id: mocks.orgId, name: mocks.orgId, stripe_customer_id: 'cus_test' },
   currentRole: mocks.role, refetchOrgs: mocks.refetch,
 }) }));
-vi.mock('@/hooks/usePlan', () => ({ usePlan: () => ({ plan: { name: 'Free' }, planKey: 'free', status: null, isActive: false }) }));
+vi.mock('@/hooks/usePlan', () => ({ usePlan: () => ({ plan: { name: 'Free' }, planKey: 'free', status: null as string | null, isActive: false }) }));
 vi.mock('@/lib/native/platform', () => ({ isNativePlatform: () => mocks.native }));
-vi.mock('@/lib/billing/billingService', () => ({ startCheckout: mocks.checkout, openBillingPortal: mocks.portal, getWorkspaceProjectCount: mocks.count }));
-vi.mock('@/lib/org/repository', () => ({ listOrgMembers: async () => [], listInvitations: async () => [] }));
+vi.mock('@/lib/billing/billingService', () => ({ startCheckout: mocks.checkout, openBillingPortal: mocks.portal, getWorkspaceProjectCount: mocks.count, getWorkspaceMemberCount: mocks.members, getWorkspacePendingInvitationCount: mocks.invites }));
 vi.mock('@/api/supabaseClient', () => ({ entities: { Project: { list: mocks.list } } }));
 vi.mock('sonner', () => ({ toast: { success: mocks.success, message: mocks.message, error: mocks.error } }));
-vi.mock('../billing/BillingControlCenter', () => ({ default: ({ projectCount, children }: { projectCount: number | null; children: React.ReactNode }) => <><output aria-label="Project count">{projectCount ?? 'unknown'}</output>{children}</> }));
+vi.mock('../billing/BillingControlCenter', () => ({ default: ({ projectCount, memberCount, pendingCount, children }: { projectCount: number | null; memberCount: number | null; pendingCount: number | null; children: React.ReactNode }) => <><output aria-label="Project count">{projectCount ?? 'unknown'}</output><output aria-label="Member count">{memberCount ?? 'unknown'}</output><output aria-label="Pending count">{pendingCount ?? 'unknown'}</output>{children}</> }));
 import Billing from '../Billing';
 
 function deferred<T>() {
@@ -40,12 +39,34 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.orgId = 'org-a'; mocks.role = 'owner'; mocks.native = false;
   mocks.count.mockResolvedValue(3); mocks.list.mockResolvedValue([]); mocks.refetch.mockResolvedValue({});
+  mocks.members.mockResolvedValue(2); mocks.invites.mockResolvedValue(1);
   setActiveOrgId('org-a');
   window.history.replaceState({}, '', '/Billing');
 });
 afterEach(() => { cleanup(); setActiveOrgId(null); vi.useRealTimers(); });
 
 describe('Billing workspace isolation', () => {
+  it('keeps both member and invitation usage unknown while loading', () => {
+    mocks.members.mockReturnValue(new Promise(() => {})); mocks.invites.mockReturnValue(new Promise(() => {}));
+    mount();
+    expect(screen.getByLabelText('Member count')).toHaveTextContent('unknown');
+    expect(screen.getByLabelText('Pending count')).toHaveTextContent('unknown');
+  });
+
+  it.each(['members', 'invites'] as const)('keeps failed %s usage unknown instead of zero', async (kind) => {
+    mocks[kind].mockRejectedValue(new Error('usage unavailable')); mount();
+    await waitFor(() => expect(screen.getByLabelText(kind === 'members' ? 'Pending count' : 'Member count')).toHaveTextContent(kind === 'members' ? '1' : '2'));
+    expect(screen.getByLabelText(kind === 'members' ? 'Member count' : 'Pending count')).toHaveTextContent('unknown');
+  });
+
+  it('does not query admin-only invitations or reuse the owner invite count for a member', async () => {
+    const view = mount(); await waitFor(() => expect(screen.getByLabelText('Pending count')).toHaveTextContent('1'));
+    mocks.invites.mockClear(); mocks.role = 'member'; view.refresh();
+    await waitFor(() => expect(screen.getByLabelText('Member count')).toHaveTextContent('2'));
+    expect(screen.getByLabelText('Pending count')).toHaveTextContent('unknown');
+    expect(mocks.invites).not.toHaveBeenCalled();
+  });
+
   it('never announces an active subscription from a success query parameter', async () => {
     window.history.replaceState({}, '', '/Billing?status=success&keep=1#plan');
     mount();

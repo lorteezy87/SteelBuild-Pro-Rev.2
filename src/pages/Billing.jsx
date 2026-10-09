@@ -10,16 +10,15 @@
  * Stripe handlers and plan cards remain owned by Billing.jsx so behavior does not drift.
  */
 
-import React, { useMemo } from "react";
+import React from "react";
 import { Check, CreditCard, ExternalLink, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useOrg } from "@/components/shared/OrgContext";
 import { usePlan } from "@/hooks/usePlan";
 import { PLANS } from "@/lib/billing/plans";
-import { getWorkspaceProjectCount } from "@/lib/billing/billingService";
+import { getWorkspaceProjectCount, getWorkspaceMemberCount, getWorkspacePendingInvitationCount } from "@/lib/billing/billingService";
 import { isNativePlatform } from "@/lib/native/platform";
 import BillingControlCenter from "./billing/BillingControlCenter";
-import { listOrgMembers, listInvitations } from "@/lib/org/repository";
 import { useBillingActions } from "./billing/useBillingActions";
 
 export default function Billing() {
@@ -31,16 +30,16 @@ export default function Billing() {
 
   const { busy, upgrade, manage } = useBillingActions({ orgId, canManage, native, refetchOrgs });
 
-  const { data: orgMembers = [] } = useQuery({
-    queryKey: ["org-members", orgId],
-    queryFn: () => listOrgMembers(orgId),
+  const memberUsage = useQuery({
+    queryKey: ["billing-member-count", orgId, currentRole],
+    queryFn: () => getWorkspaceMemberCount(orgId),
     enabled: !!orgId,
     staleTime: 60_000,
   });
-  const { data: orgInvites = [] } = useQuery({
-    queryKey: ["org-invites", orgId],
-    queryFn: () => listInvitations(orgId),
-    enabled: !!orgId,
+  const invitationUsage = useQuery({
+    queryKey: ["billing-invitation-count", orgId, currentRole],
+    queryFn: () => getWorkspacePendingInvitationCount(orgId),
+    enabled: !!orgId && canManage,
     staleTime: 60_000,
   });
   const projectUsage = useQuery({
@@ -50,11 +49,8 @@ export default function Billing() {
     staleTime: 5 * 60_000,
   });
 
-  const memberCount = orgMembers.length;
-  const pendingCount = useMemo(
-    () => orgInvites.filter((i) => i.status === "pending").length,
-    [orgInvites],
-  );
+  const memberCount = memberUsage.isError ? null : memberUsage.data ?? null;
+  const pendingCount = !canManage || invitationUsage.isError ? null : invitationUsage.data ?? null;
   const projectCount = projectUsage.isError ? null : projectUsage.data ?? null;
 
   // BillingControlCenter is canonical.
@@ -157,6 +153,7 @@ export default function Billing() {
       stripeCustomerId={currentOrg?.stripe_customer_id ?? null}
       memberCount={memberCount}
       pendingCount={pendingCount}
+      seatCountIsWorkspaceTotal={canManage}
       projectCount={projectCount}
       projectCountIsWorkspaceTotal={canManage}
     >

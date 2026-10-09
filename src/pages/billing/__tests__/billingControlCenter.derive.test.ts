@@ -105,15 +105,15 @@ describe("buildBillingSummary — free plan", () => {
 
   it("seat capacity uses free limit of 2", () => {
     const s = buildBillingSummary(base);
-    expect(s.seats.limit).toBe(2);
-    expect(s.seats.used).toBe(1);
-    expect(s.seats.remaining).toBe(1);
-    expect(s.seats.atLimit).toBe(false);
+    expect(s.seats?.limit).toBe(2);
+    expect(s.seats?.used).toBe(1);
+    expect(s.seats?.remaining).toBe(1);
+    expect(s.seats?.atLimit).toBe(false);
   });
 
   it("flags atLimit for seat KPI when both free seats are taken", () => {
     const s = buildBillingSummary({ ...base, memberCount: 1, pendingCount: 1 });
-    expect(s.seats.atLimit).toBe(true);
+    expect(s.seats?.atLimit).toBe(true);
     expect(s.kpis.find((k) => k.label === "Seats Used")?.tone).toBe("danger");
   });
 
@@ -160,9 +160,9 @@ describe("buildBillingSummary — Pro active", () => {
 
   it("seat usage: 8 members + 2 pending = 10 / 15, neutral tone", () => {
     const s = buildBillingSummary(base);
-    expect(s.seats.used).toBe(10);
-    expect(s.seats.limit).toBe(15);
-    expect(s.seats.atLimit).toBe(false);
+    expect(s.seats?.used).toBe(10);
+    expect(s.seats?.limit).toBe(15);
+    expect(s.seats?.atLimit).toBe(false);
     expect(s.kpis.find((k) => k.label === "Seats Used")?.tone).toBe("neutral");
   });
 
@@ -175,7 +175,7 @@ describe("buildBillingSummary — Pro active", () => {
   it("near-seat-limit warning when ≥80%", () => {
     const s = buildBillingSummary({ ...base, memberCount: 12, pendingCount: 0 });
     // 12/15 = 80% → near = true
-    expect(s.seats.near).toBe(true);
+    expect(s.seats?.near).toBe(true);
     expect(s.kpis.find((k) => k.label === "Seats Used")?.tone).toBe("warn");
   });
 });
@@ -214,7 +214,7 @@ describe("buildBillingSummary — enterprise", () => {
   it("enterprise is always active, unlimited, info tone", () => {
     const s = buildBillingSummary(base);
     expect(s.isActive).toBe(true);
-    expect(s.seats.unlimited).toBe(true);
+    expect(s.seats?.unlimited).toBe(true);
     expect(s.projectsUnlimited).toBe(true);
     expect(s.statusLabel).toBe("Enterprise");
     expect(s.statusTone).toBe("info");
@@ -239,7 +239,7 @@ describe("buildBillingSummary — business unlimited", () => {
 
   it("seats and projects are unlimited", () => {
     const s = buildBillingSummary(base);
-    expect(s.seats.unlimited).toBe(true);
+    expect(s.seats?.unlimited).toBe(true);
     expect(s.projectsUnlimited).toBe(true);
     expect(s.kpis.find((k) => k.label === "Seats Used")?.tone).toBe("neutral");
     expect(s.kpis.find((k) => k.label === "Projects")?.tone).toBe("neutral");
@@ -247,7 +247,7 @@ describe("buildBillingSummary — business unlimited", () => {
 });
 
 describe("project usage evidence", () => {
-  const base = { planKey: "pro", subscriptionStatus: "active", currentPeriodEnd: null, stripeCustomerId: "cus_test", memberCount: 1, pendingCount: 0 };
+  const base = { planKey: "pro", subscriptionStatus: "active", currentPeriodEnd: null as string | null, stripeCustomerId: "cus_test", memberCount: 1, pendingCount: 0 };
   it("does not invent zero or remaining capacity from an unknown count", () => {
     const summary = buildBillingSummary({ ...base, projectCount: null });
     expect(summary.kpis.find(kpi => kpi.label === "Projects")).toMatchObject({ value: "—", sublabel: "project usage unavailable", tone: "neutral" });
@@ -255,5 +255,19 @@ describe("project usage evidence", () => {
   it("does not describe a member's accessible subset as workspace capacity", () => {
     const summary = buildBillingSummary({ ...base, projectCount: 2, projectCountIsWorkspaceTotal: false });
     expect(summary.kpis.find(kpi => kpi.label === "Projects you can access")).toMatchObject({ value: "2", sublabel: "workspace total may be higher", tone: "neutral" });
+  });
+});
+
+describe("seat usage evidence", () => {
+  const base = { planKey: "pro", subscriptionStatus: "active", currentPeriodEnd: null as string | null, stripeCustomerId: "cus_test", projectCount: 1 };
+  it.each([{ memberCount: null as number | null, pendingCount: 0 }, { memberCount: 2, pendingCount: null as number | null }])("does not calculate seat capacity from unavailable counts: %j", counts => {
+    const summary = buildBillingSummary({ ...base, ...counts });
+    expect(summary.seats).toBeNull();
+    expect(summary.kpis.find(kpi => kpi.label === "Seats Used")).toMatchObject({ value: "—", sublabel: "seat usage unavailable", tone: "neutral" });
+  });
+  it("labels nonadmin membership without claiming invite-inclusive capacity", () => {
+    const summary = buildBillingSummary({ ...base, memberCount: 3, pendingCount: null, seatCountIsWorkspaceTotal: false });
+    expect(summary.seats).toBeNull();
+    expect(summary.kpis.find(kpi => kpi.label === "Members")).toMatchObject({ value: "3", sublabel: "pending invitations visible to admins", tone: "neutral" });
   });
 });
