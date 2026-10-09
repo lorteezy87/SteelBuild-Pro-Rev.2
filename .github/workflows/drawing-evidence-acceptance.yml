@@ -1,0 +1,125 @@
+name: Drawing evidence acceptance
+run-name: Read-only drawing acceptance for ${{ inputs.candidate_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact reviewed 40-character commit already reachable from main
+        required: true
+        type: string
+      drawing_fixture:
+        description: Exact existing drawing-set fixture name in STG-0001
+        default: STG Erection Drawings
+        required: true
+        type: string
+      submittal_fixture:
+        description: Exact existing Shop Drawing submittal title in STG-0001
+        default: Staging erection drawings
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: drawing-evidence-acceptance
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      candidate_sha: ${{ steps.source.outputs.candidate_sha }}
+    steps:
+      - name: Verify exact main ancestor and source checks
+        id: source
+        uses: actions/github-script@v9
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        with:
+          script: |
+            if (context.ref !== 'refs/heads/main' || context.eventName !== 'workflow_dispatch') {
+              throw new Error('Acceptance must be dispatched from main');
+            }
+            const sha = process.env.CANDIDATE_SHA;
+            if (!/^[a-f0-9]{40}$/.test(sha || '')) throw new Error('Use an exact lowercase commit SHA');
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              ...context.repo, basehead: `${sha}...${context.sha}`,
+            });
+            if (comparison.merge_base_commit?.sha !== sha) {
+              throw new Error('Candidate is not reachable from this main commit');
+            }
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              ...context.repo, workflow_id: 'ci.yml', head_sha: sha, per_page: 100,
+            });
+            const required = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Commercial SQL + concurrent PostgreSQL acceptance'];
+            let verified = false;
+            for (const run of runs) {
+              if (run.head_sha !== sha || run.event !== 'push' || run.status !== 'completed') continue;
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: run.id, per_page: 100,
+              });
+              if (required.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) {
+                verified = true; break;
+              }
+            }
+            if (!verified) throw new Error('Required source checks have not passed together for this exact commit');
+            core.setOutput('candidate_sha', sha);
+
+  acceptance:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    # The environment must also be restricted to main in repository settings.
+    environment: staging-backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.candidate_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install reviewed dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build exact candidate for staging
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+          VITE_APP_VERSION: ${{ needs.verify.outputs.candidate_sha }}
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          test "$VITE_SUPABASE_URL" = 'https://ndyfjffsulfbwpmwdmic.supabase.co' || { echo 'Staging URL mismatch'; exit 1; }
+          test -n "$VITE_SUPABASE_ANON_KEY" || { echo 'Missing staging public key'; exit 1; }
+          npm run build
+      - name: Read-only authenticated desktop and mobile acceptance
+        env:
+          ACCEPTANCE_CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
+          E2E_TARGET: staging
+          E2E_BASE_URL: http://127.0.0.1:4173
+          E2E_EXPECTED_SUPABASE_REF: ndyfjffsulfbwpmwdmic
+          E2E_USER: ${{ secrets.STAGING_E2E_USER }}
+          E2E_PASS: ${{ secrets.STAGING_E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+          E2E_DRAWING_FIXTURE_TEXT: ${{ inputs.drawing_fixture }}
+          E2E_SUBMITTAL_FIXTURE_TEXT: ${{ inputs.submittal_fixture }}
+        run: npx playwright test --config playwright.drawing-evidence.config.ts
+      - name: Retain screenshots and sanitized result only
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: drawing-evidence-${{ needs.verify.outputs.candidate_sha }}
+          path: |
+            test-results/drawing-evidence/**/*.png
+            test-results/drawing-evidence/summary.json
+          if-no-files-found: ignore
+          retention-days: 7
