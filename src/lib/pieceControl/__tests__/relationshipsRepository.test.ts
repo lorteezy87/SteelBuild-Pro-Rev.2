@@ -127,6 +127,7 @@ describe("fetchPieceRelationshipSnapshot", () => {
     expect(workPackagesSelect).not.toMatch(/\bdescription\b/);
     expect(sawDeletedFilter).toBe(true);
     expect(optionalSelects.get("drawings")).toContain("linked_rfi_ids");
+    expect(optionalSelects.get("submittals")).toContain("submittal_type");
     expect(optionalSelects.get("drawing_revisions")).toContain("issued_at");
     expect(optionalSelects.get("drawing_revisions")).toContain("received_at");
     expect(snapshot.sourceAvailability).toEqual({

@@ -32,6 +32,7 @@ const DRAWINGS = [
 ];
 const LINKED_SUBMITTAL = {
   id: "sub-1",
+  submittal_type: "Shop Drawing",
   drawing_set_ids: ["set-linked"],
   status: "Under Review",
   ball_in_court: "EOR",
@@ -41,6 +42,7 @@ const LINKED_SUBMITTAL = {
 };
 const UNLINKED_SUBMITTAL = {
   id: "sub-2",
+  submittal_type: "Shop Drawing",
   drawing_set_ids: [] as string[],
   status: "Revise and Resubmit",
   ball_in_court: "Detailer",

@@ -15,7 +15,7 @@
  * revision vs readiness-flags are distinct sources) so nothing is double-counted.
  */
 import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
-import { derivedSetStage, isRRStatus, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
+import { derivedSetStage, isRRStatus, isUsableShopDrawingSubmittal, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
 import { selectChangedSheets } from "@/lib/revisionPackageReport";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 import { isRfiOpen } from "@/lib/entityPredicates";
@@ -153,9 +153,9 @@ export function calculateDrawingHealthScore(pkg: any, context: HealthContext = {
   const today = context.today || todayLocalISO();
   const rfis = context.rfis || [];
   const revisions = context.revisions || [];
-  const sheets = pkg?.sheets || [];
+  const sheets = (pkg?.sheets || []).filter((sheet: any) => sheet && !sheet.is_deleted && !sheet.deleted_at);
    
-  const subs = (pkg?.submittals || []).filter((s: any) => s && !s.is_deleted);
+  const subs = (pkg?.submittals || []).filter(isUsableShopDrawingSubmittal);
   const recent = pickMostRecentSubmittal(subs);
   const recentStatus: string | undefined = recent?.status ?? undefined;
   const stage = derivedSetStage(subs, sheets);
@@ -169,7 +169,12 @@ export function calculateDrawingHealthScore(pkg: any, context: HealthContext = {
   // ── Approval (outcome) ──────────────────────────────────────────────
   let approvalDed: number;
   let approvalDetail: string;
-  if (recentStatus === "Released for Fabrication") {
+  if (!recent) {
+    approvalDed = WEIGHTS.approval;
+    approvalDetail = sheets.length
+      ? `No governing submittal — sheet stage ${stage} is reference only`
+      : "No governing submittal — no sheets in this set";
+  } else if (recentStatus === "Released for Fabrication") {
     approvalDed = 0;
     approvalDetail = "Released for fabrication";
   } else if (isApprovedOutcome) {
@@ -177,11 +182,7 @@ export function calculateDrawingHealthScore(pkg: any, context: HealthContext = {
     approvalDetail = `Approved (${recentStatus}) — not yet released to fab`;
   } else {
     approvalDed = Math.round(WEIGHTS.approval * (1 - stageIndex / maxIndex));
-    approvalDetail = recent
-      ? `In review — ${stage}`
-      : sheets.length
-      ? `Not submitted — ${stage}`
-      : "No sheets in this set";
+    approvalDetail = `In review — ${stage}`;
   }
 
   // ── Submittal progress (churn) ──────────────────────────────────────

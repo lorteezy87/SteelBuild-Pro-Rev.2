@@ -102,6 +102,12 @@ function extractDetails(item) {
       if (raw.percent_complete != null) details.push({ label: "% Complete", value: `${raw.percent_complete}%` });
       break;
 
+    case "TASK":
+      if (raw.start_date) details.push({ label: "Planned Start", value: raw.start_date });
+      if (raw.end_date) details.push({ label: "Required Finish", value: raw.end_date });
+      if (raw.actual_finish_date) details.push({ label: "Actual Finish", value: raw.actual_finish_date });
+      if (raw.percent_complete != null) details.push({ label: "% Complete", value: `${raw.percent_complete}%` });
+      break;
     case "PAY":
       if (raw.period_to) details.push({ label: "Period End", value: raw.period_to });
       if (raw.totalScheduled) details.push({ label: "Scheduled Value", value: `$${raw.totalScheduled.toLocaleString()}` });
@@ -138,7 +144,7 @@ export default function ItemDetailDrawer({ item, onClose }) {
   // permanent no-op there. Routes map to the page registry (src/config/routes.js).
   const PAGE_FOR_TYPE = {
     RFI: "RFIs", SUB: "Submittals", DWG: "Drawings", CO: "ChangeOrders",
-    DEL: "Deliveries", WP: "WorkPackages", PAY: "SOV", NOTE: "ProductionNotes", TASK: "Schedule",
+    DEL: "Deliveries", WP: "WorkPackages", PAY: "SOV", NOTE: "ProductionNotes", TASK: "ScheduleHub",
   };
   const targetRoute = (() => {
     if (item.quickAction?.route) return item.quickAction.route;

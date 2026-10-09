@@ -25,6 +25,46 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261008013546",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control governing-submittal gate candidate. Aligns evaluate_fab_release_set with exact drawing-set IDs, live recognized rounds, submitted-date ordering and fail-closed BIC stage mapping. Local SQL return-value tests pass; exact reviewed staging authentication, hold/RFI and release validation are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261008021100",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control lot-split set-link inheritance candidate. Copies the parent's exact piece_drawing_sets links only to child lots returned by split_piece_lot_impl in the same atomic split, preserves authorization and failure journal, and refuses stale cross-project links. Does not backfill historical children. Local SQL return-value tests pass; exact reviewed staged split and release-gate acceptance are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261008022100",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control piece/set link serialization candidate. Locks the target piece in existing link and unlink RPCs before validation or mutation, rejects explicit containers even after all children are archived, and adds an atomic replace_piece_drawing_set RPC for exclusive assignment with project and role checks plus per-link audit events. Local PGlite SQL tests pass; two-session staged race, authenticated RLS and release-gate acceptance are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261008023000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control exact GC issuance to shop drawing-set impact links. Adds project-locked foreign keys, project-scoped read RLS, PM-only audited atomic replacement, and a guard against declaring no steel impact while affected sets remain linked. This relation is advisory impact context only, never approval or fabrication release. Local PGlite tests pass; review transactional parent-index lock duration, hosted RLS and authenticated edit/read flows on staging before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261008032840",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "LOCAL CANDIDATE ONLY - Reviewed shop drawing revision RPC is deliberately unapplied and unwired. QUARANTINED at supabase/migrations_quarantine/20261008032840_transactional_reviewed_shop_drawing_revision.sql outside the executable migrations directory. It rejects existing approved Shop Drawing sets and active drawing zones because current submittal rounds have no immutable exact-revision manifest and zone carry-forward is not yet transactional. Do not stamp or deploy this file until those prerequisites, legacy reconciliation, hosted concurrency/RLS checks, and a new explicit owner release are complete. See docs/audits/DRAWING_REVISION_ATOMIC_CANDIDATE_2026-10-08.md; SHA-256 4a34d5dedea0566b661ce38e97884b3fca9e250b92927d7842bd575993b16d8c."
+      },
+      {
+        "version": "20261008041759",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control package/release-log gate alignment candidate. Requires every active sibling in a normal drawing-set release and rechecks the complete set gate inside fab_release_log insertion; only an explicit audited PM override may release a subset or blocked set. The public package RPC now includes set blockers and the piece helper uses set ok, not governing stage alone. Local PGlite tests pass; exact reviewed staging authentication, concurrency, override and full release validation are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261007113400",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local reviewed change-order save candidate. Binds metadata and lifecycle effects to the reviewed timestamp, status and amount in one transaction so competing edits cannot approve an unreviewed amount. Requires reviewed staged application and financial lifecycle acceptance before frontend release. Keep visible in missingMigrations until its exact committed SQL is applied and stamped. See supabase/tests/commercial-lifecycle/README.md."
+      },
+      {
+        "version": "20261007120658",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local reviewed SOV save candidate. Rejects stale SOV drafts after an approved change-order adjustment or another editor save; preserves project authorization, MFA, financial guards, audit and timestamp triggers. Requires reviewed staged application and concurrent financial acceptance before frontend release. Keep visible in missingMigrations until its exact committed SQL is applied and stamped. See supabase/tests/commercial-lifecycle/README.md and supabase/tests/commercial-postgres/README.md."
+      },
+      {
         "version": "20261007090057",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix for the relation-lock/parent-row deadlock confirmed during staging account-erasure overlap validation. Acquires the existing erasure chain's potential trigger-toggle relation set before row locks using atomic NOWAIT attempts, rollback of partial locks, and an eight-second acquisition budget; preserves fresh ownership/membership checks, grants and the 60-second RPC timeout. This deliberately broadens each call's global write-lock set. The exact payload passed staged HTTP overlap validation under the staging-only approval; production still requires separate reviewed manual application/stamping. Keep visible in missingMigrations until its exact committed payload is applied."

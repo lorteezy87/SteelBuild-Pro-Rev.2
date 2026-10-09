@@ -44,7 +44,7 @@ function renderIndex() {
   );
 }
 
-const proj = (over = {}) => ({ activeProject: null, loading: false, ...over });
+const proj = (over = {}) => ({ activeProject: null, loading: false, projectCacheOwner: { userId: "user-a", orgId: "org-a" }, ...over });
 const roleResolved = (role) => ({ role, isLoading: false });
 
 /**
@@ -56,7 +56,10 @@ const roleResolved = (role) => ({ role, isLoading: false });
  */
 function saveSelection(activeProjectId, cachedProjects) {
   localStorage.setItem("activeProjectId", activeProjectId);
-  localStorage.setItem("sbp_projects_cache", JSON.stringify(cachedProjects));
+  localStorage.setItem("sbp_projects_cache", JSON.stringify({
+    version: 2, owner: { userId: "user-a", orgId: "org-a" },
+    projects: cachedProjects.map((project) => ({ org_id: "org-a", ...project })),
+  }));
 }
 
 describe("IndexRoute — default landing precedence (boot invariants)", () => {

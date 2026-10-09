@@ -17,11 +17,13 @@
  */
 import { DrawingRegisterGridPanel } from "@/components/drawings/register/DrawingRegisterGridPanel";
 import { lazy, Suspense } from "react";
+import { useSearchParams } from "react-router-dom";
 import DrawingRegisterWorkbench from "./DrawingRegisterWorkbench";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { HubViewToggle } from "./HubViewToggle";
 import type { HubViewOption } from "./HubViewToggle";
 import { useHubView } from "./useHubView";
+import { hubViewSearch } from "./hubLinks";
 import type { HubView } from "./hubLinks";
 import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
 import type { SetPackage } from "./types";
@@ -54,8 +56,30 @@ export interface DrawingRegisterPanelProps {
 export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
   const projectId = props.projectId ?? props.activeProject?.id ?? null;
   const [view, setView] = useHubView("drawings");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedSetIds = searchParams.getAll("set");
+  const hasLinkedSet = searchParams.has("set");
+  // A repeated or empty set parameter cannot safely select a register row.
+  const linkedSetId = linkedSetIds.length === 1 ? linkedSetIds[0]?.trim() || null : null;
+  const clearLinkedSet = () => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous);
+    next.delete("set");
+    return next;
+  }, { replace: true });
+  const changeView = (next: HubView<"drawings">) => {
+    if (next === view) return;
+    if (hasLinkedSet && next !== "sets") {
+      setSearchParams((previous) => {
+        const nextSearch = hubViewSearch(previous, "drawings", next);
+        nextSearch.delete("set");
+        return nextSearch;
+      }, { replace: true });
+      return;
+    }
+    setView(next);
+  };
   return <>
-    <HubViewToggle label="Drawing register view" options={VIEWS} value={view} onChange={setView} />
+    <HubViewToggle label="Drawing register view" options={VIEWS} value={view} onChange={changeView} />
     {view === "sheets" && (
       <DrawingRegisterWorkbench projectId={projectId} activeProject={props.activeProject}>
         {({ selected, onToggleSelect, onToggleSelectAll, onMarkTitleblock }) => (
@@ -79,7 +103,8 @@ export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
       <DrawingRegisterWorkbench projectId={projectId} activeProject={props.activeProject}>
         {({ onMarkTitleblock }) => (
           <Suspense fallback={<p role="status">Loading drawing sets…</p>}>
-            <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []} onMarkTitleblock={onMarkTitleblock} />
+            <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []}
+              onMarkTitleblock={onMarkTitleblock} hasLinkedSet={hasLinkedSet} linkedSetId={linkedSetId} onClearLinkedSet={clearLinkedSet} />
           </Suspense>
         )}
       </DrawingRegisterWorkbench>

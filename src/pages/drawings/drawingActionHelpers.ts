@@ -509,6 +509,15 @@ export function buildSubmittalAdvanceSearch(
   return qs ? `?${qs}` : "";
 }
 
+/** Only an open, explicitly typed Shop Drawing can receive a drawing revision or stage move. */
+export function openShopDrawingSubmittalsForSet<
+  T extends LinkableSubmittal & { submittal_type?: string | null; deleted_at?: string | null },
+>(setId: string | null | undefined, submittals: T[] | null | undefined): T[] {
+  return openLinkedSubmittalsForSet(setId, submittals).filter(
+    (submittal) => submittal.submittal_type === "Shop Drawing" && !submittal.deleted_at,
+  );
+}
+
 /**
  * Where the Drawings page sends the user for a stage move that a submittal
  * owns: the latest OPEN submittal already linked to the set (`?recordId=`,
@@ -521,7 +530,7 @@ export function buildSubmittalNavigationSearch(opts: {
   submittals: LinkableSubmittal[] | null | undefined;
 }): string {
   const { setId, mapped, submittals } = opts;
-  const open = openLinkedSubmittalsForSet(setId, submittals);
+  const open = openShopDrawingSubmittalsForSet(setId, submittals);
   const latestOpen = pickMostRecentSubmittal(open as Array<LinkableSubmittal & SubmittalLike>);
   if (latestOpen?.id) {
     const params = new URLSearchParams();

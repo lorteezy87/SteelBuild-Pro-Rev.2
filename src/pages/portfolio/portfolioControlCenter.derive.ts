@@ -6,7 +6,7 @@
  * All functions are pure: (projects, relatedRecords) → summary. Easy to unit-test.
  */
 import { calcContractValue, calcWpProgress, calcDaysToDeadline } from "@/utils/projectKpis";
-import { computeCostCodeTotals, resolveProjectSpend } from "@/services/costRollup";
+import { computeRevisedBudget, resolveProjectSpend } from "@/services/costRollup";
 import { computePortfolioProjectHealth } from "@/services/portfolioHealthScoring";
 import { capHealthScore, deriveOperationalHealth } from "@/lib/projectHealth";
 import type { OperationalHealthLabel } from "@/lib/projectHealth";
@@ -38,7 +38,7 @@ export interface ProjectRecord {
 
 /** Cross-entity data needed for portfolio rollups. */
 export interface PortfolioRelated {
-  changeOrders: Array<{ project_id?: string; status?: string | null; co_amount?: number | null }>;
+  changeOrders: Array<{ project_id?: string; status?: string | null; co_amount?: number | null; cost_code_id?: string | null }>;
   workPackages: Array<{ project_id?: string; status?: string | null; tonnage?: number | null; percent_complete?: number | null }>;
   costCodes: Array<{ project_id?: string; budget_amount?: number | null; committed_cost?: number | null; actual_cost?: number | null; [key: string]: unknown }>;
   rfis: Array<{ project_id?: string; status?: string | null; date_required?: string | null; priority?: string | null }>;
@@ -86,9 +86,9 @@ export interface EnrichedProject extends ProjectRecord {
   lateDeliveries: number;
   /** Total tons from work packages. */
   totalTons: number;
-  /** Budget from cost codes (computeCostCodeTotals). */
+  /** Revised budget including approved change orders allocated to cost codes. */
   budget: number;
-  /** Committed spend via resolveProjectSpend (floored at resolved actual). */
+  /** Reconciled cost exposure used by portfolio health (legacy field name). */
   committed: number;
   /** reasons[] for health deductions (same as AIInsights). */
   reasons: string[];
@@ -251,14 +251,13 @@ export function buildPortfolioSummary(
     const { daysLeft, isOverdue } = calcDaysToDeadline(project);
 
     // ── Cost codes ──
-    const { budget } = computeCostCodeTotals(projCodes);
-    // Canonical spend model: typed cost-code columns win, expenses fall back,
-    // unmapped expenses still count (resolveProjectSpend). The project-level
-    // max(committed, actual) preserves the domain invariant committed ≥ actual
-    // when only actuals were typed onto the codes.
+    const { revisedBudget: budget } = computeRevisedBudget(projCodes, projCOs);
+    // Reconcile each cost code before summing exposure so commitments in one
+    // scope cannot hide actual-only costs in another. Unmapped expenses count
+    // once through the same canonical resolver used by the project dashboard.
     const projExpenses = expensesByProject.get(pId) ?? [];
     const spend = resolveProjectSpend(projCodes, projExpenses);
-    const committed = Math.max(spend.committed, spend.actual);
+    const committed = spend.costExposure;
 
     const {
       score: rawScore,

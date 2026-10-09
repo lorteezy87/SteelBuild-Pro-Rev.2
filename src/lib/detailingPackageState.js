@@ -22,7 +22,7 @@
  */
 
 import { WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
-import { derivedSetStage, submittalStatusToStage, isRRStatus, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
+import { derivedSetStage, isUsableShopDrawingSubmittal, isRRStatus, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
 
 /** Manual upstream (pre-submittal) drafting states. */
 export const DRAFTING_STATES = ["In Detailing", "Internal Review", "Ready to Submit"];
@@ -64,14 +64,15 @@ export function isReleaseState(state) {
 const FAB_RELEASED_SET = new Set(["Released", ...RELEASE_STATES]);
 
 /**
- * True when a package has ACTUALLY been released for fabrication.
+ * True when a package's operational workflow state is marked released.
  *
  * Deliberately NOT `isClosedPackage`, which is a *terminal-for-triage*
  * predicate: that one also fires on a Void submittal, on the deprecated
  * `drawing_sets.set_approval_status === "approved"` flag, and on other dead
  * ends — none of which mean the shop ever received the package. Using it to
- * drive the Control Center's green "Released / sets to fab" tile reported
- * packages as released to fab that were merely voided or legacy-approved.
+ * This is not evidence that the server drawing-set or work-package fabrication
+ * gate passed. Manual release states and legacy sheet stages may satisfy it.
+ * Display it as a neutral workflow marker, never a clearance or green KPI.
  */
 export function isPackageReleasedForFab(pkg, submittalsForSet, sheetsForSet = []) {
   return FAB_RELEASED_SET.has(effectiveDetailingState(pkg, submittalsForSet, sheetsForSet));
@@ -87,8 +88,7 @@ export function isPackageReleasedForFab(pkg, submittalsForSet, sheetsForSet = []
  */
 export function hasGoverningSubmittal(submittalsForSet) {
   return (Array.isArray(submittalsForSet) ? submittalsForSet : []).some(
-    (s) => s && !s.is_deleted &&
-      submittalStatusToStage(s.status, s.ball_in_court, s.approved_date) !== null,
+    isUsableShopDrawingSubmittal,
   );
 }
 
@@ -128,7 +128,7 @@ export function effectiveDetailingState(pkg, submittalsForSet, sheetsForSet = []
  */
 export function isPackageSuperseded(sheetsForSet) {
   const sheets = (Array.isArray(sheetsForSet) ? sheetsForSet : []).filter(
-    (s) => s && !s.is_deleted,
+    (s) => s && !s.is_deleted && !s.deleted_at,
   );
   return sheets.length > 0 && sheets.every((s) => s.is_superseded === true);
 }
@@ -150,8 +150,7 @@ export function isPackageSuperseded(sheetsForSet) {
  */
 export function isPackageRR(submittalsForSet) {
   const usable = (Array.isArray(submittalsForSet) ? submittalsForSet : []).filter(
-    (s) => s && !s.is_deleted &&
-      submittalStatusToStage(s.status, s.ball_in_court, s.approved_date) !== null,
+    isUsableShopDrawingSubmittal,
   );
   const governing = pickMostRecentSubmittal(usable);
   return !!governing && isRRStatus(governing.status);

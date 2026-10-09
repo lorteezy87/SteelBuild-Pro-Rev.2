@@ -82,6 +82,12 @@ export interface ProjectSpend {
   actual: number;
   /** mappedCommitted + unmappedCommitted — every non-voided dollar. */
   committed: number;
+  /**
+   * Sum of max(resolved actual, resolved committed) for each cost-code row,
+   * plus unmapped non-voided expenses once. Commitments already include paid
+   * costs; separate scopes must not mask one another's actual-only spending.
+   */
+  costExposure: number;
 }
 
 /**
@@ -160,6 +166,7 @@ export function resolveProjectSpend(
 
   let mappedActual = 0;
   let mappedCommitted = 0;
+  let mappedCostExposure = 0;
   const knownCodes = new Set<string>();
   // Two cost-code rows sharing one number (the create-time duplicate guard is
   // client-side only, so a concurrent add can mint one) would each claim that
@@ -172,8 +179,13 @@ export function resolveProjectSpend(
     if (number) knownCodes.add(number);
     const firstClaim = Boolean(number) && !claimed.has(number);
     if (number) claimed.add(number);
-    mappedActual += preferManualActual(c.actual_cost, firstClaim ? (paidByCode.get(number) ?? 0) : 0);
-    mappedCommitted += preferManualActual(c.committed_cost, firstClaim ? (allByCode.get(number) ?? 0) : 0);
+    const actual = preferManualActual(c.actual_cost, firstClaim ? (paidByCode.get(number) ?? 0) : 0);
+    const committed = preferManualActual(c.committed_cost, firstClaim ? (allByCode.get(number) ?? 0) : 0);
+    mappedActual += actual;
+    mappedCommitted += committed;
+    // Compare within each scope before summing: commitments in one code do
+    // not cover actual-only spending in another code.
+    mappedCostExposure += Math.max(actual, committed);
   }
 
   let unmappedActual = 0;
@@ -195,6 +207,9 @@ export function resolveProjectSpend(
     unmappedCount,
     actual: mappedActual + unmappedActual,
     committed: mappedCommitted + unmappedCommitted,
+    // Unmapped expense amounts have no competing manual entry. Include the
+    // signed non-voided amounts once, preserving the existing expense model.
+    costExposure: mappedCostExposure + unmappedCommitted,
   };
 }
 

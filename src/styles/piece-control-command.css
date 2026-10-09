@@ -254,8 +254,8 @@
   border-color: color-mix(in srgb, var(--cmd-warn) 45%, var(--cmd-border));
 }
 
-[data-skin="command"] .piece-impact.is-ready {
-  border-color: color-mix(in srgb, var(--cmd-good) 40%, var(--cmd-border));
+[data-skin="command"] .piece-impact.is-stage-clear {
+  border-color: var(--cmd-border);
 }
 
 [data-skin="command"] .piece-impact__head {
@@ -278,8 +278,8 @@
   font-size: 12px;
 }
 
-[data-skin="command"] .piece-impact.is-ready .piece-impact__icon {
-  color: var(--cmd-good);
+[data-skin="command"] .piece-impact.is-stage-clear .piece-impact__icon {
+  color: var(--cmd-text-muted);
 }
 
 [data-skin="command"] .piece-impact.is-blocked .piece-impact__icon {
@@ -1354,8 +1354,8 @@
   background: var(--cmd-surface);
 }
 
-[data-skin="command"] .piece-readiness-card.is-ready {
-  border-left-color: var(--cmd-good);
+[data-skin="command"] .piece-readiness-card.is-stage-clear {
+  border-left-color: var(--cmd-text-muted);
 }
 
 [data-skin="command"] .piece-readiness-card__head {
@@ -1386,7 +1386,7 @@
 
 [data-skin="command"] .piece-readiness-card__success {
   margin: 12px 0 0;
-  color: var(--cmd-good-text);
+  color: var(--cmd-text-muted);
   font-size: 12px;
 }
 

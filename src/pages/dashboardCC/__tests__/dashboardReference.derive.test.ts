@@ -78,3 +78,40 @@ describe("buildDashboardReferenceModel", () => {
     expect(rfi?.deadline).toBeNull();
   });
 });
+
+describe("attention preview completeness", () => {
+  it("counts hidden production and commercial risks behind a full RFI preview", () => {
+    const model = buildDashboardReferenceModel({
+      summary, todayIso: "2026-09-16",
+      rfis: Array.from({ length: 8 }, (_, i) => ({
+        id: `r${i}`, rfi_number: `A-${i}`, status: "Open", date_required: "2026-09-15",
+      })),
+      submittals: [], deliveries: [],
+      workPackages: [{ id: "held", wp_number: "ZZ-WP", status: "On Hold" }],
+      changeOrders: [{
+        id: "aging", co_number: "ZZ-CO", status: "Submitted", submitted_date: "2026-08-23",
+      }],
+    });
+    expect(model.attention).toHaveLength(8);
+    expect(model.attention.every((item) => item.target === "RFIs")).toBe(true);
+    expect(model.attentionTotal).toBe(10);
+    expect(model.attentionCounts).toEqual({ danger: 9, warn: 1, info: 0, neutral: 0, good: 0 });
+    expect(model.bands.find((band) => band.id === "production")?.tone).toBe("danger");
+    expect(model.bands.find((band) => band.id === "commercial")).toMatchObject({
+      tone: "warn", detail: "1 aging decision needs action",
+    });
+  });
+});
+
+it("does not treat canceled or removed loads as recovery work", () => {
+  const model = buildDashboardReferenceModel({
+    summary, todayIso: "2026-10-06", rfis: [], submittals: [], workPackages: [], changeOrders: [],
+    deliveries: [
+      { id: "canceled", status: "Cancelled", scheduled_date: "2026-10-01" },
+      { id: "removed", status: "Delayed", scheduled_date: "2026-10-01", is_deleted: true },
+    ],
+  });
+  expect(model.attentionTotal).toBe(0);
+  expect(model.bands.find(band => band.id === "production")?.tone).toBe("neutral");
+  expect(model.bands.find(band => band.id === "field")?.tone).toBe("neutral");
+});

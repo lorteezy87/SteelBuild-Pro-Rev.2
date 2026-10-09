@@ -1,22 +1,23 @@
 import { describe, it, expect } from "vitest";
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
 
-const SUB_RELEASED = { status: "Released for Fabrication" }; // → Released
+const SUB_RELEASED = { submittal_type: "Shop Drawing", status: "Released for Fabrication" }; // → Released
 
 describe("computeDetailingReadiness", () => {
-  it("a fresh package with no submittal is Not Started and not fab/erection ready", () => {
+  it("a fresh package has neither shop nor field workflow stage marked", () => {
     const r = computeDetailingReadiness({ pkg: {}, submittals: [], sheets: [{ stage: "Not Started" }] });
     expect(r.effectiveState).toBe("Not Started");
-    expect(r.fabricationReady).toBe(false);
-    expect(r.erectionReady).toBe(false);
+    expect(r.shopStageMarked).toBe(false);
+    expect(r.fieldStageMarked).toBe(false);
     expect(r.rfiBlocked).toBe(false);
   });
 
-  it("a released package with no blockers is fabrication-ready", () => {
+  it("a released workflow stage is marked without claiming fabrication clearance", () => {
     const r = computeDetailingReadiness({ pkg: {}, submittals: [SUB_RELEASED], sheets: [] });
     expect(r.effectiveState).toBe("Released");
-    expect(r.fabricationReady).toBe(true);
-    expect(r.erectionReady).toBe(false); // not yet released for erection
+    expect(r.shopStageMarked).toBe(true);
+    expect(r.fieldStageMarked).toBe(false);
+    expect(r).not.toHaveProperty("fabricationReady");
   });
 
   // ── Linked RFIs: TWO id spaces ────────────────────────────────────────────
@@ -26,13 +27,13 @@ describe("computeDetailingReadiness", () => {
   // actually stores — the old ones used `pkg.linked_rfi_ids`, a column that does
   // not exist on drawing_sets, which is why the broken path stayed green.
 
-  it("an open RFI linked from a SUBMITTAL (uuid) blocks fabrication readiness", () => {
+  it("an open RFI linked from a SUBMITTAL (uuid) is surfaced beside the stage marker", () => {
     const submittals = [{ ...SUB_RELEASED, linked_rfi_ids: ["rfi-1"] }];
     const r = computeDetailingReadiness({
       pkg: {}, submittals, sheets: [], openRfiIds: new Set(["rfi-1"]),
     });
     expect(r.rfiBlocked).toBe(true);
-    expect(r.fabricationReady).toBe(false);
+    expect(r.shopStageMarked).toBe(true);
   });
 
   it("a submittal-linked RFI that is NOT open does not block", () => {
@@ -41,10 +42,10 @@ describe("computeDetailingReadiness", () => {
       pkg: {}, submittals, sheets: [], openRfiIds: new Set(["rfi-99"]),
     });
     expect(r.rfiBlocked).toBe(false);
-    expect(r.fabricationReady).toBe(true);
+    expect(r.shopStageMarked).toBe(true);
   });
 
-  it("an open RFI linked from a SHEET (canonical 'RFI #014' text) blocks fabrication readiness", () => {
+  it("an open RFI linked from a SHEET (canonical 'RFI #014' text) is surfaced", () => {
     // The exact shape SheetFormModal's "RFI #001, RFI #002" placeholder produces.
     const r = computeDetailingReadiness({
       pkg: {},
@@ -54,7 +55,7 @@ describe("computeDetailingReadiness", () => {
       openRfiNumbers: new Set(["RFI014"]),
     });
     expect(r.rfiBlocked).toBe(true);
-    expect(r.fabricationReady).toBe(false);
+    expect(r.shopStageMarked).toBe(true);
   });
 
   it("matches sheet-linked RFI numbers across punctuation and spacing variants", () => {
@@ -85,7 +86,7 @@ describe("computeDetailingReadiness", () => {
       openRfiNumbers: new Set(["RFI099"]),
     });
     expect(r.rfiBlocked).toBe(false);
-    expect(r.fabricationReady).toBe(true);
+    expect(r.shopStageMarked).toBe(true);
   });
 
   it("never matches a sheet's RFI NUMBER against the open-UUID set", () => {
@@ -133,8 +134,7 @@ describe("computeDetailingReadiness", () => {
     });
     expect(r.revisionImpacted).toBe(true);
     expect(r.fullySuperseded).toBe(false);
-    // The `&& !revisionImpacted` term in fabricationReady was a no-op before.
-    expect(r.fabricationReady).toBe(false);
+    expect(r.shopStageMarked).toBe(true);
   });
 
   it("reports fullySuperseded when every sheet is in the superseded bucket", () => {
@@ -153,17 +153,17 @@ describe("computeDetailingReadiness", () => {
     });
     expect(r.revisionImpacted).toBe(false);
     expect(r.fullySuperseded).toBe(false);
-    expect(r.fabricationReady).toBe(true);
+    expect(r.shopStageMarked).toBe(true);
   });
 
-  it("a partial supersede flags revisionImpacted (and blocks fab readiness)", () => {
+  it("a partial supersede flags revision impact beside the stage marker", () => {
     const r = computeDetailingReadiness({
       pkg: {}, submittals: [SUB_RELEASED],
       sheets: [{ is_superseded: true }, { is_superseded: false }],
     });
     expect(r.revisionImpacted).toBe(true);
     expect(r.fullySuperseded).toBe(false);
-    expect(r.fabricationReady).toBe(false);
+    expect(r.shopStageMarked).toBe(true);
   });
 
   it("surfaces the manual flags + priority sequence + backward dates from the WP", () => {
@@ -206,10 +206,10 @@ describe("computeDetailingReadiness", () => {
 
 describe("computeSequenceReadiness", () => {
   const entries = [
-    { sequenceNumber: "1", effectiveState: "Released for Erection", fabricationReady: true, erectionReady: true, atRisk: false },
-    { sequenceNumber: "1", effectiveState: "Not Started", fabricationReady: false, erectionReady: false, atRisk: true },
-    { sequenceNumber: "2", effectiveState: "Released", fabricationReady: true, erectionReady: false, atRisk: false },
-    { sequenceNumber: null, effectiveState: "IFA", fabricationReady: false, erectionReady: false, atRisk: false },
+    { sequenceNumber: "1", effectiveState: "Released for Erection", shopStageMarked: true, fieldStageMarked: true, atRisk: false },
+    { sequenceNumber: "1", effectiveState: "Not Started", shopStageMarked: false, fieldStageMarked: false, atRisk: true },
+    { sequenceNumber: "2", effectiveState: "Released", shopStageMarked: true, fieldStageMarked: false, atRisk: false },
+    { sequenceNumber: null, effectiveState: "IFA", shopStageMarked: false, fieldStageMarked: false, atRisk: false },
   ];
 
   it("groups by sequence, rolls up readiness, and sorts Unsequenced last", () => {
@@ -225,8 +225,8 @@ describe("computeSequenceReadiness", () => {
     // "Released for Erection" is past detailing-complete → clamped to 100%,
     // averaged with "Not Started" at 0%.
     expect(s1.detailingPct).toBe(50);
-    expect(s1.fabReadyCount).toBe(1);
-    expect(s1.erectionReadyCount).toBe(1);
+    expect(s1.shopStageCount).toBe(1);
+    expect(s1.fieldStageCount).toBe(1);
     expect(s1.atRiskCount).toBe(1);
 
     expect(rows[1].detailingPct).toBe(100); // "Released" IS detailing-complete
@@ -234,10 +234,10 @@ describe("computeSequenceReadiness", () => {
   });
 
   it("never reports a released package as partially detailed", () => {
-    // The reported symptom: "Seq 3 — Detailing 83%" sitting next to "Fab 4/4".
+    // A terminal workflow stage counts as 100% detailing, not release authority.
     for (const state of ["Released", "Partially Released", "Released for Erection"]) {
       const [row] = computeSequenceReadiness([
-        { sequenceNumber: "9", effectiveState: state, fabricationReady: true },
+        { sequenceNumber: "9", effectiveState: state, shopStageMarked: true },
       ]);
       expect(row.detailingPct, state).toBe(100);
     }

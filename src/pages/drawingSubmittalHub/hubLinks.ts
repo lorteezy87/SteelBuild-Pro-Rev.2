@@ -39,6 +39,7 @@ export const HUB_TAB_KEYS = [
   "holds",
   "validation",
   "model3d",
+  "gc",
 ] as const;
 export type HubTabKey = (typeof HUB_TAB_KEYS)[number];
 
@@ -124,6 +125,7 @@ export const HUB_TAB_SCOPED_PARAMS = [
   "prefilledBallInCourt",
   "transmittal",
   "hub_view",
+  "set",
   "matrix_filter",
 ] as const;
 

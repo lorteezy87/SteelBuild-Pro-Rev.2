@@ -33,11 +33,14 @@ interface SheetFixture {
 
 interface SubmittalFixture {
   id: string;
+  submittal_type?: string | null;
   status: string;
   ball_in_court: string | null;
   approved_date: string | null;
   round_number: number;
   is_deleted: boolean;
+  submitted_date?: string | null;
+  deleted_at?: string | null;
 }
 
 interface ParentFixture {
@@ -75,6 +78,7 @@ const cleanPkg = (): PkgFixture => ({
   submittals: [
     {
       id: "sub-1",
+      submittal_type: "Shop Drawing",
       status: "Released for Fabrication",
       ball_in_court: null,
       approved_date: null,
@@ -102,6 +106,7 @@ const approvedNotedPkg = (): PkgFixture => ({
   submittals: [
     {
       id: "sub-2",
+      submittal_type: "Shop Drawing",
       status: "Approved as Noted",
       ball_in_court: "EOR",
       approved_date: "2026-06-01",
@@ -122,6 +127,7 @@ const rfiBlockedPkg = (openRfiCount = 1): PkgFixture => {
     submittals: [
       {
         id: "sub-3",
+        submittal_type: "Shop Drawing",
         status: "Draft",
         ball_in_court: "Detailer",
         approved_date: null,
@@ -153,6 +159,14 @@ const overduePkg = (today = "2026-07-01"): PkgFixture => ({
 // ─── calculateDrawingHealthScore ──────────────────────────────────────────────
 
 describe("calculateDrawingHealthScore", () => {
+  it("does not score a linked Product Data approval as shop drawing approval", () => {
+    const pkg = cleanPkg();
+    pkg.submittals[0].submittal_type = "Product Data";
+    const approval = calculateDrawingHealthScore(pkg, { today: "2026-06-25" }).factors.find((factor) => factor.key === "approval");
+    expect(approval?.deduction).toBe(16);
+    expect(approval?.detail).toContain("No governing submittal");
+  });
+
   it("clean Released-for-Fabrication package → score 100, grade A, band excellent", () => {
     const result = calculateDrawingHealthScore(cleanPkg(), { today: "2026-06-25" });
     expect(result.score).toBe(100);
@@ -163,6 +177,43 @@ describe("calculateDrawingHealthScore", () => {
     for (const f of result.factors) {
       expect(f.deduction).toBe(0);
     }
+  });
+
+  it("ignores a newer Void in both the stage and the approval/churn score", () => {
+    const pkg = cleanPkg();
+    pkg.submittals[0].submitted_date = "2026-09-01";
+    pkg.submittals.push({
+      id: "void", status: "Void", ball_in_court: null, approved_date: null,
+      round_number: 9, is_deleted: false, submitted_date: "2026-09-02",
+    });
+    const result = calculateDrawingHealthScore(pkg, { today: "2026-09-03" });
+    expect(result.stage).toBe("Released");
+    expect(result.factors.find((factor) => factor.key === "submittal")?.deduction).toBe(0);
+    expect(result.score).toBe(100);
+  });
+
+  it("ignores a timestamp-deleted review when choosing the governing health status", () => {
+    const pkg = cleanPkg();
+    pkg.submittals[0].submitted_date = "2026-09-01";
+    pkg.submittals.push({
+      id: "deleted", status: "Revise and Resubmit", ball_in_court: "Detailer", approved_date: null,
+      round_number: 4, is_deleted: false, submitted_date: "2026-09-02", deleted_at: "2026-09-03T00:00:00Z",
+    });
+    const result = calculateDrawingHealthScore(pkg, { today: "2026-09-03" });
+    expect(result.stage).toBe("Released");
+    expect(result.factors.find((factor) => factor.key === "submittal")?.deduction).toBe(0);
+    expect(result.score).toBe(100);
+  });
+
+  it("does not score a legacy Released sheet stage as approved without a governing submittal", () => {
+    const pkg = cleanPkg();
+    pkg.submittals = [];
+    const result = calculateDrawingHealthScore(pkg, { today: "2026-09-03" });
+    expect(result.stage).toBe("Released");
+    const approval = result.factors.find((factor) => factor.key === "approval");
+    expect(approval?.deduction).toBe(16);
+    expect(approval?.detail).toContain("No governing submittal");
+    expect(result.score).toBe(84);
   });
 
   it("Approved-as-Noted (terminal, not Released) → small approval deduction, still grade A", () => {

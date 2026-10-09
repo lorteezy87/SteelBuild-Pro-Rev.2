@@ -31,6 +31,55 @@ function mount(activeTab = "overview") {
 }
 
 describe("DetailingTabStrip", () => {
+  it("keeps four everyday work areas visible and moves specialist tools into one menu", () => {
+    const onTab = vi.fn();
+    const workAreas = [
+      { key: "overview", label: "Action Queue", icon: Gauge },
+      { key: "drawings", label: "Shop Drawings", icon: Gauge },
+      { key: "gc", label: "GC Issuances", icon: Gauge },
+      { key: "submittals", label: "Approvals", icon: ClipboardList },
+      { key: "holds", label: "Holds & Blockers", icon: ShieldAlert },
+    ];
+    render(
+      <DetailingTabStrip
+        tabs={workAreas}
+        primaryKeys={["overview", "drawings", "gc", "submittals"]}
+        activeTab="holds"
+        onTab={onTab}
+        tabCounts={{ holds: 2 }}
+        alertTabs={["holds"]}
+      />,
+    );
+
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Action Queue", "Shop Drawings", "GC Issuances", "Approvals",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: /More tools.*Holds & Blockers/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Holds & Blockers/ }));
+    expect(onTab).toHaveBeenCalledWith("holds");
+  });
+
+  it("opens specialist tools from the keyboard and returns focus on Escape", async () => {
+    render(
+      <DetailingTabStrip
+        tabs={TABS}
+        primaryKeys={["overview", "submittals"]}
+        activeTab="overview"
+        onTab={vi.fn()}
+        tabCounts={{}}
+        alertTabs={[]}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: "More tools" });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const first = await screen.findByRole("menuitem", { name: /Holds & Blockers/ });
+    await waitFor(() => expect(first).toHaveFocus());
+    fireEvent.keyDown(first, { key: "Escape" });
+    expect(trigger).toHaveFocus();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
   it("uses manual activation with wrapping roving focus", () => {
     const onTab = mount();
     const [board, register, holds] = screen.getAllByRole("tab");

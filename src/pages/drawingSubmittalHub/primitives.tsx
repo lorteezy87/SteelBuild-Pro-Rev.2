@@ -31,7 +31,8 @@ export function SeqMetric({ label, value, tone }: { label: string; value: ReactN
 }
 
 export function OperationalStateChip({ state }: { state: string }) {
-  const color = getOperationalStateColor(state);
+  const releaseMarker = ["Released", "Partially Released", "Released for Erection"].includes(state);
+  const color = releaseMarker ? "var(--cmd-text-muted)" : getOperationalStateColor(state);
   return (
     <span style={{
       display: "inline-block",
@@ -46,7 +47,7 @@ export function OperationalStateChip({ state }: { state: string }) {
       background: `color-mix(in srgb, ${color} 16%, transparent)`,
       border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
       whiteSpace: "nowrap",
-    }}>
+    }} title={releaseMarker ? "Workflow marker only. Verify the drawing-set and work-package fabrication release gates." : undefined}>
       {state}
     </span>
   );

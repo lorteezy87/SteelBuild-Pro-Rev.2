@@ -322,6 +322,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             <Field label="Project" span={3}>
               <DarkSelect
                 value={formData.project_id}
+                disabled={Boolean(projectId || rfi)}
                 onChange={(value) => set("project_id", value)}
                 placeholder="Select project..."
                 options={projects.map((p) => ({ value: p.id, label: p.name || p.project_number || "Unnamed project" }))}
@@ -617,7 +618,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   );
 }
 
-function DarkSelect({ value, options, onChange, placeholder = "Select..." }) {
+function DarkSelect({ value, options, onChange, placeholder = "Select...", disabled = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selected = options.find((option) => option.value === value);
@@ -640,13 +641,13 @@ function DarkSelect({ value, options, onChange, placeholder = "Select..." }) {
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button type="button" onClick={() => setOpen((next) => !next)} style={darkSelectButtonStyle}>
+      <button type="button" disabled={disabled} onClick={() => setOpen((next) => !next)} style={darkSelectButtonStyle}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: selected ? "var(--text-primary)" : "var(--text-muted)" }}>
           {selected?.label || placeholder}
         </span>
         <span style={{ color: "var(--text-muted)", transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.12s" }}>v</span>
       </button>
-      {open && (
+      {open && !disabled && (
         <div style={darkSelectMenuStyle}>
           {placeholder && (
             <button type="button" onClick={() => { onChange(""); setOpen(false); }} style={darkSelectOptionStyle(!value)}>

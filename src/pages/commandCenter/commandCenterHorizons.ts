@@ -1,3 +1,4 @@
+import { daysUntil as calendarDaysUntil } from "@/lib/dateMath";
 import type { ActionItem } from "./commandCenterControlCenter.derive";
 
 export type CommandHorizonKey = "now" | "48h" | "10d";
@@ -8,16 +9,9 @@ export interface CommandHorizon {
   items: ActionItem[];
 }
 
-function localMidnight(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
 function daysUntil(dateValue: string | null): number | null {
-  if (!dateValue) return null;
-  const due = new Date(`${dateValue}T00:00:00`);
-  if (Number.isNaN(due.getTime())) return null;
-  return Math.ceil((due.getTime() - localMidnight().getTime()) / 86400000);
+  const days = calendarDaysUntil(dateValue);
+  return Number.isFinite(days) ? days : null;
 }
 
 function stableUrgencyOrder(item: ActionItem): number {

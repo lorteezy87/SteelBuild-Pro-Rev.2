@@ -1,56 +1,69 @@
-/**
- * The two localStorage keys that carry a user's project selection between
- * loads, and the one question the boot path needs to ask about them.
- *
- * They live here rather than in ProjectContext because IndexRoute has to answer
- * "will a project resolve this load?" BEFORE ProjectContext has fetched
- * anything — and because IndexRoute's test mocks ProjectContext wholesale, so a
- * helper exported from there would be mocked away rather than exercised.
- */
-
-/** Most-recent explicit project pick. Written by ProjectContext.selectProject. */
+/** Account/workspace-owned cache of confirmed live project rows. */
 export const ACTIVE_PROJECT_ID_KEY = "activeProjectId";
-
-/**
- * Cache of the last confirmed-live project list. ProjectContext REMOVES this
- * key when a successful load returns zero live projects, so its absence is
- * informative: it means the last thing the server told us was "no projects",
- * not merely "we have not looked yet".
- */
 export const PROJECTS_CACHE_KEY = "sbp_projects_cache";
 
-type CachedProject = { id?: unknown; is_deleted?: unknown };
+export type ProjectCacheOwner = { userId: string; orgId: string };
+export type CachedProject = { id?: unknown; org_id?: unknown; is_deleted?: unknown };
+type ProjectCacheEnvelope = {
+  version: 2;
+  owner: ProjectCacheOwner;
+  projects: CachedProject[];
+};
 
-/** Live (non-archived) only — never seed a selection from a tombstone. */
-function isLive(project: CachedProject | null | undefined): boolean {
-  return Boolean(project) && project?.is_deleted !== true;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isOwnedLiveProject(value: unknown, owner: ProjectCacheOwner): value is CachedProject {
+  return isRecord(value) && typeof value.id === "string" &&
+    value.org_id === owner.orgId && value.is_deleted !== true;
 }
 
 /**
- * Does the saved project pick still refer to a project we last saw live?
- *
- * `activeProjectId` outlives the project it names: ProjectContext only clears a
- * stale id AFTER a fetch resolves, and an empty list is retried three times
- * with 1.5s + 3s of backoff first. Anything that treats the bare presence of
- * the key as "a project is pending" therefore makes a zero-project user wait
- * out that backoff on a spinner — the exact stall IndexRoute's landing logic
- * was written to avoid. Cross-checking the cache answers the real question.
- *
- * Returns false on any storage or parse failure: the caller's fallback is to
- * decide immediately, which is the better failure mode of the two.
+ * Legacy arrays have no proven owner and must never seed authenticated UI.
+ * A failed network request may retain only data from this exact account/workspace.
  */
-export function hasResolvableProjectSelection(): boolean {
+export function readOwnedProjects(
+  owner: ProjectCacheOwner | null | undefined,
+): CachedProject[] {
+  if (!owner) return [];
+  try {
+    const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
+    if (!raw) return [];
+    const envelope: unknown = JSON.parse(raw);
+    if (!isRecord(envelope) || envelope.version !== 2 || !isRecord(envelope.owner) ||
+      envelope.owner.userId !== owner.userId || envelope.owner.orgId !== owner.orgId ||
+      !Array.isArray(envelope.projects)) return [];
+    return envelope.projects.filter((project: unknown): project is CachedProject => isOwnedLiveProject(project, owner));
+  } catch {
+    return [];
+  }
+}
+
+export function writeOwnedProjects(
+  projects: readonly CachedProject[],
+  owner: ProjectCacheOwner | null | undefined,
+): void {
+  // Without a verified scope, never read or replace another account's cache.
+  if (!owner) return;
+  try {
+    const live = projects.filter((project) => isOwnedLiveProject(project, owner));
+    if (!live.length) {
+      localStorage.removeItem(PROJECTS_CACHE_KEY);
+      return;
+    }
+    const envelope: ProjectCacheEnvelope = { version: 2, owner, projects: live };
+    localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(envelope));
+  } catch {
+    // Storage is an optional optimization, not a prerequisite for project access.
+  }
+}
+
+/** A selection is pending only when this account/workspace owns the cached row. */
+export function hasResolvableProjectSelection(owner?: ProjectCacheOwner | null): boolean {
   try {
     const savedId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY);
-    if (!savedId) return false;
-
-    const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
-    if (!raw) return false; // last load returned no live projects
-
-    const cached: unknown = JSON.parse(raw);
-    if (!Array.isArray(cached)) return false;
-
-    return cached.some((p: CachedProject) => isLive(p) && p?.id === savedId);
+    return Boolean(savedId && readOwnedProjects(owner).some((project) => project.id === savedId));
   } catch {
     return false;
   }

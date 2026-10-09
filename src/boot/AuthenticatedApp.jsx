@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { OrgProvider, useOrg } from "@/components/shared/OrgContext";
 import AppLoader from "@/boot/AppLoader";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { OutboxProvider } from "@/lib/field/OutboxContext";
 
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
 const DesktopConnectSignIn = lazyWithRetry(() => import("@/pages/DesktopConnectSignIn"));
@@ -59,7 +60,7 @@ export default function AuthenticatedApp() {
     isAuthenticated,
     isLoadingAuth, isLoadingPublicSettings, authError, isLoggingIn,
     loginWithPassword, signUpWithPassword, sendPasswordReset, isPasswordRecovery, mfaRequired,
-    mfaStatusDegraded, mfaStatusMessage, retryMfaStatus,
+    mfaStatusDegraded, mfaStatusMessage, retryMfaStatus, isCheckingMfa,
     logout,
   } = useAuth();
 
@@ -80,6 +81,9 @@ export default function AuthenticatedApp() {
       </Suspense>
     );
   }
+
+  // Hold new or unverified sessions until their blocking AAL lookup resolves.
+  if (isAuthenticated && isCheckingMfa) return <AppLoader />;
 
   if (mfaStatusDegraded) {
     return (
@@ -156,7 +160,9 @@ export default function AuthenticatedApp() {
 
   return (
     <OrgProvider>
-      <OrgGate />
+      <OutboxProvider>
+        <OrgGate />
+      </OutboxProvider>
     </OrgProvider>
   );
 }

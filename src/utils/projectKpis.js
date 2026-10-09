@@ -6,6 +6,7 @@
  * to test and reuse without React dependencies.
  */
 
+import { calculateEarnedValue } from "@/utils/earnedValue";
 import { computeRevisedContractValue } from "@/services/costRollup";
 import { isRfiOpen } from "@/lib/entityPredicates";
 
@@ -74,32 +75,11 @@ export function calcDaysToDeadline(project) {
  * EVM (Earned Value Management) metrics for a single project.
  * @param {object[]} workPackages - WPs already filtered to this project
  * @param {number} [budgetAtCompletion] - optional override; defaults to sum of WP budgets
- * @returns {{ bac, ev, ac, cpi, spi, tcpi, vac }}
+ * @param {number|null} [plannedValue] - explicit baseline value planned by the data date; unknown by default
+ * @returns {import("@/utils/earnedValue").EarnedValueFigures}
  */
-export function calcEVM(workPackages = [], budgetAtCompletion) {
-  const bac = budgetAtCompletion ?? workPackages.reduce((s, w) => {
-    return s + (Number(w.budgeted_labor_value) || 0) + (Number(w.budgeted_material_value) || 0);
-  }, 0);
-
-  const ev = workPackages.reduce((s, w) => {
-    const wpBac = (Number(w.budgeted_labor_value) || 0) + (Number(w.budgeted_material_value) || 0);
-    return s + wpBac * ((Number(w.percent_complete) || 0) / 100);
-  }, 0);
-
-  const ac = workPackages.reduce((s, w) => {
-    return s + (Number(w.actual_labor_cost_to_date) || 0) + (Number(w.actual_material_cost_to_date) || 0);
-  }, 0);
-
-  const cpi  = ac > 0   ? ev / ac        : null;
-  // SPI = EV / PV. Without time-phased PV data, approximate PV from
-  // elapsed schedule fraction × BAC (linear baseline).
-  const pv   = bac; // Placeholder: assumes PV ≈ BAC at current date; replace with time-phased PV when available
-  const spi  = pv > 0  ? ev / pv        : null;
-  const eac  = cpi > 0 ? ac + (bac - ev) / cpi : bac;
-  const vac  = bac - eac;
-  const tcpi = (bac - ev) > 0 ? (bac - ac) / (bac - ev) : null;
-
-  return { bac, ev, ac, cpi, spi, tcpi, vac, eac };
+export function calcEVM(workPackages = [], budgetAtCompletion, plannedValue) {
+  return calculateEarnedValue(workPackages, budgetAtCompletion, plannedValue);
 }
 
 /**

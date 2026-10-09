@@ -1,150 +1,54 @@
-/* Tactical Command Center horizons for the SteelBuild Pro system-first redesign. */
-
-.sbp-horizons {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.sbp-horizon {
-  position: relative;
-  min-width: 0;
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  background: var(--bg-surface);
-  overflow: hidden;
-}
-
-.sbp-horizon::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--border-strong);
-}
-
-.sbp-horizon.is-danger::before { background: var(--status-error); }
-.sbp-horizon.is-warn::before { background: var(--status-warning); }
-.sbp-horizon.is-good::before { background: var(--status-success); }
-
-.sbp-horizon__head {
-  min-height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px 10px 15px;
-  border-bottom: 1px solid var(--divider);
-  background: var(--bg-surface-low);
-}
-
-.sbp-horizon__eyebrow,
-.sbp-command-register-head__eyebrow {
-  font: 700 8px/1.3 var(--font-mono, monospace);
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.sbp-horizon__head h2,
-.sbp-command-register-head h2 {
-  margin: 2px 0 0;
-  font-family: var(--font-display, sans-serif);
-  font-size: 17px;
-  line-height: 1;
-  letter-spacing: .02em;
-  color: var(--text-primary);
-}
-
-.sbp-horizon__count {
-  min-width: 28px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 7px;
-  border: 1px solid var(--border-default);
-  border-radius: 5px;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font: 700 10px/1 var(--font-mono, monospace);
-}
-
-.sbp-horizon__body {
-  min-height: 172px;
-}
-
-.sbp-horizon__item {
-  width: 100%;
-  display: block;
-  padding: 9px 11px 9px 15px;
-  border: 0;
-  border-bottom: 1px solid var(--divider);
-  background: transparent;
-  color: var(--text-primary);
-  text-align: left;
-  cursor: pointer;
-}
-
-.sbp-horizon__item:last-child { border-bottom: 0; }
-.sbp-horizon__item:hover { background: var(--bg-row-hover); }
-
-.sbp-horizon__item-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.sbp-horizon__type {
-  flex: 0 0 auto;
-  min-width: 28px;
-  padding-top: 1px;
-  color: var(--accent);
-  font: 700 8px/1.4 var(--font-mono, monospace);
-  letter-spacing: .08em;
-}
-
-.sbp-horizon__title {
-  min-width: 0;
-  font-size: 11px;
-  line-height: 1.35;
-  font-weight: 650;
-}
-
-.sbp-horizon__item-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 10px;
-  margin-top: 5px;
-  padding-left: 36px;
-  color: var(--text-secondary);
-  font: 500 9px/1.35 var(--font-mono, monospace);
-}
-
-.sbp-horizon__empty {
-  min-height: 172px;
-  display: flex;
-  align-items: center;
-  padding: 16px 15px;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.sbp-command-register-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 1px 0;
-}
-
-.sbp-command-register-head__count {
-  color: var(--text-secondary);
-  font: 600 9px/1.4 var(--font-mono, monospace);
-}
-
+/* Job control: one source register, a short exception brief and review-window filters. */
+.cc-cmd.sbp-command-page { gap: 14px; padding: clamp(14px, 1.5vw, 24px); font-size: 1rem; }
+.cc-cmd .sbp-page-header { padding: 16px 18px; }
+.cc-cmd .sbp-page-header__eyebrow { color: var(--text-secondary); font: 600 .875rem/1.4 var(--font-body, sans-serif); letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
+.cc-cmd .sbp-page-header__title { font-size: 1.75rem; line-height: 1.15; }
+.cc-cmd .sbp-page-header__meta { font-size: .875rem; line-height: 1.4; }
+.cc-cmd .sbp-operational-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.cc-cmd .sbp-operational-summary__metric { padding: 12px 14px; }
+.cc-cmd .sbp-operational-summary__label { color: var(--text-secondary); font: 600 .875rem/1.4 var(--font-body, sans-serif); letter-spacing: 0; text-transform: none; }
+.cc-cmd .sbp-operational-summary__value { margin-top: 5px; font-size: 1.75rem; line-height: 1.15; }
+.cc-cmd .sbp-operational-summary__sub { margin-top: 5px; font-size: .875rem; line-height: 1.4; }
+.sbp-execution-brief { padding: 14px 16px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-surface); color: var(--text-primary); font-size: .9375rem; line-height: 1.45; }
+.sbp-execution-brief header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.sbp-command-register-head__eyebrow { color: var(--text-secondary); font: 500 .875rem/1.4 var(--font-body, sans-serif); }
+.sbp-execution-brief h2 { margin: 3px 0; font: 600 1.25rem/1.2 var(--font-display, sans-serif); }
+.sbp-execution-brief__exceptions { margin: 8px 0 4px; font-weight: 650; }
+.sbp-execution-brief__gaps { margin: 4px 0 0; color: var(--text-secondary); }
+.sbp-execution-brief__definitions { margin-top: 8px; color: var(--text-secondary); font-size: .875rem; }
+.sbp-execution-brief__definitions summary { width: fit-content; cursor: pointer; }
+.sbp-execution-brief__definitions p { margin: 6px 0 0; }
+.sbp-horizon-filters { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--border-default); }
+.sbp-horizon-filters button { display: inline-flex; align-items: center; gap: 12px; min-height: 42px; padding: 9px 14px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-secondary); font: 600 .9375rem/1.4 var(--font-body, sans-serif); cursor: pointer; }
+.sbp-horizon-filters button:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sbp-horizon-filters button[aria-pressed="true"] { border-color: var(--border-strong); background: var(--bg-surface); color: var(--text-primary); }
+.sbp-horizon-filters button span { color: var(--text-secondary); font: 600 .875rem/1.4 var(--font-mono, monospace); }
+.sbp-command-register-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 2px 1px 0; }
+.sbp-command-register-head h2 { margin: 0; color: var(--text-primary); font: 600 1.25rem/1.2 var(--font-display, sans-serif); }
+.sbp-command-register-head__count { color: var(--text-secondary); font: 500 .875rem/1.4 var(--font-mono, monospace); }
+.sbp-command-filter-status { margin: -6px 0 0; color: var(--text-secondary); font-size: .875rem; }
+.sbp-command-register { min-width: 0; overflow-x: auto; border-radius: 8px; }
+.sbp-command-register__content { min-width: 1130px; }
+.sbp-command-column-heading { font: 600 .875rem/1.4 var(--font-body, sans-serif); text-transform: none; letter-spacing: 0; }
+.cc-cmd .cmd-row__meta { font-size: .875rem; line-height: 1.4; }
+.cc-cmd .cmd-row__num { font-size: .875rem; }
+.cc-cmd .cmd-table { font-size: .9375rem; line-height: 1.4; }
+.cc-cmd .cmd-table th { font: 600 .875rem/1.4 var(--font-body, sans-serif); letter-spacing: 0; }
+.cc-cmd .cmd-table th, .cc-cmd .cmd-table td { padding: 12px; }
+.cc-cmd .cmd-table td:nth-child(2) { min-width: 210px; font-size: 1rem; }
+.cc-cmd .cmd-pill { font-size: .875rem; white-space: nowrap; }
+.cc-cmd .cmd-chip-btn, .cc-cmd .cmd-search__input, .cc-cmd .cmd-btn { font-size: .9375rem; }
+.cc-cmd .cmd-chip-btn, .cc-cmd .cmd-search, .cc-cmd .cmd-btn { min-height: 40px; }
+.cc-cmd button:focus-visible, .cc-cmd summary:focus-visible, .cc-cmd [role="button"]:focus-visible, .cc-cmd h2:focus-visible, .cc-cmd .sbp-command-register:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 1100px) {
-  .sbp-horizons { grid-template-columns: 1fr; }
-  .sbp-horizon__body,
-  .sbp-horizon__empty { min-height: 0; }
+  .cc-cmd .sbp-operational-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cc-cmd .sbp-operational-summary__metric { border-bottom: 1px solid var(--divider); }
 }
+@media (max-width: 600px) {
+  .cc-cmd .sbp-page-header { padding: 14px; }
+  .cc-cmd .sbp-operational-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cc-cmd .sbp-operational-summary__metric { padding: 10px 12px; }
+  .sbp-execution-brief { padding: 12px 14px; }
+  .sbp-horizon-filters button { justify-content: space-between; flex: 1 1 calc(50% - 4px); min-width: 0; padding-inline: 10px; }
+}
+[data-density="compact"] .cc-cmd .cmd-table td { padding-block: 8px; }

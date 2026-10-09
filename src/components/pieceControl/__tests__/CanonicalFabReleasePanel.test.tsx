@@ -42,7 +42,16 @@ const blockedGate: CanonicalReleaseGate = {
   evaluated_at: "2026-07-23T12:00:00.000Z",
 };
 
-function renderPanel(pieceControlMode = "shadow") {
+const readyGate: CanonicalReleaseGate = {
+  ...blockedGate,
+  passes: true,
+  checks: {
+    ...blockedGate.checks,
+    scope: { passed: true, blockers: [] },
+  },
+};
+
+function renderPanel(pieceControlMode = "shadow", assertCanRelease?: () => void) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -56,6 +65,7 @@ function renderPanel(pieceControlMode = "shadow") {
         projectId="project-1"
         workPackageId="wp-1"
         pieceControlMode={pieceControlMode}
+        assertCanRelease={assertCanRelease}
       />
     </QueryClientProvider>,
   );
@@ -110,6 +120,30 @@ describe("CanonicalFabReleasePanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("removes the release action if refreshing a previously clear gate fails", async () => {
+    vi.mocked(evaluateCanonicalReleaseGate)
+      .mockResolvedValueOnce(readyGate)
+      .mockRejectedValueOnce(new Error("Network unavailable"));
+    renderPanel();
+
+    expect(await screen.findByRole("button", { name: "Release for fabrication" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh fabrication release checks" }));
+    expect(await screen.findByText("Fabrication release could not be evaluated.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Release for fabrication" })).not.toBeInTheDocument();
+    expect(releaseCanonicalWorkPackage).not.toHaveBeenCalled();
+  });
+
+  it("rejects a gate response for another project or package", async () => {
+    vi.mocked(evaluateCanonicalReleaseGate).mockResolvedValue({
+      ...readyGate,
+      project_id: "another-project",
+    });
+    renderPanel();
+
+    expect(await screen.findByText("Fabrication release evidence did not match this package.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Release for fabrication" })).not.toBeInTheDocument();
+  });
+
   it("uses plain operational mutation error copy", async () => {
     vi.mocked(evaluateCanonicalReleaseGate).mockResolvedValue({
       ...blockedGate,
@@ -157,5 +191,18 @@ describe("CanonicalFabReleasePanel", () => {
     expect(
       screen.getByLabelText("Required exception reason"),
     ).toHaveAttribute("id", "piece-release-exception-reason-wp-1");
+  });
+
+  it("rechecks caller evidence at the actual release boundary", async () => {
+    vi.mocked(evaluateCanonicalReleaseGate).mockResolvedValue({
+      ...blockedGate, passes: true,
+      checks: { ...blockedGate.checks, scope: { passed: true, blockers: [] } },
+    });
+    const assertCanRelease = vi.fn(() => { throw new Error("Evidence is refreshing"); });
+    renderPanel("live", assertCanRelease);
+    fireEvent.click(await screen.findByRole("button", { name: "Release for fabrication" }));
+    await waitFor(() => expect(assertCanRelease).toHaveBeenCalledOnce());
+    expect(releaseCanonicalWorkPackage).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
   });
 });

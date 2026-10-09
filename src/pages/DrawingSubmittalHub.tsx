@@ -1,14 +1,13 @@
 import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 /**
- * DrawingSubmittalHub — Unified Drawings & Submittals command center.
+ * DrawingSubmittalHub — project-scoped Drawing Control workbench.
  *
- * Three+ tabs:
- *   Control Board / Process Board / Drawing Register (embedded) /
- *   Submittal Register (embedded) / Approval Matrix.
+ * Four primary work areas: Action Queue, Shop Drawings, GC Issuances, and
+ * Approvals. Specialist tools remain reachable through the More tools menu
+ * and their existing deep links.
  *
- * This is a thin orchestrator. The existing pages render inside tab panels
- * and keep all their internal state / queries. The hub adds a unified KPI
- * strip, a shared CommandBar with tab navigation, and the Approval Matrix.
+ * Existing domain pages render in contextual panels and retain their own
+ * scoped queries. The hub shares the project KPI strip and approval evidence.
  */
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -29,8 +28,7 @@ import { comparisonEvidenceByRevision, type RevisionComparisonEvidenceRow } from
 import { toast } from "sonner";
 import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
-import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
-import { computeFabReady } from "@/lib/submittalAnalytics";
+import { computeShopSubmittalReleaseMarker } from "@/lib/submittalAnalytics";
 import { computeDetailingReadiness } from "@/lib/detailingReadiness";
 import { summarizeElementStatuses } from "@/services/modelElementStatus";
 import { countModelElements, fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
@@ -49,6 +47,7 @@ import { Model3DGateError, Model3DGateLoading, Model3DGateNotice } from "./drawi
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
+  PRIMARY_TAB_KEYS,
   buildCurrentRevisionIdMap,
   buildCurrentRevisionMap,
   buildDrawingKpis,
@@ -87,6 +86,7 @@ const RevisionDeepDiveModal = lazyWithRetry(() => import("@/components/drawings/
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
 // chunk 404s after a deploy trigger a reload instead of a hard crash.
 const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
+const GcDocumentsPage = lazyWithRetry(() => import("@/pages/GcDocuments"));
 // Heavy tab panels — each only renders on its own tab, so code-split them off
 // the hub's route chunk. They already mount conditionally inside the <Suspense>
 // boundary below, so deferring the import is behavior-preserving.
@@ -253,7 +253,7 @@ function DetailingControlCenter() {
   } = useSubmittals(projectId);
 
   // Drawing sets. Paged: setPackages is built from these, and every claim on
-  // this page — a set's stage, its readiness, its Fab Ready share — is derived
+  // this page — a set's stage, workflow marker, and schedule risk — is derived
   // from that. A capped read does not show fewer sets, it drops them from the
   // denominators too.
   const { data: drawingSets = [], isPending: drawingSetsLoading, error: drawingSetsError, refetch: refetchDrawingSets } = useQuery({
@@ -265,13 +265,11 @@ function DetailingControlCenter() {
 
   // Holds: one query feeds the header badge, the Holds tab count and the
   // matrix's On Hold column — the same key HoldsPanel reads, so all agree.
-  // "Known" means we HAVE rows. A failed background refetch keeps its cached
-  // rows (TanStack v5: status "error" with data), and those last-known values
-  // stay on screen — flipping cells to "?" while the hold filter still matched
-  // the same cached rows contradicted itself.
+  // A failed background refetch can retain cached rows. They are no longer
+  // verified hold evidence, even if a previous request once succeeded.
   const holdsQuery = useDrawingHolds(projectId ?? null);
-  const holds = holdsQuery.data ?? NO_HOLDS;
-  const holdsStatus: HoldsStatus = holdsQuery.data !== undefined ? "ready" : holdsQuery.isError ? "error" : "loading";
+  const holdsStatus: HoldsStatus = holdsQuery.isError ? "error" : holdsQuery.data !== undefined ? "ready" : "loading";
+  const holds = holdsStatus === "ready" ? holdsQuery.data ?? NO_HOLDS : NO_HOLDS;
   const activeHolds = holdsStatus === "ready" ? activeHoldCount(holds) : null;
   // The matrix's Last Transmittal column and Last sent line. It's a
   // three-table read, so it loads only while the matrix is open (same key as
@@ -293,13 +291,9 @@ function DetailingControlCenter() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
-  // RFIs gate readiness, so this read must be complete — it is the one that can
-  // make the page say something dangerous. openRfiIds / openRfiNumbers below
-  // are built from it, and computeDetailingReadiness treats an RFI that is not
-  // in those sets as CLOSED. Capped at PostgREST's 1000 rows, an open RFI past
-  // the cap stopped blocking its package, and the set reported Fab Ready with
-  // that RFI still open — the same outcome as the two linked-RFI matching bugs
-  // on record (e40711b8, df1d885e), reached from a different direction.
+  // RFIs feed the local blocker and schedule-risk evidence. This read must be
+  // complete: an open RFI beyond a cap would disappear from those signals.
+  // The authoritative fab-release gate still runs on the server.
   const { data: rfis = [], isPending: rfisLoading, error: rfisError, refetch: refetchRfis } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => entities.RFI.filterAll({ project_id: projectId }),
@@ -675,32 +669,32 @@ function DetailingControlCenter() {
   // ── Drawing KPIs ───────────────────────────────────────────────────────
   const drawingKpis = useMemo(() => buildDrawingKpis(drawings, setPackages), [drawings, setPackages]);
 
-  // ── Fab-Ready KPI ──────────────────────────────────────────────────────
-  const fabReady = useMemo(
-    () => computeFabReady(drawings, submittals),
+  // ── Shop Drawing submittal stage marker (not a fab-release verdict) ────
+  const shopReleaseMarker = useMemo(
+    () => computeShopSubmittalReleaseMarker(drawings, submittals),
     [drawings, submittals]
   );
 
   const isLoading = drawingsLoading || submittalsLoading || drawingSetsLoading || workPackagesLoading || rfisLoading;
 
   const triage = useMemo(
-    () => buildTriage(submittals, setPackages, readinessByKey, workdayDues),
-    [submittals, setPackages, readinessByKey, workdayDues],
+    () => buildTriage(submittals, setPackages, readinessByKey, workdayDues, { holdsStatus, holds }),
+    [submittals, setPackages, readinessByKey, workdayDues, holdsStatus, holds],
   );
 
   // A tab badge must count the ROWS that tab lists. The Drawing Register tab
   // renders sheets (DrawingRegisterGridPanel), so badging it with the set count
   // read "Drawing Register 11" above 148 rows.
   //
-  // TABS has nine entries and this map has seven. The two it leaves out are
-  // deliberate, not oversights — badging either would undo a load the hub
-  // avoids on purpose:
+  // Some tools deliberately have no eager count. Badging them would undo
+  // loads the hub avoids on purpose:
   //   transmittals — useTransmittals is gated to `activeTab === "matrix"`
   //     because it is a three-table read. A badge would force it on every
   //     page load, for every tab.
   //   validation   — runDetailingValidation is `enabled: false` behind an
   //     explicit "Run validation" button. There is no count until the user
   //     asks for one, and inventing a 0 would claim a clean report nobody ran.
+  //   gc           — its dedicated register loads only when the GC area opens.
   // The strip renders no badge at 0 (`count > 0 &&`), so leaving them out
   // asserts nothing. Adding a count to either means making its query eager
   // first — a performance decision, not a display one.
@@ -893,6 +887,7 @@ function DetailingControlCenter() {
           />
           </>
         )}
+        {activeTab === "gc" && <GcDocumentsPage embedded />}
         {activeTab === "submittals" && <SubmittalsPage embedded />}
         {activeTab === "matrix" && (
           <ApprovalMatrixPanel
@@ -1026,9 +1021,9 @@ function DetailingControlCenter() {
 
   return (
     <>
-      <ListTruncationNotice count={drawings.length} label="drawing sheets" />
       <DetailingCommandShell
         tabs={tabs}
+        primaryKeys={PRIMARY_TAB_KEYS}
         activeTab={activeTab}
         onTab={setActiveTab}
         kpis={{
@@ -1043,9 +1038,9 @@ function DetailingControlCenter() {
           atRisk: triage.atRiskCount,
           overdueDrawingSets: triage.overdueDrawingSets,
           overdueUnlinkedSubmittals: triage.overdueUnlinkedSubmittals,
-          fabReadyNumerator: fabReady.numerator,
-          fabReadyDenominator: fabReady.denominator,
-          fabReadyPercent: fabReady.percent,
+          shopReleaseNumerator: shopReleaseMarker.numerator,
+          shopReleaseDenominator: shopReleaseMarker.denominator,
+          shopReleasePercent: shopReleaseMarker.percent,
           openItems: triage.openItems.length,
           fleetAverageScore: fleetHealth.count > 0 ? fleetHealth.averageScore : null,
         }}

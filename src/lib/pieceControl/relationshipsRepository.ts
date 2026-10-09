@@ -186,7 +186,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchOptionalProjectRows<SubmittalEvidence>(
       "submittals",
       projectId,
-      "id, status, ball_in_court, drawing_set_ids, current_round_id, submitted_date, required_date, returned_date, updated_at, round_number, is_deleted, deleted_at",
+      "id, submittal_type, status, ball_in_court, drawing_set_ids, current_round_id, submitted_date, required_date, returned_date, updated_at, round_number, is_deleted, deleted_at",
     ),
     fetchOptionalProjectRows<SheetResponseEvidence>(
       "submittal_sheet_responses",
@@ -306,6 +306,19 @@ export function unlinkPieceDrawingSet(
   drawingSetId: string,
 ) {
   return callRpc("unlink_piece_drawing_set", {
+    p_project_id: projectId,
+    p_piece_id: pieceId,
+    p_drawing_set_id: drawingSetId,
+  });
+}
+
+/** Exclusive assignment is one RPC so a lot split cannot land between unlink and link. */
+export function replacePieceDrawingSet(
+  projectId: string,
+  pieceId: string,
+  drawingSetId: string,
+) {
+  return callRpc("replace_piece_drawing_set", {
     p_project_id: projectId,
     p_piece_id: pieceId,
     p_drawing_set_id: drawingSetId,

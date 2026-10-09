@@ -71,6 +71,22 @@ export interface SetPackage {
    */
   supersededSheets: Drawing[];
   submittals: Submittal[];
+  /** Explicitly set-linked non-shop records: related, never drawing approval. */
+  relatedSubmittals?: Submittal[];
+  /** Name-only legacy matches are visible context, never approval authority. */
+  historicalSubmittals?: Submittal[];
+}
+
+/** Client-visible prerequisites. Only evaluate_fab_release_set can authorize release. */
+export interface PackageReleaseEvidence {
+  sheetCount: number;
+  supersededSheetCount: number;
+  missingPdfCount: number;
+  /** Explicitly set-linked records whose type cannot govern drawing approval. */
+  relatedSubmittalCount?: number;
+  /** Null until the drawing-holds query succeeds. */
+  activeHoldCount: number | null;
+  governingStage: string | null;
 }
 
 export interface TriageItem {
@@ -103,6 +119,7 @@ export interface TriageItem {
   _detailingStateRaw?: string | null;
   /** Per-package readiness read-model (computeDetailingReadiness output). */
   _readiness?: DetailingReadiness | null;
+  _releaseEvidence?: PackageReleaseEvidence;
   /** Which persisted field receives an owner edit. */
   _ownerScope?: "Submittal BIC" | "First sheet owner" | "No owner target";
 }
@@ -117,8 +134,10 @@ export interface DetailingScheduleRisk {
 export interface DetailingReadiness {
   backwardDates?: Record<string, string | null | undefined>;
   scheduleRisk?: DetailingScheduleRisk;
-  fabricationReady?: boolean;
-  erectionReady?: boolean;
+  /** Local workflow marker; only the server fab-release gate can authorize production. */
+  shopStageMarked?: boolean;
+  /** Local workflow marker, not a field/erection release decision. */
+  fieldStageMarked?: boolean;
   rfiBlocked?: boolean;
   revisionImpacted?: boolean;
   materialImpacted?: boolean;
@@ -159,8 +178,8 @@ export interface SequenceReadinessRow {
   sequence: string;
   packageCount: number;
   detailingPct: number;
-  fabReadyCount: number;
-  erectionReadyCount: number;
+  shopStageCount: number;
+  fieldStageCount: number;
   atRiskCount: number;
 }
 

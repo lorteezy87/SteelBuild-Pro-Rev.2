@@ -8,7 +8,7 @@
 #                before merge.
 #   - deploy-cloudflare: THE production deploy — `wrangler deploy` to the
 #                Cloudflare Worker. GATED on `ci`, secret scan, Edge typecheck
-#                and production drift, and ONLY on a push to main, so
+#                production drift and commercial PostgreSQL acceptance, and ONLY on a push to main, so
 #                a red lint/typecheck/test/build cannot reach
 #                steelbuild-pro.com. That gate only holds while this is the SOLE
 #                publisher, so Cloudflare's own Workers Builds git integration
@@ -46,7 +46,7 @@
 #   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
 #   - SAST — still queued; needs an owner decision on tooling
 #     (see ENTERPRISE_READINESS_AUDIT.md L13).
-#   - Lighthouse / a11y / bundle-size budgets (queued for later).
+#   - Lighthouse / automated a11y auditing (queued for later).
 #
 # NOTE ON ENFORCEMENT: deploy dependencies block a failed build from publishing.
 # Branch protection must ALSO require these checks to prevent unchecked merges
@@ -86,6 +86,51 @@ permissions:
   contents: read
 
 jobs:
+  commercial-postgres:
+    name: Commercial SQL + concurrent PostgreSQL acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Disposable synthetic database; no Supabase credentials or hosted writes.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: steelbuild_commercial_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: commercial-fixture-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d steelbuild_commercial_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            supabase/tests/commercial-create/package-lock.json
+            supabase/tests/commercial-lifecycle/package-lock.json
+            supabase/tests/commercial-postgres/package-lock.json
+      - name: Verify transactional create and reviewed lifecycle boundaries
+        run: |
+          npm ci --prefix supabase/tests/commercial-create --ignore-scripts
+          npm test --prefix supabase/tests/commercial-create
+          npm ci --prefix supabase/tests/commercial-lifecycle --ignore-scripts
+          npm test --prefix supabase/tests/commercial-lifecycle
+      - name: Verify independent concurrent PostgreSQL sessions
+        env:
+          COMMERCIAL_POSTGRES_TEST: "1"
+          COMMERCIAL_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_commercial_test
+        run: |
+          npm ci --prefix supabase/tests/commercial-postgres --ignore-scripts
+          npm test --prefix supabase/tests/commercial-postgres
+
   edge-typecheck:
     name: Release Edge Function typecheck
     runs-on: ubuntu-latest
@@ -189,6 +234,15 @@ jobs:
       - name: Verify shell recovery (desktop and mobile, no backend)
         run: npm run test:e2e:foundation
 
+      - name: Preserve browser acceptance evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-acceptance-evidence
+          path: test-results/foundation/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Verify database helper search paths
         run: |
           npm ci --prefix supabase/tests/function-search-path --ignore-scripts
@@ -218,6 +272,9 @@ jobs:
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Verify production bundle budgets
+        run: npm run perf:bundle
 
   # ── Dependency audit ────────────────────────────────────────────────────
   # `npm audit` over PRODUCTION dependencies, via scripts/audit-gate.mjs.
@@ -255,6 +312,7 @@ jobs:
       - name: Audit all dependencies (high+, including build and native tooling)
         if: ${{ !cancelled() }}
         run: npm audit --audit-level=high
+
 
   # ── Secret scanning (enforced) ──────────────────────────────────────────────
   # Closes the "no secret scanning" gap this file used to list under "What does
@@ -368,7 +426,7 @@ jobs:
   # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers (production)
-    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -474,7 +532,7 @@ jobs:
   # public/_headers marks them noindex, and Cloudflare Access is the real fix.
   preview-cloudflare:
     name: Cloudflare preview (PR)
-    needs: [ci, secret-scan, supabase-drift, edge-typecheck]
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
     # Same-repo PRs only. Secrets are not exposed to forked-PR workflows, so a
     # fork would trip the config check below instead of building something
     # broken; skipping outright is clearer.
@@ -548,7 +606,7 @@ jobs:
   # Staging has its own Worker and Supabase branch. Never inherit prod env.
   deploy-staging-cloudflare:
     name: Deploy to Cloudflare Workers (staging)
-    needs: [ci, secret-scan, edge-typecheck]
+    needs: [ci, secret-scan, edge-typecheck, commercial-postgres]
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -765,6 +823,9 @@ jobs:
         run: npm run test:e2e
         env:
           E2E_BASE_URL: https://steelbuild-pro.com
+          E2E_PROJECT_ID: ${{ vars.E2E_PROJECT_ID }}
+          E2E_DRAWING_FIXTURE_TEXT: ${{ vars.E2E_DRAWING_FIXTURE_TEXT }}
+          E2E_SUBMITTAL_FIXTURE_TEXT: ${{ vars.E2E_SUBMITTAL_FIXTURE_TEXT }}
           # Sign-in: global-setup (browser session) + the API fixtures. The
           # passwords are secrets; the anon key is browser-public but stored as a
           # secret for one consistent place.

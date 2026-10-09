@@ -19,6 +19,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  ELEMENT_STATUS_META,
   normalizePieceMark,
   resolveElementStatus,
   summarizeElementStatuses,
@@ -27,8 +28,8 @@ import { normalizePieceMark as canonicalNormalizePieceMark } from "@/lib/pieceCo
 
 const readiness = (over = {}) => ({
   effectiveState: "IFA",
-  fabricationReady: false,
-  erectionReady: false,
+  shopStageMarked: false,
+  fieldStageMarked: false,
   rfiBlocked: false,
   atRisk: false,
   ...over,
@@ -53,12 +54,18 @@ describe("resolveElementStatus", () => {
     expect(resolveElementStatus({ piece_mark: "1B1" }, new Map())).toBe("unmapped");
   });
 
+  it("retains viewer bucket keys while labeling them as stage markers", () => {
+    expect(ELEMENT_STATUS_META.fab_ready.label).toBe("Shop stage marked");
+    expect(ELEMENT_STATUS_META.erection_ready.label).toBe("Field stage marked");
+    expect(ELEMENT_STATUS_META.fab_ready.label).not.toMatch(/ready/i);
+  });
+
   it("resolves the package through drawing_id -> set when only the sheet is linked", () => {
     const bySheet = new Map([["dwg-9", "set-1"]]);
     expect(
       resolveElementStatus(
         { piece_mark: "1B1", drawing_id: "dwg-9" },
-        setMap(readiness({ fabricationReady: true, effectiveState: "Released" })),
+        setMap(readiness({ shopStageMarked: true, effectiveState: "Released" })),
         bySheet,
       ),
     ).toBe("fab_ready");
@@ -69,13 +76,13 @@ describe("resolveElementStatus", () => {
       resolveElementStatus({ piece_mark: "X", drawing_set_id: "set-1" }, setMap(readiness({ rfiBlocked: true, atRisk: true }))),
     ).toBe("rfi_blocked");
     expect(
-      resolveElementStatus({ piece_mark: "X", drawing_set_id: "set-1" }, setMap(readiness({ atRisk: true, fabricationReady: true }))),
+      resolveElementStatus({ piece_mark: "X", drawing_set_id: "set-1" }, setMap(readiness({ atRisk: true, shopStageMarked: true }))),
     ).toBe("behind_schedule");
   });
 
   it("erection_ready outranks fab_ready; review/drafting bands map by state", () => {
     expect(
-      resolveElementStatus({ piece_mark: "X", drawing_set_id: "set-1" }, setMap(readiness({ erectionReady: true, fabricationReady: true }))),
+      resolveElementStatus({ piece_mark: "X", drawing_set_id: "set-1" }, setMap(readiness({ fieldStageMarked: true, shopStageMarked: true }))),
     ).toBe("erection_ready");
     expect(
       resolveElementStatus({ piece_mark: "X", drawing_set_id: "set-1" }, setMap(readiness({ effectiveState: "OFA" }))),
@@ -92,7 +99,7 @@ describe("resolveElementStatus", () => {
 describe("summarizeElementStatuses", () => {
   it("buckets counts, GUIDs and ids; skips deleted; computes mapped %", () => {
     const readinessBySet = new Map([
-      ["set-ok", readiness({ fabricationReady: true, effectiveState: "Released" })],
+      ["set-ok", readiness({ shopStageMarked: true, effectiveState: "Released" })],
       ["set-rev", readiness({ effectiveState: "BFA" })],
     ]);
     const elements = [
@@ -143,39 +150,39 @@ describe("resolveElementStatus — per-bucket precedence", () => {
   });
 
   it("bucket: rfi_blocked — readiness.rfiBlocked true → 'rfi_blocked' (highest non-unmapped priority)", () => {
-    // Even with atRisk=true and erectionReady=true, rfiBlocked wins
+    // Even with atRisk=true and fieldStageMarked=true, rfiBlocked wins
     expect(
       resolveElementStatus(
         el("set-a"),
-        setMap(readiness({ rfiBlocked: true, atRisk: true, erectionReady: true, fabricationReady: true })),
+        setMap(readiness({ rfiBlocked: true, atRisk: true, fieldStageMarked: true, shopStageMarked: true })),
       ),
     ).toBe("rfi_blocked");
   });
 
   it("bucket: behind_schedule — readiness.atRisk true (rfiBlocked false) → 'behind_schedule'", () => {
-    // atRisk outranks erectionReady and fabricationReady
+    // atRisk outranks fieldStageMarked and shopStageMarked
     expect(
       resolveElementStatus(
         el("set-a"),
-        setMap(readiness({ atRisk: true, erectionReady: true, fabricationReady: true })),
+        setMap(readiness({ atRisk: true, fieldStageMarked: true, shopStageMarked: true })),
       ),
     ).toBe("behind_schedule");
   });
 
-  it("bucket: erection_ready — erectionReady true (not blocked/atRisk) → 'erection_ready'", () => {
+  it("bucket: erection_ready — fieldStageMarked true (not blocked/atRisk) → 'erection_ready'", () => {
     expect(
       resolveElementStatus(
         el("set-a"),
-        setMap(readiness({ erectionReady: true, fabricationReady: true })),
+        setMap(readiness({ fieldStageMarked: true, shopStageMarked: true })),
       ),
     ).toBe("erection_ready");
   });
 
-  it("bucket: fab_ready — fabricationReady true (not blocked/atRisk/erectionReady) → 'fab_ready'", () => {
+  it("bucket: fab_ready — shopStageMarked true (not blocked/atRisk/fieldStageMarked) → 'fab_ready'", () => {
     expect(
       resolveElementStatus(
         el("set-a"),
-        setMap(readiness({ fabricationReady: true, effectiveState: "Released" })),
+        setMap(readiness({ shopStageMarked: true, effectiveState: "Released" })),
       ),
     ).toBe("fab_ready");
   });
@@ -191,11 +198,11 @@ describe("resolveElementStatus — per-bucket precedence", () => {
   });
 
   it("bucket: in_review — effectiveState 'Released' (past IFA) also yields 'in_review'", () => {
-    // Released (index 9) ≥ IFA_IDX (4) but no fabricationReady → in_review
+    // Released (index 9) ≥ IFA_IDX (4) but no shopStageMarked → in_review
     expect(
       resolveElementStatus(
         el("set-a"),
-        setMap(readiness({ effectiveState: "Released", fabricationReady: false })),
+        setMap(readiness({ effectiveState: "Released", shopStageMarked: false })),
       ),
     ).toBe("in_review");
   });
@@ -243,7 +250,7 @@ describe("resolveElementStatus — per-bucket precedence", () => {
     expect(
       resolveElementStatus(
         { piece_mark: "X", drawing_id: "dwg-unknown" },
-        setMap(readiness({ fabricationReady: true })),
+        setMap(readiness({ shopStageMarked: true })),
         new Map(), // empty sheet→set map
       ),
     ).toBe("unmapped");
@@ -255,7 +262,7 @@ describe("resolveElementStatus — per-bucket precedence", () => {
 describe("summarizeElementStatuses — extended", () => {
   it("mixed mapped + unmapped: counts, idsByStatus, and mappedPct", () => {
     const readinessBySet = new Map([
-      ["set-fab",  readiness({ fabricationReady: true, effectiveState: "Released" })],
+      ["set-fab",  readiness({ shopStageMarked: true, effectiveState: "Released" })],
       ["set-risk", readiness({ atRisk: true })],
     ]);
 

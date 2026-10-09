@@ -12,6 +12,7 @@ import { Plus } from "lucide-react";
 import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
+import { useNumberedCreateDraft } from "@/hooks/useNumberedCreateDraft";
 
 export default function ChangeRequests() {
   const projectId = useProjectId();
@@ -20,6 +21,7 @@ export default function ChangeRequests() {
   const [filterPriority, setFilterPriority] = useState("all");
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);
+  const createDraft = useNumberedCreateDraft(projectId, showForm && !editing, "change-request-register");
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const {
@@ -61,7 +63,7 @@ export default function ChangeRequests() {
   };
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.ChangeRequest.create(withProjectId(data, projectId)),
+    mutationFn: (data) => createDraft.save(withProjectId(data, projectId), entities.ChangeRequest.create),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["change-requests", projectId] });
       setShowForm(false);
@@ -170,9 +172,10 @@ export default function ChangeRequests() {
         <ChangeRequestFormModal
           projectId={projectId}
           changeRequest={editing}
-          onClose={() => {setShowForm(false); setEditing(null);}}
+          onClose={() => { if (!createMut.isPending && !updateMut.isPending) { setShowForm(false); setEditing(null); } }}
           onSave={handleSave}
           isSaving={createMut.isPending || updateMut.isPending}
+          recoveryPending={createDraft.recoveryPending}
         />
       )}
 

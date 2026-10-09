@@ -66,6 +66,7 @@ export interface DrawingSetEvidence {
 export interface SubmittalEvidence {
   id: string;
   status: string;
+  submittal_type?: string | null;
   ball_in_court?: string | null;
   drawing_set_ids?: string[] | null;
   current_round_id?: string | null;

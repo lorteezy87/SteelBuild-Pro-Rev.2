@@ -21,9 +21,11 @@ accounts / handling passwords is out of scope for the agent). Do it once:
    in the Supabase dashboard) — e.g. `e2e@steelbuild-pro.com`. Strongly prefer
    a **dedicated test account in its own org with a sample project**, not your
    real owner login, so a future mutating spec can never touch live work.
-2. **Make sure it can see a project** (the smoke specs assume the signed-in user
-   lands on a project). Add the test user to at least one project with a few
-   drawings / submittals / RFIs.
+2. **Choose a known project and fixture rows.** Set `E2E_PROJECT_ID` to a live,
+   unpaused project the test account can read, plus known drawing-set and
+   submittal titles. Staging defaults to the bootstrap project `STG-0001` and
+   its seeded rows. An empty RFI register is valid only after a successful
+   project-scoped RFI response and the rendered `No RFIs yet` state.
 3. **Set the env vars** (locally in a shell, or as CI secrets):
 
    | Var | What | Example |
@@ -33,6 +35,9 @@ accounts / handling passwords is out of scope for the agent). Do it once:
    | `E2E_BASE_URL` | app origin to test | `https://steelbuild-pro.com` |
    | `E2E_SUPABASE_URL` | project URL (or reuse `VITE_SUPABASE_URL`) | `https://kjrwqagyeswwoxpjkcko.supabase.co` |
    | `E2E_SUPABASE_ANON_KEY` | anon key, public (or reuse `VITE_SUPABASE_ANON_KEY`) | `eyJ…` |
+   | `E2E_PROJECT_ID` | explicit fixture project; required outside staging | project UUID |
+   | `E2E_DRAWING_FIXTURE_TEXT` | exact drawing-set name; staging default `STG Erection Drawings` | known set name |
+   | `E2E_SUBMITTAL_FIXTURE_TEXT` | exact submittal title; staging default `Staging erection drawings` | known title |
 
    The anon key is browser-public (it ships in the app bundle); it is not a
    secret. The **password** is — keep it in a secret store / CI secret, never in
@@ -144,11 +149,38 @@ Full dedicated-fixture run:
 npx playwright test e2e/piece-control-pilot.spec.ts
 ```
 
-`global-setup.ts` signs in via the Supabase API and seeds the session into
-`e2e/.auth/state.json` (gitignored) — no login-modal automation, so the harness
-doesn't break when the sign-in UI changes. With nothing configured, the run
-fails fast with a clear message; `npx playwright test --list` works with no
-secrets (handy for verifying the config parses).
+`global-setup.ts` signs in through the Supabase API and reads the exact fixture
+project under that user's RLS. After the app initializes its account/workspace
+identity and loads its owned project cache, setup selects that project through
+the real Project picker and saves `e2e/.auth/state.json` (gitignored). It never
+assumes that seeding a JWT also selects a project. With nothing configured the
+run fails fast; `npx playwright test --list` works without credentials.
+
+Register acceptance requires the authenticated `Main content` landmark,
+page-specific loaded headings, successful JSON responses from the configured
+Supabase origin filtered to the selected project, and the expected fixture
+inside the register list. Runtime/console errors, failed requests, and HTTP
+errors fail the run. A request guard blocks writes, including navigation
+effects such as automatic aging ActionItems; blocked writes fail acceptance.
+The default POST exceptions are session refresh and the inspected
+`get_my_project_role` read RPC. The sign-out boundary test explicitly permits
+and verifies the auth logout request. Guards remain active through page
+teardown. No fixture is created or repaired by smoke.
+
+`acceptance-contract.spec.ts` uses controlled browser HTML/API responses to
+prove that login pages, body keywords, cached rows without an API response,
+wrong projects, HTTP 401/403/500, missing fixture rows, runtime errors, and
+attempted writes cannot pass. It also verifies successful rows and a valid
+empty RFI state. These tests run in `npm run test:e2e:foundation`, separately
+from real authenticated acceptance; they do not claim live RLS coverage.
+
+`command-brief.spec.ts` mounts the shipped Command Center presentation through
+the development-only `/dev/command-brief.html` entry with synthetic records.
+It checks desktop/mobile in both themes, calendar-window counts, missing owner
+and date disclosures, keyboard activation of every brief source, the empty
+snapshot caveat, runtime errors, network isolation, and viewport overflow.
+It runs in the same foundation suite and saves brief/page screenshots. This
+fixture does not validate authenticated queries or live data completeness.
 
 ## Staging post-deploy CI
 
@@ -178,7 +210,9 @@ stays **skipped (never red)** until you switch it on. To enable:
    not a secret, because `secrets.*` is unreliable in a job-level `if`. Unset →
    the whole job is skipped.
 2. **Set the repo SECRETS** (same page → **Secrets**) for sign-in:
-   `E2E_USER`, `E2E_PASS`, `E2E_SUPABASE_URL`, `E2E_SUPABASE_ANON_KEY`. With
+   `E2E_USER`, `E2E_PASS`, `E2E_SUPABASE_URL`, `E2E_SUPABASE_ANON_KEY`. Provide
+   `E2E_PROJECT_ID`, `E2E_DRAWING_FIXTURE_TEXT`, and `E2E_SUBMITTAL_FIXTURE_TEXT`
+   in the production job environment for the chosen read-only fixture. With
    `E2E_ENABLED=true` but these missing the run goes red by design (you opted
    in). The `E2E_BASE_URL` is hard-set to production in the job.
 3. *(Optional)* the **fab-release gate** secrets to also run that spec
@@ -191,9 +225,9 @@ failure.
 
 ## Notes / follow-ups
 
-- **Assertions are deliberately loose** (URL held + the page renders its own
-  content + no uncaught page errors). After the first green local run, tighten
-  to specific elements/test-ids if you want stronger guarantees.
+- **Fixture acceptance fails closed.** A route URL or marketing body keyword
+  is never enough; update the explicit register contract if shipped page
+  headings or fixture identities change.
 - **Routes assumed:** `/Drawings`, `/Submittals`, `/RFIs`. Confirm against
   `src/config/routes.js` if a register doesn't load.
 - **Fab release** is an action inside the submittal/drawing flow

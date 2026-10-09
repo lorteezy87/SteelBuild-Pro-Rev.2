@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { acceptanceOptions, readOnlyTest as test, visitRegister } from "./acceptance";
 
 test.describe("staging authentication boundary", () => {
   test.skip(
@@ -7,41 +8,46 @@ test.describe("staging authentication boundary", () => {
   );
   test.describe.configure({ mode: "serial" });
 
-  test("rejects an unauthenticated protected-route request", async ({ browser }) => {
-    const context = await browser.newContext({
-      storageState: { cookies: [], origins: [] },
-    });
-
-    try {
-      const page = await context.newPage();
+  test.describe("without a session", () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+    test("rejects an unauthenticated protected-route request", async ({ page }) => {
       await page.goto("/Submittals");
-
-      await expect(page.getByRole("button", { name: "Sign in" }).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "Log in", exact: true }).first()).toBeVisible();
       await expect(page.locator('main[aria-label="Main content"]')).toHaveCount(0);
-    } finally {
-      await context.close();
-    }
+    });
   });
 
-  test("signs out the staging user and clears the browser session", async ({ page }) => {
-    await page.goto("/Submittals");
-    await expect(page).toHaveURL(/\/Submittals\/?$/);
+  test.describe("explicit sign-out", () => {
+    test.use({ allowAuthLogout: true });
+    test("signs out the staging user and clears the browser session", async ({ page, readOnlySupabaseUrl }) => {
+      await visitRegister(page, "submittals", acceptanceOptions("submittals"));
 
-    const signOutButton = page
-      .locator('button[title*="sign out" i]')
-      .or(page.getByRole("button", { name: /sign out/i }))
-      .first();
-    await signOutButton.click();
+      const signOutButton = page
+        .locator('button[title*="sign out" i]')
+        .or(page.getByRole("button", { name: /sign out/i }))
+        .first();
+      const [logout] = await Promise.all([
+        page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.origin === new URL(readOnlySupabaseUrl).origin
+            && url.pathname === "/auth/v1/logout" && response.request().method() === "POST";
+        }),
+        signOutButton.click(),
+      ]);
+      expect(logout.ok(), "The allowed auth logout must succeed").toBe(true);
 
-    await expect(page.getByRole("button", { name: "Sign in" }).first()).toBeVisible();
-    await expect
-      .poll(() =>
-        page.evaluate(() =>
-          Object.keys(window.localStorage).filter(
-            (key) => key.startsWith("sb-") && key.endsWith("-auth-token"),
+      await expect(page.getByRole("button", { name: "Log in", exact: true }).first()).toBeVisible();
+      await expect(page.locator('main[aria-label="Main content"]')).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => localStorage.getItem("sbp_projects_cache"))).toBe(null);
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            Object.keys(window.localStorage).filter(
+              (key) => key.startsWith("sb-") && key.endsWith("-auth-token"),
+            ),
           ),
-        ),
-      )
-      .toEqual([]);
+        )
+        .toEqual([]);
+    });
   });
 });

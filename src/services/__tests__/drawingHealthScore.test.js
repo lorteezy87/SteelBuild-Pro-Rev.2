@@ -15,7 +15,7 @@ function perfectPkg() {
       { id: "d1", sheet_number: "S1.1", due_date: "2999-01-01", linked_rfi_ids: null, is_superseded: false },
       { id: "d2", sheet_number: "S1.2", due_date: "2999-01-01", linked_rfi_ids: null, is_superseded: false },
     ],
-    submittals: [{ id: "s1", status: "Released for Fabrication", ball_in_court: null, round_number: 1, is_deleted: false }],
+    submittals: [{ id: "s1", submittal_type: "Shop Drawing", status: "Released for Fabrication", ball_in_court: null, round_number: 1, is_deleted: false }],
   };
 }
 
@@ -50,7 +50,7 @@ describe("calculateDrawingHealthScore", () => {
       name: "Anchor Bolts",
       parent: { due_date: "2026-05-01", sheet_count: 1 }, // 46 days overdue vs TODAY
       sheets: [{ id: "d", due_date: "2026-05-01", linked_rfi_ids: null, is_superseded: false }],
-      submittals: [{ status: "Submitted", ball_in_court: "EOR", round_number: 1, is_deleted: false }],
+      submittals: [{ submittal_type: "Shop Drawing", status: "Submitted", ball_in_court: "EOR", round_number: 1, is_deleted: false }],
     };
     const res = calculateDrawingHealthScore(pkg, ctx());
     expect(factor(res, "aging").deduction).toBe(14); // capped (>30 days overdue)
@@ -60,7 +60,7 @@ describe("calculateDrawingHealthScore", () => {
 
   it("deducts for R&R churn on a later round", () => {
     const pkg = perfectPkg();
-    pkg.submittals = [{ status: "Revise and Resubmit", ball_in_court: "Detailer", round_number: 2, is_deleted: false }];
+    pkg.submittals = [{ submittal_type: "Shop Drawing", status: "Revise and Resubmit", ball_in_court: "Detailer", round_number: 2, is_deleted: false }];
     const res = calculateDrawingHealthScore(pkg, ctx());
     const sub = factor(res, "submittal");
     expect(sub.deduction).toBe(11); // 0.6*12=7 (R&R) + (2-1)*4=4

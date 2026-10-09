@@ -1,0 +1,214 @@
+/* Drawing Control keeps the steel drawing log's four work areas visible.
+   Specialist tools stay available without forcing every workflow into the
+   same horizontal strip. All surfaces use the command-skin token remap. */
+[data-skin="command"] .detailing-cc__nav {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin: 10px -16px 0;
+  padding: 0 16px;
+  box-shadow: inset 0 -1px 0 var(--cmd-border);
+}
+
+[data-skin="command"] .detailing-cc__nav .detailing-cc__tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+[data-skin="command"] .detailing-cc__nav .detailing-cc__tab {
+  margin-right: clamp(8px, 2vw, 24px);
+}
+
+[data-skin="command"] .detailing-cc__tools {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+[data-skin="command"] .detailing-cc__tools-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  max-width: 180px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--cmd-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+[data-skin="command"] .detailing-cc__tools-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-skin="command"] .detailing-cc__tools-trigger.is-active {
+  color: var(--cmd-text);
+  border-bottom-color: var(--cmd-gold);
+}
+
+[data-skin="command"] .detailing-cc__tools-trigger:focus-visible,
+[data-skin="command"] .detailing-cc__tools-menu button:focus-visible {
+  outline: 2px solid var(--cmd-gold);
+  outline-offset: -2px;
+}
+
+[data-skin="command"] .detailing-cc__tools-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  right: 0;
+  width: min(280px, calc(100vw - 32px));
+  padding: 5px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 8px;
+  background: var(--cmd-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+[data-skin="command"] .detailing-cc__tools-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-skin="command"] .detailing-cc__tools-menu button:hover,
+[data-skin="command"] .detailing-cc__tools-menu button[aria-current="page"] {
+  background: var(--cmd-row-hover);
+}
+
+[data-skin="command"] .detailing-cc__tools-count {
+  margin-left: auto;
+  color: var(--cmd-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-skin="command"] .drawing-actions__more {
+  position: relative;
+}
+
+[data-skin="command"] .drawing-actions__menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 5px);
+  right: 0;
+  width: min(250px, calc(100vw - 32px));
+  padding: 5px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 8px;
+  background: var(--cmd-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+[data-skin="command"] .drawing-actions__menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-skin="command"] .drawing-actions__menu button:hover,
+[data-skin="command"] .drawing-actions__menu button:focus-visible {
+  background: var(--cmd-row-hover);
+}
+
+[data-skin="command"] .drawing-actions__more > button:focus-visible,
+[data-skin="command"] .drawing-actions__menu button:focus-visible {
+  outline: 2px solid var(--cmd-gold);
+  outline-offset: -2px;
+}
+
+[data-skin="command"] .drawing-actions__menu button:disabled {
+  color: var(--cmd-text-muted);
+  cursor: not-allowed;
+}
+
+[data-skin="command"] .drawing-actions__menu-label {
+  display: block;
+  padding: 11px 10px 5px;
+  color: var(--cmd-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* Keep every sequence metric and revision action inside the Control Board card. */
+[data-skin="command"] .detailing-cc .drawing-triage__sequence-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.7fr) minmax(120px, 1.3fr) repeat(3, minmax(64px, 0.5fr));
+}
+
+[data-skin="command"] .detailing-cc .drawing-triage__revision-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(150px, 1fr) auto;
+}
+
+@media (max-width: 680px) {
+  [data-skin="command"] .detailing-cc .drawing-triage__sequence-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  [data-skin="command"] .detailing-cc .drawing-triage__sequence-row > :nth-child(-n + 2) {
+    grid-column: 1 / -1;
+  }
+  [data-skin="command"] .detailing-cc .drawing-triage__revision-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-skin="command"] .detailing-cc .drawing-triage__revision-row > :last-child {
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  [data-skin="command"] .detailing-cc__nav {
+    flex-direction: column;
+    gap: 0;
+    padding-bottom: 5px;
+  }
+  [data-skin="command"] .detailing-cc__nav .detailing-cc__tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 8px;
+    overflow: visible;
+  }
+  [data-skin="command"] .detailing-cc__nav .detailing-cc__tab {
+    min-width: 0;
+    min-height: 42px;
+    margin-right: 0;
+    padding: 8px 2px;
+    white-space: normal;
+    text-align: left;
+  }
+  [data-skin="command"] .detailing-cc__tools {
+    align-self: flex-end;
+  }
+  [data-skin="command"] .detailing-cc__tools-trigger {
+    min-height: 36px;
+    max-width: 180px;
+  }
+}

@@ -29,7 +29,7 @@ const KPIS: DetailingKpis = {
   totalSets: 4, totalSheets: 20, released: 1, inReview: 2,
   submittalsTotal: 3, submittalsPending: 1, needsAction: 0,
   overdue: 0, atRisk: 0, overdueDrawingSets: 0, overdueUnlinkedSubmittals: 0,
-  fabReadyNumerator: 1, fabReadyDenominator: 4, fabReadyPercent: 25,
+  shopReleaseNumerator: 1, shopReleaseDenominator: 4, shopReleasePercent: 25,
   openItems: 0, fleetAverageScore: null,
 };
 
@@ -39,7 +39,7 @@ const TABS = [
   { key: "holds", label: "Holds & Blockers", icon: ShieldAlert },
 ];
 
-const STATUS_LINE = "4 sets · 0 open · 0 overdue · 0 at risk · Fab Ready 1/4";
+const STATUS_LINE = "4 sets · 0 open · 0 overdue · 0 at risk · Shop submittal marked released 1/4";
 
 function mount(props: Partial<ComponentProps<typeof DetailingCommandShell>> = {}) {
   const onTab = vi.fn();
@@ -109,7 +109,7 @@ describe("DetailingCommandShell — compact header", () => {
       const h1s = screen.getAllByRole("heading", { level: 1 });
       expect(h1s).toHaveLength(1);
       // The badge sits beside the h1, so the heading's name is just the title.
-      expect(h1s[0]).toHaveAccessibleName("Detailing Control Center");
+      expect(h1s[0]).toHaveAccessibleName("Drawing Control");
       cleanup();
     }
   });
@@ -139,7 +139,7 @@ describe("DetailingCommandShell — KPI strip and status line", () => {
     expect(within(screen.getByRole("tabpanel")).getByText("Submittals Needing Action")).toBeInTheDocument();
     expect(screen.queryByText(STATUS_LINE)).not.toBeInTheDocument();
     // The one number the strip has no cell for.
-    expect(screen.getByText("Fab Ready 1/4")).toBeInTheDocument();
+    expect(screen.getByText("Shop submittal marked released 1/4")).toBeInTheDocument();
     cleanup();
 
     for (const activeTab of ["submittals", "holds"]) {
@@ -152,12 +152,12 @@ describe("DetailingCommandShell — KPI strip and status line", () => {
 
   it("shows em dashes, never zeros, while the queries load", () => {
     mount({ activeTab: "holds", isLoading: true });
-    expect(screen.getByText("— sets · — open · — overdue · — at risk · Fab Ready —")).toBeInTheDocument();
+    expect(screen.getByText("— sets · — open · — overdue · — at risk · Shop submittal marked released —")).toBeInTheDocument();
     cleanup();
 
     mount({ activeTab: "overview", isLoading: true });
     expect(within(screen.getByRole("tabpanel")).getAllByText("—")).toHaveLength(8);
-    expect(screen.getByText("Fab Ready —")).toBeInTheDocument();
+    expect(screen.getByText("Shop submittal marked released —")).toBeInTheDocument();
   });
 });
 

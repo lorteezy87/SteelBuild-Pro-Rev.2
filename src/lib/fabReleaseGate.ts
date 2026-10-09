@@ -32,6 +32,7 @@ export interface DrawingLike {
   /** CSV of RFI numbers (canonical); array tolerated defensively. */
   linked_rfi_ids?: string | string[] | null;
   is_deleted?: boolean | null;
+  deleted_at?: string | null;
   stage?: string | null;
   set_approval_status?: string | null;
   ifc_status?: string | null;
@@ -93,6 +94,7 @@ export interface FabReleaseGateArgs {
   /** Submittal evidence for IFC/Released readiness (Slice 8). */
   submittals?: Array<{
     id: string;
+    submittal_type?: string | null;
     status: string;
     ball_in_court?: string | null;
     drawing_set_ids?: string[] | null;
@@ -211,7 +213,7 @@ export function computeFabReleaseGate({
   submittals = [],
   drawingRevisions = [],
 }: FabReleaseGateArgs = {}): FabGateResult {
-  const live = (drawings || []).filter((d): d is DrawingLike => !!d && d.is_deleted !== true);
+  const live = (drawings || []).filter((d): d is DrawingLike => !!d && d.is_deleted !== true && !d.deleted_at);
   const evidence = {
     submittals: submittals ?? [],
     drawingSignoffs: (signoffs || [])

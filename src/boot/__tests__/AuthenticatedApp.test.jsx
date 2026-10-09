@@ -26,6 +26,7 @@ vi.mock("@/pages/MfaChallenge", () => ({ default: () => <div>MFA_CHALLENGE</div>
 vi.mock("@/boot/AppRoutes", () => ({ default: () => <div>APP_ROUTES</div> }));
 vi.mock("@/pages/OrgOnboarding", () => ({ default: () => <div>ONBOARDING</div> }));
 vi.mock("@/components/shared/ProjectContext", () => ({ ProjectProvider: ({ children }) => <>{children}</> }));
+vi.mock("@/lib/field/OutboxContext", () => ({ OutboxProvider: ({ children }) => <>{children}</> }));
 
 import AuthenticatedApp from "@/boot/AuthenticatedApp";
 
@@ -39,6 +40,7 @@ const authed = {
   retryMfaStatus: vi.fn(),
   logout: vi.fn(),
   mfaStatusDegraded: false,
+  isCheckingMfa: false,
   mfaStatusMessage: null,
 };
 
@@ -97,6 +99,14 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     expect(await screen.findByText("APP_ROUTES")).toBeInTheDocument();
     expect(screen.queryByText("LOADER")).not.toBeInTheDocument();
     expect(screen.queryByText("ONBOARDING")).not.toBeInTheDocument();
+  });
+
+  it("holds desktop handoff and application routes while MFA is being checked", () => {
+    window.history.pushState({}, "", "/DesktopConnect?state=abc");
+    authState = { ...authed, isCheckingMfa: true };
+    render(<AuthenticatedApp />);
+    expect(screen.getByText("LOADER")).toBeInTheDocument();
+    expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
   });
 
   it("shows the loader while the org is resolving", () => {

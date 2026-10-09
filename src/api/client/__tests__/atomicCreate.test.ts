@@ -57,6 +57,7 @@ vi.mock("@/lib/supabase", () => ({
 
 import { entities } from "@/api/client/entities";
 import { createBackcharge } from "@/lib/backcharge/repository";
+import { setActiveOrgId } from "@/lib/activeOrg";
 
 const ok = (row: Record<string, unknown>): PgResponse => ({ data: { id: "row-1", ...row }, error: null });
 
@@ -72,7 +73,7 @@ beforeEach(() => {
 describe.each([
   {
     label: "change order",
-    rpc: "create_change_order",
+    kind: "change_orders",
     call: (r: Record<string, unknown>) => entities.ChangeOrder.create(r as never),
     minted: ["co_number", "project_name", "sov_line_number", "submitted_by"],
     record: { project_id: "p1", title: "Added embeds", co_amount: 4200 },
@@ -80,7 +81,7 @@ describe.each([
   },
   {
     label: "change request",
-    rpc: "create_change_request",
+    kind: "change_requests",
     call: (r: Record<string, unknown>) => entities.ChangeRequest.create(r as never),
     minted: ["cr_number", "project_name", "change_order_id"],
     record: { project_id: "p1", title: "RFI 12 impact" },
@@ -88,7 +89,7 @@ describe.each([
   },
   {
     label: "delivery",
-    rpc: "create_delivery",
+    kind: "deliveries",
     call: (r: Record<string, unknown>) => entities.Delivery.create(r as never),
     minted: ["delivery_number", "project_name", "pieces", "weight_tons"],
     record: { project_id: "p1", delivery_title: "Load 3", items: [{ assembly_mark: "B1", qty: 2 }] },
@@ -96,14 +97,16 @@ describe.each([
     // stripping it would silently drop the whole load.
     keep: { delivery_title: "Load 3", items: [{ assembly_mark: "B1", qty: 2 }] },
   },
-])("$label creation", ({ rpc, call, minted, record, keep }) => {
+])("$label creation", ({ kind, call, minted, record, keep }) => {
   it("calls the RPC with project id as its own argument", async () => {
     rpcSpy.mockResolvedValue(ok({}));
     await call(record);
 
     expect(rpcSpy).toHaveBeenCalledTimes(1);
     const [name, args] = rpcSpy.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe(rpc);
+    expect(name).toBe("create_numbered_record");
+    expect(args.p_kind).toBe(kind);
+    expect(args.p_client_op_id).toEqual(expect.any(String));
     expect(args.p_project_id).toBe("p1");
     expect(args.p_payload).toMatchObject(keep);
     // project_id belongs in the argument, never the payload.
@@ -143,7 +146,7 @@ describe.each([
 });
 
 describe("columns the RPC does not write", () => {
-  it("carries a delivery's procurement fields through a follow-up write", async () => {
+  it("includes a delivery's procurement fields in the numbered transaction", async () => {
     rpcSpy.mockResolvedValue(ok({ delivery_title: "Load 3" }));
     await entities.Delivery.create({
       project_id: "p1",
@@ -153,8 +156,8 @@ describe("columns the RPC does not write", () => {
       is_long_lead: true,
     } as never);
 
-    expect(fromSpy).toHaveBeenCalledWith("deliveries");
-    const patch = updateSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(fromSpy).not.toHaveBeenCalled();
+    const patch = (rpcSpy.mock.calls[0][1] as { p_payload: Record<string, unknown> }).p_payload;
     expect(patch).toMatchObject({
       procurement_category: "Long lead",
       lead_time_weeks: 14,
@@ -186,6 +189,33 @@ describe("columns the RPC does not write", () => {
 });
 
 describe("bulk creation", () => {
+  it("does not continue sequential numbered writes after the workspace changes", async () => {
+    setActiveOrgId("numbered-org-a");
+    rpcSpy.mockImplementationOnce(async () => { setActiveOrgId("numbered-org-b"); return ok({}); });
+    await expect(entities.Delivery.bulkCreate([
+      { project_id: "p1", delivery_title: "A" },
+      { project_id: "p1", delivery_title: "B" },
+    ] as never)).rejects.toThrow(/workspace changed/i);
+    expect(rpcSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes the confirmed prefix and failed input index for duplicate-safe recovery", async () => {
+    rpcSpy
+      .mockResolvedValueOnce(ok({ title: "A" }))
+      .mockRejectedValueOnce(new TypeError("reply lost"));
+    const error = await entities.Delivery.bulkCreate([
+      { project_id: "p1", delivery_title: "A" },
+      { project_id: "p1", delivery_title: "B" },
+      { project_id: "p1", delivery_title: "C" },
+    ] as never).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      created: [{ id: "row-1", title: "A" }],
+      failedIndex: 1,
+      cause: { outcomeUnknown: true, clientOperationId: expect.any(String) },
+    });
+    expect(rpcSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("loops the single RPC in order", async () => {
     rpcSpy.mockResolvedValue(ok({}));
     await entities.ChangeOrder.bulkCreate([
@@ -194,8 +224,8 @@ describe("bulk creation", () => {
     ] as never);
 
     expect(rpcSpy.mock.calls.map((c) => c[0])).toEqual([
-      "create_change_order",
-      "create_change_order",
+      "create_numbered_record",
+      "create_numbered_record",
     ]);
   });
 
@@ -214,9 +244,9 @@ describe("bulk creation", () => {
 });
 
 describe("backcharges", () => {
-  it("creates through create_backcharge and carries notice_date", async () => {
+  it("creates the backcharge and its notice in the same transaction", async () => {
     rpcSpy.mockResolvedValue({
-      data: { id: "bc-1", project_id: "p1", status: "draft", backcharge_number: "BC-001", title: "Crane standby" },
+      data: { id: "bc-1", project_id: "p1", status: "draft", backcharge_number: "BC-001", title: "Crane standby", notice_date: "2026-09-10" },
       error: null,
     });
     singleResult.mockResolvedValue({
@@ -232,15 +262,17 @@ describe("backcharges", () => {
     } as never);
 
     const [name, args] = rpcSpy.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("create_backcharge");
+    expect(name).toBe("create_numbered_record");
+    expect(args.p_kind).toBe("backcharges");
     expect(args.p_project_id).toBe("p1");
     const payload = args.p_payload as Record<string, unknown>;
-    expect(payload).toMatchObject({ title: "Crane standby", amount: 1800 });
+    expect(payload).toMatchObject({ title: "Crane standby", amount: 1800, notice_date: "2026-09-10" });
     // The RPC forces 'draft' and mints the number.
     expect(payload).not.toHaveProperty("backcharge_number");
     expect(payload).not.toHaveProperty("status");
-    // No direct write to the guarded table. The backcharge_events insert below
-    // is the notice_sent audit row and is expected.
+    // Both the row and audit are written by the server transaction.
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalled();
     const backchargeInserts = insertSpy.mock.calls.filter((c) => c[0] === "backcharges");
     expect(backchargeInserts).toEqual([]);
     expect(bc.notice_date).toBe("2026-09-10");

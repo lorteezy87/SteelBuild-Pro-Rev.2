@@ -361,7 +361,7 @@ export function BoardView({ items, wpById, onEdit }) {
 /* ----------------------------------------------------------------------
  * Form drawer - every column the schema offers
  * ---------------------------------------------------------------------- */
-export function ProcurementFormModal({ projectId, item, vendors, workPackages, onClose, onSave, isSaving = false }) {
+export function ProcurementFormModal({ projectId, item, vendors, workPackages, onClose, onSave, isSaving = false, recoveryPending = false }) {
   void projectId; // unused - Procurement page injects project_id at create
   const initial = item ? {
     ...item,
@@ -411,7 +411,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
 
   const handleSave = () => {
     if (isSaving) return;
-    if (!form.description?.trim()) return;
+    if (!recoveryPending && !form.description?.trim()) return;
     // Coerce numerics - empty strings should hit the DB as null.
     const payload = {
       description: form.description?.trim(),
@@ -464,8 +464,10 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
         }}>
           {item ? 'Edit Procurement Item' : 'Add Procurement Item'}
         </h2>
+        {recoveryPending && <p role="status">The save may have completed. Retry to recover the original details; changes entered afterward will not be applied. Check the register before starting another item.</p>}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <fieldset disabled={isSaving || recoveryPending} style={{ display: 'contents' }}>
           {/* IDENTIFICATION */}
           <div style={sectionLabelStyle}>Identification</div>
           <div style={{ gridColumn: 'span 2' }}>
@@ -676,6 +678,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
             />
           </div>
 
+          </fieldset>
           <div style={{
             gridColumn: 'span 2', display: 'flex', gap: 8,
             justifyContent: 'flex-end', paddingTop: 12,
@@ -700,17 +703,17 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
             <button
               type="button"
               onClick={handleSave}
-              disabled={isSaving || !form.description?.trim()}
+              disabled={isSaving || (!recoveryPending && !form.description?.trim())}
               style={{
                 background: 'var(--accent)', color: 'var(--on-accent)',
                 border: 'none', borderRadius: 8, padding: '8px 20px',
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-                cursor: isSaving || !form.description?.trim() ? 'not-allowed' : 'pointer',
+                cursor: isSaving || (!recoveryPending && !form.description?.trim()) ? 'not-allowed' : 'pointer',
                 textTransform: 'uppercase',
-                opacity: isSaving || !form.description?.trim() ? 0.5 : 1,
+                opacity: isSaving || (!recoveryPending && !form.description?.trim()) ? 0.5 : 1,
               }}
             >
-              {isSaving ? (item ? 'Saving...' : 'Adding...') : (item ? 'Save' : 'Add Item')}
+              {isSaving ? (item ? 'Saving...' : 'Adding...') : recoveryPending ? 'Recover saved item' : (item ? 'Save' : 'Add Item')}
             </button>
           </div>
         </div>

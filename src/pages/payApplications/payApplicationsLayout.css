@@ -1,0 +1,155 @@
+.payapp-cc,
+.payapp-cc .sbp-work-grid,
+.payapp-cc .sbp-work-panel,
+.payapp-cc .cmd-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.payapp-editor {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding: 0 14px 20px;
+}
+
+.payapp-editor__grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+.payapp-editor__summary,
+.payapp-editor__sheet {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.payapp-editor__summary-heading,
+.payapp-editor__summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.payapp-editor__summary-heading {
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.payapp-editor__summary-heading > :first-child,
+.payapp-editor__summary-row > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.payapp-editor__summary-heading > button,
+.payapp-editor__summary-row > :last-child {
+  flex-shrink: 0;
+}
+
+.payapp-editor__summary-row {
+  padding: 3px 0;
+}
+
+.payapp-editor__sheet {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.payapp-editor__sheet:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.payapp-editor__table {
+  min-width: 940px;
+}
+
+.payapp-editor__scroll-note {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font: 500 11px/1.4 var(--font-body, sans-serif);
+}
+
+.payapp-new-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.payapp-new-modal__card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+}
+
+.payapp-new-modal__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.payapp-new-modal__fields > div,
+.payapp-new-modal__fields input {
+  min-width: 0;
+}
+
+.payapp-new-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 1360px) {
+  .payapp-editor__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .payapp-editor {
+    padding: 0 12px 16px;
+    --payapp-card-padding: 12px;
+  }
+
+  .payapp-editor,
+  .payapp-new-modal {
+    --payapp-input-font-size: 16px;
+  }
+
+  .payapp-editor__grid {
+    gap: 10px;
+  }
+
+  .payapp-new-modal__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .payapp-new-modal__actions button,
+  .payapp-editor__summary button,
+  .payapp-editor__summary select {
+    min-height: 40px;
+  }
+
+  .payapp-editor__summary-heading button {
+    min-width: 40px;
+  }
+}

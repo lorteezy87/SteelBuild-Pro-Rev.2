@@ -99,6 +99,41 @@ describe("DeliveryFormModal delivery_title", () => {
     expect(create.mock.calls[0][0].delivery_title).toBe("HSS Columns Load 3");
   });
 
+  it("omits receipt authority from a new delivery payload", async () => {
+    renderModal();
+    fireEvent.change(screen.getByLabelText(/Delivery Title/i), { target: { value: "Load 4" } });
+    fireEvent.click(screen.getByRole("button", { name: /create|save/i }));
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).not.toHaveProperty("received_by");
+  });
+
+  it("recovers the exact original payload and operation after a lost create reply", async () => {
+    create.mockRejectedValueOnce(Object.assign(new Error("Reply lost"), { outcomeUnknown: true }));
+    renderModal();
+    fireEvent.change(screen.getByLabelText(/Delivery Title/i), { target: { value: "Original load" } });
+    fireEvent.click(screen.getByRole("button", { name: /create|save/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: /create|save|recover/i })).not.toBeDisabled());
+    fireEvent.change(screen.getByLabelText(/Delivery Title/i), { target: { value: "Changed after timeout" } });
+    fireEvent.click(screen.getByRole("button", { name: /create|save|recover/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    expect(create.mock.calls[0][1]?.clientOperationId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(create.mock.calls[1]).toEqual(create.mock.calls[0]);
+  });
+
+  it("preserves a locked recovery through a full modal unmount and reopen", async () => {
+    create.mockRejectedValueOnce(Object.assign(new Error("Reply lost"), { outcomeUnknown: true }));
+    const first = renderModal();
+    fireEvent.change(screen.getByLabelText(/Delivery Title/i), { target: { value: "Original load" } });
+    fireEvent.click(screen.getByRole("button", { name: /create|save/i }));
+    await screen.findByRole("button", { name: /Recover saved delivery/i });
+    first.unmount(); renderModal();
+    expect(screen.getByLabelText(/Delivery Title/i)).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Recover saved delivery/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    expect(create.mock.calls[1]).toEqual(create.mock.calls[0]);
+  });
+
   // The two inputs shared one state key, so filling in the material
   // description silently wiped the title the user had already typed.
   it("keeps the title and the material description independent", async () => {

@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { ArrowRight, ArrowUpRight, HardHat } from "lucide-react";
+import { todayLocalISO } from "@/lib/dateMath";
 import "@/styles/command.css";
 import "@/styles/piece-control-command.css";
 import {
@@ -16,6 +18,7 @@ import { getPageIcon } from "@/config/pageIcons";
 import { buildDashboardSummary } from "./dashboardControlCenter.derive";
 import type { DashActivityRow } from "./dashboardControlCenter.derive";
 import { buildDashboardReferenceModel } from "./dashboardReference.derive";
+import "@/styles/dashboard-executive.css";
 
 interface DashboardControlCenterProps {
   project?: (Record<string, unknown> & { id: string; piece_control_mode?: string | null }) | null;
@@ -41,10 +44,11 @@ interface DashboardControlCenterProps {
   onNavigate?: (target: string, opts?: Record<string, unknown>) => void;
 }
 
+const EMPTY_ROWS: Record<string, unknown>[] = [];
+
 function toneForStatus(statusTone: string) {
   if (statusTone === "approved") return "good" as const;
   if (statusTone === "waiting") return "warn" as const;
-  if (statusTone === "open") return "danger" as const;
   if (statusTone === "progress") return "info" as const;
   return "neutral" as const;
 }
@@ -54,22 +58,22 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
 
   const {
     project,
-    rfis = [],
-    cos = [],
-    codes = [],
-    wps = [],
-    deliveries = [],
-    actionItems = [],
-    expenses = [],
-    submittals = [],
-    drawings = [],
-    sovItems = [],
-    scheduleTasks = [],
-    drawingActivity = [],
-    punchlistItems = [],
-    inspections = [],
-    safetyIncidents = [],
-    qualityRecords = [],
+    rfis = EMPTY_ROWS,
+    cos = EMPTY_ROWS,
+    codes = EMPTY_ROWS,
+    wps = EMPTY_ROWS,
+    deliveries = EMPTY_ROWS,
+    actionItems = EMPTY_ROWS,
+    expenses = EMPTY_ROWS,
+    submittals = EMPTY_ROWS,
+    drawings = EMPTY_ROWS,
+    sovItems = EMPTY_ROWS,
+    scheduleTasks = EMPTY_ROWS,
+    drawingActivity = EMPTY_ROWS,
+    punchlistItems = EMPTY_ROWS,
+    inspections = EMPTY_ROWS,
+    safetyIncidents = EMPTY_ROWS,
+    qualityRecords = EMPTY_ROWS,
     todayIso,
     rfiEvidenceLoaded = true,
     scheduleEvidenceLoaded = true,
@@ -107,7 +111,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
     ],
   );
 
-  const effectiveToday = todayIso ?? new Date().toISOString().slice(0, 10);
+  const effectiveToday = todayIso ?? todayLocalISO();
   const reference = useMemo(
     () => buildDashboardReferenceModel({
       summary,
@@ -124,9 +128,11 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
   const metrics: OperationalMetric[] = [
     {
       label: "Project Health",
-      value: `${summary.healthScore}%`,
-      sublabel: summary.healthLabel,
-      tone: summary.healthLabel === "On Track" ? "good" : summary.healthLabel === "At Risk" ? "danger" : "warn",
+      value: summary.healthLabel,
+      sublabel: summary.operationalHealth.partial ? "Partial operating evidence" : "Operational condition",
+      tone: summary.healthLabel === "On Track" ? "good"
+        : ["At Risk", "On Hold"].includes(summary.healthLabel) ? "danger"
+          : summary.healthLabel === "Watch" ? "warn" : "neutral",
     },
     ...summary.kpis.map((kpi) => ({
       label: kpi.label,
@@ -138,7 +144,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
 
   const attention: AttentionItem[] = reference.attention.map((item) => ({
     ...item,
-    onOpen: item.target ? () => onNavigate?.(item.target!) : undefined,
+    onOpen: item.target && onNavigate ? () => onNavigate(item.target!) : undefined,
   }));
 
   const quickAccess: QuickAccessItem[] = summary.modules.slice(0, 6).map((module) => ({
@@ -161,55 +167,114 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
     { key: "updated", header: "Updated", align: "right", render: (row) => <span className="cmd-row__meta">{row.updated}</span> },
   ];
 
+  const attentionTotal = reference.attentionTotal ?? attention.length;
+  const reviewDate = new Date(`${effectiveToday}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "long", month: "short", day: "numeric", year: "numeric",
+  });
+
   return (
-    <div className="sbp-command-page dash-cc" data-skin="command">
+    <div className="sbp-command-page dash-cc dash-executive" data-skin="command">
+      <div className="dash-executive__masthead">
+        <span>Job review</span>
+        <time dateTime={effectiveToday}>{reviewDate}</time>
+      </div>
+
       <PageHeader
-        eyebrow={`${summary.projectName} / Command`}
-        title="Project Dashboard"
-        subtitle="Project condition, production readiness, and management action in one view."
-        meta={summary.healthReasons[0] || undefined}
+        eyebrow="Project dashboard"
+        title={summary.projectName}
+        meta={summary.healthReasons[0]}
+        actions={onNavigate ? (
+          <>
+            <button type="button" className="dash-executive__button dash-executive__button--primary"
+              onClick={() => onNavigate("CommandCenter")}>
+              Open command center <ArrowUpRight size={16} aria-hidden="true" />
+            </button>
+            <button type="button" className="dash-executive__button"
+              onClick={() => onNavigate("FieldHub")}>
+              Field operations <HardHat size={16} aria-hidden="true" />
+            </button>
+          </>
+        ) : undefined}
       />
 
-      <OperationalSummary metrics={metrics} />
+      <OperationalSummary metrics={metrics} ariaLabel="Executive operating summary" />
 
-      <AttentionQueue items={attention} />
+      <div className="dash-executive__decision-grid">
+        <div className="dash-executive__priorities">
+          <AttentionQueue items={attention}
+            emptyMessage="No management priorities were found in the loaded project records." />
+          {attentionTotal > attention.length ? (
+            <div className="dash-executive__queue-footer">
+              <span>Showing {attention.length} of {attentionTotal} priorities</span>
+              {onNavigate ? (
+                <button type="button" className="dash-executive__text-button"
+                  onClick={() => onNavigate("CommandCenter")}>
+                  Open full command center <ArrowRight size={15} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
-      <section className="sbp-work-grid" aria-label="Operational bands">
+        <aside className="dash-executive__brief" aria-label="Project brief">
+          <div className="dash-executive__section-heading">
+            <div>
+              <h2>Project brief</h2>
+            </div>
+          </div>
+          {summary.summaryRows.length ? (
+            <dl className="dash-executive__facts">
+              {summary.summaryRows.map((row) => (
+                <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>
+              ))}
+            </dl>
+          ) : <p className="dash-executive__caption">Project details will appear as records are loaded.</p>}
+          {summary.operationalHealth.partial ? (
+            <p className="dash-executive__evidence" role="status">
+              Operating evidence is incomplete. Open the source workspace to review missing records.
+            </p>
+          ) : null}
+          {onNavigate ? (
+            <button type="button" className="dash-executive__text-button"
+              onClick={() => onNavigate("JobStatusReport")}>
+              Open job status report <ArrowUpRight size={15} aria-hidden="true" />
+            </button>
+          ) : null}
+        </aside>
+      </div>
+
+      <nav className="dash-executive__workflow" aria-label="Steel workflow">
         {reference.bands.map((band) => (
-          <button
-            type="button"
-            key={band.id}
-            className={`sbp-work-panel sbp-band-panel is-${band.tone}`}
-            onClick={() => onNavigate?.(band.target)}
-            style={{ cursor: onNavigate ? "pointer" : "default", textAlign: "left", color: "inherit" }}
-          >
-            <div className="sbp-work-panel__head">
-              <h2>{band.label}</h2>
-              <Pill tone={band.tone}>{band.metric}</Pill>
-            </div>
-            <div className="sbp-work-panel__body">
-              <div className="cmd-row__meta">{band.detail}</div>
-            </div>
+          <button type="button" key={band.id} disabled={!onNavigate}
+            onClick={() => onNavigate?.(band.target)}>
+            <span>
+              <strong>{band.label}</strong>
+              <span>{band.id === "field" ? band.detail : `${band.metric} · ${band.detail}`}</span>
+            </span>
+            <ArrowUpRight size={16} aria-hidden="true" />
           </button>
         ))}
-      </section>
+      </nav>
 
       {project ? (
-        <PieceControlDashboardPanel
-          project={project}
-          onOpen={() => onNavigate?.("piece-register")}
-        />
+        <PieceControlDashboardPanel project={project}
+          onOpen={() => onNavigate?.("piece-register")} />
       ) : null}
 
-      {quickAccess.length ? <QuickAccess items={quickAccess} onSelect={(target) => onNavigate?.(target)} /> : null}
+      {quickAccess.length ? (
+        <section className="dash-executive__shortcuts" aria-label="Project workspaces">
+          <span className="dash-executive__eyebrow">Your workspaces</span>
+          <QuickAccess items={quickAccess} onSelect={(target) => onNavigate?.(target)} />
+        </section>
+      ) : null}
 
-      <section className="sbp-work-panel" aria-label="Recent activity">
-        <div className="sbp-work-panel__head"><h2>Recent Activity</h2></div>
-        <DataTable
-          columns={activityColumns}
-          rows={summary.recentActivity.slice(0, 12)}
-          emptyMessage="No recent project activity."
-        />
+      <section className="sbp-work-panel dash-executive__activity" aria-label="Recent activity">
+        <div className="sbp-work-panel__head">
+          <h2>Recent Activity</h2>
+          <span className="dash-executive__caption">Latest project records</span>
+        </div>
+        <DataTable columns={activityColumns} rows={summary.recentActivity.slice(0, 12)}
+          emptyMessage="No recent project activity." />
       </section>
     </div>
   );

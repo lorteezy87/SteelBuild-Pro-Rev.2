@@ -1,32 +1,37 @@
 /**
  * ChangeOrderImportModal — bulk import CO rows from CSV.
  *
- * Mirrors RfiLogImportModal exactly: upload → preview (project match
- * + row-by-row table with removable rows) → commit (bulk insert
- * via entities.ChangeOrder.create, deduped on co_number
- * within the target project).
- *
- * No AI, no credits — every step is local or a direct Supabase
- * write. CSV is the friendliest format for users coming from
- * Sage / Vista / Procore / Excel.
+ * Review source references and Draft/Submitted rows, then create through
+ * the numbered-record API. Keep returned numbers and row failures visible;
+ * source identity and content provenance make repeat imports reviewable.
  */
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
-import { supabase } from "@/lib/supabase";
 import { readChangeOrderCsvFile } from "@/lib/importChangeOrderCsv";
-import { batchProcess } from "@/utils/batchProcess";
 import { invalidateEntity } from "@/services/cacheRegistry";
-import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { commitChangeOrderImport, prepareChangeOrderImport, matchImportProject } from "@/lib/changeOrders/importBatch";
 
 const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const AI      = "var(--ai-accent, #22D3EE)";
+const display = { fontFamily: "var(--font-display)" };
+const AI      = "var(--accent)";
 
+/**
+ * @param {{
+ *   open: boolean,
+ *   projectId?: string | null,
+ *   projectName?: string | null,
+ *   projects?: Array<Pick<import("@/api/client/supabaseTypes").RowWithAliases<"projects">, "id"> & Partial<Pick<import("@/api/client/supabaseTypes").RowWithAliases<"projects">, "name" | "org_id" | "project_number">>>,
+ *   onClose: () => void,
+ *   onCreated?: (result: { created: number, skipped: number, failed: number }) => void,
+ *   assertMutationScope?: (projectId: string) => void
+ * }} props
+ */
 export default function ChangeOrderImportModal({
   open,
   projectId,
@@ -34,6 +39,7 @@ export default function ChangeOrderImportModal({
   projects = [],
   onClose,
   onCreated,
+  assertMutationScope,
 }) {
   const qc = useQueryClient();
   const trapRef = useFocusTrap(open);
@@ -48,13 +54,31 @@ export default function ChangeOrderImportModal({
   const [lastResult, setLastResult] = useState(null);
   const [err, setErr]               = useState(null);
 
-  if (!open) return null;
-
-  const reset = () => {
-    setStep("upload"); setFile(null); setParsed(null);
+  const [preparedRows, setPreparedRows] = useState([]);
+  const sessionRef = useRef(0);
+  const mountedRef = useRef(false);
+  const currentRef = useRef({ open, projects, assertMutationScope });
+  currentRef.current = { open, projects, assertMutationScope };
+  useEffect(() => {
+    sessionRef.current += 1;
+    mountedRef.current = true;
+    setStep("upload"); setFile(null); setParsed(null); setPreparedRows([]);
     setMatched(null); setChosen(projectId || null); setExcluded(new Set());
     setLastResult(null); setErr(null);
+    return () => { mountedRef.current = false; sessionRef.current += 1; };
+  }, [open, projectId]);
+  const createImportGuard = () => {
+    const session = sessionRef.current;
+    const isCurrent = () => mountedRef.current && currentRef.current.open && sessionRef.current === session;
+    const assert = (targetProjectId) => {
+      if (!isCurrent()) throw new Error("Import session changed. Reopen the CSV and try again.");
+      if (!currentRef.current.projects.some(project => project.id === targetProjectId)) throw new Error("Select a project from the current workspace.");
+      currentRef.current.assertMutationScope?.(targetProjectId);
+    };
+    return { assert, isCurrent };
   };
+
+  if (!open) return null;
 
   const acceptFile = (f) => {
     setErr(null);
@@ -72,147 +96,84 @@ export default function ChangeOrderImportModal({
 
   const runParse = async () => {
     if (!file) return;
+    const guard = createImportGuard();
     setStep("parsing"); setErr(null);
     try {
+      guard.assert(projectId || chosenProjectId);
       const res = await readChangeOrderCsvFile(file);
+      guard.assert(projectId || chosenProjectId);
       if (!res.cos || res.cos.length === 0) {
         const detail = res.warnings?.length ? ` ${res.warnings.join(" ")}` : "";
         throw new Error(`No change-order rows found in the CSV.${detail}`);
       }
-      setParsed(res);
-
-      // Try to auto-match project from job_number (when every row
-      // agreed on one) — same pattern as the RFI importer.
-      const jobNumber = res.header?.job_number;
-      if (jobNumber) {
-        try {
-          const { data } = await supabase
-            .from("projects")
-            .select("id, name, project_number")
-            .or(`project_number.eq.${jobNumber},project_number.ilike.%${jobNumber}%`)
-            .eq("is_deleted", false)
-            .limit(1);
-          if (data && data.length > 0) {
-            setMatched(data[0]);
-            setChosen(data[0].id);
-          } else if (projectId) {
-            setChosen(projectId);
-          }
-        } catch { /* silent — the manual picker below handles it */ }
-      } else if (projectId) {
-        setChosen(projectId);
-      }
-
-      setStep("preview");
+      const match = matchImportProject(res.header?.job_number, projects);
+      if (res.header?.job_number && !match) throw new Error(`CSV job ${res.header.job_number} does not uniquely match the selected project. Open the correct project or correct the CSV job number before importing.`);
+      const destination = match?.id || projectId || chosenProjectId;
+      guard.assert(destination);
+      const prepared = await prepareChangeOrderImport(res.cos, destination);
+      guard.assert(destination);
+      setParsed(res); setPreparedRows(prepared); setLastResult(null); setExcluded(new Set());
+      setMatched(match); setChosen(destination); setStep("preview");
     } catch (e) {
-      setErr(toUserErrorMessage(e, String(e)));
-      setStep("upload");
+      if (!guard.isCurrent()) return;
+      setErr(toUserErrorMessage(e, String(e))); setStep("upload");
     }
   };
 
-  const toggleExclude = (coNumber) => {
+  const toggleExclude = (rowIndex) => {
     setExcluded((prev) => {
       const next = new Set(prev);
-      if (next.has(coNumber)) next.delete(coNumber);
-      else next.add(coNumber);
+      if (next.has(rowIndex)) next.delete(rowIndex);
+      else next.add(rowIndex);
       return next;
     });
   };
 
   const runCommit = async () => {
-    if (!parsed) return;
-    if (!chosenProjectId) { setErr("Pick a project first."); return; }
-
-    const kept = parsed.cos.filter((r) => !excluded.has(r.co_number));
-    if (kept.length === 0) { setErr("Every row is excluded — nothing to import."); return; }
-
+    if (!parsed || !chosenProjectId) return;
+    const guard = createImportGuard();
+    const candidates = lastResult?.failed.length ? lastResult.failed.map(result => result.row) : preparedRows;
+    const kept = candidates.filter(row => !excluded.has(row.index));
+    if (!kept.length) { setErr("Every row is excluded — nothing to import."); return; }
     setStep("committing"); setErr(null);
     try {
-      // Dedup: get the CO numbers already on this project so a
-      // re-run of the same CSV doesn't create duplicates.
-      const { data: existing } = await supabase
-        .from("change_orders")
-        .select("co_number")
-        .eq("project_id", chosenProjectId)
-        .eq("is_deleted", false);
-      const existingNums = new Set(
-        (existing || [])
-          .map((r) => String(r.co_number || "").replace(/[^\w\-#]/g, "").toLowerCase())
-          .filter(Boolean),
-      );
-
-      const projLabel = projects.find((p) => p.id === chosenProjectId)?.name || projectName || null;
-      const toInsert = [];
-      let skipped = 0;
-      for (const r of kept) {
-        const coKey = String(r.co_number).replace(/[^\w\-#]/g, "").toLowerCase();
-        if (existingNums.has(coKey)) { skipped++; continue; }
-        // Normalize to the canonical "CO-NNN" format for display,
-        // but only if the source was a bare number (Sage / Vista
-        // often exports just "14"). If user already prefixed, keep.
-        const displayNumber = /^\d+$/.test(r.co_number)
-          ? `CO-${r.co_number.padStart(3, "0")}`
-          : r.co_number;
-        toInsert.push(withProjectId({
-          project_name:         projLabel,
-          co_number:            displayNumber,
-          title:                r.title || null,
-          description:          r.description,
-          reason_code:          r.reason_code,
-          status:               r.status,
-          co_amount:            r.co_amount,
-          submitted_date:       r.submitted_date,
-          approved_date:        r.approved_date,
-          approved_by:          r.approved_by,
-          notes:                r.notes,
-          schedule_impact_days: r.schedule_impact_days,
-          margin_percent:       r.margin_percent,
-        }, chosenProjectId));
+      guard.assert(chosenProjectId);
+      const result = await commitChangeOrderImport({
+        rows: kept, projectId: chosenProjectId, assertScope: guard.assert,
+        readExisting: targetProjectId => entities.ChangeOrder.filterAll({ project_id: targetProjectId }),
+        create: (payload, options) => entities.ChangeOrder.create(payload, options),
+      });
+      // A completed insert still belongs to the original project, even if its modal closed.
+      if (result.succeeded.length) {
+        await invalidateEntity(qc, "change_order", chosenProjectId);
+        void qc.invalidateQueries({ queryKey: ["projects"] });
       }
-
-      // One bad row must not abort the rest of the import. This loop used to
-      // let the first rejected INSERT throw straight out, leaving a partial
-      // import with no indication of where it stopped.
-      const { succeeded, failed } = await batchProcess(toInsert, (row) =>
-        entities.ChangeOrder.create(row),
-      );
-      const created = succeeded.length;
-
-      setLastResult({ created, skipped, failed: failed.length });
-      if (failed.length > 0) {
-        toast.warning(
-          `${created} imported, ${failed.length} failed` +
-          `${skipped ? `, ${skipped} skipped (already in project)` : ""}` +
-          ` — first error: ${failed[0].error}`,
-        );
+      if (!guard.isCurrent()) return;
+      const receipts = [...(lastResult?.receipts || []), ...result.succeeded, ...result.skipped];
+      setLastResult({ ...result, receipts });
+      if (result.failed.length) {
+        toast.warning(`${result.succeeded.length} imported, ${result.failed.length} need attention. Review the remaining rows before retrying.`);
+        setStep("preview");
       } else {
-        toast.success(`${created} change order${created === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped (already in project)` : ""}`);
+        toast.success(`${result.succeeded.length} imported${result.skipped.length ? `, ${result.skipped.length} already imported` : ""}`);
+        setStep("done");
       }
-
-      // invalidateEntity fans out to every registered change_order query family
-      // (the hand-rolled list here missed change-orders-global / -dash /
-      // all-cos-portfolio). Approved COs also move a project's revised contract
-      // value, so ["projects"] has to go too.
-      await invalidateEntity(qc, "change_order", chosenProjectId);
-      qc.invalidateQueries({ queryKey: ["projects"] });
-
-      onCreated?.({ created, skipped, failed: failed.length });
-      setStep("done");
-      setTimeout(() => { reset(); onClose(); }, 1500);
+      onCreated?.({ created: result.succeeded.length, skipped: result.skipped.length, failed: result.failed.length });
     } catch (e) {
-      setErr(toUserErrorMessage(e, String(e)));
-      setStep("preview");
+      if (!guard.isCurrent()) return;
+      setErr(toUserErrorMessage(e, String(e))); setStep("preview");
     }
   };
 
   const header = parsed?.header || {};
-  const cos    = parsed?.cos || [];
-  const keptCount = cos.length - excluded.size;
+  const displayRows = lastResult?.failed.length ? lastResult.failed.map(result => result.row) : preparedRows;
+  const cos = displayRows.map(row => row.source);
+  const keptCount = displayRows.filter(row => !excluded.has(row.index)).length;
   const warnings = parsed?.warnings || [];
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 65%, transparent)", zIndex: 1200 }} />
       <div
         ref={trapRef}
         onKeyDown={(e) => { if (e.key === "Escape" && step !== "committing") onClose(); }}
@@ -271,7 +232,7 @@ export default function ChangeOrderImportModal({
               >
                 <input
                   ref={fileInput}
-                  type="file"
+                  type="file" aria-label="Change order CSV"
                   accept=".csv,.tsv,.txt,text/csv,text/plain"
                   style={{ display: "none" }}
                   onChange={(e) => acceptFile(e.target.files?.[0])}
@@ -311,6 +272,10 @@ export default function ChangeOrderImportModal({
 
           {step === "preview" && parsed && (
             <div>
+              <p style={{ color: "var(--text-secondary)", marginBottom: 14 }}>
+                SteelBuild assigns a new official CO number. The CSV reference is preserved in notes.
+                Only Draft and Submitted changes can be imported; approvals and other decisions require individual review.
+              </p>
               {/* Warnings strip */}
               {warnings.length > 0 && (
                 <div style={{
@@ -344,6 +309,7 @@ export default function ChangeOrderImportModal({
                   </div>
                 ) : (
                   <select
+                    aria-label="Import project" disabled
                     value={chosenProjectId || ""}
                     onChange={(e) => setChosen(e.target.value)}
                     style={{
@@ -371,14 +337,14 @@ export default function ChangeOrderImportModal({
                   Change Orders in CSV ({cos.length})
                 </div>
                 <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
-                  dedup on (project, co_number)
+                  Source references prevent duplicate imports
                 </div>
               </div>
               <div style={{ border: "1px solid var(--border-default)", borderRadius: 2, maxHeight: 420, overflowY: "auto" }}>
                 <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead style={{ position: "sticky", top: 0, background: "var(--bg-surface-secondary)", zIndex: 1 }}>
                     <tr>
-                      {["#", "Title", "Status", "Amount", "Submitted", "Approved", ""].map((h, i) => (
+                      {["Source CO", "Title", "Source status", "Amount", "Submitted", "Approved", ""].map((h, i) => (
                         <th key={h} style={{
                           ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
                           color: "var(--text-muted)", padding: "6px 8px",
@@ -389,11 +355,13 @@ export default function ChangeOrderImportModal({
                     </tr>
                   </thead>
                   <tbody>
-                    {cos.map((r) => {
-                      const ex = excluded.has(r.co_number);
+                    {cos.map((r, index) => {
+                      const row = displayRows[index];
+                      const ex = excluded.has(row.index);
+                      const failure = lastResult?.failed.find(result => result.row.index === row.index)?.error || row.error;
                       return (
                         <tr
-                          key={r.co_number}
+                          key={row.index}
                           style={{
                             borderBottom: "1px solid var(--divider)",
                             opacity: ex ? 0.45 : 1,
@@ -401,7 +369,7 @@ export default function ChangeOrderImportModal({
                           }}
                         >
                           <Td mono accent>{r.co_number}</Td>
-                          <Td>{r.title || <span style={{ color: "var(--text-muted)" }}>—</span>}</Td>
+                          <Td>{r.title || <span style={{ color: "var(--text-muted)" }}>—</span>}{failure && <div role="alert" style={{ color: "var(--status-error)", whiteSpace: "normal", marginTop: 6 }}>{failure}</div>}</Td>
                           <Td>
                             <span style={{
                               ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
@@ -423,7 +391,7 @@ export default function ChangeOrderImportModal({
                           <Td mono success={!!r.approved_date}>{r.approved_date || "—"}</Td>
                           <td style={{ padding: "5px 8px", textAlign: "right" }}>
                             <button
-                              onClick={() => toggleExclude(r.co_number)}
+                              onClick={() => toggleExclude(row.index)}
                               style={{
                                 ...mono, fontSize: 9, padding: "2px 6px",
                                 background: "transparent",
@@ -451,7 +419,7 @@ export default function ChangeOrderImportModal({
                   <strong style={{ color: "var(--accent)" }}>
                     {formatMoney(
                       cos
-                        .filter((r) => !excluded.has(r.co_number))
+                        .filter((_r, index) => !excluded.has(displayRows[index].index))
                         .reduce((s, r) => s + (Number(r.co_amount) || 0), 0)
                     )}
                   </strong>
@@ -477,12 +445,23 @@ export default function ChangeOrderImportModal({
               </div>
               {lastResult && (
                 <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-                  {lastResult.created} new · {lastResult.skipped} skipped
-                  {lastResult.failed > 0 && (
-                    <span style={{ color: "var(--status-error)" }}> · {lastResult.failed} failed</span>
+                  {lastResult.receipts.length} reviewed records
+                  {lastResult.failed.length > 0 && (
+                    <span style={{ color: "var(--status-error)" }}> · {lastResult.failed.length} failed</span>
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {lastResult?.receipts.length > 0 && (
+            <div aria-label="Imported change orders" style={{ marginTop: 16 }}>
+              <div style={{ ...mono, color: "var(--text-muted)", marginBottom: 8 }}>Source reference → SteelBuild CO number</div>
+              {lastResult.receipts.map(({ row, record }) => (
+                <div key={row.index} style={{ display: "flex", gap: 20, padding: "6px 0", borderBottom: "1px solid var(--divider)" }}>
+                  <span>{row.source.co_number}</span><strong>{record.co_number || "Number unavailable — open the project register"}</strong>
+                </div>
+              ))}
             </div>
           )}
 
@@ -503,6 +482,7 @@ export default function ChangeOrderImportModal({
           padding: "12px 20px", borderTop: "1px solid var(--divider)",
           display: "flex", gap: 10, justifyContent: "flex-end", flexShrink: 0,
         }}>
+          {step === "done" && <button onClick={onClose} style={btnPrimary}>DONE</button>}
           {step === "upload" && (
             <>
               <button onClick={onClose} style={btnGhost}>CANCEL</button>
@@ -519,7 +499,7 @@ export default function ChangeOrderImportModal({
               </button>
               <button onClick={runCommit} disabled={!chosenProjectId || keptCount === 0}
                       style={{ ...btnPrimary, opacity: (!chosenProjectId || keptCount === 0) ? 0.5 : 1 }}>
-                IMPORT {keptCount}
+                {lastResult?.failed.length ? `RETRY ${keptCount} FAILED` : `IMPORT ${keptCount}`}
               </button>
             </>
           )}
@@ -536,7 +516,7 @@ function statusColor(s) {
     case "rejected":       return "var(--status-error)";
     case "void":           return "var(--text-muted)";
     case "draft":          return "var(--text-muted)";
-    case "submitted":      return "var(--status-info, #3B82F6)";
+    case "submitted":      return "var(--status-info)";
     case "under review":   return "var(--status-warning)";
     default:               return "var(--text-muted)";
   }

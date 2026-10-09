@@ -15,16 +15,19 @@ vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
+    filterAll: vi.fn().mockResolvedValue([]),
     get: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockResolvedValue(null),
     delete: vi.fn().mockResolvedValue(null),
   };
   return {
-    entities: new Proxy({}, { get: () => noop }),
+    entities: new Proxy({}, { get: (_target, key) => key === "Project" ? { ...noop, filterAll: vi.fn().mockResolvedValue([{ id: "test-project-id", org_id: "test-org", name: "Test Project" }]) } : noop }),
     resolveFileUrl: vi.fn((u) => u),
   };
 });
+
+vi.mock("@/components/shared/OrgContext", () => ({ useOrg: () => ({ currentOrg: { id: "test-org" }, isLoadingOrgs: false }) }));
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {

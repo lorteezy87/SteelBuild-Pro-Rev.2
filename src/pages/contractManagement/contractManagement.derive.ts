@@ -33,6 +33,7 @@ export interface ContractChangeOrder {
 
 export interface ContractSovItem {
   id: string;
+  updated_at?: string | null;
   project_id?: string | null;
   line_item_number?: NumericValue;
   application_number?: NumericValue;

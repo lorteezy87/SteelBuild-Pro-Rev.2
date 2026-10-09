@@ -8,6 +8,7 @@
 
 import type { Database } from '@/types/supabase';
 import type { UploadWorkflow } from '@/lib/uploadValidation';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ─── Type helpers (DB row shapes) ─────────────────────────────────────────────
 
@@ -30,6 +31,17 @@ export type RowWithAliases<T extends TableName> = Row<T> & {
 
 export type Conditions = Record<string, unknown>;
 
+/** An isolated, caller-bound client for asynchronous offline replay. */
+export type EntityRequestOptions = {
+  client?: SupabaseClient<Database>;
+  /** Stable per draft/import row, retained through ambiguous numbered-create retries. */
+  clientOperationId?: string;
+  /** The version shown to the person reviewing this change order. */
+  changeOrderReview?: { updatedAt: string | null; status: string; amount: number | null };
+  /** Original SOV revision shown to the editor, including microsecond precision. */
+  sovItemReview?: { updatedAt: string | null };
+};
+
 export type EntityClient<T extends TableName> = {
   list: (sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
   /** Like list() but PAGINATES to completeness — no silent DEFAULT_LIST_LIMIT
@@ -49,9 +61,9 @@ export type EntityClient<T extends TableName> = {
    * merely displayed as a capped list (those pair with ListTruncationNotice).
    */
   filterAll: (conditions?: Conditions, sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
-  get: (id: string) => Promise<RowWithAliases<T>>;
-  create: (record: Insert<T>) => Promise<RowWithAliases<T>>;
-  update: (id: string, updates: Update<T>) => Promise<RowWithAliases<T>>;
+  get: (id: string, options?: EntityRequestOptions) => Promise<RowWithAliases<T>>;
+  create: (record: Insert<T>, options?: EntityRequestOptions) => Promise<RowWithAliases<T>>;
+  update: (id: string, updates: Update<T>, options?: EntityRequestOptions) => Promise<RowWithAliases<T>>;
   delete: (id: string) => Promise<{ success: true }>;
   bulkCreate: (records: Insert<T>[]) => Promise<Array<RowWithAliases<T>>>;
   /**
@@ -79,8 +91,10 @@ export type AuthMeResult = {
   [key: string]: unknown;
 };
 
-export type UploadFileArgs = {
+export type UploadFileArgs = EntityRequestOptions & {
   file: File;
+  /** Cancels queued replay before each storage attempt, including retries. */
+  assertActive?: () => void;
   /**
    * Optional workflow key (see src/lib/uploadValidation.ts). When supplied, the
    * tighter per-workflow extension allowlist + size cap is enforced. When

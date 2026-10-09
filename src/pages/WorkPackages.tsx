@@ -12,7 +12,7 @@
  * the phase its pieces put it in rather than the hand-typed column.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,7 +32,7 @@ import {
   toastCrudError,
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";
-import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
+import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import WorkPackageDetailModalRaw from "@/components/workpackages/WorkPackageDetailModal";
 import WPFormModalRaw from "@/components/workpackages/WPFormModal";
@@ -54,6 +54,8 @@ import {
 } from "./workPackages/analytics";
 import {
   indexReleasesByWorkPackage,
+  indexPieceDrawingScopeByWorkPackage,
+  isPieceDrivenPackage,
   summarizePiecesByWorkPackage,
   type CanonicalPieceRow,
   type ReleaseRow,
@@ -69,15 +71,14 @@ import type { WorkPackage } from "./workPackages/types";
 import WpControlCenter from "./workPackages/WpControlCenter";
 import { reconcileSelection } from "./workPackages/wpControlCenter.derive";
 import { calcWpProgress } from "@/utils/projectKpis";
-import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
+import { loadWorkPackageEvidence, rejectIncompleteWorkPackageEvidence, verifyWorkPackageEvidenceScope, workPackageEvidenceState } from "./workPackages/evidence";
 
-// The design-system primitives, LoadingSkeleton, and the workpackages
+// The design-system primitives and the workpackages
 // modals/filter are still .jsx; their destructured `= []` prop defaults make
 // TS infer `never[]` props. These boundary casts are removable once those
 // shared/feature components are typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
-const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const SequenceFilter = SequenceFilterRaw as unknown as ComponentType<AnyProps>;
 const WPBulkAddModal = WPBulkAddModalRaw as unknown as ComponentType<AnyProps>;
 const WPFormModal = WPFormModalRaw as unknown as ComponentType<AnyProps>;
@@ -95,6 +96,11 @@ interface ProjectRow {
   scope_complete_pct_override?: number | null;
   [key: string]: unknown;
 }
+
+const EMPTY_EVIDENCE: never[] = [];
+const workPackageCacheKeys = (projectId: string | null) => [["work-packages", projectId, "wp-evidence"], ["work-packages", projectId], ["work-packages"], ["wps-all"]];
+type MutationScope = { sourceProjectId: string | null };
+type FormMutationScope = MutationScope & { sourceDraft: WorkPackage | null };
 
 export default function WorkPackages() {
   const projectId = useProjectId();
@@ -116,68 +122,111 @@ export default function WorkPackages() {
   // The drawer holds an id, not a row snapshot, so a status change or a
   // realtime refetch is visible without closing and reopening it.
   const [detailWPId, setDetailWPId] = useState<string | null>(null);
+  const [detailInitialTab, setDetailInitialTab] = useState("scope");
   const [selectedWPs, setSelectedWPs] = useState<Set<string>>(new Set());
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [allocatingNumber, setAllocatingNumber] = useState(false);
+  const uiRef = useRef({ projectId, editingWP, deleteTarget, selectedWPs });
+  uiRef.current = { projectId, editingWP, deleteTarget, selectedWPs };
 
-  const { data: rawWorkPackages = [], isLoading: wpLoading } = useQuery({
-    queryKey: ["work-packages", projectId],
-    queryFn: async () => {
-      if (projectId) return entities.WorkPackage.filter({ project_id: projectId });
-      const all = await entities.WorkPackage.list();
-      return all.sort((a, b) => (a.project_name || "").localeCompare(b.project_name || ""));
-    },
+  useEffect(() => {
+    setEditingWP(null);
+    setWPModalOpen(false);
+    setDetailWPId(null);
+    setDetailInitialTab("scope");
+    setDeleteTarget(null);
+    setBulkAddOpen(false);
+    setSelectedWPs(new Set());
+  }, [projectId]);
+
+  const workPackagesQuery = useQuery({
+    queryKey: ["work-packages", projectId, "wp-evidence"],
+    queryFn: () => loadWorkPackageEvidence(entities.WorkPackage, projectId!),
+    enabled: !!projectId,
   });
 
-  const { data: projects = [] } = useQuery({
+  const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
+  const { data: projects = [] } = projectsQuery;
 
-  const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
-  const selectedProject = (projects.find((p) => p.id === projectId) || null) as ProjectRow | null;
-  const effectiveProjectId = selectedProject?.id || null;
-  const pieceControlMode = String(selectedProject?.piece_control_mode ?? "off");
-  const workPackages = useMemo(
-    () => projectId
-      ? (selectedProject ? rawWorkPackages : [])
-      : rawWorkPackages.filter((wp) => wp?.project_id && liveProjectIds.has(wp.project_id)),
-    [liveProjectIds, projectId, rawWorkPackages, selectedProject]
-  );
+  const queryProject = (projects.find((p) => p.id === projectId) || null) as ProjectRow | null;
+  const effectiveProjectId = queryProject?.id || null;
 
-  const { data: drawings = [] } = useQuery({
-    queryKey: ["drawings", projectId],
+  const drawingsQuery = useQuery({
+    queryKey: ["drawings", projectId, "wp-evidence"],
     queryFn: async () => {
       // Paged: the entity client caps a list at 2,000 rows, and a project
       // drawing log can pass that, which would silently blank readiness.
       if (projectId) {
         return fetchAllProjectRowsPaged<Record<string, unknown>>(supabase, "drawings", projectId, {
           orderBy: "sheet_number",
+          onTruncated: rejectIncompleteWorkPackageEvidence,
           build: (query) => query.eq("is_deleted", false).is("deleted_at", null),
         });
       }
       return entities.Drawing.list();
     },
+    enabled: !!projectId,
     staleTime: 30 * 1000,
   });
 
-  const { data: projectDeliveries = [] } = useQuery({
+  // Sheet stage is reference context. Only an active Shop Drawing submittal
+  // linked to that exact set can clear the drawing-approval check. Read the
+  // complete project scope so a capped register cache cannot turn a missing
+  // governing submittal or deleted set into a false clear signal.
+  const drawingSetsQuery = useQuery({
+    queryKey: ["drawing-sets-for-wps", projectId],
+    queryFn: async () => verifyWorkPackageEvidenceScope(
+      await fetchAllProjectRowsPaged<{
+        id: string; project_id: string; is_deleted: boolean | null; deleted_at: string | null;
+      }>(supabase, "drawing_sets", projectId!, {
+        select: "id,project_id,is_deleted,deleted_at",
+        maxRows: 100_000,
+        onTruncated: rejectIncompleteWorkPackageEvidence,
+      }), projectId!,
+    ),
+    enabled: !!projectId,
+    staleTime: 30 * 1000,
+  });
+
+  const submittalsQuery = useQuery({
+    queryKey: ["submittals-for-wps", projectId],
+    queryFn: async () => verifyWorkPackageEvidenceScope(
+      await fetchAllProjectRowsPaged<{
+        id: string; project_id: string; submittal_type: string | null; status: string;
+        ball_in_court: string | null; drawing_set_ids: string[] | null;
+        submitted_date: string | null; updated_at: string | null; created_at: string | null;
+        round_number: number | null; is_deleted: boolean | null; deleted_at: string | null;
+      }>(supabase, "submittals", projectId!, {
+        select: "id,project_id,submittal_type,status,ball_in_court,drawing_set_ids,submitted_date,updated_at,created_at,round_number,is_deleted,deleted_at",
+        maxRows: 100_000,
+        onTruncated: rejectIncompleteWorkPackageEvidence,
+      }), projectId!,
+    ),
+    enabled: !!projectId,
+    staleTime: 30 * 1000,
+  });
+
+  const deliveriesQuery = useQuery({
     queryKey: ["deliveries-for-wps", projectId],
     queryFn: () => projectId
-      ? entities.Delivery.filter({ project_id: projectId })
+      ? loadWorkPackageEvidence(entities.Delivery, projectId)
       : [],
     enabled: !!projectId,
     staleTime: 30 * 1000,
   });
 
   // What Fab Release recorded for each package (live rows only).
-  const { data: fabReleases = [] } = useQuery({
+  const releasesQuery = useQuery({
     queryKey: ["wp-fab-releases", projectId],
     queryFn: () => projectId
       ? fetchAllProjectRowsPaged<ReleaseRow>(supabase, "fab_releases", projectId, {
         select: "id, project_id, work_package_id, status, is_exception, canonical_release, weight_tons, release_date, released_at, release_number, is_deleted",
         orderBy: "release_date",
+        onTruncated: rejectIncompleteWorkPackageEvidence,
         build: (query) => query.eq("is_deleted", false).not("work_package_id", "is", null),
       })
       : [],
@@ -186,12 +235,14 @@ export default function WorkPackages() {
   });
 
   // Leaf-lot counts per package; only read when piece control is on.
-  const piecesEnabled = !!projectId && pieceControlMode !== "off";
-  const { data: pieces = [] } = useQuery({
+  const piecesEnabled = !!projectId && !!queryProject && String(queryProject.piece_control_mode ?? "off") !== "off";
+  const canonicalLinksEnabled = !!projectId && ["pilot", "live"].includes(String(queryProject?.piece_control_mode ?? "off"));
+  const piecesQuery = useQuery({
     queryKey: ["wp-piece-counts", projectId],
     queryFn: () => projectId
       ? fetchAllProjectRowsPaged<CanonicalPieceRow>(supabase, "pieces", projectId, {
         select: "id, work_package_id, parent_piece_id, is_container, lifecycle_status, on_hold, is_deleted, deleted_at",
+        onTruncated: rejectIncompleteWorkPackageEvidence,
         build: (query) => query.eq("is_deleted", false).is("deleted_at", null).not("work_package_id", "is", null),
       })
       : [],
@@ -199,97 +250,243 @@ export default function WorkPackages() {
     staleTime: 30 * 1000,
   });
 
-  const wpQueryKeys = [["work-packages", projectId], ["work-packages"], ["wps-all"]];
+  // In pilot/live, lot links define the fabrication drawing scope. Legacy
+  // work_packages.linked_drawing_ids can disagree with those links, so read
+  // both canonical set links and fallback sheet links to completion.
+  const pieceDrawingSetsQuery = useQuery({
+    queryKey: ["wp-piece-drawing-sets", projectId],
+    queryFn: async () => verifyWorkPackageEvidenceScope(
+      await fetchAllProjectRowsPaged<{ project_id: string; piece_id: string; drawing_set_id: string }>(
+        supabase, "piece_drawing_sets", projectId!, {
+          select: "project_id,piece_id,drawing_set_id",
+          maxRows: 100_000,
+          onTruncated: rejectIncompleteWorkPackageEvidence,
+        },
+      ), projectId!,
+    ),
+    enabled: canonicalLinksEnabled,
+    staleTime: 30 * 1000,
+  });
 
-  useRealtimeInvalidation("work_packages", projectId, wpQueryKeys);
-  useRealtimeInvalidation("fab_releases", projectId, [["wp-fab-releases", projectId]]);
-  useRealtimeInvalidation("pieces", piecesEnabled ? projectId : null, [["wp-piece-counts", projectId]]);
+  const pieceDrawingsQuery = useQuery({
+    queryKey: ["wp-piece-drawings", projectId],
+    queryFn: async () => verifyWorkPackageEvidenceScope(
+      await fetchAllProjectRowsPaged<{ project_id: string; piece_id: string; drawing_id: string }>(
+        supabase, "piece_drawings", projectId!, {
+          select: "project_id,piece_id,drawing_id",
+          maxRows: 100_000,
+          onTruncated: rejectIncompleteWorkPackageEvidence,
+        },
+      ), projectId!,
+    ),
+    enabled: canonicalLinksEnabled,
+    staleTime: 30 * 1000,
+  });
 
-  const invalidateWps = () => {
-    qc.invalidateQueries({ queryKey: ["work-packages"] });
+  const evidenceSources = [
+    { label: "Work packages", key: ["work-packages", projectId, "wp-evidence"], query: workPackagesQuery },
+    { label: "Project configuration", key: ["projects"], query: projectsQuery },
+    { label: "Drawings", key: ["drawings", projectId, "wp-evidence"], query: drawingsQuery },
+    { label: "Drawing sets", key: ["drawing-sets-for-wps", projectId], query: drawingSetsQuery },
+    { label: "Shop submittals", key: ["submittals-for-wps", projectId], query: submittalsQuery },
+    { label: "Deliveries", key: ["deliveries-for-wps", projectId], query: deliveriesQuery },
+    { label: "Fabrication releases", key: ["wp-fab-releases", projectId], query: releasesQuery },
+    ...(piecesEnabled ? [{ label: "Assigned pieces", key: ["wp-piece-counts", projectId], query: piecesQuery }] : []),
+    ...(canonicalLinksEnabled ? [
+      { label: "Lot drawing sets", key: ["wp-piece-drawing-sets", projectId], query: pieceDrawingSetsQuery },
+      { label: "Legacy lot sheets", key: ["wp-piece-drawings", projectId], query: pieceDrawingsQuery },
+    ] : []),
+  ];
+  const evidence = workPackageEvidenceState(evidenceSources);
+  const evidenceReady = !!effectiveProjectId && evidence.complete && !evidence.refreshing;
+  const evidenceRef = useRef({ projectId, ready: evidenceReady, keys: evidenceSources.map(source => source.key) });
+  evidenceRef.current = { projectId, ready: evidenceReady, keys: evidenceSources.map(source => source.key) };
+  // A queued callback must check the current evidence at the actual write,
+  // including after a project switch or a refresh that began after selection.
+  const assertEvidenceReady = useCallback((packageId?: string, manualStatus = false) => {
+    // Read the cache too: invalidation can start before React paints its
+    // disabled state, while an already queued event still holds this callback.
+    const cacheReady = evidenceRef.current.keys.every(key => {
+      const state = qc.getQueryState(key);
+      return state?.status === "success" && state.fetchStatus === "idle";
+    });
+    const currentProject = qc.getQueryData<ProjectRow[]>(["projects"])?.find(project => project.id === projectId);
+    const currentPieceQuery = qc.getQueryState(["wp-piece-counts", projectId]);
+    const currentMode = String(currentProject?.piece_control_mode ?? "off");
+    const currentPiecesReady = currentMode === "off"
+      || (currentPieceQuery?.status === "success" && currentPieceQuery.fetchStatus === "idle");
+    const currentLinksReady = !["pilot", "live"].includes(currentMode)
+      || (["wp-piece-drawing-sets", "wp-piece-drawings"] as const).every(key => {
+        const state = qc.getQueryState([key, projectId]);
+        return state?.status === "success" && state.fetchStatus === "idle";
+      });
+    if (!evidenceRef.current.ready || evidenceRef.current.projectId !== projectId || !cacheReady || !currentProject || !currentPiecesReady || !currentLinksReady) {
+      throw new Error("Wait for complete work package evidence before changing this package.");
+    }
+    if (packageId) {
+      const currentPackages = qc.getQueryData<WorkPackage[]>(["work-packages", projectId, "wp-evidence"]);
+      if (!currentPackages?.some(wp => wp.id === packageId && wp.project_id === projectId)) {
+        throw new Error("This package is no longer in the selected project. Reopen its current record.");
+      }
+      if (manualStatus) {
+        const currentPieces = qc.getQueryData<CanonicalPieceRow[]>(["wp-piece-counts", projectId]);
+        if (isPieceDrivenPackage(currentProject.piece_control_mode, summarizePiecesByWorkPackage(currentPieces).get(packageId))) {
+          throw new Error("This package now follows its piece progress. Update the Piece Register instead.");
+        }
+      }
+    }
+  }, [projectId, qc]);
+
+  const assertMutationScope = (sourceProjectId: string | null) => {
+    if (!sourceProjectId || sourceProjectId !== evidenceRef.current.projectId) {
+      throw new Error("The selected project changed. Reopen this package in its original project.");
+    }
+    assertEvidenceReady();
+  };
+  const ownsForm = ({ sourceProjectId, sourceDraft }: FormMutationScope) =>
+    uiRef.current.projectId === sourceProjectId && uiRef.current.editingWP === sourceDraft;
+
+  const candidate = {
+    projectId, project: queryProject,
+    workPackages: workPackagesQuery.data ?? [], drawings: drawingsQuery.data ?? [],
+    drawingSets: drawingSetsQuery.data ?? [], submittals: submittalsQuery.data ?? [],
+    deliveries: deliveriesQuery.data ?? [], releases: releasesQuery.data ?? [], pieces: piecesQuery.data ?? [],
+    pieceDrawingSets: pieceDrawingSetsQuery.data ?? [], pieceDrawings: pieceDrawingsQuery.data ?? [],
+  };
+  const provenSnapshot = useRef<typeof candidate | null>(null);
+  if (evidenceReady) provenSnapshot.current = candidate;
+  // Do not mix newly refreshed sources with an older piece/release snapshot.
+  // A project switch can never reuse another project's proven evidence.
+  const snapshot = provenSnapshot.current?.projectId === projectId ? provenSnapshot.current : null;
+  const selectedProject = snapshot?.project ?? null;
+  const pieceControlMode = String(selectedProject?.piece_control_mode ?? "off");
+  const workPackages = snapshot?.workPackages ?? EMPTY_EVIDENCE;
+  const drawings = snapshot?.drawings ?? EMPTY_EVIDENCE;
+  const drawingSets = snapshot?.drawingSets ?? EMPTY_EVIDENCE;
+  const submittals = snapshot?.submittals ?? EMPTY_EVIDENCE;
+  const projectDeliveries = snapshot?.deliveries ?? EMPTY_EVIDENCE;
+  const fabReleases = snapshot?.releases ?? EMPTY_EVIDENCE;
+  const pieces = snapshot?.pieces ?? EMPTY_EVIDENCE;
+  const pieceDrawingSets = snapshot?.pieceDrawingSets ?? EMPTY_EVIDENCE;
+  const pieceDrawings = snapshot?.pieceDrawings ?? EMPTY_EVIDENCE;
+
+  const wpQueryKeys = workPackageCacheKeys(projectId);
+
+  useRealtimeInvalidation(projectId ? "work_packages" : "", projectId, wpQueryKeys);
+  useRealtimeInvalidation(projectId ? "drawings" : "", projectId, [["drawings", projectId, "wp-evidence"]]);
+  useRealtimeInvalidation(projectId ? "drawing_sets" : "", projectId, [["drawing-sets-for-wps", projectId]]);
+  useRealtimeInvalidation(projectId ? "submittals" : "", projectId, [["submittals-for-wps", projectId]]);
+  useRealtimeInvalidation(projectId ? "fab_releases" : "", projectId, [["wp-fab-releases", projectId]]);
+  useRealtimeInvalidation(piecesEnabled ? "pieces" : "", projectId, [["wp-piece-counts", projectId]]);
+  useRealtimeInvalidation(canonicalLinksEnabled ? "piece_drawing_sets" : "", projectId, [["wp-piece-drawing-sets", projectId]]);
+  useRealtimeInvalidation(canonicalLinksEnabled ? "piece_drawings" : "", projectId, [["wp-piece-drawings", projectId]]);
+
+  const invalidateWps = (sourceProjectId: string | null) => {
+    qc.invalidateQueries({ queryKey: ["work-packages", sourceProjectId] });
+    qc.invalidateQueries({ queryKey: ["work-packages"], exact: true });
     qc.invalidateQueries({ queryKey: ["wps-all"] });
     // Fan out the full work_package family (incl. ["wps-fab", projectId] read by
     // FabRelease) so a WP mutation doesn't leave sibling pages stale.
-    void invalidateEntity(qc, "work_package", projectId);
+    void invalidateEntity(qc, "work_package", sourceProjectId);
     // Piece assign UI reads WPs from the relationships snapshot — without these
     // keys, soft-deleted packages stay in the Target work package dropdown.
-    void qc.invalidateQueries({ queryKey: ["piece-relationships"] });
-    void qc.invalidateQueries({ queryKey: ["piece-register"] });
+    void qc.invalidateQueries({ queryKey: ["piece-relationships", sourceProjectId] });
+    void qc.invalidateQueries({ queryKey: ["piece-register", sourceProjectId] });
   };
 
   const updateWPMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => entities.WorkPackage.update(id, data),
-    onSuccess: async (updated) => {
-      replaceRecordInCaches(qc, wpQueryKeys, updated);
-      invalidateWps();
-      setWPModalOpen(false);
-      setEditingWP(null);
+    mutationFn: ({ id, data, sourceProjectId }: { id: string; data: any } & FormMutationScope) => {
+      assertMutationScope(sourceProjectId);
+      const writesProgress = ["phase", "status", "percent_complete"].some(field => Object.prototype.hasOwnProperty.call(data ?? {}, field));
+      assertEvidenceReady(id, writesProgress);
+      return entities.WorkPackage.update(id, data);
+    },
+    onSuccess: async (updated, scope) => {
+      const keys = workPackageCacheKeys(scope.sourceProjectId);
+      replaceRecordInCaches(qc, keys, updated);
+      invalidateWps(scope.sourceProjectId);
+      if (ownsForm(scope)) { setWPModalOpen(false); setEditingWP(null); }
       toast.success("Work package updated");
-      await invalidateCrudQueries(qc, wpQueryKeys);
+      await invalidateCrudQueries(qc, keys);
     },
     onError: (err) => toastCrudError(err, "Failed to update work package"),
   });
 
   const createWPMut = useMutation({
-    mutationFn: (data: any) => entities.WorkPackage.create(
-      withProjectId(data as Record<string, unknown>, effectiveProjectId),
-    ),
-    onSuccess: async (created) => {
-      appendRecordToCaches(qc, wpQueryKeys, created, ((record, key) => !key[1] || record.project_id === key[1]) as any);
-      invalidateWps();
-      setWPModalOpen(false);
-      setEditingWP(null);
+    mutationFn: ({ data, sourceProjectId }: { data: any } & FormMutationScope) => {
+      assertMutationScope(sourceProjectId);
+      return entities.WorkPackage.create(withProjectId(data as Record<string, unknown>, sourceProjectId));
+    },
+    onSuccess: async (created, scope) => {
+      const keys = workPackageCacheKeys(scope.sourceProjectId);
+      appendRecordToCaches(qc, keys, created, ((record, key) => !key[1] || record.project_id === key[1]) as any);
+      invalidateWps(scope.sourceProjectId);
+      if (ownsForm(scope)) { setWPModalOpen(false); setEditingWP(null); }
       toast.success("Work package created");
-      await invalidateCrudQueries(qc, wpQueryKeys);
+      await invalidateCrudQueries(qc, keys);
     },
     onError: (err) => toastCrudError(err, "Failed to create work package"),
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: string) => entities.WorkPackage.delete(id),
-    onSuccess: (_, deletedId) => {
-      removeRecordFromCaches(qc, wpQueryKeys, deletedId);
-      invalidateWps();
-      setDeleteTarget(null);
-      setDetailWPId((current) => (current === deletedId ? null : current));
+    mutationFn: ({ id, sourceProjectId }: { id: string } & MutationScope) => {
+      assertMutationScope(sourceProjectId);
+      assertEvidenceReady(id);
+      return entities.WorkPackage.delete(id);
+    },
+    onSuccess: (_, { id: deletedId, sourceProjectId }) => {
+      removeRecordFromCaches(qc, workPackageCacheKeys(sourceProjectId), deletedId);
+      invalidateWps(sourceProjectId);
+      if (uiRef.current.projectId === sourceProjectId) {
+        setDeleteTarget(current => current?.id === deletedId ? null : current);
+        setDetailWPId((current) => (current === deletedId ? null : current));
+      }
       toast.success("Work package deleted");
     },
     onError: (err) => toastCrudError(err, "Failed to delete work package"),
   });
 
   const bulkCreateMut = useMutation({
-    mutationFn: async (rows: any[]) => {
-      const prepared = await prepareBulkWorkPackageRows(rows, effectiveProjectId, getNextNumber);
-      return batchProcess(prepared, (data) => entities.WorkPackage.create(data), 5);
+    mutationFn: async ({ rows, sourceProjectId }: { rows: any[] } & MutationScope) => {
+      assertMutationScope(sourceProjectId);
+      const prepared = await prepareBulkWorkPackageRows(rows, sourceProjectId, getNextNumber);
+      return batchProcess(prepared, async (data) => {
+        assertMutationScope(sourceProjectId);
+        return entities.WorkPackage.create(data);
+      }, 5);
     },
-    onSuccess: (results) => {
-      invalidateWps();
+    onSuccess: (results, { sourceProjectId }) => {
+      invalidateWps(sourceProjectId);
       const ok = results.succeeded.length;
       const fail = results.failed.length;
       if (fail === 0) {
         toast.success(`Added ${ok} work package${ok === 1 ? "" : "s"}`);
-        setBulkAddOpen(false);
+        if (uiRef.current.projectId === sourceProjectId) setBulkAddOpen(false);
       } else if (ok === 0) {
         toast.error(`All ${fail} failed: ${results.failed[0]?.error || "unknown error"}`);
       } else {
         toast.warning(`${ok} added, ${fail} failed`);
-        setBulkAddOpen(false);
+        if (uiRef.current.projectId === sourceProjectId) setBulkAddOpen(false);
       }
     },
     onError: (err) => toastCrudError(err, "Bulk create failed"),
   });
 
   const bulkStatusMut = useMutation({
-    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const results = await batchProcess(ids, (id) => entities.WorkPackage.update(id, { status }));
+    mutationFn: async ({ ids, status, sourceProjectId }: { ids: string[]; status: string; sourceSelection: Set<string> } & MutationScope) => {
+      const results = await batchProcess(ids, async (id) => {
+        assertMutationScope(sourceProjectId);
+        assertEvidenceReady(id, true);
+        return entities.WorkPackage.update(id, { status });
+      });
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }
       return results;
     },
-    onSuccess: (results) => {
-      invalidateWps();
-      setSelectedWPs(new Set());
+    onSuccess: (results, { sourceProjectId, sourceSelection }) => {
+      invalidateWps(sourceProjectId);
+      if (uiRef.current.projectId === sourceProjectId && uiRef.current.selectedWPs === sourceSelection) setSelectedWPs(new Set());
       if (results.failed.length > 0) {
         toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
       } else {
@@ -301,22 +498,35 @@ export default function WorkPackages() {
 
   // Single-row status change from the drawer (hold / resume / complete).
   const quickStatusMut = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => entities.WorkPackage.update(id, { status }),
-    onSuccess: async (updated, { status }) => {
-      replaceRecordInCaches(qc, wpQueryKeys, updated);
-      invalidateWps();
+    mutationFn: ({ id, status, sourceProjectId }: { id: string; status: string } & MutationScope) => {
+      assertMutationScope(sourceProjectId);
+      assertEvidenceReady(id, true);
+      return entities.WorkPackage.update(id, { status });
+    },
+    onSuccess: async (updated, { status, sourceProjectId }) => {
+      const keys = workPackageCacheKeys(sourceProjectId);
+      replaceRecordInCaches(qc, keys, updated);
+      invalidateWps(sourceProjectId);
       toast.success(`Marked ${status}`);
-      await invalidateCrudQueries(qc, wpQueryKeys);
+      await invalidateCrudQueries(qc, keys);
     },
     onError: (err) => toastCrudError(err, "Failed to update status"),
   });
 
   const releasesByWp = useMemo(() => indexReleasesByWorkPackage(fabReleases), [fabReleases]);
   const piecesByWp = useMemo(() => summarizePiecesByWorkPackage(pieces), [pieces]);
+  const pieceDrawingScopeByWp = useMemo(() => indexPieceDrawingScopeByWorkPackage(
+    pieces,
+    pieceDrawingSets,
+    pieceDrawings,
+    drawings as Parameters<typeof indexPieceDrawingScopeByWorkPackage>[3],
+  ), [pieces, pieceDrawingSets, pieceDrawings, drawings]);
 
   const metrics = useMemo(
-    () => buildWorkPackageMetrics(workPackages, drawings, projectDeliveries, { releasesByWp, piecesByWp, pieceControlMode }),
-    [workPackages, drawings, projectDeliveries, releasesByWp, piecesByWp, pieceControlMode]
+    () => buildWorkPackageMetrics(workPackages, drawings, projectDeliveries, {
+      releasesByWp, piecesByWp, pieceControlMode, submittals, drawingSets, pieceDrawingScopeByWp,
+    }),
+    [workPackages, drawings, projectDeliveries, releasesByWp, piecesByWp, pieceControlMode, submittals, drawingSets, pieceDrawingScopeByWp]
   );
 
   const filtered = useMemo(() => {
@@ -374,9 +584,10 @@ export default function WorkPackages() {
 
   // Inbound deep link: `?id=<uuid>` (Alerts Center, Fab Release) or
   // `?wp=WP-014` (typed / shared). Opens the drawer once rows are loaded,
-  // then strips the param so closing the drawer sticks.
+  // then strips the params so closing the drawer sticks. Fab Release may
+  // target the release gate directly with `tab=release-gate`.
   useEffect(() => {
-    if (wpLoading) return;
+    if (!evidenceReady) return;
     const idParam = searchParams.get("id")?.trim();
     const numberParam = searchParams.get("wp")?.trim();
     if (!idParam && !numberParam) return;
@@ -388,20 +599,27 @@ export default function WorkPackages() {
       (numberParam && String(wp.wp_number || "").trim().toLowerCase() === numberParam.toLowerCase())
     );
     if (match) {
+      setDetailInitialTab(searchParams.get("tab") === "release-gate" ? "release gate" : "scope");
       setDetailWPId(match.id);
-    } else if (rawWorkPackages.length > 0 || !projectId) {
+    } else if (snapshot) {
       toast.error(`Work package ${idParam || numberParam} was not found in this project.`);
     }
     const next = new URLSearchParams(searchParams);
     next.delete("id");
     next.delete("wp");
+    next.delete("tab");
     setSearchParams(next, { replace: true });
-  }, [wpLoading, workPackages, rawWorkPackages.length, projectId, selectedProject, searchParams, setSearchParams]);
+  }, [evidenceReady, workPackages, snapshot, projectId, selectedProject, searchParams, setSearchParams]);
 
   const detailWP = useMemo(
     () => (detailWPId ? metrics.enriched.find((wp) => wp.id === detailWPId) || null : null),
     [detailWPId, metrics.enriched]
   );
+
+  const openDetailWP = (id: string | null | undefined) => {
+    setDetailInitialTab("scope");
+    setDetailWPId(id ?? null);
+  };
 
   const projectName = selectedProject?.name || (projectId ? "No active project" : "All Projects");
 
@@ -425,13 +643,14 @@ export default function WorkPackages() {
   };
 
   const handleWPCreate = useCallback(async () => {
-    if (allocatingNumber) return;
+    if (allocatingNumber || !evidenceReady) return;
     setAllocatingNumber(true);
     let wpNumber = "";
     try {
       if (effectiveProjectId) {
         const n = await getNextNumber(effectiveProjectId, "wp_number");
         wpNumber = `WP-${String(n).padStart(3, "0")}`;
+        assertEvidenceReady();
       } else {
         throw new Error("No active project selected");
       }
@@ -444,9 +663,9 @@ export default function WorkPackages() {
     }
     setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId ?? undefined });
     setWPModalOpen(true);
-  }, [allocatingNumber, effectiveProjectId]);
+  }, [allocatingNumber, effectiveProjectId, evidenceReady, assertEvidenceReady]);
 
-  useAutoOpenCreate(handleWPCreate, { enabled: !!effectiveProjectId });
+  useAutoOpenCreate(handleWPCreate, { enabled: evidenceReady && can("create", "work_package") });
 
   /** Outbound links carry the project so the sibling page lands scoped. */
   const navigateFromWp = useCallback((target: WorkPackageNavTarget, wp: WorkPackage) => {
@@ -483,21 +702,37 @@ export default function WorkPackages() {
         : { key, direction: "asc" }
     );
 
-  if (wpLoading) {
+  if (!projectId) {
+    return <section className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+      <h1>Work Packages</h1><h2>Select a project</h2>
+      <p>Choose a project to review its package, drawing, release and piece evidence.</p>
+    </section>;
+  }
+
+  if (evidence.failed.length > 0 || !snapshot || (evidence.complete && !effectiveProjectId)) {
     return (
       <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
-        <LoadingSkeleton variant="table" rows={8} />
+        <WorkflowFetchState label="Work package evidence" error={evidence.failed.length > 0 || (evidence.complete && !effectiveProjectId)}
+          onRetry={() => evidenceSources.forEach(source => { void source.query.refetch(); })} />
+        <p style={{ color: "var(--text-secondary)" }}>
+          {evidence.failed.length ? `Unavailable: ${evidence.failed.join(", ")}.` : evidence.pending.length ? `Waiting for: ${evidence.pending.join(", ")}.` : "Waiting for a complete project snapshot."}
+          {" "}Package readiness and transitions require complete evidence.
+          {evidence.complete && !effectiveProjectId && " The selected project is unavailable; select an accessible project."}
+        </p>
       </div>
     );
   }
 
-  const isSaving = createWPMut.isPending || updateWPMut.isPending;
-  const canCreate = !!effectiveProjectId && can("create", "work_package") && !allocatingNumber;
+  const isSaving = createWPMut.isPending || updateWPMut.isPending || !evidenceReady;
+  const canCreate = evidenceReady && can("create", "work_package") && !allocatingNumber;
   const canEdit = can("edit", "work_package");
   const canDelete = can("delete", "work_package");
 
-  const projectBanner = (selectedProject?.on_hold || (metrics.phaseMismatches?.length ?? 0) > 0) ? (
+  const projectBanner = (evidence.refreshing || selectedProject?.on_hold || (metrics.phaseMismatches?.length ?? 0) > 0) ? (
     <div style={{ display: "grid", gap: 8, padding: "0 24px" }}>
+      {evidence.refreshing && <p role="status" style={{ color: "var(--text-secondary)" }}>
+        Refreshing work package evidence. Showing the last loaded records; package transitions are paused.
+      </p>}
       {selectedProject?.on_hold && (
         <div
           role="status"
@@ -542,11 +777,11 @@ export default function WorkPackages() {
       <WPBulkAddModal
         open={bulkAddOpen}
         onClose={() => setBulkAddOpen(false)}
-        onCommit={(rows: unknown[]) => bulkCreateMut.mutate(rows)}
+        onCommit={(rows: unknown[]) => bulkCreateMut.mutate({ rows, sourceProjectId: projectId })}
         projectId={effectiveProjectId}
         projectName={projectName}
         existingWPs={workPackages}
-        isSaving={bulkCreateMut.isPending}
+        isSaving={bulkCreateMut.isPending || !evidenceReady}
       />
 
       {(wpModalOpen || editingWP) && (
@@ -555,10 +790,12 @@ export default function WorkPackages() {
           open={wpModalOpen || !!editingWP}
           onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
           onSave={(data: unknown) => {
-            if (editingWP?.id) updateWPMut.mutate({ id: editingWP.id, data });
-            else createWPMut.mutate(data);
+            const scope = { sourceProjectId: projectId, sourceDraft: editingWP };
+            if (editingWP?.id) updateWPMut.mutate({ id: editingWP.id, data, ...scope });
+            else createWPMut.mutate({ data, ...scope });
           }}
           wp={editingWP}
+          pieceDrivenEvidence={editingWP?.id ? metrics.enriched.find((wp: (typeof metrics.enriched)[number] & Pick<WorkPackage, "id">) => wp.id === editingWP.id)?._signals.pieceDriven : false}
           projects={projects}
           nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
@@ -570,22 +807,27 @@ export default function WorkPackages() {
       {detailWP && (
         <WorkPackageDetailModal
           wp={detailWP}
+          initialTab={detailInitialTab}
           drawings={drawings}
-          onClose={() => setDetailWPId(null)}
+          onClose={() => { setDetailWPId(null); setDetailInitialTab("scope"); }}
           onEdit={canEdit ? (wp: WorkPackage) => { setDetailWPId(null); handleWPEdit(wp); } : null}
           onDelete={canDelete ? (wp: WorkPackage) => setDeleteTarget(wp) : null}
           onSetStatus={canEdit && !detailWP._signals.pieceDriven
-            ? (wp: WorkPackage, status: string) => { if (wp.id) quickStatusMut.mutate({ id: wp.id, status }); }
+            ? (wp: WorkPackage, status: string) => { if (wp.id) quickStatusMut.mutate({ id: wp.id, status, sourceProjectId: projectId }); }
             : null}
           statusPending={quickStatusMut.isPending}
+          evidencePending={!evidenceReady}
+          assertEvidenceReady={assertEvidenceReady}
           onNavigate={navigateFromWp}
         />
       )}
 
       <DeleteDialog
         open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => { if (deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }}
+        onClose={() => {
+          if (uiRef.current.projectId === projectId) setDeleteTarget(current => current === deleteTarget ? null : current);
+        }}
+        onConfirm={() => { if (deleteTarget?.id) return deleteMut.mutateAsync({ id: deleteTarget.id, sourceProjectId: projectId }); }}
         title="Delete Work Package"
         description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? Assigned pieces are unassigned. This cannot be undone.`}
       />
@@ -600,7 +842,7 @@ export default function WorkPackages() {
     if (pieceDrivenSelected.length > 0) {
       toast.info(`${pieceDrivenSelected.length} piece-driven package${pieceDrivenSelected.length === 1 ? "" : "s"} skipped; status comes from pieces.`);
     }
-    bulkStatusMut.mutate({ ids: manualSelectedIds, status });
+    bulkStatusMut.mutate({ ids: manualSelectedIds, status, sourceProjectId: projectId, sourceSelection: selectedWPs });
   };
 
   const bulkActions = (
@@ -613,19 +855,19 @@ export default function WorkPackages() {
             label: manualSelectedIds.length < selectedRows.length ? `SET COMPLETE (${manualSelectedIds.length})` : "SET COMPLETE",
             icon: "check",
             onClick: () => runBulkStatus("Complete"),
-            disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+            disabled: !evidenceReady || bulkStatusMut.isPending || selectedWPs.size === 0,
           },
           {
             label: manualSelectedIds.length < selectedRows.length ? `SET IN PROGRESS (${manualSelectedIds.length})` : "SET IN PROGRESS",
             icon: "arrow",
             onClick: () => runBulkStatus("In Progress"),
-            disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+            disabled: !evidenceReady || bulkStatusMut.isPending || selectedWPs.size === 0,
           },
           {
             label: "SET ON HOLD",
             icon: "pause",
             onClick: () => runBulkStatus("On Hold"),
-            disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+            disabled: !evidenceReady || bulkStatusMut.isPending || selectedWPs.size === 0,
           },
         ] : []),
         {
@@ -663,7 +905,7 @@ export default function WorkPackages() {
       }}
       filteredCount={filtered.length}
       totalCount={metrics.totalCount}
-      onOpenWp={(wp) => setDetailWPId(wp.id)}
+      onOpenWp={(wp) => openDetailWP(wp.id)}
       onExport={() => exportWorkPackagesCSV(filtered)}
       onBulkAdd={() => setBulkAddOpen(true)}
       onCreate={canCreate ? handleWPCreate : null}
@@ -682,10 +924,9 @@ export default function WorkPackages() {
           metrics={metrics}
           onRiskFilter={setRiskFilter}
           onStatusFilter={setStatusFilter}
-          onOpen={(wp) => setDetailWPId(wp.id ?? null)}
+          onOpen={(wp) => openDetailWP(wp.id)}
         />
       }
-      listTruncationNotice={<ListTruncationNotice count={rawWorkPackages.length} label="work packages" />}
       bulkActions={bulkActions}
       modals={wpModals}
     >
@@ -694,7 +935,7 @@ export default function WorkPackages() {
           <PhaseFlowView
             rows={filtered}
             phaseRollup={metrics.phaseRollup}
-            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
+            onOpen={(wp) => openDetailWP(wp.id)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
             selectedWPs={selectedWPs}
@@ -705,7 +946,7 @@ export default function WorkPackages() {
         {view === "board" && (
           <StatusBoardView
             rows={filtered}
-            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
+            onOpen={(wp) => openDetailWP(wp.id)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
             selectedWPs={selectedWPs}
@@ -718,7 +959,7 @@ export default function WorkPackages() {
             rows={filtered}
             selectedWPs={selectedWPs}
             onToggleSelect={toggleSelect}
-            onOpen={(wp) => setDetailWPId(wp.id ?? null)}
+            onOpen={(wp) => openDetailWP(wp.id)}
             onEdit={canEdit ? handleWPEdit : null}
             onDelete={canDelete ? setDeleteTarget : null}
             sort={registerSort}

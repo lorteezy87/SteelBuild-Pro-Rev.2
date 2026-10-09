@@ -286,12 +286,10 @@ export default function FinancialKPIs() {
     const totalUnbilled = filtered.reduce((s, r) => s + r.unbilled, 0);
     const totalAR = filtered.reduce((s, r) => s + r.arOutstanding, 0);
 
-    // Weighted CPI/SPI (weighted by BAC)
-    const totalBAC = filtered.reduce((s, r) => s + r.bac, 0);
+    // Portfolio CPI uses total earned value over total actual cost.
     const totalEV = filtered.reduce((s, r) => s + r.ev, 0);
     const totalAC = filtered.reduce((s, r) => s + r.ac, 0);
     const portfolioCPI = totalAC > 0 ? totalEV / totalAC : null;
-    const portfolioSPI = totalBAC > 0 ? totalEV / totalBAC : null;
 
     // Weighted margin
     const portfolioMargin = totalRevised > 0
@@ -310,7 +308,7 @@ export default function FinancialKPIs() {
     return {
       totalRevised, totalCommitted, totalBilled, totalCollected,
       totalRetention, totalUnbilled, totalAR, totalBacklog,
-      portfolioCPI, portfolioSPI, portfolioMargin, avgDSO,
+      portfolioCPI, portfolioMargin, avgDSO,
     };
   }, [filtered]);
 
@@ -659,7 +657,7 @@ export default function FinancialKPIs() {
             </ResponsiveContainer>
           ) : (
             <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)", ...body, fontSize: 12 }}>
-              No EVM data available. Populate work package budgets and actuals.
+              CPI requires work package budgets and actuals. SPI also requires a dated planned-value baseline; it stays unavailable until that evidence is supplied.
             </div>
           )}
           <div style={{ ...body, fontSize: 10, color: "var(--text-muted)", marginTop: 4, textAlign: "center" }}>

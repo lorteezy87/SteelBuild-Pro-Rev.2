@@ -85,8 +85,9 @@ describe("PieceRelationshipManager", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/pieces\.work_package_id/i)).not.toBeInTheDocument();
     expect(
-      screen.getByText(/read-only readiness check/i),
+      screen.getByText(/read-only piece and drawing-stage check/i),
     ).toBeInTheDocument();
+    expect(screen.getByText(/server fabrication gate must be checked separately before release/i)).toBeInTheDocument();
     expect(
       screen.getByText("No active pieces assigned to this work package."),
     ).toBeInTheDocument();
