@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.105.4";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 import {
   decodeCursor,
   encodeCursor,
@@ -37,6 +38,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
     });
     const { data: userData, error: userError } = await rls.auth.getUser(token);
     if (userError || !userData.user) throw new HttpError(401, "Authenticated SteelBuild session required");
+    const mfaDenial = mfaDenialForVerifiedUser(userData.user, authHeader, request);
+    if (mfaDenial) return mfaDenial;
 
     const result = await readOneEntity({ rls, request: readRequest, baseUrl });
     return jsonResponse(result, 200, request);
