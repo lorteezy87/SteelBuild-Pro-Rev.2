@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FabApprovalEvidenceRows } from "../fabReleaseEvidence";
+import type { SubmittalRevisionCoverage } from '@/api/client/submittalWorkflow';
 
 type Row = Record<string, unknown>;
 const database = vi.hoisted(() => ({
@@ -12,12 +13,12 @@ const database = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
-    async rpc(_name: string, args: { p_submittal_ids: string[] }) {
+    async rpc(_name: string, args: { p_submittal_ids: string[] }): Promise<{ data: SubmittalRevisionCoverage[] | null; error: { message: string } | null }> {
       database.coverageCalls.push(args.p_submittal_ids);
       if (database.failCoverage) return { data: null, error: { message: 'Evidence unavailable' } };
-      return { data: args.p_submittal_ids.map(id => {
+      return { data: args.p_submittal_ids.map((id): SubmittalRevisionCoverage => {
         const row = database.tables.submittals.find(candidate => candidate.id === id)!;
-        return { submittal_id: id, submittal_status: row.status, submittal_updated_at: row.updated_at, round_id: null, ok: false, current_revision_ids: [], captured_revision_ids: [], missing_revision_ids: [], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [], evidence: [] };
+        return { project_id: String(row.project_id), reason: 'missing_manifest', submittal_id: id, submittal_status: String(row.status), submittal_updated_at: String(row.updated_at), round_id: null, ok: false, current_revision_ids: [], captured_revision_ids: [], missing_revision_ids: [], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [], evidence: [] };
       }), error: null };
     },
     from(table: string) {

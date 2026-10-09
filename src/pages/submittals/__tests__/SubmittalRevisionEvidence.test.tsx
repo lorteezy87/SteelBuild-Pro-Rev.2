@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { RevisionEvidenceReview } from '../SubmittalRevisionEvidence';
 import type { SubmittalRevisionCoverage } from '@/api/client/submittalWorkflow';
+import type { ComponentProps } from 'react';
 const coverage: SubmittalRevisionCoverage = { project_id: 'p', submittal_status: 'Approved', submittal_updated_at: '2026-10-09T00:00:00Z', empty_drawing_set_ids: [], submittal_id: 's', round_id: 'r', ok: false, reason: 'Missing exact revisions', current_revision_ids: ['rev1'], captured_revision_ids: [], missing_revision_ids: ['rev1'], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], evidence: [] };
 describe('legacy exact revision review', () => {
   it('keeps reconciliation blocked until each PDF, the transmittal, and a written attestation are reviewed', async () => {
@@ -25,7 +26,7 @@ describe('legacy exact revision review', () => {
     expect(screen.getByRole('status')).toHaveTextContent('an earlier approval cannot authorize the current PDFs');
   });
   it('offers explicit legacy review when the historical submission has no round, but not for a draft', () => {
-    const props = { revisions: [], submittedDate: '2026-10-01', canReconcile: true, onReconcile: vi.fn(), onOpenDocument: vi.fn() };
+    const props: ComponentProps<typeof RevisionEvidenceReview> = { revisions: [], submittedDate: '2026-10-01', canReconcile: true, onReconcile: vi.fn(), onOpenDocument: vi.fn() };
     const view = render(<RevisionEvidenceReview {...props} coverage={{ ...coverage, round_id: null }} />);
     expect(screen.getByRole('button', { name: 'Attest reviewed evidence' })).toBeDisabled();
     view.rerender(<RevisionEvidenceReview {...props} coverage={{ ...coverage, round_id: null, submittal_status: 'Draft' }} />);

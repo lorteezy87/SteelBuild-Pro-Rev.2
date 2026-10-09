@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import {
   evaluateWorkPackageReadiness,
   isDrawingApproved,
@@ -20,7 +21,7 @@ describe("piece-control drawing approval rules (Slice 6 IFC/Released)", () => {
     expect(
       isDrawingApproved(drawing, {
         submittals: [
-          { id: "s1", submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] },
+          { id: "s1", ...verifiedSubmittalEvidence('s1'), submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] },
         ],
       }),
     ).toBe(true);
@@ -31,6 +32,7 @@ describe("piece-control drawing approval rules (Slice 6 IFC/Released)", () => {
             id: "s1",
             submittal_type: "Shop Drawing",
             status: "Released for Fabrication",
+            ...verifiedSubmittalEvidence('s1'),
             ball_in_court: null,
             drawing_set_ids: ["set-1"],
           },
@@ -179,6 +181,7 @@ describe("work-package readiness", () => {
             id: "s1",
             submittal_type: "Shop Drawing",
             status: "Approved",
+            ...verifiedSubmittalEvidence('s1'),
             ball_in_court: "GC",
             drawing_set_ids: ["set-1"],
           },

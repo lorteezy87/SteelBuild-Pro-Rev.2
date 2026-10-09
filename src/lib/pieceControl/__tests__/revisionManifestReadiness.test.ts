@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { isGoverningDrawingReleaseReady } from '../drawingReleaseReady';
+import type { RevisionCoverageSummary } from '@/lib/submittalRevisionEvidence';
 const drawing = { id: 'd', project_id: 'p', drawing_set_id: 'set', stage: 'IFC' };
 const submittal = { id: 's', submittal_type: 'Shop Drawing', status: 'Released for Fabrication', drawing_set_ids: ['set'], current_round_id: 'r' };
-const coverage = { submittal_id: 's', round_id: 'r', ok: true, current_revision_ids: ['revision1'], captured_revision_ids: ['revision1'], missing_revision_ids: [], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [] };
+const coverage: RevisionCoverageSummary = { submittal_id: 's', round_id: 'r', ok: true, current_revision_ids: ['revision1'], captured_revision_ids: ['revision1'], missing_revision_ids: [], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [] };
 describe('exact revision readiness', () => {
   it('blocks a legacy Released status without immutable evidence', () => {
     const result = isGoverningDrawingReleaseReady(drawing, { submittals: [submittal] });

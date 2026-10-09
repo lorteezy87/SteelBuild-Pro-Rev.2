@@ -5,7 +5,7 @@ vi.mock('@/api/client/submittalWorkflow', () => ({ applySubmittalWorkflow: mocks
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc: mocks.rfis } }));
 vi.mock('@/lib/submittalSmartTriggers', () => ({ runSubmittalStatusTriggers: mocks.triggers }));
 vi.mock('@/services/auditLogger', () => ({ logTransition: mocks.audit }));
-import { addSubmittalRound, planRoundWrite, TERMINAL_APPROVED_STATUSES } from '../useSubmittals';
+import { addSubmittalRound, planRoundWrite, TERMINAL_APPROVED_STATUSES, type CurrentRoundLite } from '../useSubmittals';
 import { FabReleaseBlockedError } from '@/lib/fabRelease/releaseStatus';
 const base = { id: 's', project_id: 'p', updated_at: '2026-10-09T00:00:00.000001Z', current_round_id: 'r', status: 'Draft', revision: 'A', submittal_type: 'Shop Drawing' };
 const checklist = { comments_addressed: true, markups_incorporated: true, sheets_ready: true, authorized_to_issue: true };
@@ -23,7 +23,7 @@ describe('round planning display compatibility', () => {
   });
   it('plans a new send, continues an open send and closes an existing cycle', () => {
     expect(planRoundWrite(null, 'Submitted')).toMatchObject({ action: 'insert', roundNumber: 1 });
-    const open = { id: 'r', round_number: 2, submitted_date: '2026-10-01', returned_date: null };
+    const open: CurrentRoundLite = { id: 'r', round_number: 2, submitted_date: '2026-10-01', returned_date: null };
     expect(planRoundWrite(open, 'Under Review')).toMatchObject({ action: 'update', roundId: 'r', setReturned: false });
     expect(planRoundWrite(open, 'Approved')).toMatchObject({ action: 'update', roundId: 'r', setReturned: true });
     expect(planRoundWrite({ ...open, returned_date: '2026-10-02' }, 'Submitted')).toMatchObject({ action: 'insert', roundNumber: 3 });

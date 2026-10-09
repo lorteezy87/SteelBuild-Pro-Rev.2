@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const workflowRpc = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc: workflowRpc } }));
-import { hydrateSubmittalRevisionCoverage } from '../submittalWorkflow';
+import { hydrateSubmittalRevisionCoverage, type SubmittalRevisionCoverage } from '../submittalWorkflow';
 import { withSubmittalLifecycle } from '../submittalLifecycle';
 import { setActiveOrgId } from '@/lib/activeOrg';
 import type { EntityClient } from '../supabaseTypes';
 const row = { id: 's', status: 'Approved', ball_in_court: 'GC', submittal_type: 'Shop Drawing', current_round_id: 'r', updated_at: '2026-10-09T00:00:00.000001+00:00' };
-function coverage(id: string) { return { submittal_id: id, submittal_status: row.status, submittal_updated_at: row.updated_at, round_id: 'r', ok: false, current_revision_ids: ['rev'], captured_revision_ids: [], missing_revision_ids: ['rev'], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [], evidence: [] }; }
+function coverage(id: string): SubmittalRevisionCoverage { return { project_id: 'p', reason: 'missing_manifest', submittal_id: id, submittal_status: row.status, submittal_updated_at: row.updated_at, round_id: 'r', ok: false, current_revision_ids: ['rev'], captured_revision_ids: [], missing_revision_ids: ['rev'], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [], evidence: [] }; }
 beforeEach(() => { workflowRpc.mockReset(); setActiveOrgId('org'); });
 describe('complete revision coverage reads', () => {
   it('batches more than a hosted page without truncation or per-row calls', async () => {

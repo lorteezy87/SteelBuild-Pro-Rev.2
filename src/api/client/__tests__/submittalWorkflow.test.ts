@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc } }));
-import { applySubmittalWorkflow, validateSubmittalCreate } from '../submittalWorkflow';
+import { applySubmittalWorkflow, validateSubmittalCreate, type SubmittalReview, type WorkflowResult } from '../submittalWorkflow';
 import { setActiveOrgId } from '@/lib/activeOrg';
-const review = { id: 'sub-1', updated_at: '2026-10-09T00:00:00.000001Z', status: 'Draft', current_round_id: null, submittal_type: 'Shop Drawing' };
-const result = { submittal: { ...review, status: 'Submitted' }, round: { id: 'round-1' }, evidence: [] };
+const review: SubmittalReview = { id: 'sub-1', updated_at: '2026-10-09T00:00:00.000001Z', status: 'Draft', current_round_id: null, submittal_type: 'Shop Drawing' };
+const result: WorkflowResult = { submittal: { ...review, status: 'Submitted' }, round: { id: 'round-1' }, evidence: [] };
 beforeEach(() => { rpc.mockReset(); setActiveOrgId('org-1'); rpc.mockResolvedValue({ data: result, error: null }); });
 describe('atomic submittal client', () => {
   it('commits a reviewed transition through one RPC, with microsecond expectations and exact revisions', async () => {
