@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261009125901",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - durable org-scoped checkout intent and service-only reservation/customer/session RPCs. Requires reviewed exact SQL, installed-schema staging rollback, independent PostgreSQL concurrency acceptance and verified manual ledger stamp before deploying dependent checkout handler. No frozen exemption. See docs/superpowers/specs/2026-10-09-durable-checkout-design.md and docs/audits/DURABLE_CHECKOUT_RELEASE_2026-10-09.md."
+      },
+      {
         "version": "20261008071019",
         "lifecycle": "required",
         "evidence": "APPLIED staging and production 2026-10-09 13:09 UTC. Exact ledger payload SHA-256 3dfc1339eb999c33b5bad396d439958c8a6e6820071a612e33e686db9d5bbe44; matching function definitions and service-only grants verified. All 20 installed staging acceptance checks passed under rollback. Service-role-only snapshot/apply RPCs couple organization billing state, revision check and unique receipt. Retain required classification so a missing stamp still blocks publication. Matching handler and durable checkout/provider acceptance remain pending. See docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md and docs/audits/PRODUCTION_RELEASE_2026-10-08.md."

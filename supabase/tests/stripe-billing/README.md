@@ -52,10 +52,13 @@ test database. These are synthetic concurrency checks, not hosted acceptance.
 execution under rollback. The October 9 rehearsal passed 20 checks and cleanup
 counts were zero; the candidate remains unapplied. See the release audit.
 
-`node supabase/tests/stripe-billing/diagnose-checkout.mjs` is an explicit open-gap
-diagnostic, not a passing monetization gate. It confirms duplicate subscription
-sessions for already-paid workspaces and duplicate customers/sessions after
-failed binding writes. It uses synthetic boundaries and makes no charges.
+The original `diagnose-checkout.mjs` reproduced duplicate sessions/customers on
+PR #513. It is superseded by `checkoutHandler.test.ts`, which first reproduced
+both defects as failing assertions and now verifies the durable checkout flow.
+`verify-checkout.mjs` executes the separate checkout-intent migration under
+PGlite; `checkout-staging-acceptance.sql` verifies installed guards and audited
+erasure under rollback. The PostgreSQL runner also covers real overlapping
+checkout reservations, conflicting plans/sessions, revocation and deletion.
 
 **The exact reviewed migration must be applied and verified before deploying
 the matching `stripe-billing` handler.** Follow the repository's manual migration
@@ -67,5 +70,7 @@ Existing receipts remain authoritative for backward compatibility. This change
 does not automatically repair historical receipts written after a failed billing
 update; reconcile any affected subscriptions deliberately without bulk-deleting
 receipts. Distinct subscriptions created in the same second require review,
-and the existing new-checkout upgrade flow can still create overlapping paid
-subscriptions. Neither is resolved by guessing event order.
+and historical new-checkout upgrades may have created overlapping paid
+subscriptions. The durable checkout follow-up prevents new app requests from
+starting another subscription for existing subscribers; historical duplicates
+still require provider reconciliation. Never resolve either by guessing order.

@@ -170,7 +170,7 @@ describe('the real manifest', () => {
     expect(report.missingMigrations).toContain(version);
   });
 
-  it.each(['20261008071019', '20261008032524'])('requires billing/membership migration %s when its stamp is absent', (version) => {
+  it.each(['20261008071019', '20261008032524', '20261009125901'])('requires billing/membership migration %s when its stamp is absent', (version) => {
     const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
     expect(entry?.lifecycle).toBe('required');
     expect(entry?.evidence).toMatch(/2026-10-09/);

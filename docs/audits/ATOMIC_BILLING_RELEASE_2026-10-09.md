@@ -26,7 +26,7 @@ The storage backup workflow admits scheduled/manual runs from `main` only. The s
 
 ## Monetization blockers still open
 
-**This is not complete payment readiness.** `node supabase/tests/stripe-billing/diagnose-checkout.mjs` reproduces two unresolved behaviors using the actual entrypoint with synthetic boundaries:
+**This slice alone is not complete payment readiness.** The original `diagnose-checkout.mjs` at PR #513 reproduced two behaviors using the actual entrypoint with synthetic boundaries. Its executable replacement is the durable checkout regression suite described in `DURABLE_CHECKOUT_RELEASE_2026-10-09.md`:
 
 1. Two requests from an already-paid workspace create two new subscription Checkout Sessions, without an idempotency key or an existing-subscription gate.
 2. Concurrent requests without a bound customer create two customers and two sessions even when both workspace customer-binding writes return errors.
