@@ -129,7 +129,7 @@ export function createTelemetryPolicy(config: TelemetryPolicyConfig) {
       return JSON.stringify(cleaned).length <= 256 * 1_024 ? cleaned : null;
     } catch { return null; }
   }
-  function errorEvent(input: unknown) {
+  function errorEvent(input: unknown): (Event & { type: undefined }) | null {
     const cleaned = event(input, 'event');
     return cleaned ? { ...cleaned, type: undefined } : null;
   }
