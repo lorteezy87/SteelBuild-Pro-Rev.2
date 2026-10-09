@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import DrawingEvidenceReporter from '../../e2e/drawing-evidence-reporter';
+import DrawingEvidenceReporter from '../../e2e/drawing-evidence-reporter.js';
 
 const { write } = vi.hoisted(() => ({ write: vi.fn() }));
 vi.mock('node:fs', () => ({ mkdirSync: vi.fn(), writeFileSync: write }));

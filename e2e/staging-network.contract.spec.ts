@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
-import { APP_ORIGIN, installStagingNetworkGuard } from './stagingNetworkGuard';
-import { DrawingEvidenceTransport } from './drawingEvidenceTransport';
+import { APP_ORIGIN, installStagingNetworkGuard } from './stagingNetworkGuard.js';
+import { DrawingEvidenceTransport } from './drawingEvidenceTransport.js';
 
 async function listen(server: Server, port = 0): Promise<number> {
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });

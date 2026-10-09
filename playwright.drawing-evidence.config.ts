@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
-import authenticatedConfig from './playwright.config';
-import { DRAWING_STATE_PATH } from './e2e/drawingEvidenceTransport';
+import authenticatedConfig from './playwright.config.js';
+import { DRAWING_STATE_PATH } from './e2e/drawingEvidenceTransport.js';
 
 // Reuse real auth/project selection. This runner serves the reviewed build,
 // reads staging, and never provisions fixtures or authorizes project writes.

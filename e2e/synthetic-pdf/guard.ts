@@ -1,4 +1,4 @@
-import { ORG, PROJECT, STAGING, hash, revisionRecord, setRecord, sheetRecord, submittalRecord, syntheticPdf, workflowPatch, type Fixture } from './fixture';
+import { ORG, PROJECT, STAGING, hash, revisionRecord, setRecord, sheetRecord, submittalRecord, syntheticPdf, workflowPatch, type Fixture } from './fixture.js';
 
 const canonical = (value: unknown): string => JSON.stringify(value, (_key, node) => node && typeof node === 'object' && !Array.isArray(node)
   ? Object.fromEntries(Object.entries(node).sort(([a], [b]) => a.localeCompare(b))) : node);
@@ -69,11 +69,20 @@ export function allowsStorage(f: Fixture, raw: string, method: string, bytes?: U
     || (method === 'GET' && url.pathname === `/storage/v1/object/authenticated/app-files/${f.paths[revision]}`));
 }
 
-export { allowsStagingBrowserRequest as allowsBrowser, installStagingNetworkGuard as installBrowserGuard } from '../stagingNetworkGuard';
+export { allowsStagingBrowserRequest as allowsBrowser, installStagingNetworkGuard as installBrowserGuard } from '../stagingNetworkGuard.js';
 
 export class ScopedTransport {
   private requests = 0;
-  constructor(private fixture: Fixture | null, private key: string, private bearer?: string, private network: typeof fetch = fetch) {}
+  private fixture: Fixture | null;
+  private key: string;
+  private bearer?: string;
+  private network: typeof fetch;
+  constructor(fixture: Fixture | null, key: string, bearer?: string, network: typeof fetch = fetch) {
+    this.fixture = fixture;
+    this.key = key;
+    this.bearer = bearer;
+    this.network = network;
+  }
   async send(path: string, method = 'GET', body?: unknown, bytes?: Uint8Array): Promise<Response> {
     const url = `${STAGING}${path}`;
     if (++this.requests > 180 || !(bytes || path.startsWith('/storage/')

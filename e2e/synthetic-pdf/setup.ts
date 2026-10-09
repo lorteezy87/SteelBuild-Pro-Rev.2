@@ -1,9 +1,9 @@
 import { chromium, expect } from '@playwright/test';
 import { mkdirSync, rmSync } from 'node:fs';
-import { APP, ORG, PROJECT, STATE, assertPublicKey, assertRuntime, fixtureFor } from './fixture';
-import { ScopedTransport, installBrowserGuard } from './guard';
-import { validateDrawingSession } from '../drawingEvidenceTransport';
-import type { SyntheticSetupStage } from './reporter';
+import { APP, ORG, PROJECT, STATE, assertPublicKey, assertRuntime, fixtureFor } from './fixture.js';
+import { ScopedTransport, installBrowserGuard } from './guard.js';
+import { validateDrawingSession } from '../drawingEvidenceTransport.js';
+import type { SyntheticSetupStage } from './reporter.js';
 
 export default async function setup(): Promise<void> {
   let stage: SyntheticSetupStage = 'environment';

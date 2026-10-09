@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BrowserContext } from '@playwright/test';
-import { APP, PROJECT, STAGING, assertPublicKey, assertRuntime, fixtureFor, hash, revisionRecord, setRecord, sheetRecord, submittalRecord, syntheticPdf, workflowPatch } from '../../e2e/synthetic-pdf/fixture';
-import { allowsApi, allowsBrowser, allowsStorage, installBrowserGuard, ScopedTransport } from '../../e2e/synthetic-pdf/guard';
+import { APP, PROJECT, STAGING, assertPublicKey, assertRuntime, fixtureFor, hash, revisionRecord, setRecord, sheetRecord, submittalRecord, syntheticPdf, workflowPatch } from '../../e2e/synthetic-pdf/fixture.js';
+import { allowsApi, allowsBrowser, allowsStorage, installBrowserGuard, ScopedTransport } from '../../e2e/synthetic-pdf/guard.js';
 
 const f = fixtureFor('12345678', '1', new Date('2026-10-09T12:00:00Z'));
 const goodEnv = { GITHUB_ACTIONS: 'true', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', SYNTHETIC_PDF_ACCEPTANCE: 'reviewed-staging-only', E2E_TARGET: 'staging', E2E_SUPABASE_URL: STAGING, E2E_EXPECTED_SUPABASE_REF: 'ndyfjffsulfbwpmwdmic', E2E_BASE_URL: APP, ACCEPTANCE_CANDIDATE_SHA: 'a'.repeat(40), GITHUB_RUN_ID: '12345678', GITHUB_RUN_ATTEMPT: '1' };

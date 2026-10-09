@@ -1,8 +1,8 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { observeReadOnlyPage, visitRegister } from './acceptance';
-import { APP, PROJECT, ORG, STAGING, STATE, assertRuntime, fixtureFor, hash, syntheticPdf, setRecord, sheetRecord, submittalRecord, revisionRecord, workflowPatch, type Fixture } from './synthetic-pdf/fixture';
-import { installBrowserGuard, ScopedTransport } from './synthetic-pdf/guard';
+import { observeReadOnlyPage, visitRegister } from './acceptance.js';
+import { APP, PROJECT, ORG, STAGING, STATE, assertRuntime, fixtureFor, hash, syntheticPdf, setRecord, sheetRecord, submittalRecord, revisionRecord, workflowPatch, type Fixture } from './synthetic-pdf/fixture.js';
+import { installBrowserGuard, ScopedTransport } from './synthetic-pdf/guard.js';
 
 type Row = Record<string, unknown>;
 type Phase = 'preflight' | 'created' | 'submitted' | 'approved' | 'stale' | 'cleanup';

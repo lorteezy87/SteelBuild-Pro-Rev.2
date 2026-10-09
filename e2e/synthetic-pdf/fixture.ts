@@ -37,7 +37,7 @@ export function fixtureFor(runId: string, attempt: string, now = new Date()) {
 }
 export type Fixture = ReturnType<typeof fixtureFor>;
 
-export { assertStagingPublicKey as assertPublicKey } from '../drawingEvidenceTransport';
+export { assertStagingPublicKey as assertPublicKey } from '../drawingEvidenceTransport.js';
 
 export function assertRuntime(env: Record<string, string | undefined> = process.env): void {
   if (env.GITHUB_ACTIONS !== 'true' || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch'

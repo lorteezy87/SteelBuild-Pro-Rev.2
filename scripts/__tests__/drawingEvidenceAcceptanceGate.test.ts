@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import generalConfig from '../../playwright.config';
-import drawingConfig from '../../playwright.drawing-evidence.config';
+import generalConfig from '../../playwright.config.js';
+import drawingConfig from '../../playwright.drawing-evidence.config.js';
 
 interface Step { uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, string> }
 interface Job { if?: string; needs?: string; environment?: string; steps: Step[] }

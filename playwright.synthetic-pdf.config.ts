@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { APP, STATE } from './e2e/synthetic-pdf/fixture';
+import { APP, STATE } from './e2e/synthetic-pdf/fixture.js';
 
 export default defineConfig({
   testDir: './e2e', testMatch: 'synthetic-pdf-evidence.spec.ts',
