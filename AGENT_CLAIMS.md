@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-09 | codex-drawing-browser-diagnosis | Protected drawing browser setup diagnosis | e2e/drawing-evidence-{setup,reporter}.ts; e2e/staging-network.contract.spec.ts; e2e/stagingNetworkGuard.ts diagnostic categories only; scoped acceptance setup/reporter tests | Reproduce hosted browser-stage failure without credentials and add closed diagnostic substeps if needed; preserve request/WS policies, no hosted dispatch. |
+
 
 
 
