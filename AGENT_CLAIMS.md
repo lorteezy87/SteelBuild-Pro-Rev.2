@@ -30,7 +30,6 @@ Notes:
 
 ## Active claims
 
-| 2026-10-09 | codex-drawing-runner-isolation | Dedicated drawing acceptance discovery | playwright.config.ts; playwright.drawing-evidence.config.ts; scripts/__tests__/drawingEvidenceAcceptanceGate.test.ts | Exclude protected drawing evidence cases from general E2E discovery while preserving all four dedicated cases; no egress or hosted changes. |
 
 
 
