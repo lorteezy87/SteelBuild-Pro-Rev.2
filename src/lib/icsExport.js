@@ -179,11 +179,11 @@ export function buildIcs({ events = [], calendarName = "SteelBuild Pro" } = {}) 
  *
  * @param {object} opts  Same shape as buildIcs + `filename`.
  */
-export function downloadIcs({ filename = "schedule.ics", ...rest } = {}) {
+export function downloadIcs({ filename = "schedule.ics", isCurrent = undefined, ...rest } = {}) {
   const ics = buildIcs(rest);
   const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
   const exportFilename = filename.endsWith(".ics") ? filename : `${filename}.ics`;
-  return presentGeneratedFile({ blob, filename: exportFilename, title: "Calendar export" });
+  return presentGeneratedFile({ blob, filename: exportFilename, title: "Calendar export", isCurrent });
 }
 
 // ── Entity → event shape helpers ────────────────────────────────────────

@@ -43,9 +43,11 @@ import {
   presentRemoteFile,
   presentRemoteFiles,
 } from "@/lib/native/fileExport";
+import { setActiveOrgId } from '@/lib/activeOrg';
 
 describe("native file presentation", () => {
   beforeEach(() => {
+    setActiveOrgId('org-a');
     vi.clearAllMocks();
     isNativePlatform.mockReturnValue(false);
     writeFile.mockResolvedValue({ uri: "file:///cache/steelbuild-exports/report.csv" });
@@ -63,6 +65,41 @@ describe("native file presentation", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('does not share a generated file written after sign-out and re-entry', async () => {
+    isNativePlatform.mockReturnValue(true);
+    let resolveWrite!: (value: { uri: string }) => void;
+    writeFile.mockImplementationOnce(() => new Promise(resolve => { resolveWrite = resolve; }));
+    const pending = presentGeneratedFile({ blob: new Blob(['private']), filename: 'report.txt' });
+    await vi.waitFor(() => expect(writeFile).toHaveBeenCalledOnce());
+    setActiveOrgId(null); setActiveOrgId('org-a');
+    resolveWrite({ uri: 'file:///private' });
+    expect(await pending).toBe('cancelled');
+    expect(share).not.toHaveBeenCalled();
+    expect(deleteFile).toHaveBeenCalledOnce();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('stops a remote group before downloading its next file after an owner switch', async () => {
+    isNativePlatform.mockReturnValue(true);
+    let resolveDownload!: () => void;
+    downloadFile.mockImplementationOnce(() => new Promise<void>(resolve => { resolveDownload = resolve; }));
+    const pending = presentRemoteFiles({ files: [{ url: 'https://files.test/a', filename: 'a' }, { url: 'https://files.test/b', filename: 'b' }], title: 'Old project' });
+    await vi.waitFor(() => expect(downloadFile).toHaveBeenCalledOnce());
+    setActiveOrgId('org-b'); resolveDownload();
+    expect(await pending).toBe('cancelled');
+    expect(downloadFile).toHaveBeenCalledOnce();
+    expect(share).not.toHaveBeenCalled();
+    expect(deleteFile).toHaveBeenCalledOnce();
+    expect(rmdir).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a caller that became stale before file presentation began', async () => {
+    const result = await presentGeneratedFile({ blob: new Blob(['private']), filename: 'a', isCurrent: () => false });
+    expect(result).toBe('cancelled');
+    expect(share).not.toHaveBeenCalled();
+    expect(writeFile).not.toHaveBeenCalled();
   });
 
   it("preserves a Safari-compatible browser download outside the native shell", async () => {

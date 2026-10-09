@@ -23,7 +23,7 @@ describe("replayPhotoCreate", () => {
     const d = deps();
     await replayPhotoCreate(op, d);
 
-    expect(d.uploadFile).toHaveBeenCalledTimes(1);
+    expect(d.uploadFile).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p1" }));
     expect(d.createPhoto).toHaveBeenCalledWith(
       expect.objectContaining({ project_id: "p1", file_url: "https://cdn/x.jpg", client_op_id: "cid-1" }),
     );

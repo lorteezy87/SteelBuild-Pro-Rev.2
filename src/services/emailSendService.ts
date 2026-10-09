@@ -62,7 +62,7 @@ const EDGE_FN_PATH = "/functions/v1/email-send";
 /**
  * Send an email through the email-send Edge Function.
  */
-export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+export async function sendEmail(params: SendEmailParams, operationId: string = crypto.randomUUID()): Promise<SendEmailResult> {
   const parsed = sendEmailParamsSchema.safeParse(params);
   if (!parsed.success) {
     const detail = parsed.error.issues.map((i) => i.message).join("; ");
@@ -81,6 +81,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Idempotency-Key": operationId,
         "Authorization": `Bearer ${session.access_token}`,
       },
       body: JSON.stringify(parsed.data),
@@ -100,10 +101,10 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       message_id: data.message_id,
       provider_message_id: data.provider_message_id,
     };
-  } catch (err: any) {
+  } catch {
     return {
       success: false,
-      error: err?.message || "Network error sending email",
+      error: "Send outcome could not be confirmed. Retry this unchanged draft; do not start a new send until its outcome is reconciled.",
     };
   }
 }

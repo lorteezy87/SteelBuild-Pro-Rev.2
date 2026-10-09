@@ -72,7 +72,7 @@ describe("PhotoUpload orchestration", () => {
       }),
     ).resolves.toEqual({ errors: [] });
 
-    expect(uploadFile).toHaveBeenCalledWith({ file: compressed, workflow: "photo" });
+    expect(uploadFile).toHaveBeenCalledWith({ file: compressed, projectId: "project-1", workflow: "photo" });
     expect(createPhoto).toHaveBeenCalledWith({
       project_id: "project-1",
       category: "Progress",

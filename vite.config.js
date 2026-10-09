@@ -1,33 +1,14 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import path from 'path'
-import fs from 'node:fs'
 import { fileURLToPath } from 'url'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
+import { buildInfoPlugin } from './scripts/build-info'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// web-ifc's .wasm MUST match the installed web-ifc JS version, or the IFC viewer
-// silently renders zero geometry. Copy the wasm straight from node_modules into
-// the served /wasm/ path on every build/dev start so the two can never drift
-// (the 3D viewer calls IfcAPI.SetWasmPath('/wasm/')). public/wasm is gitignored
-// — it's a generated artifact, never committed. Runs regardless of how vite is
-// invoked (buildStart fires for `vite build` and `vite` dev alike).
-function copyWebIfcWasm() {
-  return {
-    name: 'copy-web-ifc-wasm',
-    buildStart() {
-      try {
-        const src = path.resolve(__dirname, 'node_modules/web-ifc/web-ifc.wasm')
-        const destDir = path.resolve(__dirname, 'public/wasm')
-        fs.mkdirSync(destDir, { recursive: true })
-        fs.copyFileSync(src, path.join(destDir, 'web-ifc.wasm'))
-      } catch (e) {
-        this.warn?.('[web-ifc] wasm copy failed (3D viewer will not load): ' + e.message)
-      }
-    },
-  }
-}
+// ifcEngine imports the installed WASM with ?url; Vite emits content-addressed
+// bytes beside the matching loader. Do not recreate the old public/wasm copy.
 
 // Sentry source-map upload runs ONLY when SENTRY_AUTH_TOKEN is present (set as
 // a repo secret and passed to the deploy job in .github/workflows/ci.yml).
@@ -134,8 +115,8 @@ export default defineConfig({
     },
   },
   plugins: [
+    buildInfoPlugin(),
     react(),
-    copyWebIfcWasm(),
     // Must be LAST so it sees the final emitted bundle + source maps. Gated on
     // the auth token; uploads are best-effort (errorHandler swallows failures)
     // so a misconfigured token/slug can never fail a production deploy.

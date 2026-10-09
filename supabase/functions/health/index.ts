@@ -1,63 +1,46 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// health — Supabase Edge Function (H7)
-//
-// Unauthenticated liveness/readiness probe for uptime monitoring. Returns 200
-// with { status:"ok", db:"ok" } when the API can reach Postgres, or 503
-// { status:"degraded", db:"down" } when it cannot. No project data is returned
-// (a head-only query is used purely to confirm reachability), so the endpoint is
-// safe to expose to an external monitor (Better Stack / Pingdom / UptimeRobot).
-//
-// Public, data-free endpoint. It uses the shared CORS policy so an explicit
-// staging allowlist is enforced consistently with authenticated functions.
-//
-// Auth: none (deploy with --no-verify-jwt). Method: GET or HEAD.
-// Secrets used: SUPABASE_URL + SUPABASE_ANON_KEY (already in the runtime).
-//
-// Deploy:
-//   npx supabase functions deploy health --project-ref kjrwqagyeswwoxpjkcko --no-verify-jwt
-// ─────────────────────────────────────────────────────────────────────────────
-
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@^2.47";
+// Public data-free liveness (?mode=live) and bounded default readiness.
+// Short per-isolate caching is not a global rate limiter; configure probe throttling separately.
+import "jsr:@supabase/functions-js@2.117.2/edge-runtime.d.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders(req, "GET, HEAD, OPTIONS") });
-  }
+type DatabaseStatus = "ok" | "down" | "unconfigured";
+let cached: { db: DatabaseStatus; expiresAt: number } | null = null;
+let pending: Promise<DatabaseStatus> | null = null;
 
-  const started = Date.now();
-  let db: "ok" | "down" | "unconfigured" = "unconfigured";
-
-  try {
+async function databaseReadiness(): Promise<DatabaseStatus> {
+  if (cached && cached.expiresAt > Date.now()) return cached.db;
+  if (pending) return pending;
+  pending = (async () => {
+    let db: DatabaseStatus = "unconfigured";
     const url = Deno.env.get("SUPABASE_URL");
-    // Service role for a pure liveness head-query: it must not depend on anon
-    // table grants/RLS (a probe should test reachability, not authorization).
-    // head:true returns NO rows, so no project data is ever exposed.
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
     if (url && key) {
-      const sb = createClient(url, key, { auth: { persistSession: false } });
-      const { error } = await sb.from("feature_flags").select("id", { head: true }).limit(1);
-      db = error ? "down" : "ok";
+      try {
+        // HEAD returns no rows. One total deadline, no provider retries.
+        const response = await fetch(`${url}/rest/v1/feature_flags?select=id&limit=1`, {
+          method: "HEAD", redirect: "error", signal: AbortSignal.timeout(3_000),
+          headers: { apikey: key, Authorization: `Bearer ${key}` },
+        });
+        db = response.ok ? "ok" : "down";
+      } catch { db = "down"; }
     }
-  } catch {
-    db = "down";
+    cached = { db, expiresAt: Date.now() + (db === "ok" ? 5_000 : 2_000) };
+    return db;
+  })();
+  try { return await pending; } finally { pending = null; }
+}
+
+Deno.serve(async req => {
+  const headers = { ...corsHeaders(req, "GET, HEAD, OPTIONS"), "content-type": "application/json", "cache-control": "no-store" };
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: { ...headers, Allow: "GET, HEAD, OPTIONS" } });
   }
-
-  const ok = db === "ok";
-  const body = {
-    status: ok ? "ok" : "degraded",
-    db,
-    latency_ms: Date.now() - started,
-    time: new Date().toISOString(),
-  };
-
-  return new Response(JSON.stringify(body), {
-    status: ok ? 200 : 503,
-    headers: {
-      ...corsHeaders(req, "GET, HEAD, OPTIONS"),
-      "content-type": "application/json",
-      "cache-control": "no-store",
-    },
-  });
+  const started = Date.now();
+  if (new URL(req.url).searchParams.get("mode") === "live") {
+    return new Response(req.method === "HEAD" ? null : JSON.stringify({ status: "ok", db: "not_checked" }), { headers });
+  }
+  const db = await databaseReadiness();
+  const body = { status: db === "ok" ? "ok" : "degraded", db, latency_ms: Date.now() - started, time: new Date().toISOString() };
+  return new Response(req.method === "HEAD" ? null : JSON.stringify(body), { status: db === "ok" ? 200 : 503, headers });
 });

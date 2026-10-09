@@ -7,7 +7,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
-import { getActiveOrgId } from '@/lib/activeOrg';
+import { getActiveOrgId, getActiveOrgGeneration } from '@/lib/activeOrg';
 import { assertUploadAllowed, sanitizeFilename } from '@/lib/uploadValidation';
 import { quotaExceededUserMessage, remapQuotaError } from '@/lib/quotaExceeded';
 import { isTransientNetworkError, withTransientRetry } from '@/lib/transientRetry';
@@ -31,10 +31,9 @@ function isAlreadyExistsError(err: unknown): boolean {
 /**
  * Upload a file to Supabase Storage (private bucket).
  * Returns { file_url, file_name, path }
- * file_url is a signed URL valid for 1 hour. For long-term storage,
- * persist `path` to the database and call getSignedUrl(path) on demand.
+ * file_url and path are durable storage paths; sign them on demand.
  */
-export const UploadFile = async ({ file, workflow, assertActive = () => {}, client = supabase }: UploadFileArgs): Promise<UploadFileResult> => {
+export const UploadFile = async ({ file, projectId, scope = 'project', userId, workflow, assertActive = () => {}, client = supabase }: UploadFileArgs): Promise<UploadFileResult> => {
   if (!file) throw new Error('No file provided');
   // Fail-closed content/size guard (#21). With a `workflow` this enforces the
   // tighter per-workflow allowlist; without one the `default` backstop still
@@ -44,23 +43,36 @@ export const UploadFile = async ({ file, workflow, assertActive = () => {}, clie
   // chokepoint, so every upload path is covered.
   assertUploadAllowed(file, workflow ?? 'default');
   const ext = (file.name.split('.').pop() || '').toLowerCase();
-  // Org-scoped path so storage RLS isolates tenants (`<org_id>/uploads/...`),
-  // read from the org context that OrgProvider publishes. FAIL CLOSED: refuse
-  // a NEW upload rather than writing to the grandfathered flat `uploads/...`
-  // namespace if the org isn't resolved yet — a flat-path write creates
-  // tenant-boundary ambiguity in a multi-tenant workspace. Legacy flat-path
-  // files stay READABLE via getSignedUrl/resolveFileUrl; only new writes
-  // require org scope. orgId is published by OrgProvider once the workspace
-  // resolves, so this only trips during the brief sign-in/load window.
+  // Scope is explicit, never inferred from a selected or default project.
+  // Storage RLS independently validates this path against current DB roles.
   const orgId = getActiveOrgId();
+  const orgGeneration = getActiveOrgGeneration();
   if (!orgId) {
     throw new Error('Workspace is still loading — please try again in a moment.');
   }
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orgId)) {
+  const isUuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  if (!isUuid(orgId)) {
     throw new Error('Unable to resolve a valid workspace context for upload.');
   }
-  const dir = `${orgId}/uploads`;
-  const path = `${dir}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  let dir: string;
+  if (scope === 'project') {
+    if (!isUuid(projectId)) throw new Error('Select a valid project before uploading.');
+    dir = `${orgId}/projects/${projectId}/uploads`;
+  } else if (scope === 'avatar') {
+    if (!isUuid(userId)) throw new Error('A valid avatar owner is required.');
+    dir = `${orgId}/users/${userId}/avatars`;
+  } else if (scope === 'organization') {
+    dir = `${orgId}/organization/uploads`;
+  } else {
+    throw new Error('Invalid file scope.');
+  }
+  const path = `${dir}/${crypto.randomUUID()}.${ext}`;
+  const assertUploadContext = () => {
+    assertActive();
+    if (getActiveOrgId() !== orgId || getActiveOrgGeneration() !== orgGeneration) {
+      throw new Error('Workspace changed during upload. Please try again.');
+    }
+  };
 
   // Browsers report application/octet-stream for many construction file types.
   // Map extensions → proper MIME types so Supabase storage accepts them.
@@ -125,11 +137,11 @@ export const UploadFile = async ({ file, workflow, assertActive = () => {}, clie
     async (attempt) => {
       // A reconnect retry may outlive the outbox identity that supplied the
       // blob. Check again after backoff before the singleton client reads auth.
-      assertActive();
+      assertUploadContext();
       const res = await client.storage
         .from('app-files')
         .upload(path, file, { contentType, upsert: false });
-      assertActive();
+      assertUploadContext();
       if (res.error) {
         if (attempt > 1 && isAlreadyExistsError(res.error)) return { path };
         remapQuotaError(res.error);

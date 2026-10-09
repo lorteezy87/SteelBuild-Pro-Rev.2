@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { escapeCsvCell as csvCell } from "@/lib/csv";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
 import {
   isMissingSchemaObjectError,
@@ -164,9 +165,9 @@ export function buildModelGuidCsv(
     if (row.is_deleted) continue;
     const guid = String(row.element_guid ?? "").trim();
     if (!guid) continue;
-    const mark = String(row.piece_mark ?? "").replace(/"/g, '""');
+    const mark = String(row.piece_mark ?? "");
     const pieceId = row.piece_id ? String(row.piece_id) : "";
-    const fab = String(row.fab_status ?? "").replace(/"/g, '""');
+    const fab = String(row.fab_status ?? "");
     const linked = row.piece_id ? "yes" : "no";
     lines.push(
       [
@@ -180,11 +181,6 @@ export function buildModelGuidCsv(
   }
 
   return lines.join("\n");
-}
-
-function csvCell(value: string): string {
-  if (/[",\n]/.test(value)) return `"${value}"`;
-  return value;
 }
 
 /** Trigger a browser download of the GUID CSV. */

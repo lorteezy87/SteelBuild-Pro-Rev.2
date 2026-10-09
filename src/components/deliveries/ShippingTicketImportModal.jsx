@@ -89,12 +89,11 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
-        const uploaded = await uploadShippingTicket(file);
-        const parsed = await extractShippingTicket(uploaded);
+        const parsed = await extractShippingTicket({ file, project_id: projectId });
         const match = await resolveProjectForTicket(parsed.header?.job_number);
         results.push({
           file,
-          uploaded,
+          uploaded: null,
           parsed,
           matchedProject: match || null,
           chosenProjectId: match?.id || projectId || null,
@@ -148,14 +147,16 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
     for (const ticket of committable) {
       try {
         const project = projects.find(p => p.id === ticket.chosenProjectId);
+        // The reviewed project owns the file; AI's job-number guess does not.
+        const uploaded = await uploadShippingTicket(ticket.file, ticket.chosenProjectId);
         await commitShippingTicket({
           header: ticket.parsed.header,
           items:  ticket.parsed.items,
           projectId:   ticket.chosenProjectId,
           projectName: project?.name || projectName || null,
-          file_url:     ticket.uploaded.file_url,
-          storage_path: ticket.uploaded.storage_path,
-          file_name:    ticket.uploaded.file_name,
+          file_url:     uploaded.file_url,
+          storage_path: uploaded.storage_path,
+          file_name:    uploaded.file_name,
         });
         successCount++;
       } catch (e) {

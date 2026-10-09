@@ -252,6 +252,7 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
           )}
 
           <PhotoStripUploader
+            projectId={formData.project_id || projectId}
             label="Photos"
             value={formData.photos}
             onChange={(v) => setFormData({ ...formData, photos: v })}

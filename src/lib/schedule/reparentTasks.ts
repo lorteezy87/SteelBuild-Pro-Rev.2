@@ -1,4 +1,5 @@
 import { entities } from "@/api/supabaseClient";
+import { captureExportOwner } from '@/lib/exportOwner';
 import { logActivity } from "@/services/auditLogger";
 import { wouldCreateCycle, computeSiblingSortOrder, type HierarchyTask } from "./hierarchy";
 
@@ -9,6 +10,7 @@ export interface ReparentTask extends HierarchyTask {
 }
 
 export interface ReparentOptions {
+  assertCurrent?: () => void;
   tasks?: ReparentTask[];
   dropIndex?: number | null;
   projectId?: string | null;
@@ -31,6 +33,8 @@ export async function reparentTasks(
   opts: ReparentOptions = {},
 ): Promise<void> {
   const { tasks = [], dropIndex = null, projectId = null, projectName = null } = opts;
+  const isCurrent = captureExportOwner();
+  const assertCurrent = () => { if (!isCurrent()) throw new Error('Workspace changed. Reopen this operation.'); opts.assertCurrent?.(); };
   const ids = (Array.isArray(taskIds) ? taskIds : []).filter((id): id is string => !!id);
   if (!ids.length) return;
 
@@ -48,10 +52,12 @@ export async function reparentTasks(
   let order = computeSiblingSortOrder(tasks, newParentId, dropIndex);
   for (const id of ids) {
     const before = byId.get(id);
+    assertCurrent();
     await entities.ScheduleTask.update(id, {
       parent_task_id: newParentId,
       sort_order: order,
     });
+    assertCurrent();
     void logActivity("schedule_task", "updated", before || { id }, {
       projectId: projectId || before?.project_id || null,
       projectName,

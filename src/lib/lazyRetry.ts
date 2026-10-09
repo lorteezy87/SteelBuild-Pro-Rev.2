@@ -45,6 +45,7 @@ export function isStaleChunkError(err: unknown): boolean {
   const msg = e.message || "";
   return (
     /Failed to fetch dynamically imported module/i.test(msg) ||
+    /error loading dynamically imported module/i.test(msg) ||
     /Importing a module script failed/i.test(msg) ||
     /Loading chunk [\w-]+ failed/i.test(msg) ||
     /Loading CSS chunk [\w-]+ failed/i.test(msg)

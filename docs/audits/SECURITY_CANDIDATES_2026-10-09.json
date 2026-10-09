@@ -1,0 +1,69 @@
+{
+  "recordedDate": "2026-10-09",
+  "sourceBase": "997b7f6b6bd774e1f7741702e4ee04c7de224924",
+  "status": "source_candidates_not_applied",
+  "encoding": "UTF-8 without BOM; LF newlines matching repository attributes",
+  "releaseContract": "Review, manually apply exact SQL, and stamp the matching filename version and payload. These hashes are source evidence, not hosted deployment proof. Earlier prerequisite candidates remain separately required in the ownership manifest.",
+  "candidates": [
+    {
+      "file": "supabase/migrations/20261008201934_enforce_authoritative_project_creation_caps.sql",
+      "version": "20261008201934",
+      "sha256": "a02d9913023b770134449997a27428880f50a459b0d59bc18258f53cc59ae916",
+      "bytes": 6230
+    },
+    {
+      "file": "supabase/migrations/20261008201944_bind_submittal_event_provenance.sql",
+      "version": "20261008201944",
+      "sha256": "4d974ca610b92e432698d0373a8f4f4ea2bb344a36940df40f41baeff50c604c",
+      "bytes": 2165
+    },
+    {
+      "file": "supabase/migrations/20261008201945_private_email_credentials_and_verified_mailboxes.sql",
+      "version": "20261008201945",
+      "sha256": "eb8a57272066e1eb20fe3089ace779d29f500bcfac12f6a5e49aa7ceb77fecfe",
+      "bytes": 9725
+    },
+    {
+      "file": "supabase/migrations/20261008234107_app_files_project_authorization.sql",
+      "version": "20261008234107",
+      "sha256": "d7a0450e14405a78719446f090e49e3d633e9f90ca64fcd204f342453ee924bb",
+      "bytes": 6534
+    },
+    {
+      "file": "supabase/migrations/20261008234249_enforce_app_files_project_authorization.sql",
+      "version": "20261008234249",
+      "sha256": "f73f30e26f680d0a84aa443eb9bd2f2816bdcdb322f53755e9d91a855113a4b2",
+      "bytes": 4340
+    },
+    {
+      "file": "supabase/migrations/20261008235532_private_atomic_edge_operation_quotas.sql",
+      "version": "20261008235532",
+      "sha256": "2395093860c62a1c0a0e3313a891849634a34bff525e8aaea176c158d003eacf",
+      "bytes": 9448
+    },
+    {
+      "file": "supabase/migrations/20261009001532_protect_feature_flag_override_projection.sql",
+      "version": "20261009001532",
+      "sha256": "02a05b5e7e887f13fbfd923e5567c6f8dc4c5bfe230f1832bb684ce45bb52ede",
+      "bytes": 4129
+    },
+    {
+      "file": "supabase/migrations/20261009001555_restrict_sequence_allocation_to_writers.sql",
+      "version": "20261009001555",
+      "sha256": "f287c54f8d37b26ffd074d1e3397ce54eab3ee33925d8948333e768779bd5735",
+      "bytes": 4598
+    },
+    {
+      "file": "supabase/migrations/20261009003246_require_active_project_for_piece_edits.sql",
+      "version": "20261009003246",
+      "sha256": "9caf35c8a66540624062bbc246520537b14c11f660c5c368e9e2f228d05a0f55",
+      "bytes": 103796
+    },
+    {
+      "file": "supabase/migrations/20261009221740_retire_desktop_companion_handoff.sql",
+      "version": "20261009221740",
+      "sha256": "cabc653d795cc0f73450d7dfe4a3f051013c305e55944a22b8c2b885e7f06441",
+      "bytes": 560
+    }
+  ]
+}

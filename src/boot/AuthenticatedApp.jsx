@@ -6,7 +6,7 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import { OutboxProvider } from "@/lib/field/OutboxContext";
 
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
-const DesktopConnectSignIn = lazyWithRetry(() => import("@/pages/DesktopConnectSignIn"));
+const DesktopConnect = lazyWithRetry(() => import("@/pages/DesktopConnect"));
 const UpdatePassword = lazyWithRetry(() => import("@/pages/UpdatePassword"));
 const MfaChallenge = lazyWithRetry(() => import("@/pages/MfaChallenge"));
 const AppRoutes = lazyWithRetry(() => import("@/boot/AppRoutes"));
@@ -108,7 +108,7 @@ export default function AuthenticatedApp() {
 
   // Supabase requires AAL2 to change an enrolled user's password. Recovery
   // stays held through that challenge, then through confirmed sign-out; it
-  // must never mount org/project providers or desktop handoff in between.
+  // must never mount org/project providers in between.
   if (isPasswordRecovery) {
     return (
       <Suspense fallback={<AppLoader />}>
@@ -117,21 +117,12 @@ export default function AuthenticatedApp() {
     );
   }
 
+  // Retained only as an inert retirement page; never prompt for desktop credentials.
+  if (onDesktopConnect) {
+    return <Suspense fallback={<AppLoader />}><DesktopConnect /></Suspense>;
+  }
+
   if (!isAuthenticated) {
-    // Desktop Connect opens the system browser, which often has no session even
-    // when the user is signed in elsewhere. Show a focused gate instead of the
-    // marketing Landing page so the handoff query string stays obvious.
-    if (onDesktopConnect) {
-      return (
-        <Suspense fallback={<AppLoader />}>
-          <DesktopConnectSignIn
-            onLogin={loginWithPassword}
-            isSubmitting={isLoggingIn}
-            loginError={loginError}
-          />
-        </Suspense>
-      );
-    }
     return (
       <Suspense fallback={<AppLoader />}>
         <Landing
@@ -145,15 +136,6 @@ export default function AuthenticatedApp() {
     );
   }
 
-  // Desktop handoff only needs a browser session — skip org/project bootstrap
-  // so a successful sign-in lands on /DesktopConnect immediately.
-  if (onDesktopConnect) {
-    return (
-      <Suspense fallback={<AppLoader />}>
-        <AppRoutes />
-      </Suspense>
-    );
-  }
 
   return (
     <OrgProvider>

@@ -7,6 +7,7 @@ import { RFI_NUMBER_PATTERN, DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } 
 import { isRfiClosed } from "@/lib/entityPredicates";
 import { localToday } from "@/utils/dates";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { escapeCsvCell } from "@/lib/csv";
 
 export const extractRfiSequence = (value) => {
   if (!value) return null;
@@ -180,11 +181,11 @@ export const exportRFIsToCSV = (rows, filename = "rfi-log.csv") => {
     r.cost_impact_amount || "",
     r.schedule_impact ? "Yes" : "No",
     r.schedule_impact_days || "",
-    (r.question || "").replace(/,/g, ";"),
-    (r.answer || "").replace(/,/g, ";"),
+    r.question || "",
+    r.answer || "",
   ]);
   const csv = [headers, ...data]
-    .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .map((row) => row.map(escapeCsvCell).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   void presentGeneratedFile({ blob, filename, title: "RFI export" });

@@ -25,11 +25,26 @@
  * Bump CACHE_VERSION whenever the caching STRATEGY changes (not per app
  * release — releases are handled by the network-first + hashed-asset rules).
  */
-const CACHE_VERSION = "sbp-shell-v1";
+const CACHE_VERSION = "sbp-shell-v2";
 const SHELL_URL = "/index.html";
 // Best-effort precache so the very first offline boot has a shell even if the
 // user never triggered a same-origin navigation while online.
-const PRECACHE_URLS = [SHELL_URL, "/", "/manifest.json", "/favicon.svg", "/icon-maskable.svg", "/steelbuild-pro-mark.svg"];
+const PRECACHE_URLS = [SHELL_URL, "/manifest.json", "/favicon.svg", "/icon-maskable.svg", "/steelbuild-pro-mark.svg"];
+
+async function isAppShell(response) {
+  if (!response || response.status !== 200 || response.type !== "basic" || response.redirected ||
+      !/^text\/html(?:;|$)/i.test(response.headers.get("content-type") || "") ||
+      response.headers.get("cf-mitigated") === "challenge") return false;
+  return (await response.clone().text()).includes('<meta name="steelbuild-app-shell" content="v1">');
+}
+
+async function offlineShell() {
+  const cache = await caches.open(CACHE_VERSION);
+  const cached = await cache.match(SHELL_URL);
+  return await isAppShell(cached) ? cached : new Response("SteelBuild Pro is unavailable offline. Reconnect and try again.", {
+    status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -37,7 +52,12 @@ self.addEventListener("install", (event) => {
       .open(CACHE_VERSION)
       // allSettled: a single 404 (e.g. an icon renamed later) must not abort
       // the whole install and leave users with no SW at all.
-      .then((cache) => Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url))))
+      .then((cache) => Promise.allSettled(PRECACHE_URLS.map(async (url) => {
+        const response = await fetch(url, { cache: "no-store" });
+        if (url === SHELL_URL ? await isAppShell(response) : response.status === 200 && response.type === "basic" && !response.redirected) {
+          await cache.put(url, response);
+        }
+      })))
       .then(() => self.skipWaiting()),
   );
 });
@@ -46,7 +66,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("sbp-shell-") && k !== CACHE_VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -77,14 +97,25 @@ self.addEventListener("fetch", (event) => {
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
-        .then((res) => {
+        .then(async (res) => {
           // Stash the freshest shell HTML under a stable key for offline boot.
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(SHELL_URL, copy)).catch(() => {});
+          if (await isAppShell(res)) {
+            try {
+              const cache = await caches.open(CACHE_VERSION);
+              await cache.put(SHELL_URL, res.clone());
+            } catch { /* A cache failure must not discard a valid online response. */ }
+          }
           return res;
         })
-        .catch(() => caches.match(SHELL_URL).then((cached) => cached || caches.match("/"))),
+        .catch(() => offlineShell()),
     );
+    return;
+  }
+
+  // Historical unversioned WASM must never win over a newly deployed loader.
+  // Current IFC loaders request hashed /assets/ URLs, which stay immutable.
+  if (/\.wasm$/i.test(url.pathname) && !url.pathname.startsWith("/assets/")) {
+    event.respondWith(fetch(req, { cache: "no-store" }));
     return;
   }
 

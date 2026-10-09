@@ -60,7 +60,7 @@ export const functions = {
       case 'invokeLLM':
       case 'anthropicProxy': {
         try {
-          const { data, error } = await supabase.functions.invoke('llm-proxy', { body: params });
+          const { data, error } = await supabase.functions.invoke('llm-proxy', { body: params, headers: { 'Idempotency-Key': crypto.randomUUID() } });
           if (error) throw error;
           return { data };
         } catch (err: unknown) {

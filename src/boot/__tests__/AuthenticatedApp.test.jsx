@@ -20,7 +20,7 @@ vi.mock("@/components/shared/OrgContext", () => ({
 }));
 vi.mock("@/boot/AppLoader", () => ({ default: () => <div>LOADER</div> }));
 vi.mock("@/pages/Landing", () => ({ default: () => <div>LANDING</div> }));
-vi.mock("@/pages/DesktopConnectSignIn", () => ({ default: () => <div>DESKTOP_CONNECT_SIGNIN</div> }));
+vi.mock("@/pages/DesktopConnect", () => ({ default: () => <div>DESKTOP_DISCONTINUED</div> }));
 vi.mock("@/pages/UpdatePassword", () => ({ default: () => <div>UPDATE_PW</div> }));
 vi.mock("@/pages/MfaChallenge", () => ({ default: () => <div>MFA_CHALLENGE</div> }));
 vi.mock("@/boot/AppRoutes", () => ({ default: () => <div>APP_ROUTES</div> }));
@@ -67,7 +67,7 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     expect(await screen.findByText("LANDING")).toBeInTheDocument();
   });
 
-  it("shows a focused desktop connect sign-in on /DesktopConnect when there is no session", async () => {
+  it("shows the retirement page on /DesktopConnect when there is no session", async () => {
     window.history.pushState({}, "", "/DesktopConnect?state=abc");
     authState = {
       ...authed,
@@ -75,11 +75,11 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
       authError: { type: "auth_required", message: "Authentication required" },
     };
     render(<AuthenticatedApp />);
-    expect(await screen.findByText("DESKTOP_CONNECT_SIGNIN")).toBeInTheDocument();
+    expect(await screen.findByText("DESKTOP_DISCONTINUED")).toBeInTheDocument();
     expect(screen.queryByText("LANDING")).not.toBeInTheDocument();
   });
 
-  it("keeps the desktop connect sign-in mounted while credentials are submitting", async () => {
+  it("does not ask for desktop credentials during an existing login", async () => {
     window.history.pushState({}, "", "/DesktopConnect?state=abc");
     authState = {
       ...authed,
@@ -88,15 +88,15 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
       authError: { type: "auth_required", message: "Authentication required" },
     };
     render(<AuthenticatedApp />);
-    expect(await screen.findByText("DESKTOP_CONNECT_SIGNIN")).toBeInTheDocument();
+    expect(await screen.findByText("DESKTOP_DISCONTINUED")).toBeInTheDocument();
     expect(screen.queryByText("LOADER")).not.toBeInTheDocument();
   });
 
-  it("routes authenticated /DesktopConnect users directly to app routes", async () => {
+  it("shows the retirement page for authenticated /DesktopConnect users", async () => {
     window.history.pushState({}, "", "/DesktopConnect?state=abc");
     authState = { ...authed, isAuthenticated: true, authError: null };
     render(<AuthenticatedApp />);
-    expect(await screen.findByText("APP_ROUTES")).toBeInTheDocument();
+    expect(await screen.findByText("DESKTOP_DISCONTINUED")).toBeInTheDocument();
     expect(screen.queryByText("LOADER")).not.toBeInTheDocument();
     expect(screen.queryByText("ONBOARDING")).not.toBeInTheDocument();
   });

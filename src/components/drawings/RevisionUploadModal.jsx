@@ -90,7 +90,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setStep("processing");
       setProcessingMsg("Uploading PDF...");
       setProcessingPct(10);
-      const res = await integrations.Core.UploadFile({ file: pdfFile, workflow: "drawings" });
+      const res = await integrations.Core.UploadFile({ file: pdfFile, projectId: activeProject?.id, workflow: "drawings" });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
       setExtraction({ setMeta: null, scanned: false });

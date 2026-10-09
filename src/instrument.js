@@ -3,22 +3,27 @@
  *
  * Imported as the FIRST statement in main.jsx so the SDK is active before any
  * application code runs (per the Sentry React SDK guide). Wires error capture,
- * performance tracing, and session replay (fully masked).
+ * performance tracing with an allowlisted telemetry payload.
  *
- * DSN resolution: the VITE_SENTRY_DSN env var wins (set it in the Vercel
- * project env to rotate/override); the project DSN below is a safe public
+ * DSN resolution: the VITE_SENTRY_DSN build env var wins (set it in the
+ * publishing environment to rotate/override); the project DSN below is a safe public
  * fallback so monitoring works out of the box. A Sentry DSN is a write-only
  * ingest key designed to ship in the browser bundle — it is NOT a secret.
  *
- * Privacy: replayIntegration runs with maskAllText + blockAllMedia, so session
- * replays show layout/interactions but never readable project/financial
- * content. Sampling is production-tuned (10% traces, 10% sessions, 100% of
- * error sessions).
+ * Replay is disabled: DOM masking does not remove callback URLs or signed
+ * attachment links from recording metadata. Re-enabling it requires separate
+ * recording/envelope sanitization and synthetic-secret acceptance tests.
  *
  * Follow-up (optional, needs a SENTRY_AUTH_TOKEN build secret): add
  * @sentry/vite-plugin to upload source maps for readable stack traces.
  */
 import * as Sentry from "@sentry/react";
+import { rejectImplicitAuthCallback } from "@/lib/authCallbackPolicy";
+
+// Reject bearer callbacks before monitoring can observe the browser location.
+rejectImplicitAuthCallback();
+
+import { sanitizeBreadcrumb, sanitizeTelemetryEvent, sanitizeTelemetrySpan, telemetryPrivacyIntegration } from './lib/telemetryPrivacy';
 
 const DSN =
   import.meta.env.VITE_SENTRY_DSN ||
@@ -27,16 +32,14 @@ const DSN =
 if (DSN) {
   Sentry.init({
     dsn: DSN,
-    environment: import.meta.env.MODE,
+    environment: import.meta.env.VITE_DEPLOY_ENV || import.meta.env.MODE,
     release: import.meta.env.VITE_APP_VERSION || undefined,
     // PII off: don't auto-attach IP address / user identifiers / request headers.
-    // Session replay is already masked (below); if richer triage is ever needed,
-    // attach only minimal scrubbed identifiers explicitly (e.g. hashed user id,
-    // org id) via Sentry.setUser — never email / financial / document data.
     sendDefaultPii: false,
-    integrations: [
-      Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
+    integrations: defaults => [
+      telemetryPrivacyIntegration(),
+      ...defaults.filter(integration => integration.name !== 'BrowserSession'),
+      Sentry.browserTracingIntegration({ enableInp: false }),
     ],
     tracesSampleRate: 0.1,
     // Trace-propagation adds `sentry-trace` + `baggage` request headers to
@@ -53,39 +56,19 @@ if (DSN) {
       "localhost",
       /^https:\/\/(www\.)?steelbuild-pro\.com/,
     ],
-    replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
-    enableLogs: true,
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: 0,
+    enableLogs: false,
     // Scrub sensitive data before anything leaves the browser (M15). Query
     // strings can carry projectId / redirect targets / tokens, and Postgres
     // unique-violation messages echo the conflicting ROW VALUES ("Key
     // (project_id, name)=(<uuid>, <name>) already exists") — both are stripped
     // here so they never reach Sentry.
-    beforeSend(event) {
-      // Drop the query string from the request URL.
-      if (event.request?.url) {
-        event.request.url = event.request.url.split("?")[0];
-      }
-      // Redact row values embedded in Postgres unique-violation messages.
-      if (event.exception?.values) {
-        for (const v of event.exception.values) {
-          if (typeof v.value === "string") {
-            v.value = v.value.replace(/Key \(.+?\)=\(.+?\)/g, "Key (…)=(…)");
-          }
-        }
-      }
-      return event;
-    },
-    // Strip query strings from fetch/xhr breadcrumbs for the same reason.
-    beforeBreadcrumb(breadcrumb) {
-      if (
-        (breadcrumb.category === "fetch" || breadcrumb.category === "xhr") &&
-        typeof breadcrumb.data?.url === "string"
-      ) {
-        breadcrumb.data.url = breadcrumb.data.url.split("?")[0];
-      }
-      return breadcrumb;
-    },
+    beforeSend: sanitizeTelemetryEvent,
+    beforeBreadcrumb: sanitizeBreadcrumb,
+    beforeSendTransaction: sanitizeTelemetryEvent,
+    // Standalone spans are sent through a different envelope than transactions.
+    beforeSendSpan: sanitizeTelemetrySpan,
   });
 }
 

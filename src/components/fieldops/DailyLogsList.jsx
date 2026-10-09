@@ -1,3 +1,4 @@
+import ResolvedPhotoLink from "@/components/shared/ResolvedPhotoLink";
 import React, { useState, useMemo, useId } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
@@ -404,42 +405,7 @@ export default function DailyLogsList({ logs = [], onEdit = null, onDelete = nul
                 >
                   <div style={sectionLabelStyle}>Photos ({photos.length})</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {photos.map((p, idx) => {
-                      const url = p.file_url || p.path || p.url || "";
-                      return (
-                        <a
-                          key={idx}
-                          href={url || undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={p.name || `photo-${idx}`}
-                          style={{
-                            display: "block",
-                            width: 80,
-                            height: 80,
-                            borderRadius: 8,
-                            border: "1px solid var(--border-default)",
-                            overflow: "hidden",
-                            background: "var(--bg-input)",
-                          }}
-                        >
-                          {url ? (
-                            <img
-                              src={url}
-                              alt={p.name || `photo-${idx}`}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                                display: "block",
-                              }}
-                              onError={(e) => { e.currentTarget.style.display = "none"; }}
-                            />
-                          ) : null}
-                        </a>
-                      );
-                    })}
-                  </div>
+                    {photos.map((p, idx) => <ResolvedPhotoLink key={idx} fileUrl={typeof p === "string" ? p : p.file_url || p.path || p.url} name={p.name || `photo-${idx}`} size={80} />)}                  </div>
                 </div>
               )}
             </div>

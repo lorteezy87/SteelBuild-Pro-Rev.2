@@ -37,13 +37,15 @@
 //   supabase functions deploy email-ingest --no-verify-jwt
 // ─────────────────────────────────────────────────────────────────────────────
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2.117.2/edge-runtime.d.ts";
+import { EdgeBoundaryError, boundedRequest, configuredLimit, fetchWithDeadline, operationFingerprint, reserveOperation, finishOperation } from "../_shared/edgeOperation.ts";
+import { classifyAttachmentContent } from "../_shared/attachmentContent.ts";
+import { computeCostUsd } from "../llm-proxy/providers/cost.ts";
 import { reportError } from "../_shared/reportError.ts";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_TOTAL_BYTES,
   MAX_ATTACHMENT_COUNT,
-  isDangerousAttachment,
   sanitizeAttachmentName,
 } from "../_shared/attachments.ts";
 
@@ -68,16 +70,10 @@ interface ParsedAttachment {
   content: Uint8Array<ArrayBuffer>;
 }
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -184,34 +180,34 @@ function resolveTrustedDomainsForProject(projectId: string): Set<string> {
       if (normalized) domains.add(normalized);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[email-ingest] Invalid EMAIL_INGEST_TRUSTED_SENDER_DOMAINS_BY_PROJECT: ${message}`);
+    console.error("[email-ingest] trust_configuration_invalid");
   }
   return domains;
 }
 
-async function fetchActiveProjectMailboxAddresses(
+async function fetchVerifiedProjectMailboxAddresses(
   supabaseUrl: string,
   serviceKey: string,
   projectId: string,
 ): Promise<Set<string>> {
-  const resp = await fetch(
-    `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${projectId}&is_active=eq.true&select=email_address&limit=500`,
-    { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
+  const resp = await fetchWithDeadline(
+    `${supabaseUrl}/rest/v1/rpc/get_verified_email_mailboxes`,
+    {
+      method: "POST",
+      headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_project_id: projectId }),
+    },
   );
   if (!resp.ok) {
-    const detail = await resp.text();
-    throw new Error(`email_accounts lookup failed ${resp.status}: ${detail.slice(0, 200)}`);
+    throw new Error("Mailbox verification lookup failed");
   }
   const rows = await resp.json();
   const addresses = new Set<string>();
-  if (Array.isArray(rows)) {
-    for (const row of rows) {
-      if (!row?.email_address) continue;
-      const normalized = normalizeEmail(String(row.email_address));
-      if (normalized) addresses.add(normalized);
-    }
+  if (!Array.isArray(rows) || !rows.every((row) => row && typeof row.email_address === "string"
+    && /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(row.email_address))) {
+    throw new Error("Invalid mailbox verification result");
   }
+  for (const row of rows) addresses.add(row.email_address.toLowerCase());
   return addresses;
 }
 
@@ -368,8 +364,7 @@ function parseJsonAttachments(raw: any): ParsedAttachment[] {
       if (content.byteLength === 0) continue;
       out.push({ filename, contentType, sizeBytes: content.byteLength, content });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[email-ingest] Failed to decode attachment "${filename}": ${msg}`);
+      console.error("[email-ingest] attachment_decode_failed");
     }
   }
   return out;
@@ -500,6 +495,7 @@ async function parseMultipartPayload(req: Request): Promise<ParsedEmail> {
 // ── Classification types ───────────────────────────────────────────────────
 
 interface EmailClassification {
+  classifier?: "ai" | "regex";
   type: string;
   confidence: number;
   extracted: ExtractedFields;
@@ -606,50 +602,8 @@ function isTruthy(v: string | undefined): boolean {
   return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 }
 
-function numEnv(name: string, fallback: number): number {
-  const raw = Deno.env.get(name);
-  if (!raw) return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : fallback;
-}
-
-/**
- * Count this project's email-classify LLM calls in the rolling 24h window via
- * the same llm_telemetry table the gateway uses. Returns null when it can't be
- * read (caller treats null as "don't block"). Bounded so a stalled read can't
- * hang ingestion.
- */
-async function emailClassifyCountToday(projectId: string): Promise<number | null> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceKey) return null;
-  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  try {
-    const resp = await fetch(
-      `${supabaseUrl}/rest/v1/llm_telemetry?project_id=eq.${projectId}&use_case=eq.email-classify&occurred_at=gte.${encodeURIComponent(sinceIso)}&select=id&limit=1`,
-      {
-        headers: {
-          "apikey": serviceKey,
-          "Authorization": `Bearer ${serviceKey}`,
-          "Prefer": "count=exact",
-        },
-        signal: AbortSignal.timeout(2000),
-      },
-    );
-    if (!resp.ok) return null;
-    const range = resp.headers.get("content-range") || "";
-    const total = Number(range.split("/")[1]);
-    return Number.isFinite(total) ? total : null;
-  } catch {
-    return null;
-  }
-}
-
 async function classifyEmailWithAI(email: ParsedEmail, projectId: string): Promise<EmailClassification> {
-  // Kill switch + per-project daily cap (#6). A leaked webhook secret can spam
-  // emails into paid classify calls; degrade to the free regex classifier when
-  // disabled or over the cap. Fail-open to AI when the count can't be read so a
-  // telemetry hiccup doesn't quietly downgrade every classification.
+  // Limits and ledger failures fall back to free regex without paid dispatch.
   if (isTruthy(Deno.env.get("EMAIL_CLASSIFY_DISABLED"))) {
     return classifyEmailRegex(email);
   }
@@ -658,15 +612,6 @@ async function classifyEmailWithAI(email: ParsedEmail, projectId: string): Promi
   if (!apiKey) {
     console.log("[email-ingest] OPENAI_API_KEY not set, falling back to regex");
     return classifyEmailRegex(email);
-  }
-
-  const dailyLimit = numEnv("EMAIL_CLASSIFY_DAILY_LIMIT", 200);
-  if (dailyLimit > 0) {
-    const used = await emailClassifyCountToday(projectId);
-    if (used !== null && used >= dailyLimit) {
-      console.warn(`[email-ingest] email-classify daily cap reached project=${projectId} (${used} >= ${dailyLimit}); using regex`);
-      return classifyEmailRegex(email);
-    }
   }
 
   const bodySnippet = (email.bodyText || "").slice(0, 2000);
@@ -682,9 +627,23 @@ async function classifyEmailWithAI(email: ParsedEmail, projectId: string): Promi
     bodySnippet,
   ].filter(Boolean).join("\n");
 
+  let reservation: Awaited<ReturnType<typeof reserveOperation>>;
+  try {
+    const fingerprint = await operationFingerprint({ prompt: EMAIL_CLASSIFY_PROMPT, userContent });
+    // A provider Message-ID is preferred. Manual forwards lacking one use the
+    // same content digest across retries; generateMessageId is not a retry key.
+    const key = email.externalId.startsWith('manual-') ? fingerprint
+      : await operationFingerprint({ externalId: email.externalId });
+    reservation = await reserveOperation({ kind: 'email-classify', userId: null, projectId, key, fingerprint,
+      countLimit: configuredLimit('EMAIL_CLASSIFY_DAILY_LIMIT', 200), reservedCost: .01944 });
+    if (reservation.replay) return reservation.replay.result as EmailClassification;
+  } catch {
+    return classifyEmailRegex(email);
+  }
+
   try {
     const t0 = performance.now();
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    const resp = await fetchWithDeadline("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -700,21 +659,20 @@ async function classifyEmailWithAI(email: ParsedEmail, projectId: string): Promi
         temperature: 0.1,
         response_format: { type: "json_object" },
       }),
-    });
+    }, 20_000, 64 * 1024);
 
     const latencyMs = Math.round(performance.now() - t0);
 
     if (!resp.ok) {
       const detail = await resp.text();
-      console.error(`[email-ingest] OpenAI classify failed ${resp.status}: ${detail.slice(0, 200)}`);
-      return classifyEmailRegex(email);
+      console.error("[email-ingest] classifier_provider_failed", { status: resp.status });
+      throw new Error("Classifier provider rejected request");
     }
 
     const data = await resp.json();
     const text = data?.choices?.[0]?.message?.content;
     if (!text) {
-      console.error("[email-ingest] OpenAI returned no content");
-      return classifyEmailRegex(email);
+      throw new Error("Classifier provider returned no content");
     }
 
     const parsed = JSON.parse(text);
@@ -739,20 +697,17 @@ async function classifyEmailWithAI(email: ParsedEmail, projectId: string): Promi
     const inputTokens = data?.usage?.prompt_tokens || null;
     const outputTokens = data?.usage?.completion_tokens || null;
 
-    console.log(
-      `[email-ingest] AI classify: type=${type} confidence=${confidence} ` +
-      `latency=${latencyMs}ms tokens=${inputTokens}/${outputTokens} ` +
-      `rfi=${extracted.rfi_number} drawings=${extracted.drawing_refs.length} ` +
-      `due=${extracted.due_date} priority=${extracted.priority}`
-    );
+    console.log("[email-ingest] classification_completed");
 
     // Best-effort telemetry
-    logClassifyTelemetry(inputTokens, outputTokens, latencyMs, true, null, projectId).catch(() => {});
-
-    return { type, confidence, extracted };
+    await logClassifyTelemetry(inputTokens, outputTokens, latencyMs, true, null, projectId);
+    const classification: EmailClassification = { type, confidence, extracted, classifier: 'ai' };
+    await finishOperation(reservation.operationId, 'completed', classification, 200,
+      computeCostUsd('openai', 'gpt-4o-mini', inputTokens, outputTokens));
+    return classification;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[email-ingest] AI classify error: ${msg}`);
+    console.error("[email-ingest] classifier_failed");
+    await finishOperation(reservation.operationId, 'unknown').catch(() => {});
     return classifyEmailRegex(email);
   }
 }
@@ -774,7 +729,7 @@ async function logClassifyTelemetry(
   const costUsd = (inTok * 0.15 + outTok * 0.60) / 1_000_000;
 
   try {
-    await fetch(`${supabaseUrl}/rest/v1/llm_telemetry`, {
+    await fetchWithDeadline(`${supabaseUrl}/rest/v1/llm_telemetry`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -813,7 +768,7 @@ async function hashContent(data: Uint8Array<ArrayBuffer>): Promise<string> {
 // ── Main Handler ───────────────────────────────────────────────────────────
 
 async function handle(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+  if (req.method === "OPTIONS") return new Response("ok");
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   if (!authenticateWebhook(req)) {
@@ -853,7 +808,7 @@ async function handle(req: Request): Promise<Response> {
   // project*. Confirm the project exists and is active so a leaked secret
   // can't inject email/attachments into arbitrary or bogus project ids.
   try {
-    const projResp = await fetch(
+    const projResp = await fetchWithDeadline(
       `${supabaseUrl}/rest/v1/projects?id=eq.${projectId}&is_deleted=eq.false&select=id&limit=1`,
       { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
     );
@@ -862,8 +817,7 @@ async function handle(req: Request): Promise<Response> {
       return json({ error: "Unknown or inactive project" }, 404);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[email-ingest] Project validation failed: ${msg}`);
+    console.error("[email-ingest] project_validation_failed");
     return json({ error: "Project validation failed" }, 500);
   }
 
@@ -872,6 +826,7 @@ async function handle(req: Request): Promise<Response> {
   let email: ParsedEmail;
 
   try {
+    req = await boundedRequest(req, 40 * 1024 * 1024);
     if (contentType.includes("multipart/form-data")) {
       email = await parseMultipartPayload(req);
     } else {
@@ -879,9 +834,8 @@ async function handle(req: Request): Promise<Response> {
       email = await parseJsonPayload(body);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[email-ingest] Parse error: ${msg}`);
-    return json({ error: `Failed to parse email payload: ${msg}` }, 400);
+    console.error("[email-ingest] payload_invalid");
+    return json({ error: "Invalid or oversized email payload" }, err instanceof EdgeBoundaryError ? err.status : 400);
   }
 
   if (!email.senderEmail) {
@@ -891,14 +845,13 @@ async function handle(req: Request): Promise<Response> {
   const trustedDomains = resolveTrustedDomainsForProject(projectId);
   let mailboxAddresses: Set<string>;
   try {
-    mailboxAddresses = await fetchActiveProjectMailboxAddresses(supabaseUrl, serviceKey, projectId);
+    mailboxAddresses = await fetchVerifiedProjectMailboxAddresses(supabaseUrl, serviceKey, projectId);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[email-ingest] Sender trust lookup failed: ${message}`);
+    console.error("[email-ingest] sender_trust_lookup_failed");
     return json({ error: "Failed to validate sender trust" }, 500);
   }
   if (mailboxAddresses.size === 0 && trustedDomains.size === 0) {
-    console.error(`[email-ingest] sender trust blocked: no active mailbox mapping or domain allowlist configured for ${projectId}`);
+    console.error("[email-ingest] sender_trust_unconfigured");
     return json(
       {
         error: "Sender trust is not configured for this project",
@@ -911,9 +864,7 @@ async function handle(req: Request): Promise<Response> {
   const untrustedAction = (Deno.env.get("EMAIL_INGEST_UNTRUSTED_ACTION") || "reject").toLowerCase();
   const shouldFlagUntrusted = untrustedAction === "flag";
   if (!senderTrust.trusted && !shouldFlagUntrusted) {
-    console.warn(
-      `[email-ingest] untrusted sender rejected: project=${projectId} sender=${senderTrust.senderNormalized || "<empty>"} domain=${senderTrust.senderDomain || "<unknown>"}`,
-    );
+    console.warn("[email-ingest] sender_rejected");
     return json(
       {
         error: "Sender is not trusted for this project",
@@ -923,22 +874,39 @@ async function handle(req: Request): Promise<Response> {
     );
   }
 
+  // Quarantine mode retains reviewable text only. It cannot buy classification
+  // or publish attachments for a sender outside the operator's trusted bindings.
+  const suppliedAttachmentCount = email.attachments.length;
+  if (!senderTrust.trusted) { email.attachments = []; email.bodyHtml = ''; }
+  else {
+    let admittedBytes = 0;
+    email.attachments = email.attachments.slice(0, MAX_ATTACHMENT_COUNT).filter(att => {
+      if (att.content.byteLength > MAX_ATTACHMENT_BYTES || admittedBytes + att.content.byteLength > MAX_ATTACHMENTS_TOTAL_BYTES) return false;
+      const admission = classifyAttachmentContent({ filename: att.filename, contentType: att.contentType, bytes: att.content });
+      if (!admission.allowed) return false;
+      att.contentType = admission.contentType;
+      att.sizeBytes = att.content.byteLength;
+      admittedBytes += att.sizeBytes;
+      return true;
+    });
+  }
+
   // Dedup check
   if (email.externalId && !email.externalId.startsWith("manual-")) {
-    const dedupResp = await fetch(
+    const dedupResp = await fetchWithDeadline(
       `${supabaseUrl}/rest/v1/email_messages?project_id=eq.${projectId}&external_id=eq.${encodeURIComponent(email.externalId)}&select=id&limit=1`,
       { headers: supabaseHeaders }
     );
     if (dedupResp.ok) {
       const existing = await dedupResp.json();
       if (Array.isArray(existing) && existing.length > 0) {
-        console.log(`[email-ingest] Duplicate skipped: ${email.externalId}`);
+        console.log("[email-ingest] duplicate_skipped");
         return json({ status: "duplicate", message_id: existing[0].id });
       }
     }
   }
 
-  const classification = await classifyEmailWithAI(email, projectId);
+  const classification = senderTrust.trusted ? await classifyEmailWithAI(email, projectId) : classifyEmailRegex(email);
 
   // Insert email_message
   const messageRow = {
@@ -959,7 +927,8 @@ async function handle(req: Request): Promise<Response> {
     parsed_metadata: JSON.stringify({
       ingestion_method: "webhook",
       ingested_at: new Date().toISOString(),
-      classifier: "ai",
+      classifier: classification.classifier ?? "regex",
+      attachments_dropped: suppliedAttachmentCount - email.attachments.length,
       sender_trust: {
         trusted: senderTrust.trusted,
         trust_reason: senderTrust.trustReason,
@@ -970,16 +939,15 @@ async function handle(req: Request): Promise<Response> {
     import_status: senderTrust.trusted ? "pending" : "rejected",
   };
 
-  const msgResp = await fetch(`${supabaseUrl}/rest/v1/email_messages`, {
+  const msgResp = await fetchWithDeadline(`${supabaseUrl}/rest/v1/email_messages`, {
     method: "POST",
     headers: supabaseHeaders,
     body: JSON.stringify(messageRow),
   });
 
   if (!msgResp.ok) {
-    const detail = await msgResp.text();
-    console.error(`[email-ingest] Insert email_messages failed ${msgResp.status}: ${detail.slice(0, 500)}`);
-    return json({ error: "Failed to store email message", detail: detail.slice(0, 200) }, 500);
+    console.error("[email-ingest] message_record_failed", { status: msgResp.status });
+    return json({ error: "Failed to store email message" }, 500);
   }
 
   const [insertedMsg] = await msgResp.json();
@@ -991,19 +959,15 @@ async function handle(req: Request): Promise<Response> {
   // enters a storage path (a name like "../x" or "a/b" would otherwise escape
   // the per-message prefix).
   if (email.attachments.length > MAX_ATTACHMENT_COUNT) {
-    console.warn(`[email-ingest] attachment count ${email.attachments.length} > ${MAX_ATTACHMENT_COUNT}; extra dropped`);
+    console.warn("[email-ingest] attachment_count_exceeded");
   }
   const incomingAttachments = email.attachments.slice(0, MAX_ATTACHMENT_COUNT);
   const storedAttachments: string[] = [];
   let attachmentBytesTotal = 0;
   for (const att of incomingAttachments) {
     try {
-      if (isDangerousAttachment(att.filename)) {
-        console.warn(`[email-ingest] skipped disallowed attachment type: ${sanitizeAttachmentName(att.filename)}`);
-        continue;
-      }
       if (att.sizeBytes > MAX_ATTACHMENT_BYTES) {
-        console.warn(`[email-ingest] skipped oversize attachment (${att.sizeBytes} bytes)`);
+        console.warn("[email-ingest] attachment_size_exceeded");
         continue;
       }
       if (attachmentBytesTotal + att.sizeBytes > MAX_ATTACHMENTS_TOTAL_BYTES) {
@@ -1016,7 +980,7 @@ async function handle(req: Request): Promise<Response> {
       const contentHash = await hashContent(att.content);
       const storagePath = `${projectId}/${messageId}/${safeName}`;
 
-      const uploadResp = await fetch(
+      const uploadResp = await fetchWithDeadline(
         `${supabaseUrl}/storage/v1/object/email-attachments/${storagePath}`,
         {
           method: "POST",
@@ -1024,6 +988,7 @@ async function handle(req: Request): Promise<Response> {
             "Authorization": `Bearer ${serviceKey}`,
             "apikey": serviceKey,
             "Content-Type": att.contentType,
+            "Content-Disposition": "attachment",
             "x-upsert": "true",
           },
           body: att.content,
@@ -1032,7 +997,7 @@ async function handle(req: Request): Promise<Response> {
 
       if (!uploadResp.ok) {
         const detail = await uploadResp.text();
-        console.error(`[email-ingest] Storage upload failed for ${att.filename}: ${detail.slice(0, 200)}`);
+        console.error("[email-ingest] attachment_upload_failed");
         continue;
       }
 
@@ -1047,7 +1012,7 @@ async function handle(req: Request): Promise<Response> {
         storage_bucket: "email-attachments",
       };
 
-      const attResp = await fetch(`${supabaseUrl}/rest/v1/email_attachments`, {
+      const attResp = await fetchWithDeadline(`${supabaseUrl}/rest/v1/email_attachments`, {
         method: "POST",
         headers: { ...supabaseHeaders, "Prefer": "return=minimal" },
         body: JSON.stringify(attRow),
@@ -1055,24 +1020,19 @@ async function handle(req: Request): Promise<Response> {
 
       if (!attResp.ok) {
         const detail = await attResp.text();
-        console.error(`[email-ingest] Insert attachment failed for ${att.filename}: ${detail.slice(0, 200)}`);
+        console.error("[email-ingest] attachment_record_failed");
       } else {
         storedAttachments.push(safeName);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[email-ingest] Attachment error for ${att.filename}: ${msg}`);
+      console.error("[email-ingest] attachment_failed");
     }
   }
 
   // Avoid logging sender address + subject (correspondence PII). Keep ids,
   // classification, and counts — enough to debug ingestion without leaking
   // who wrote what.
-  console.log(
-    `[email-ingest] Ingested: project=${projectId} messageId=${messageId} ` +
-    `type=${classification.type}(${classification.confidence}) ` +
-    `attachments=${storedAttachments.length}/${email.attachments.length}`
-  );
+  console.log("[email-ingest] ingestion_completed");
 
   return json({
     status: "ingested",
@@ -1087,8 +1047,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     return await handle(req);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     await reportError(err, "email-ingest", { unhandled: true });
-    return json({ error: `Internal error: ${message}` }, 500);
+    return json({ error: err instanceof EdgeBoundaryError ? err.message : "Email ingestion failed" }, err instanceof EdgeBoundaryError ? err.status : 500);
   }
 });

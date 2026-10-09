@@ -125,6 +125,7 @@ export async function suggestLinksForZone(zone, records, {
     "Call propose_zone_links with the records that clearly belong to this zone.";
 
   const { data, error } = await supabase.functions.invoke("llm-proxy", {
+    headers: { "Idempotency-Key": crypto.randomUUID() },
     body: {
       useCase: "drawing-link-suggest",
       project_id: zone?.project_id || undefined,

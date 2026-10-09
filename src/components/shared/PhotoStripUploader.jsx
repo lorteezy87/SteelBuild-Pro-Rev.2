@@ -37,9 +37,10 @@ const labelStyle = {
 
 /**
  * @typedef {{ file_url?: string, path?: string, url?: string, name?: string, uploaded_at?: string }} UploadedPhoto
- * @param {{ value?: UploadedPhoto[], onChange?: (photos: UploadedPhoto[]) => void, disabled?: boolean, max?: number, label?: string }} props
+ * @param {{ projectId?: string, value?: UploadedPhoto[], onChange?: (photos: UploadedPhoto[]) => void, disabled?: boolean, max?: number, label?: string }} props
  */
 export default function PhotoStripUploader({
+  projectId,
   value = [],
   onChange,
   disabled = false,
@@ -66,7 +67,7 @@ export default function PhotoStripUploader({
       for (const rawFile of files) {
         try {
           const file = await compressImage(rawFile);
-          const result = await integrations.Core.UploadFile({ file, workflow: "photo" });
+          const result = await integrations.Core.UploadFile({ file, projectId, workflow: "photo" });
           uploaded.push({
             file_url: result.file_url || result.path,
             path: result.path,

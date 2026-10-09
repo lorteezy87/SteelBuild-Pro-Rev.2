@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const invokeMock = vi.fn();
 const fromMock = vi.hoisted(() => vi.fn());
+vi.mock('../workspaceExportOwner', () => ({
+  beginWorkspaceExport: async (orgId: string) => ({
+    orgId, client: { functions: { invoke: invokeMock }, from: fromMock },
+    assertCurrent: () => {}, isCurrent: () => true, dispose: () => {},
+  }),
+}));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     functions: { invoke: (...args: unknown[]) => invokeMock(...args) },

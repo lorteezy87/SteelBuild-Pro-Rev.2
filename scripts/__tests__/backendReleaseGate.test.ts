@@ -15,7 +15,7 @@ function verify(options: { target?: string; ref?: string; failedJob?: string; st
   vi.stubEnv('TARGET', options.target ?? 'production');
   vi.stubEnv('FUNCTION', 'project-export');
   const sha = 'a'.repeat(40);
-  const names = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Supabase drift check'];
+  const names = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Supabase drift check', 'Dependency audit (required)', 'Commercial SQL + concurrent PostgreSQL acceptance'];
   const github = {
     rest: { actions: { listWorkflowRuns: 'runs', listJobsForWorkflowRun: 'jobs' } },
     paginate: vi.fn(async (method: string, params: { workflow_id?: string }) => {
@@ -31,7 +31,7 @@ describe('executed backend release gate', () => {
   it('permits a checked production commit with matching staging evidence', async () => {
     await expect(verify()).resolves.toBeUndefined();
   });
-  it.each(['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Supabase drift check'])('blocks a failed %s', async (failedJob) => {
+  it.each(['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Supabase drift check', 'Dependency audit (required)', 'Commercial SQL + concurrent PostgreSQL acceptance'])('blocks a failed %s', async (failedJob) => {
     await expect(verify({ failedJob })).rejects.toThrow('Required checks');
   });
   it('blocks production outside main', async () => {

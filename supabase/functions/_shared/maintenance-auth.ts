@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.101.1";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.105.4";
 
 export interface MaintenanceContext {
   token_sha256: string | null;

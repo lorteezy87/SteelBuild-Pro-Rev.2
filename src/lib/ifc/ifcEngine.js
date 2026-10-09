@@ -3,8 +3,7 @@
  * (loadIfcGeometry) and the roster extractor (extractIfcRoster). Kept in its own
  * module so both pull web-ifc through the same singleton + the same lazy chunk.
  *
- * Single-threaded wasm served from /wasm/ (the copyWebIfcWasm vite plugin keeps
- * it version-matched) — no SharedArrayBuffer / cross-origin-isolation needed.
+ * Single-threaded wasm is emitted as a hashed Vite asset matched to this loader — no SharedArrayBuffer / cross-origin-isolation needed.
  */
 let enginePromise = null;
 
@@ -13,8 +12,10 @@ export async function getEngine() {
     enginePromise = (async () => {
       const WebIFC = await import("web-ifc");
       const api = new WebIFC.IfcAPI();
-      api.SetWasmPath("/wasm/");
-      await api.Init();
+      const { default: wasmUrl } = await import("web-ifc/web-ifc.wasm?url");
+      // Vite fingerprints these exact bytes alongside this loader. Old caches
+      // cannot supply an unversioned WASM from a different deployment.
+      await api.Init(() => wasmUrl, true);
       // Silence web-ifc's wasm console logging. Tekla exports routinely carry
       // self-intersecting composite curves (bolts/plates/complex profiles) that
       // web-ifc logs at [error] level once per referencing element — hundreds of

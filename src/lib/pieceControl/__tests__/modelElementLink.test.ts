@@ -249,8 +249,8 @@ describe("buildModelGuidCsv", () => {
     ]);
     const lines = csv.split("\n");
     expect(lines[0]).toBe("element_guid,piece_mark,piece_id,fab_status,is_linked");
-    expect(lines[1]).toBe("g1,B1,p1,fabricated,yes");
-    expect(lines[2]).toBe('g2,"Mark ""X""",,,no');
+    expect(lines[1]).toBe('"g1","B1","p1","fabricated",yes');
+    expect(lines[2]).toBe('"g2","Mark ""X""","","",no');
     expect(lines).toHaveLength(3);
   });
 });

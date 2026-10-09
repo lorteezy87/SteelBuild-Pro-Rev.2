@@ -41,12 +41,18 @@
 // Secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@^2.47";
+import "jsr:@supabase/functions-js@2.117.2/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { CORS, json, handleOrgDeletion, handleAccountDeletion } from "./handlers.ts";
 import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
+import { boundedRequest, EdgeBoundaryError } from "../_shared/edgeOperation.ts";
 
 Deno.serve(async (req) => {
+  let response: Response;
+  try {
+    response = await (async () => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
@@ -59,11 +65,11 @@ Deno.serve(async (req) => {
   let orgId: string | undefined;
   let mode: string | undefined;
   try {
-    const body = await req.json();
+    const body = await (await boundedRequest(req, 16_384)).json();
     orgId = body?.org_id;
     mode = body?.mode;
-  } catch {
-    return json({ error: "invalid_body" }, 400);
+  } catch (error) {
+    return json({ error: "invalid_body" }, error instanceof EdgeBoundaryError ? error.status : 400);
   }
   if (mode !== "account" && !orgId) {
     return json({ error: "org_id is required" }, 400);
@@ -86,4 +92,13 @@ Deno.serve(async (req) => {
   return mode === "account"
     ? await handleAccountDeletion(admin, userClient, callerId)
     : await handleOrgDeletion(admin, userClient, callerId, orgId as string);
+    })();
+  } catch (error) {
+    await reportError(error, "account-delete", { unhandled: true });
+    response = json({ error: "account_deletion_failed", detail: "Account cleanup could not be completed. Please retry or contact support@steelbuild-pro.com." }, 500);
+  }
+  const headers = new Headers(response.headers);
+  headers.delete("Access-Control-Allow-Origin");
+  for (const [name, value] of Object.entries(corsHeaders(req))) headers.set(name, value);
+  return new Response(response.body, { status: response.status, headers });
 });

@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Require passing CI and matching staging evidence
-        uses: actions/github-script@v9
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
           TARGET: ${{ inputs.target }}
           FUNCTION: ${{ inputs.function }}
@@ -48,7 +48,7 @@ jobs:
             const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               ...context.repo, workflow_id: 'ci.yml', head_sha: context.sha, per_page: 100,
             });
-            const required = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck'];
+            const required = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Dependency audit (required)', 'Commercial SQL + concurrent PostgreSQL acceptance'];
             if (target === 'production') required.push('Supabase drift check');
             let verified = false;
             for (const run of runs) {
@@ -77,13 +77,13 @@ jobs:
     # repository SUPABASE_ACCESS_TOKEN used by legacy inventory workflows.
     environment: ${{ inputs.target }}-backend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: '2.9.6'
       - name: Typecheck selected source
@@ -91,7 +91,7 @@ jobs:
           FUNCTION: ${{ inputs.function }}
         run: |
           case "$FUNCTION" in llm-proxy|project-export|stripe-billing) ;; *) exit 1 ;; esac
-          deno check --node-modules-dir=none --no-config --no-lock "supabase/functions/$FUNCTION/index.ts"
+          deno check --config supabase/functions/deno.json --frozen "supabase/functions/$FUNCTION/index.ts"
       - name: Preserve existing deployment before replacement
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_BACKEND_ACCESS_TOKEN }}
@@ -116,7 +116,7 @@ jobs:
             echo 'Reviewed production function is missing; investigate before replacing it'; exit 1
           fi
       - name: Retain rollback source and JWT inventory before publishing
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: backend-before-${{ inputs.target }}-${{ inputs.function }}-${{ github.run_id }}
           path: ${{ runner.temp }}/backend-before

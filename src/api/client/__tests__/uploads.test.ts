@@ -35,6 +35,7 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/lib/activeOrg", () => ({
   getActiveOrgId: getActiveOrgIdMock,
+  getActiveOrgGeneration: () => 1,
 }));
 
 vi.mock("@/lib/uploadValidation", () => ({
@@ -67,31 +68,37 @@ describe("UploadFile", () => {
 
   it("fails closed when org context is unresolved", async () => {
     getActiveOrgIdMock.mockReturnValue(null);
-    await expect(UploadFile({ file: new File(["x"], "a.pdf"), workflow: "default" } as never))
+    await expect(UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file: new File(["x"], "a.pdf"), workflow: "default" } as never))
       .rejects.toThrow(/Workspace is still loading/i);
     expect(uploadMock).not.toHaveBeenCalled();
   });
 
   it("fails closed when org context is malformed", async () => {
     getActiveOrgIdMock.mockReturnValue("not-a-uuid");
-    await expect(UploadFile({ file: new File(["x"], "a.pdf"), workflow: "default" } as never))
+    await expect(UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file: new File(["x"], "a.pdf"), workflow: "default" } as never))
       .rejects.toThrow(/valid workspace context/i);
     expect(uploadMock).not.toHaveBeenCalled();
   });
 
-  it("writes to org-scoped uploads path only", async () => {
+  it.each([undefined, null, "", "not-a-uuid"])("fails closed for missing or invalid project %s", async projectId => {
     getActiveOrgIdMock.mockReturnValue("11111111-1111-4111-8111-111111111111");
-    uploadMock.mockResolvedValue({ data: { path: "11111111-1111-4111-8111-111111111111/uploads/x.pdf" }, error: null });
+    await expect(UploadFile({ file: new File(["x"], "a.pdf"), projectId } as never)).rejects.toThrow(/project/i);
+    expect(uploadMock).not.toHaveBeenCalled();
+  });
+
+  it("writes to the explicitly requested project path", async () => {
+    getActiveOrgIdMock.mockReturnValue("11111111-1111-4111-8111-111111111111");
+    uploadMock.mockResolvedValue({ data: { path: "11111111-1111-4111-8111-111111111111/projects/22222222-2222-4222-8222-222222222222/uploads/x.pdf" }, error: null });
     const file = new File(["hello"], "drawing.pdf", { type: "application/pdf" });
 
-    const result = await UploadFile({ file, workflow: "drawings_upload" } as never);
+    const result = await UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file, workflow: "drawings_upload" } as never);
 
     expect(fromMock).toHaveBeenCalledWith("app-files");
     expect(uploadMock).toHaveBeenCalledTimes(1);
     const uploadPath = uploadMock.mock.calls[0][0] as string;
-    expect(uploadPath).toMatch(/^11111111-1111-4111-8111-111111111111\/uploads\//);
+    expect(uploadPath).toMatch(/^11111111-1111-4111-8111-111111111111\/projects\/22222222-2222-4222-8222-222222222222\/uploads\//);
     expect(assertUploadAllowedMock).toHaveBeenCalledWith(file, "drawings_upload");
-    expect(result.path).toContain("11111111-1111-4111-8111-111111111111/uploads/");
+    expect(result.path).toContain("11111111-1111-4111-8111-111111111111/projects/22222222-2222-4222-8222-222222222222/uploads/");
   });
 
   // ── Dropped-connection retry ───────────────────────────────────────────
@@ -112,7 +119,7 @@ describe("UploadFile", () => {
       .mockResolvedValueOnce({ data: { path: `${ORG}/uploads/ok.pdf` }, error: null });
 
     const file = new File(["hello"], "rev.pdf", { type: "application/pdf" });
-    const result = await UploadFile({ file, workflow: "drawings" } as never);
+    const result = await UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file, workflow: "drawings" } as never);
 
     expect(uploadMock).toHaveBeenCalledTimes(2);
     expect(result.path).toBe(`${ORG}/uploads/ok.pdf`);
@@ -124,7 +131,7 @@ describe("UploadFile", () => {
       .mockResolvedValueOnce({ data: null, error: netFail })
       .mockResolvedValueOnce({ data: { path: `${ORG}/uploads/ok.pdf` }, error: null });
 
-    await UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never);
+    await UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file: new File(["x"], "a.pdf"), workflow: "drawings" } as never);
 
     expect(uploadMock.mock.calls[0][0]).toBe(uploadMock.mock.calls[1][0]);
   });
@@ -138,7 +145,7 @@ describe("UploadFile", () => {
       .mockResolvedValueOnce({ data: null, error: netFail })
       .mockResolvedValueOnce({ data: null, error: { statusCode: "409", error: "Duplicate", message: "The resource already exists" } });
 
-    const result = await UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never);
+    const result = await UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file: new File(["x"], "a.pdf"), workflow: "drawings" } as never);
 
     expect(uploadMock).toHaveBeenCalledTimes(2);
     expect(result.path).toBe(uploadMock.mock.calls[0][0]);
@@ -160,7 +167,7 @@ describe("UploadFile", () => {
     });
 
     await expect(
-      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
+      UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
     ).rejects.toBeTruthy();
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(remapQuotaErrorMock).toHaveBeenCalled();
@@ -171,7 +178,7 @@ describe("UploadFile", () => {
     uploadMock.mockResolvedValue({ data: null, error: { statusCode: "413", message: "Payload too large" } });
 
     await expect(
-      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
+      UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
     ).rejects.toBeTruthy();
     expect(uploadMock).toHaveBeenCalledTimes(1);
   });
@@ -185,7 +192,7 @@ describe("UploadFile", () => {
     uploadMock.mockResolvedValue({ data: null, error: { name: "StorageUnknownError", message: "quota has been exceeded" } });
 
     await expect(
-      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
+      UploadFile({ projectId: "22222222-2222-4222-8222-222222222222", file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
     ).rejects.toThrow(/storage is full/i);
     expect(uploadMock).toHaveBeenCalledTimes(1);
   });

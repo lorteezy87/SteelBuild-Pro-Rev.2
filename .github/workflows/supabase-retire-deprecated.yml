@@ -30,10 +30,10 @@ jobs:
       # file if it tries, failing a run on every push. Set the path here instead.
       - name: Choose the backup directory
         run: echo "BACKUP_ROOT=$RUNNER_TEMP/supabase-retirement-backup" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: npm
@@ -46,7 +46,7 @@ jobs:
         run: node scripts/supabase-retire-deprecated.ts prepare "$BACKUP_ROOT"
       - name: Persist complete source backups before any deletion
         id: backup
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: supabase-retirement-backup-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.BACKUP_ROOT }}
@@ -64,7 +64,7 @@ jobs:
         run: node scripts/supabase-retire-deprecated.ts apply "$BACKUP_ROOT"
       - name: Retain before and after inventory evidence even if retirement stops
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: supabase-retirement-inventory-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.BACKUP_ROOT }}-inventory

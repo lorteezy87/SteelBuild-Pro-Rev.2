@@ -9,6 +9,7 @@
 
 import React, { useState } from "react";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -45,13 +46,35 @@ export default function EmailAccountSettings({ projectId }) {
     queryFn: () => entities.EmailAccount.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
+  const { data: verification = [], isPending: verificationPending, isError: verificationError } = useQuery({
+    queryKey: ["email-account-verification", projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_email_account_verification", { p_project_id: projectId });
+      if (error) throw error;
+      if (!Array.isArray(data)) throw new Error("Mailbox verification unavailable");
+      return data;
+    },
+    enabled: !!projectId,
+  });
+  const invalidateAccounts = () => {
+    invalidateEntity(qc, "email_account", projectId);
+    qc.invalidateQueries({ queryKey: ["email-account-verification", projectId] });
+  };
+  const verificationLabel = (account) => {
+    if (!account.is_active) return "Inactive — verification required before sending";
+    if (verificationError) return "Verification unavailable — sending disabled";
+    if (verificationPending) return "Checking mailbox verification…";
+    const binding = verification.find((row) => row.account_id === account.id);
+    if (!binding?.verified) return "Unverified — sending disabled";
+    return binding.send_provider === "inbound_only" ? "Verified for inbound only" : "Verified for sending";
+  };
 
   // ── Mutations ────────────────────────────────────────────────────────
   const createMut = useMutation({
     mutationFn: (data) => entities.EmailAccount.create(withProjectId(data, projectId)),
     onSuccess: () => {
-      invalidateEntity(qc, "email_account", projectId);
-      toast.success("Email account added");
+      invalidateAccounts();
+      toast.success("Email source added. Mailbox verification is required before sending.");
       setShowAddForm(false);
       setNewEmail("");
       setNewDisplayName("");
@@ -62,7 +85,7 @@ export default function EmailAccountSettings({ projectId }) {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.EmailAccount.update(id, data),
     onSuccess: () => {
-      invalidateEntity(qc, "email_account", projectId);
+      invalidateAccounts();
     },
     onError: (e) => toast.error(toUserErrorMessage(e, "Update failed")),
   });
@@ -70,7 +93,7 @@ export default function EmailAccountSettings({ projectId }) {
   const deleteMut = useMutation({
     mutationFn: (id) => entities.EmailAccount.delete(id),
     onSuccess: () => {
-      invalidateEntity(qc, "email_account", projectId);
+      invalidateAccounts();
       toast.success("Email account removed");
     },
     onError: (e) => toast.error(toUserErrorMessage(e, "Failed to remove email account")),
@@ -164,6 +187,10 @@ export default function EmailAccountSettings({ projectId }) {
           Add Email Source
         </button>
       </div>
+
+      <p style={{ ...hintTextStyle, margin: "12px 18px" }}>
+        Adding or activating an email source does not authorize sending. A workspace administrator must arrange verification of mailbox ownership and provider access. Changing the address or connection, or deactivating the source, requires new verification.
+      </p>
 
       {/* Add form */}
       {showAddForm && (
@@ -377,6 +404,9 @@ export default function EmailAccountSettings({ projectId }) {
                       {account.email_address}
                     </span>
                   )}
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    {verificationLabel(account)}
+                  </span>
                   <span style={{
                     display: "inline-flex",
                     alignItems: "center",

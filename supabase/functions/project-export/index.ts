@@ -28,10 +28,11 @@
 //   supabase functions deploy project-export
 // ─────────────────────────────────────────────────────────────────────────────
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2.117.2/edge-runtime.d.ts";
+import { boundedRequest, EdgeBoundaryError } from "../_shared/edgeOperation.ts";
 import { readTablePaged, readQueryPages, type ExportClient } from "./readTablePaged.ts";
 import { buildProjectExport, buildExportAuditRecord, PROJECT_EXPORT_TABLES, type ProjectExportTableResult, type StorageFile } from "./exportShape.ts";
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.105.4";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
@@ -183,7 +184,7 @@ async function listProjectStorageFiles(
           sortBy: { column: "name", order: "asc" },
         });
         if (error) {
-          console.error(`[project-export] storage list ${bucket}/${dir}: ${error.message}`);
+          console.error("[project-export] storage_list_failed");
           break; // best-effort: skip this dir/bucket, keep the export
         }
         const entries = data ?? [];
@@ -223,9 +224,9 @@ async function handle(req: Request): Promise<Response> {
 
   let body: { project_id?: string };
   try {
-    body = await req.json();
-  } catch {
-    return errorResponse(400, "Invalid JSON body", req);
+    body = await (await boundedRequest(req, 16_384)).json();
+  } catch (error) {
+    return errorResponse(error instanceof EdgeBoundaryError ? error.status : 400, "Invalid request body", req);
   }
   const projectId = body.project_id;
   if (!projectId || typeof projectId !== "string") {
@@ -258,7 +259,7 @@ async function handle(req: Request): Promise<Response> {
     .maybeSingle();
 
   if (projectErr) {
-    console.error(`[project-export] project fetch error: ${projectErr.message}`);
+    console.error("[project-export] project_read_failed");
     return errorResponse(500, "Failed to read project", req);
   }
   if (!project) {
@@ -275,7 +276,7 @@ async function handle(req: Request): Promise<Response> {
     // query builder here exceeds Deno's type-instantiation limit.
     const { rows, error } = await readTablePaged(rls as unknown as ExportClient, table, projectId);
     if (error) {
-      console.error(`[project-export] ${table} fetch error: ${error}`);
+      console.error("[project-export] export_read_failed");
       return errorResponse(500, `Failed to read ${table}`, req);
     }
     tableResults.push({ table, rows });
@@ -283,7 +284,7 @@ async function handle(req: Request): Promise<Response> {
 
   const folderExport = await readNoteFolderExport(rls, projectId);
   if (folderExport.error) {
-    console.error(`[project-export] note folders fetch error: ${folderExport.error}`);
+    console.error("[project-export] export_read_failed");
     return errorResponse(500, "Failed to read note folders", req);
   }
   tableResults.push(...folderExport.results);
@@ -313,16 +314,12 @@ async function handle(req: Request): Promise<Response> {
   const admin = createClient(supabaseUrl, serviceKey);
   const { error: auditErr } = await admin.from("activities").insert(auditRecord);
   if (auditErr) {
-    console.error(`[project-export] audit insert failed: ${auditErr.message}`);
+    console.error("[project-export] audit_write_failed");
     return errorResponse(500, "Failed to record export audit entry", req);
   }
 
   // Log scope only — never row-level project data — into function logs.
-  console.log(
-    `[project-export] project=${projectId} by=${user.id} ` +
-      `rows=${envelope.total_rows} tables=${Object.keys(envelope.tables).length} ` +
-      `files=${envelope.file_count}`,
-  );
+  console.log("[project-export] export_completed");
 
   return jsonResponse(envelope, 200, req);
 }
@@ -331,8 +328,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     return await handle(req);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     await reportError(err, "project-export", { unhandled: true });
-    return errorResponse(500, `Internal error: ${message}`, req);
+    return errorResponse(500, "Project export failed. Please try again.", req);
   }
 });

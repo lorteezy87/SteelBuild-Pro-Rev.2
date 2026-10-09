@@ -17,8 +17,9 @@
 // Required edge-function secrets:
 //   STRIPE_SECRET_KEY (live), STRIPE_SK_TEST (test E2E)   (SUPABASE_URL / SERVICE_ROLE_KEY / ANON_KEY injected)
 
-import Stripe from "https://esm.sh/stripe@17?target=deno";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
+import { boundedRequest, EdgeBoundaryError } from "../_shared/edgeOperation.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
@@ -182,6 +183,11 @@ async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, req);
   const url = new URL(req.url);
+  try {
+    req = await boundedRequest(req, url.pathname.endsWith("/webhook") ? 1_048_576 : 16_384);
+  } catch (error) {
+    return json({ error: "Invalid request body" }, error instanceof EdgeBoundaryError ? error.status : 400, req);
+  }
   // Load config FIRST so the Stripe client uses the correct key (live vs test) —
   // billing_config is the single source of truth for the live/test environment.
   const cfg = await loadConfig();

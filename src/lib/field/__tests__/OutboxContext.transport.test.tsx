@@ -48,7 +48,7 @@ it("does not dispatch a write when the real SDK resolves its auth lock with a re
   mocks.getSession.mockReturnValue(new Promise((resolve) => { resolveSession = resolve; }));
   mocks.transport.mockResolvedValue(new Response(JSON.stringify({ id: "punch-a" }), { headers: { "Content-Type": "application/json" } }));
   setActiveOrgId("org-a");
-  saveQueue([{ ...makePunchCreateOp({ title: "A private draft", project_id: "shared-project" }, "capture-a", 1), owner: { userId: "user-a", orgId: "org-a" } }]);
+  saveQueue([{ ...makePunchCreateOp({ title: "A private draft", project_id: "33333333-3333-4333-8333-333333333333" }, "capture-a", 1), owner: { userId: "user-a", orgId: "org-a" } }]);
   const client = new QueryClient();
   const tree = () => <QueryClientProvider client={client}><OutboxProvider><span>App</span></OutboxProvider></QueryClientProvider>;
   const view = render(tree());
@@ -67,12 +67,12 @@ it("does not dispatch a write when the real SDK resolves its auth lock with a re
 type BoundClient = SupabaseClient<Database>;
 const captureId = "22222222-2222-4222-8222-222222222222";
 const operations: Record<string, (client: BoundClient) => Promise<unknown>> = {
-  punch: (client) => entities.PunchlistItem.create({ description: "Punch", project_id: "shared-project", photos: '[{"file_url":"photo.jpg"}]', client_op_id: captureId }, { client }),
-  dailyLog: (client) => entities.DailyLog.create({ project_id: "shared-project", date: "2026-10-07", client_op_id: captureId }, { client }),
-  photo: (client) => entities.Photo.create({ project_id: "shared-project", file_url: "photo.jpg", client_op_id: captureId }, { client }),
+  punch: (client) => entities.PunchlistItem.create({ description: "Punch", project_id: "33333333-3333-4333-8333-333333333333", photos: '[{"file_url":"photo.jpg"}]', client_op_id: captureId }, { client }),
+  dailyLog: (client) => entities.DailyLog.create({ project_id: "33333333-3333-4333-8333-333333333333", date: "2026-10-07", client_op_id: captureId }, { client }),
+  photo: (client) => entities.Photo.create({ project_id: "33333333-3333-4333-8333-333333333333", file_url: "photo.jpg", client_op_id: captureId }, { client }),
   scheduleRead: (client) => entities.ScheduleTask.get("task", { client }),
   scheduleUpdate: (client) => entities.ScheduleTask.update("task", { percent_complete: 50 }, { client }),
-  upload: (client) => UploadFile({ file: new File(["photo"], "photo.jpg", { type: "image/jpeg" }), client }),
+  upload: (client) => UploadFile({ projectId: "33333333-3333-4333-8333-333333333333", file: new File(["photo"], "photo.jpg", { type: "image/jpeg" }), client }),
 };
 
 it.each(Object.keys(operations))("aborts %s at the real SDK transport boundary after token resolution begins", async (operation) => {
@@ -126,12 +126,12 @@ it.each(["punch", "dailyLog", "photo"])("deduplicates %s replay after the server
   function Probe(): null { outbox = useOutbox(); return null; }
   const queryClient = new QueryClient();
   render(<QueryClientProvider client={queryClient}><OutboxProvider><Probe /></OutboxProvider></QueryClientProvider>);
-  const record = { id: "discarded-form-id", project_id: "shared-project", client_op_id: captureId };
+  const record = { id: "discarded-form-id", project_id: "33333333-3333-4333-8333-333333333333", client_op_id: captureId };
   const op = operation === "punch"
     ? makePunchCreateOp({ ...record, description: "Loose bolt" }, captureId, 1)
     : operation === "dailyLog"
       ? makeDailyLogCreateOp({ ...record, date: "2026-10-07" }, captureId, 1)
-      : makePhotoCreateOp(captureId, { project_id: "shared-project" }, 1);
+      : makePhotoCreateOp(captureId, { project_id: "33333333-3333-4333-8333-333333333333" }, 1);
   act(() => { outbox.enqueue(op); });
   await act(async () => { await outbox.flush(); });
   expect(loadQueue()).toHaveLength(1);

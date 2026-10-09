@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useOperationOwner } from '@/hooks/useOperationOwner';
+import { beginWorkspaceExport } from '@/lib/workspaceExportOwner';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useOrg } from '@/components/shared/OrgContext';
@@ -25,8 +27,10 @@ const ActionBtn = ({ onClick, disabled, color, children }) => (
 
 export default function SystemTab({ user }) {
   const { currentOrg } = useOrg();
+  const captureOwner = useOperationOwner(JSON.stringify([user?.id, currentOrg?.id]));
   const [isExporting, setIsExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState('');
+  useEffect(() => { setIsExporting(false); setExportMsg(''); }, [user?.id, currentOrg?.id]);
 
   // Real workspace backup: pull every project in the active org and export
   // each through the RLS-scoped, audited `project-export` Edge Function, then
@@ -39,6 +43,8 @@ export default function SystemTab({ user }) {
   // multi-org user, mix in projects from their other orgs. Scoping by
   // currentOrg.id and including on-hold rows makes the backup match its label.
   const handleExportData = async () => {
+    const owner = captureOwner();
+    let run;
     setIsExporting(true);
     setExportMsg('Gathering projects…');
     try {
@@ -48,17 +54,22 @@ export default function SystemTab({ user }) {
       // PostgREST's 1000-row ceiling, which dropped projects before
       // exportWorkspace could record them as `failures` and made the success
       // toast below report a project count the backup never contained.
-      const projects = await fetchWorkspaceProjects(currentOrg?.id);
+      run = await beginWorkspaceExport(currentOrg?.id, owner.isCurrent);
+      const projects = await fetchWorkspaceProjects(currentOrg?.id, run);
+      if (!owner.isCurrent()) return;
       if (!projects?.length) {
         toast.error('No projects to export yet.');
         return;
       }
       const bundle = await exportWorkspace(projects, {
         workspaceName: currentOrg?.name,
+        owner: run,
         onProgress: (done, total, name) =>
-          setExportMsg(name ? `Exporting ${Math.min(done + 1, total)} of ${total}: ${name}…` : 'Packaging backup…'),
+          owner.isCurrent() && setExportMsg(name ? `Exporting ${Math.min(done + 1, total)} of ${total}: ${name}…` : 'Packaging backup…'),
       });
-      const presentation = await downloadWorkspaceExport(bundle);
+      if (!owner.isCurrent()) return;
+      const presentation = await downloadWorkspaceExport(bundle, run);
+      if (!owner.isCurrent()) return;
       if (presentation !== 'downloaded' && presentation !== 'shared') return;
       const skipped = bundle.failures.length;
       toast.success(
@@ -67,10 +78,13 @@ export default function SystemTab({ user }) {
         (skipped ? ` · ${skipped} skipped` : ''),
       );
     } catch (err) {
-      toast.error('Export failed: ' + (err?.message || String(err)));
+      if (owner.isCurrent()) toast.error('Export failed: ' + (err?.message || String(err)));
     } finally {
-      setIsExporting(false);
-      setExportMsg('');
+      run?.dispose();
+      if (owner.isCurrent()) {
+        setIsExporting(false);
+        setExportMsg('');
+      }
     }
   };
 

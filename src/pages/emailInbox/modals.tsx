@@ -9,7 +9,8 @@ import { getActiveOrgGeneration } from "@/lib/activeOrg";
 import { Modal as ModalRaw } from "@/components/design-system";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { sendEmail, buildReplyDefaults } from "@/services/emailSendService";
+import { useEmailSendOperation } from "@/hooks/useEmailSendOperation";
+import { buildReplyDefaults } from "@/services/emailSendService";
 import {
   ENTITY_TYPE_OPTIONS,
   MAX_ATTACH_TOTAL_BYTES,
@@ -457,7 +458,7 @@ export function ComposeEmailModal({ projectId, onClose, onSent }: ComposeEmailMo
   const [subject, setSubject] = useState("");
   const [bodyText, setBodyText] = useState("");
   const [attachments, setAttachments] = useState<OutboundAttachment[]>([]);
-  const [sending, setSending] = useState(false);
+  const { sending, send: sendDraft } = useEmailSendOperation(projectId);
 
   const handleSend = async () => {
     const toList = to.split(",").map((s) => s.trim()).filter(Boolean);
@@ -465,10 +466,9 @@ export function ComposeEmailModal({ projectId, onClose, onSent }: ComposeEmailMo
     if (!subject.trim()) { toast.error("Subject is required"); return; }
     if (!bodyText.trim()) { toast.error("Message body is required"); return; }
 
-    setSending(true);
     const ccList = cc ? cc.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
-    const result = await sendEmail({
+    const result = await sendDraft({
       project_id: projectId,
       to: toList,
       cc: ccList,
@@ -477,7 +477,7 @@ export function ComposeEmailModal({ projectId, onClose, onSent }: ComposeEmailMo
       attachments,
     });
 
-    setSending(false);
+    if (!result) return;
     if (result.success) {
       toast.success("Email sent");
       onSent();
@@ -560,19 +560,18 @@ export function ReplyEmailModal({ projectId, originalMessage, mode, currentUserE
   const [subject, setSubject] = useState(defaults.subject);
   const [bodyText, setBodyText] = useState("");
   const [attachments, setAttachments] = useState<OutboundAttachment[]>([]);
-  const [sending, setSending] = useState(false);
+  const { sending, send: sendDraft } = useEmailSendOperation(`${projectId}:${originalMessage.id}`);
 
   const handleSend = async () => {
     const toList = to.split(",").map((s) => s.trim()).filter(Boolean);
     if (toList.length === 0) { toast.error("At least one recipient is required"); return; }
     if (!bodyText.trim()) { toast.error("Message body is required"); return; }
 
-    setSending(true);
     const ccList = cc ? cc.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
     const fullBody = bodyText + defaults.quoted_body;
 
-    const result = await sendEmail({
+    const result = await sendDraft({
       project_id: projectId,
       to: toList,
       cc: ccList,
@@ -584,7 +583,7 @@ export function ReplyEmailModal({ projectId, originalMessage, mode, currentUserE
       attachments,
     });
 
-    setSending(false);
+    if (!result) return;
     if (result.success) {
       toast.success("Reply sent");
       onSent();

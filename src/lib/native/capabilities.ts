@@ -2,6 +2,7 @@ import { Camera, CameraDirection } from "@capacitor/camera";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { Share } from "@capacitor/share";
 import { isNativePlatform } from "@/lib/native/platform";
+import { captureExportOwner } from '@/lib/exportOwner';
 
 type ImpactStrength = "light" | "medium";
 
@@ -67,6 +68,7 @@ export async function captureNativePhoto(): Promise<File | null> {
 
 export async function shareCurrentReport({ title, url }: { title: string; url: string }): Promise<void> {
   if (!isNativePlatform()) return;
+  const isCurrent = captureExportOwner();
 
   await Share.share({
     title,
@@ -74,5 +76,5 @@ export async function shareCurrentReport({ title, url }: { title: string; url: s
     url: publicShareUrl(url),
     dialogTitle: `Share ${title}`,
   });
-  await nativeImpact("light");
+  if (isCurrent()) await nativeImpact("light");
 }

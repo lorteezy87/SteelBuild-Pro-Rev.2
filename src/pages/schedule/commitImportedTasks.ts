@@ -7,6 +7,7 @@
  * CSV preview modal reuses the exact same insert + link semantics.
  */
 import type { QueryClient } from "@tanstack/react-query";
+import { captureExportOwner } from '@/lib/exportOwner';
 import { entities } from "@/api/supabaseClient";
 import { PHASES } from "@/utils/phases";
 import { batchProcess } from "@/utils/batchProcess";
@@ -24,6 +25,7 @@ import { assertScheduleDateRange } from "./scheduleDateValidation";
 import type { ParsedMppTask, ScheduleTask } from "./types";
 
 export interface CommitImportedTasksOpts {
+  assertCurrent?: () => void;
   tasks: ParsedMppTask[];
   projectId: string;
   qc: QueryClient;
@@ -38,7 +40,11 @@ export async function commitImportedScheduleTasks({
   qc,
   generateMissingWbs = false,
   existingTasks = [],
+  assertCurrent: extraAssert,
 }: CommitImportedTasksOpts): Promise<{ created: number }> {
+  const isCurrent = captureExportOwner();
+  const assertCurrent = () => { if (!isCurrent()) throw new Error('Workspace changed. Reopen this import.'); extraAssert?.(); };
+  assertCurrent();
   if (!allParsed.length) {
     throw new Error("No tasks to import.");
   }
@@ -53,6 +59,7 @@ export async function commitImportedScheduleTasks({
   const snapshot: ScheduleTask[] = [...existingTasks];
 
   for (const t of allParsed) {
+    assertCurrent();
     const phaseName = t.phaseHint || derivePhaseFromHierarchy(t, allParsed);
     const mapped = PHASE_NAME_MAP[String(phaseName || "").toUpperCase()] || phaseName || "Fabrication";
     const phase = PHASES.includes(mapped) ? mapped : "Fabrication";
@@ -82,6 +89,7 @@ export async function commitImportedScheduleTasks({
       notes: t.notes || null,
       is_summary: t.isSummary || false,
     }, projectId) as any) as { id: string };
+    assertCurrent();
 
     uidToDbId[t.uid] = record.id;
     snapshot.push({ id: record.id, phase, wbs_code: wbs } as ScheduleTask);
@@ -91,13 +99,15 @@ export async function commitImportedScheduleTasks({
   if (depItems.length > 0) {
     await batchProcess(
       depItems,
-      ({ dbId, predLinks }: { dbId: string; predLinks: Array<{ id: string; type: string; lag_days: number }> }) =>
-        entities.ScheduleTask.update(dbId, {
+      ({ dbId, predLinks }: { dbId: string; predLinks: Array<{ id: string; type: string; lag_days: number }> }) => {
+        assertCurrent();
+        return entities.ScheduleTask.update(dbId, {
           dependencies: JSON.stringify(predLinks),
-        }),
+        }); },
     );
   }
 
+  assertCurrent();
   invalidateEntity(qc, "schedule_task", projectId);
   return { created: Object.keys(uidToDbId).length };
 }

@@ -2,11 +2,7 @@ import { getWorkPackageDisplayName } from "./analytics";
 import { drawingPackageLabel, num, stageMeta } from "./format";
 import type { EnrichedWorkPackage } from "./types";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
-
-function escapeCsv(value: unknown): string {
-  const text = String(value ?? "");
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
+import { escapeCsvCell } from "@/lib/csv";
 
 export function exportFabReleaseCSV(rows: EnrichedWorkPackage[], fileName = "fab-release.csv"): void {
   const headers = [
@@ -38,7 +34,7 @@ export function exportFabReleaseCSV(rows: EnrichedWorkPackage[], fileName = "fab
       wp.released_date,
       wp._signals.drawing.packages.map(drawingPackageLabel).join("; "),
       wp._signals.flags.map((flag) => flag.label).join("; "),
-    ].map(escapeCsv).join(",")),
+    ].map(escapeCsvCell).join(",")),
   ];
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
   void presentGeneratedFile({ blob, filename: fileName, title: "Fab release export" });

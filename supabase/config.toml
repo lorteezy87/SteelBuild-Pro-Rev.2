@@ -434,13 +434,11 @@ inspector_port = 8083
 deno_version = 2
 
 [functions.command-center-session-handoff]
-# Redemption starts from the native desktop before a caller JWT is available.
-# The function performs its own strict create/redeem authorization checks.
+# Discontinued: inert 410 source only. Delete hosted slug through reviewed retirement.
 verify_jwt = false
 
 [functions.command-center-read]
-# Validate the bearer token inside the function through Supabase Auth, then use
-# that same caller authorization on the anon client so project RLS is authoritative.
+# Discontinued: inert 410 source only. Delete hosted slug through reviewed retirement.
 verify_jwt = false
 
 # [edge_runtime.secrets]

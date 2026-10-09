@@ -23,7 +23,9 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOwnedMutation } from "@/hooks/useOwnedMutation";
+import { useOperationOwner } from "@/hooks/useOperationOwner";
 import { toast } from "sonner";
 import { entities, integrations } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -62,6 +64,7 @@ function fmtShortDate(iso) {
 export default function FieldToday() {
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
+  const captureOwner = useOperationOwner(projectId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const photoInputRef = useRef(null);
@@ -98,16 +101,18 @@ export default function FieldToday() {
   const { pending: pendingSync, enqueue: enqueueOutbox, flush: flushOutbox } = useOutbox();
 
   // ── Task progress: optimistic write back to the schedule (offline-safe) ──
-  const progressMut = useMutation({
-    mutationFn: ({ task, pct, capturedDay }) =>
+  const progressMut = useOwnedMutation(projectId, {
+    mutationFn: ({ task, pct, capturedDay }, owner) =>
       persistScheduleProgress({
         gateway: entities.ScheduleTask,
         id: task.id,
         pct,
         capturedDay,
+        assertActive: owner.assertCurrent,
       }),
-    onMutate: async ({ task, pct }) => {
+    onMutate: async ({ task, pct }, owner) => {
       await queryClient.cancelQueries({ queryKey: ["schedule-tasks", projectId] });
+      owner.assertCurrent();
       const prev = queryClient.getQueryData(["schedule-tasks", projectId]);
       const patch = progressPatch(pct);
       queryClient.setQueryData(["schedule-tasks", projectId], (old) =>
@@ -149,7 +154,7 @@ export default function FieldToday() {
   // ── Quick punch add (reuses the production PunchlistFormModal + create path) ──
   // The client_op_id is minted in onSave and rides BOTH the online create and
   // the offline retry, so a replay can't mint a duplicate (server dedups it).
-  const punchMut = useMutation({
+  const punchMut = useOwnedMutation(projectId, {
     mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
@@ -175,6 +180,7 @@ export default function FieldToday() {
   // create op in the outbox) and replayed on reconnect, dedup'd by client_op_id
   // so a lost-response retry can't mint a duplicate. ──
   const handlePhotoFiles = async (fileList) => {
+    const owner = captureOwner();
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
     if (!projectId) {
@@ -186,6 +192,7 @@ export default function FieldToday() {
     let queued = 0;
     try {
       for (const raw of files) {
+        if (!owner.isCurrent()) return;
         const clientOpId = newClientOpId();
         const meta = {
           project_id: projectId,
@@ -200,8 +207,10 @@ export default function FieldToday() {
         } catch {
           file = raw; // compression failed — upload the original
         }
+        if (!owner.isCurrent()) return;
         try {
-          const result = await integrations.Core.UploadFile({ file, workflow: "photo" });
+          const result = await integrations.Core.UploadFile({ file, projectId, workflow: "photo" });
+          if (!owner.isCurrent()) return;
           await entities.Photo.create(withProjectId({
             ...meta,
             file_url: result.file_url || result.path,
@@ -210,9 +219,11 @@ export default function FieldToday() {
           }, projectId));
           added += 1;
         } catch (err) {
+          if (!owner.isCurrent()) return;
           if (isLikelyOfflineError(err)) {
             try {
               await putPendingPhoto(clientOpId, file, { name: file.name, type: file.type });
+              if (!owner.isCurrent()) return;
               enqueueOutbox(makePhotoCreateOp(clientOpId, { ...meta, file_name: file.name }, Date.now()));
               queued += 1;
             } catch (storeErr) {
@@ -224,6 +235,7 @@ export default function FieldToday() {
           }
         }
       }
+      if (!owner.isCurrent()) return;
       if (added > 0) {
         queryClient.invalidateQueries({ queryKey: ["field-hub-photos", projectId] });
       }
@@ -237,8 +249,8 @@ export default function FieldToday() {
         toast.error("Photo upload failed");
       }
     } finally {
-      setUploadingPhoto(false);
-      if (photoInputRef.current) photoInputRef.current.value = "";
+      if (owner.isCurrent()) setUploadingPhoto(false);
+      if (owner.isCurrent() && photoInputRef.current) photoInputRef.current.value = "";
     }
   };
 

@@ -46,7 +46,10 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: microphone=(), usb=(), serial=(), bluetooth=(), midi=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=' https://js.stripe.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://nominatim.openstreetmap.org https://cloudflareinsights.com; worker-src 'self' blob:; frame-src 'self' https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4511458803253248.ingest.us.sentry.io/api/4511458819375104/security/?sentry_key=6709c2092ebda9743a803919a79c7b46
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=' https://js.stripe.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://nominatim.openstreetmap.org https://cloudflareinsights.com; worker-src 'self' blob:; frame-src 'self' https://kjrwqagyeswwoxpjkcko.supabase.co/storage/v1/object/ https://ndyfjffsulfbwpmwdmic.supabase.co/storage/v1/object/ https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4511458803253248.ingest.us.sentry.io/api/4511458819375104/security/?sentry_key=6709c2092ebda9743a803919a79c7b46
+
+/build-info.json
+  Cache-Control: no-store
 
 # ── Hashed build output ──────────────────────────────────────────────────────
 # Vite fingerprints everything under /assets/, so it is immutable by
@@ -56,12 +59,15 @@
   Cache-Control: public, max-age=31536000, immutable
 
 # ── web-ifc WebAssembly: deliberately NO rule here ───────────────────────────
+# The viewer now imports the installed WASM with ?url, producing a content-
+# hashed /assets/web-ifc-*.wasm beside its matching loader. It inherits the
+# immutable /assets/ cache rule above. Do not recreate a public/wasm copy.
 # The old vercel.json pinned Content-Type: application/wasm on /wasm/. Do NOT
 # add that rule back — on Cloudflare it makes things worse, verified against
 # `wrangler dev`:
 #
 #   • Wrangler already derives application/wasm from the .wasm extension when
-#     it uploads the asset, so a REAL /wasm/web-ifc.wasm is correctly typed
+#     it uploads the asset, so a real /assets/web-ifc-*.wasm is correctly typed
 #     with no rule at all.
 #   • A path-pattern rule also applies to the SPA fallback. With "/wasm/*  ->
 #     Content-Type: application/wasm", a request for a /wasm/ path that does

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Modal, Button } from "@/components/design-system";
 import { toast } from "sonner";
 import { buildRfiNudge, parseEmails } from "@/lib/rfiNudge";
-import { sendEmail } from "@/services/emailSendService";
+import { useEmailSendOperation } from "@/hooks/useEmailSendOperation";
 
 const fieldStyle = {
   width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
@@ -25,7 +25,7 @@ export default function NudgeDraftModal({ rfi, open, onClose, fromName }) {
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
+  const { sending, send: sendDraft } = useEmailSendOperation(open ? `${rfi?.project_id}:${rfi?.id}` : "closed");
 
   useEffect(() => {
     if (!rfi || !open) return;
@@ -33,7 +33,6 @@ export default function NudgeDraftModal({ rfi, open, onClose, fromName }) {
     setTo(draft.suggestedTo.join(", "));
     setSubject(draft.subject);
     setBody(draft.body);
-    setSending(false);
   }, [rfi, open, fromName]);
 
   if (!rfi || !open) return null;
@@ -54,22 +53,18 @@ export default function NudgeDraftModal({ rfi, open, onClose, fromName }) {
       toast.error("Add at least one recipient email before sending");
       return;
     }
-    setSending(true);
-    try {
-      const result = await sendEmail({
-        project_id: rfi.project_id,
-        to: recipients,
-        subject,
-        body_text: body,
-      });
-      if (result.success) {
-        toast.success(`Nudge sent to ${recipients.join(", ")}`);
-        onClose?.();
-      } else {
-        toast.error(`Send failed: ${result.error || "unknown error"}`);
-      }
-    } finally {
-      setSending(false);
+    const result = await sendDraft({
+      project_id: rfi.project_id,
+      to: recipients,
+      subject,
+      body_text: body,
+    });
+    if (!result) return;
+    if (result.success) {
+      toast.success(`Nudge sent to ${recipients.join(", ")}`);
+      onClose?.();
+    } else {
+      toast.error(`Send failed: ${result.error || "unknown error"}`);
     }
   };
 

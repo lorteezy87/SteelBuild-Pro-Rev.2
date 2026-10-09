@@ -1,3 +1,4 @@
+import { fetchWithDeadline } from "../_shared/edgeOperation.ts";
 export class RequestBoundaryError extends Error {
   constructor(message: string, readonly status: 400 | 403 | 413 | 503) {
     super(message);
@@ -50,12 +51,11 @@ export async function authorizeTelemetryProject(
   }
   let response: Response;
   try {
-    response = await fetch(`${config.url}/rest/v1/rpc/user_has_project_access`, {
+    response = await fetchWithDeadline(`${config.url}/rest/v1/rpc/user_has_project_access`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: config.anonKey, Authorization: config.authorization },
       body: JSON.stringify({ p_project_id: projectId }),
-      signal: AbortSignal.timeout(5000),
-    });
+    }, 5000);
   } catch {
     throw new RequestBoundaryError('Project access cannot be verified. Please retry.', 503);
   }

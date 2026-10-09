@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOwnedMutation } from "@/hooks/useOwnedMutation";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -103,13 +104,14 @@ export function useProductionNotesWorkspace({
     void invalidateEntity(queryClient, "production_note");
   };
 
-  const createNote = useMutation({
+  const createNote = useOwnedMutation(orgId, {
     mutationFn: (data: ProductionNoteCreateInput) =>
       entities.ProductionNote.create(
         withProjectId(data, data.project_id),
       ) as Promise<ProductionNoteRecord>,
-    onMutate: async (data) => {
+    onMutate: async (data, owner) => {
       await queryClient.cancelQueries({ queryKey: notesKey });
+      owner.assertCurrent();
       const previous = queryClient.getQueryData<ProductionNoteRecord[]>(notesKey);
       const optimistic: ProductionNoteRecord = {
         ...data,
@@ -136,11 +138,12 @@ export function useProductionNotesWorkspace({
     },
   });
 
-  const updateNote = useMutation({
+  const updateNote = useOwnedMutation(orgId, {
     mutationFn: ({ id, data }: UpdateNoteInput) =>
       entities.ProductionNote.update(id, data) as Promise<ProductionNoteRecord>,
-    onMutate: async ({ id, data }) => {
+    onMutate: async ({ id, data }, owner) => {
       await queryClient.cancelQueries({ queryKey: notesKey });
+      owner.assertCurrent();
       const previous = queryClient.getQueryData<ProductionNoteRecord[]>(notesKey);
       queryClient.setQueryData<ProductionNoteRecord[]>(notesKey, (old = []) =>
         old.map((note) => (note.id === id ? { ...note, ...data } : note)),
@@ -156,10 +159,11 @@ export function useProductionNotesWorkspace({
     },
   });
 
-  const deleteNote = useMutation({
+  const deleteNote = useOwnedMutation(orgId, {
     mutationFn: (id: string) => entities.ProductionNote.delete(id),
-    onMutate: async (id) => {
+    onMutate: async (id, owner) => {
       await queryClient.cancelQueries({ queryKey: notesKey });
+      owner.assertCurrent();
       const previous = queryClient.getQueryData<ProductionNoteRecord[]>(notesKey);
       queryClient.setQueryData<ProductionNoteRecord[]>(notesKey, (old = []) =>
         old.filter((note) => note.id !== id),
@@ -175,7 +179,7 @@ export function useProductionNotesWorkspace({
     },
   });
 
-  const createFolder = useMutation({
+  const createFolder = useOwnedMutation(orgId, {
     mutationFn: ({ parentFolderId, name }: CreateFolderInput) =>
       createNoteFolder({ orgId: orgId as string, name, parentFolderId }),
     onSuccess: () => {
@@ -186,7 +190,7 @@ export function useProductionNotesWorkspace({
       toast.error(toUserErrorMessage(error, "Could not create folder")),
   });
 
-  const renameFolder = useMutation({
+  const renameFolder = useOwnedMutation(orgId, {
     mutationFn: ({ folder, name }: RenameFolderInput) =>
       renameNoteFolder({
         folderId: folder.id,
@@ -201,7 +205,7 @@ export function useProductionNotesWorkspace({
       toast.error(toUserErrorMessage(error, "Could not rename folder")),
   });
 
-  const archiveFolder = useMutation({
+  const archiveFolder = useOwnedMutation(orgId, {
     mutationFn: (folder: VisibleNoteFolder) =>
       archiveNoteFolder({
         folderId: folder.id,
@@ -218,7 +222,7 @@ export function useProductionNotesWorkspace({
       toast.error(toUserErrorMessage(error, "Could not archive folder")),
   });
 
-  const linkFolder = useMutation({
+  const linkFolder = useOwnedMutation(orgId, {
     mutationFn: ({ folder, projectIds, makeIndependent }: LinkFolderInput) =>
       setNoteFolderLinks({
         folderId: folder.id,

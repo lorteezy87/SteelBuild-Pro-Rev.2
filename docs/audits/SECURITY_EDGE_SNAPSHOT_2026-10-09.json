@@ -1,0 +1,84 @@
+{
+  "observedDate": "2026-10-09",
+  "projectRef": "kjrwqagyeswwoxpjkcko",
+  "evidence": "Read-only live Edge Function inventory; this is hosted metadata, not source or deployment acceptance.",
+  "hostedChangesPerformed": false,
+  "functions": [
+    {
+      "id": "94cc303b-2b50-447c-84eb-0437fdc49d3a",
+      "slug": "llm-proxy",
+      "status": "ACTIVE",
+      "version": 44,
+      "verify_jwt": false,
+      "ezbr_sha256": "7a390459cf3236e90686cfa7ca197a35b25afb21d3ac7e66d52e9fdc5c2cad35"
+    },
+    {
+      "id": "a29c616f-9ab0-4be2-985e-6d3810aaefda",
+      "slug": "email-ingest",
+      "status": "ACTIVE",
+      "version": 35,
+      "verify_jwt": false,
+      "ezbr_sha256": "c716f7472e52270c248038b8a1d9931be4fe97a58fd6f574d1fd7890b82ffebd"
+    },
+    {
+      "id": "e7cb20e4-24b9-46d3-8362-872d7eb204a9",
+      "slug": "email-send",
+      "status": "ACTIVE",
+      "version": 31,
+      "verify_jwt": true,
+      "ezbr_sha256": "a04ba904e6c1ba10343a5cbfd7a15e6166e6caaefd52c133ed5a819cd0065041"
+    },
+    {
+      "id": "f78169d1-a6a5-4547-9cea-ecfee44c2210",
+      "slug": "stripe-billing",
+      "status": "ACTIVE",
+      "version": 31,
+      "verify_jwt": false,
+      "ezbr_sha256": "e5fa0e2edd0d1fe16420894f9c70aeb8d4127f2b49a4e69e2b08a6eb8c38b4d4"
+    },
+    {
+      "id": "3251e0a5-669e-4f51-a3eb-6ceca67482c3",
+      "slug": "project-export",
+      "status": "ACTIVE",
+      "version": 31,
+      "verify_jwt": true,
+      "ezbr_sha256": "b17a52220b4afed0a970670a982fc8f732a802232451f6c074a7cac9b0de4f47"
+    },
+    {
+      "id": "a50257ad-e1ee-4dcb-8774-d717b42268c1",
+      "slug": "health",
+      "status": "ACTIVE",
+      "version": 16,
+      "verify_jwt": false,
+      "ezbr_sha256": "4ead87a3e944ef88f5baa4824dd9f6310c7c9da7fc2b43d943adc407e8b0921f"
+    },
+    {
+      "id": "97beb4ba-0e80-45f7-bfb3-82ac032ed460",
+      "slug": "command-center-session-handoff",
+      "status": "ACTIVE",
+      "version": 15,
+      "verify_jwt": false,
+      "ezbr_sha256": "713e0cbf081757c8ae5452425ab5623a6feb2ad659be0ee9cc0ec96a855d40f2"
+    },
+    {
+      "id": "fb85599d-4412-4cd0-9d71-b0286b75e41e",
+      "slug": "command-center-read",
+      "status": "ACTIVE",
+      "version": 14,
+      "verify_jwt": false,
+      "ezbr_sha256": "2ac1111bcc3473ab7383ebb6de81e3b755098f877ab2028afea0766c5d3df7d3"
+    },
+    {
+      "id": "3387e807-eb1a-4c25-ba9e-45479ca6010e",
+      "slug": "account-delete",
+      "status": "ACTIVE",
+      "version": 4,
+      "verify_jwt": true,
+      "ezbr_sha256": "5cc29c4bf484a3fc5e30b7d32622c5ab5e4d58a5c49d36ac1bc0ae3a0838499d"
+    }
+  ],
+  "retirementPending": [
+    "command-center-read",
+    "command-center-session-handoff"
+  ]
+}

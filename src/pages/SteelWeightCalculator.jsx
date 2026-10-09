@@ -17,8 +17,10 @@
  * Shape data lives in src/data/aiscShapes.js (AISC Manual 15th Ed.).
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { escapeCsvCell as csvCell } from "@/lib/csv";
 import { toast } from "sonner";
+import { useOwnedCalculatorState } from "@/hooks/useOwnedCalculatorState";
 import {
   SHAPE_FAMILIES,
   findShape,
@@ -105,40 +107,6 @@ function parseLengthFeet(raw, mode) {
   return ticksToDecimalFeet(ticks);
 }
 
-// ── localStorage helpers (SSR/quota safe) ───────────────────────────
-function readLS(key, fallback) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw == null ? fallback : raw;
-  } catch {
-    return fallback;
-  }
-}
-function writeLS(key, value) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    /* quota / private-mode — ignore */
-  }
-}
-function readRows() {
-  try {
-    const raw = window.localStorage.getItem(LS_ROWS);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-// CSV-cell escaping: wrap in quotes + double any embedded quotes when
-// the value contains a comma, quote, or newline.
-function csvCell(value) {
-  const s = String(value ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 export default function SteelWeightCalculator() {
   const [familyKey, setFamilyKey] = useState(SHAPE_FAMILIES[0].key);
   const [designation, setDesignation] = useState(
@@ -158,31 +126,12 @@ export default function SteelWeightCalculator() {
   const [lengthRaw, setLengthRaw] = useState("");
   const [qty, setQty] = useState("1");
 
-  // Cost — rate + unit, rehydrated from localStorage.
-  const [rate, setRate] = useState(() => readLS(LS_RATE, ""));
-  const [costUnit, setCostUnit] = useState(() => {
-    const saved = readLS(LS_UNIT, COST_UNITS[0]);
-    return COST_UNITS.includes(saved) ? saved : COST_UNITS[0];
-  });
-
-  // Results state — populated on Calculate, cleared when inputs change.
+  // Business rates and history belong to this person in this workspace.
+  const [rate, setRate] = useOwnedCalculatorState(LS_RATE, "");
+  const [costUnit, setCostUnit] = useOwnedCalculatorState(LS_UNIT, COST_UNITS[0]);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-
-  // Running-total list for the session, rehydrated from localStorage.
-  const [runningTotal, setRunningTotal] = useState(() => readRows());
-
-  // ── Persistence side-effects ───────────────────────────────────
-  useEffect(() => { writeLS(LS_RATE, rate); }, [rate]);
-  useEffect(() => { writeLS(LS_UNIT, costUnit); }, [costUnit]);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(LS_ROWS, JSON.stringify(runningTotal));
-    } catch {
-      /* quota / private-mode — ignore */
-    }
-  }, [runningTotal]);
-
+  const [runningTotal, setRunningTotal] = useOwnedCalculatorState(LS_ROWS, []);
   const rateNum = useMemo(() => {
     const n = parseFloat(rate);
     return Number.isFinite(n) && n > 0 ? n : 0;

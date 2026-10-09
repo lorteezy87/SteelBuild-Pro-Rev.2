@@ -1,44 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { checkUserQuota } from './quota';
-
-describe('configured AI quotas', () => {
-  let env: Record<string, string>;
-  beforeEach(() => {
-    env = { SUPABASE_URL: 'https://example.test', SUPABASE_SERVICE_ROLE_KEY: 'test-key', LLM_DAILY_REQUEST_LIMIT: '100' };
-    vi.stubGlobal('Deno', { env: { get: (key: string) => env[key] } });
-    vi.stubGlobal('fetch', vi.fn());
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-  });
-  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-  it('fails closed regardless of a routing label when usage is unavailable', async () => {
-    vi.mocked(fetch).mockRejectedValue(new Error('offline'));
-    await expect(checkUserQuota('user-id')).resolves.toMatchObject({ ok: false, status: 503 });
-  });
-  it.each([{ rows: [] }, { rows: [{ request_count: 'invalid', cost_sum: '0' }] }, { rows: [{ request_count: 0 }] }])('rejects malformed usage data $rows', async ({ rows }) => {
-    vi.mocked(fetch).mockResolvedValue(Response.json(rows));
-    await expect(checkUserQuota('user-id')).resolves.toMatchObject({ ok: false, status: 503 });
-  });
-  it('accepts verified zero usage', async () => {
-    vi.mocked(fetch).mockResolvedValue(Response.json([{ request_count: '0', cost_sum: '0' }]));
-    await expect(checkUserQuota('user-id')).resolves.toEqual({ ok: true });
-  });
-  it('blocks the request at the configured cap', async () => {
-    vi.mocked(fetch).mockResolvedValue(Response.json([{ request_count: '100', cost_sum: '0' }]));
-    await expect(checkUserQuota('user-id')).resolves.toMatchObject({ ok: false, status: 429 });
-  });
-  it('preserves explicitly disabled quotas', async () => {
-    delete env.LLM_DAILY_REQUEST_LIMIT;
-    await expect(checkUserQuota('user-id')).resolves.toEqual({ ok: true });
-    expect(fetch).not.toHaveBeenCalled();
-  });
-  it('does not silently disable a malformed cap', async () => {
-    env.LLM_DAILY_REQUEST_LIMIT = 'invalid';
-    await expect(checkUserQuota('user-id')).resolves.toMatchObject({ ok: false, status: 503 });
-  });
-  it('retains the existing non-positive configuration opt-out', async () => {
-    env.LLM_DAILY_REQUEST_LIMIT = '-1';
-    await expect(checkUserQuota('user-id')).resolves.toEqual({ ok: true });
-    expect(fetch).not.toHaveBeenCalled();
-  });
+import { afterEach, expect, it, vi } from 'vitest';
+import { assertTokenOnlyRequest, reserveLlmOperation } from './quota';
+afterEach(()=>vi.unstubAllGlobals());
+it('reserves even when both quota dimensions are explicitly disabled',async()=>{
+ vi.stubGlobal('Deno',{env:{get:(key:string)=>({SUPABASE_URL:'https://db.example.invalid',SUPABASE_SERVICE_ROLE_KEY:'fixture',LLM_DAILY_COST_LIMIT_USD:'0',LLM_DAILY_REQUEST_LIMIT:'0'}[key])}});
+ const fetch=vi.fn(async()=>Response.json({decision:'reserved',operation_id:'11000000-5eed-4000-8000-000000000001'}));vi.stubGlobal('fetch',fetch);
+ const req=new Request('https://example.invalid',{headers:{'idempotency-key':'22000000-5eed-4000-8000-000000000002'}});
+ await reserveLlmOperation(req,'user',null,{maxTokens:1000},'openai','gpt-4o');
+ expect(fetch).toHaveBeenCalledTimes(1);expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({p_count_limit:0,p_cost_limit:0,p_kind:'llm-proxy'});
 });
+it('preserves custom JSON function tools',()=>{expect(()=>assertTokenOnlyRequest({tools:[{name:'extract',input_schema:{type:'object',properties:{id:{type:'string'}}}}]})).not.toThrow();});
+it('rejects a cache control nested in tool examples',()=>{expect(()=>assertTokenOnlyRequest({tools:[{name:'extract',input_schema:{cache_control:{type:'ephemeral'}}}]})).toThrow(/cache/);});

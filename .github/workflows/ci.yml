@@ -26,9 +26,8 @@
 #                runs against a staging environment, opt-in via STAGING_E2E_*
 #                and STAGING_BASE_URL. Their credentials and Supabase target are
 #                staging-specific and cannot target prod.
-#   - dependency-audit: `npm audit` over production deps, ADVISORY (not in
-#                `deploy-cloudflare.needs`, so a newly disclosed CVE alarms the
-#                run without blocking the release train).
+#   - dependency-audit: required for all publishers. Unwaived production
+#                advisories and high build-tool findings block releases.
 #
 # REMOVED (2026-09): the `deploy` and `deploy-staging` jobs, which shipped to
 # Vercel. That account is closed, so both could only ever fail.
@@ -43,7 +42,8 @@
 #                there is nothing to weigh and the run should fail.
 #
 # What does NOT run here:
-#   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
+#   - Exhaustive business E2E: release acceptance covers the existing auth,
+#     fabrication-release and piece-workflow fixture, not every product workflow.
 #   - SAST — still queued; needs an owner decision on tooling
 #     (see ENTERPRISE_READINESS_AUDIT.md L13).
 #   - Lighthouse / automated a11y auditing (queued for later).
@@ -106,10 +106,10 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: npm
@@ -136,15 +136,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: '2.9.6'
       - name: Check every repository Edge Function entrypoint
         run: >-
-          deno check --node-modules-dir=none --no-config --no-lock
+          deno check --config supabase/functions/deno.json --frozen
           supabase/functions/*/index.ts
 
   ci:
@@ -163,12 +163,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -236,7 +236,7 @@ jobs:
 
       - name: Preserve browser acceptance evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: browser-acceptance-evidence
           path: test-results/foundation/
@@ -271,6 +271,21 @@ jobs:
           npm ci --prefix supabase/tests/stripe-billing --ignore-scripts
           npm test --prefix supabase/tests/stripe-billing
 
+      - name: Verify private mailboxes, project files, creation limits and event provenance
+        run: |
+          npm ci --prefix supabase/tests/private-email --ignore-scripts
+          npm test --prefix supabase/tests/private-email
+          npm ci --prefix supabase/tests/app-files --ignore-scripts
+          npm test --prefix supabase/tests/app-files
+          npm ci --prefix supabase/tests/creation-provenance --ignore-scripts
+          npm test --prefix supabase/tests/creation-provenance
+          npm ci --prefix supabase/tests/edge-quotas --ignore-scripts
+          npm test --prefix supabase/tests/edge-quotas
+          npm ci --prefix supabase/tests/flags-sequences --ignore-scripts
+          npm test --prefix supabase/tests/flags-sequences
+          npm ci --prefix supabase/tests/desktop-retirement --ignore-scripts
+          npm test --prefix supabase/tests/desktop-retirement
+
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
@@ -291,10 +306,8 @@ jobs:
 
   # ── Dependency audit ────────────────────────────────────────────────────
   # `npm audit` over PRODUCTION dependencies, via scripts/audit-gate.mjs.
-  # Deliberately NOT in `deploy.needs`: a CVE disclosed overnight in a
-  # transitive dep should alarm the run (red job, red run), but must not stop
-  # an unrelated fix from shipping. Works straight off the lockfile — no
-  # `npm ci` needed. (Audit L13, dependency-audit slice; gitleaks/SAST queued.)
+  # Required by all publishers. Works straight off the lockfile. Any exception
+  # requires an explicit reviewed, expiring policy change; do not remove needs.
   #
   # This job used to run `npm audit --omit=dev --audit-level=high` and exit 0
   # while three real production advisories sat one step below the bar at
@@ -307,15 +320,15 @@ jobs:
   # in its ALLOWLIST, with a reason and a review date, and fails again when a
   # waiver goes stale. Exceptions live in the diff instead of under a threshold.
   dependency-audit:
-    name: Dependency audit (advisory)
+    name: Dependency audit (required)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
 
@@ -335,8 +348,7 @@ jobs:
   # inbound-mail gate outright. Those live in Supabase Edge Function secrets and
   # the Cloudflare project env; none of them should ever appear in a diff.
   #
-  # BLOCKING, unlike dependency-audit. A CVE in a transitive dep is a risk to
-  # weigh; a committed credential is already compromised the moment it is pushed,
+  # BLOCKING, as is dependency-audit. A committed credential is compromised on push,
   # and the remediation is rotation, not a merge decision. Failing the run is the
   # only useful response.
   #
@@ -364,12 +376,12 @@ jobs:
       pull-requests: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v3
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -385,10 +397,10 @@ jobs:
     if: ${{ github.repository == 'lorteezy87/SteelBuild-Pro-Rev.2' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -437,9 +449,84 @@ jobs:
   # — no service key is ever a VITE_* var.
   #
   # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
+  production-acceptance:
+    name: Exact revision staging release acceptance
+    needs: [ci, secret-scan, edge-typecheck, commercial-postgres, dependency-audit]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
+    environment: steelbuild-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: cloudflare-staging-deploy
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.STAGING_CLOUDFLARE_ACCOUNT_ID }}
+      VITE_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+      VITE_APP_VERSION: ${{ github.sha }}
+      VITE_DEPLOY_ENV: staging
+      DEPLOY_BASE_URL: https://steelbuild-pro-staging.n-lortz1987.workers.dev
+      E2E_TARGET: staging
+      E2E_BASE_URL: https://steelbuild-pro-staging.n-lortz1987.workers.dev
+      E2E_EXPECTED_SUPABASE_REF: ndyfjffsulfbwpmwdmic
+      E2E_MUTATIONS_ENABLED: 'true'
+      E2E_MUTATION_FIXTURE_KIND: disposable
+      E2E_PIECE_FULL_WORKFLOW: 'true'
+      E2E_USER: ${{ secrets.STAGING_E2E_USER }}
+      E2E_PASS: ${{ secrets.STAGING_E2E_PASS }}
+      E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+      E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+      E2E_VIEWER_USER: ${{ secrets.STAGING_E2E_VIEWER_USER }}
+      E2E_VIEWER_PASS: ${{ secrets.STAGING_E2E_VIEWER_PASS }}
+      E2E_FAB_PROJECT_ID: ${{ secrets.STAGING_E2E_FAB_PROJECT_ID }}
+      E2E_BLOCKED_DRAWING_ID: ${{ secrets.STAGING_E2E_BLOCKED_DRAWING_ID }}
+      E2E_CLEAN_DRAWING_ID: ${{ secrets.STAGING_E2E_CLEAN_DRAWING_ID }}
+      E2E_PIECE_PROJECT_ID: ${{ secrets.STAGING_E2E_PIECE_PROJECT_ID }}
+      E2E_PIECE_OTHER_TENANT_PROJECT_ID: ${{ secrets.STAGING_E2E_PIECE_OTHER_TENANT_PROJECT_ID }}
+      E2E_PIECE_WORK_PACKAGE_ID: ${{ secrets.STAGING_E2E_PIECE_WORK_PACKAGE_ID }}
+      E2E_PIECE_APPROVED_DRAWING_ID: ${{ secrets.STAGING_E2E_PIECE_APPROVED_DRAWING_ID }}
+      E2E_PIECE_EXCEPTION_WORK_PACKAGE_ID: ${{ secrets.STAGING_E2E_PIECE_EXCEPTION_WORK_PACKAGE_ID }}
+      E2E_RELEASE_FIXTURE_ATTESTATION: ${{ secrets.STAGING_E2E_RELEASE_FIXTURE_ATTESTATION }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Verify exact-attempt fixture attestation and server freshness
+        run: node scripts/verify-release-fixtures.mjs
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Deploy exact candidate to isolated staging
+        run: npx wrangler deploy --config wrangler.staging.jsonc
+      - name: Verify revision, entrypoint and backend
+        run: node scripts/verify-deployment.mjs
+      - name: Verify authenticated boot and tenant boundary
+        run: npm run test:e2e:staging:readonly
+      - name: Recheck fixture freshness immediately before mutation acceptance
+        run: node scripts/verify-release-fixtures.mjs
+      - name: Verify fabrication release and piece workflow authorization
+        run: npm run test:e2e:staging:mutations
+      - name: Preserve candidate identity and acceptance evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: production-acceptance-${{ github.sha }}
+          path: |
+            dist/build-info.json
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: error
+
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers (production)
-    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres, dependency-audit, production-acceptance]
+    environment: steelbuild-production
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -453,10 +540,10 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -503,6 +590,7 @@ jobs:
           # Stamp the commit as the Sentry release so instrument.js and the
           # vite plugin share one release name, and upload source maps when the
           # token is set (the plugin no-ops if SENTRY_AUTH_TOKEN is empty).
+          VITE_DEPLOY_ENV: production
           VITE_APP_VERSION: ${{ github.sha }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
@@ -514,60 +602,18 @@ jobs:
         run: |
           set -e
           test -f dist/_headers || { echo "::error::dist/_headers missing — headers would be dropped"; exit 1; }
-          test -f dist/wasm/web-ifc.wasm || { echo "::error::dist/wasm/web-ifc.wasm missing — IFC viewer would render nothing"; exit 1; }
+          compgen -G 'dist/assets/web-ifc-*.wasm' > /dev/null || { echo "::error::hashed IFC runtime missing — IFC viewer would render nothing"; exit 1; }
 
       - name: Deploy to Cloudflare Workers
         # Uses the pinned wrangler from devDependencies (not @latest) so the
         # deploy tool version is reviewed like any other dependency bump.
         run: npx wrangler deploy
 
-      - name: Post-deploy health check
-        # Probes the CUSTOM DOMAIN, and takes it from this file rather than
-        # from a repo variable. Both halves of that are the fix.
-        #
-        # This step used to read `vars.CLOUDFLARE_BASE_URL`, gated on it being
-        # non-empty. The variable WAS set — to the workers.dev URL, per step 3
-        # of docs/runbooks/cloudflare-migration.md ("verify off-domain before
-        # touching DNS"). Step 7.4 of that same runbook then says to repoint it
-        # at https://steelbuild-pro.com once the cutover lands. Nobody did.
-        #
-        # So the check kept passing against
-        # https://steelbuild-pro-rev-2.n-lortz1987.workers.dev/ — a URL no
-        # customer uses. `wrangler deploy` binds all three hostnames (the
-        # deploy log lists workers.dev, steelbuild-pro.com and www), and
-        # workers.dev answers straight from the Worker. It stays 200 through a
-        # missing custom-domain binding, a wrong route, or DNS pointed
-        # somewhere else entirely — every way the live site can go dark while
-        # the Worker itself is perfectly healthy.
-        #
-        # A repo variable is invisible in review: nothing in a diff shows what
-        # it holds, which is how it sat on a stale value through the whole
-        # cutover and a run of green deploys. What production is health-checked
-        # against belongs in the file, where changing it needs a PR. For a
-        # future cutover, edit the line below — that is a feature, not friction.
-        #
-        # Red here means "deployed but not serving" — a signal, not a
-        # rollback; the version is already promoted by the time this runs.
+      - name: Verify deployed revision, entrypoint and backend
         env:
-          BASE: https://steelbuild-pro.com
-        run: |
-          set -e
-          echo "probing $BASE"
-          for i in 1 2 3 4 5 6; do
-            # `|| code="000"` is load-bearing. An HTTP error status leaves curl
-            # exit 0, but a TRANSPORT failure (DNS, TLS, refused, timeout) does
-            # not — and under `set -e` a bare assignment from a failed command
-            # substitution exits the shell right here, before the loop can log
-            # an attempt, sleep, retry, or reach the ::error:: below. The six
-            # attempts would be fiction and one DNS blip would fail a deploy
-            # that is actually fine. Putting the assignment in an || list is
-            # what errexit exempts. 000 is curl's own "no HTTP response" value,
-            # so "attempt 1: HTTP 000" reads correctly.
-            code=$(curl -sL -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "$BASE") || code="000"
-            if [ "$code" = "200" ]; then echo "cloudflare healthy ($code) at $BASE"; exit 0; fi
-            echo "attempt $i: HTTP $code"; sleep 10
-          done
-          echo "::error::Cloudflare health check failed after deploy: $BASE never returned 200"; exit 1
+          DEPLOY_BASE_URL: https://steelbuild-pro.com
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: node scripts/verify-deployment.mjs
 
   # ── PR preview → Cloudflare version preview URL ──────────────────────────
   # Gives back the per-PR preview URLs that Cloudflare's Workers Builds git
@@ -579,13 +625,14 @@ jobs:
   # preview URL for it WITHOUT promoting it to the live deployment, so a PR
   # preview can never become production. Only `wrangler deploy` promotes.
   #
-  # The preview builds against the SAME Supabase project as production (there
-  # is one), so treat a preview URL as a real client: RLS and auth are what
-  # protect the data, exactly as on the live site. Preview URLs are public —
+  # Previews use staging Supabase and a separate preview Worker/credential.
+  # Environment-only secrets and Cloudflare account scope need hosted review.
+  # Preview URLs are public —
   # public/_headers marks them noindex, and Cloudflare Access is the real fix.
   preview-cloudflare:
     name: Cloudflare preview (PR)
-    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres, dependency-audit]
+    environment: steelbuild-preview
     # Same-repo PRs only. Secrets are not exposed to forked-PR workflows, so a
     # fork would trip the config check below instead of building something
     # broken; skipping outright is clearer.
@@ -600,14 +647,14 @@ jobs:
       group: cloudflare-preview-${{ github.ref }}
       cancel-in-progress: true
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -631,16 +678,19 @@ jobs:
               exit 1
               ;;
           esac
+          test "$VITE_SUPABASE_URL" = 'https://ndyfjffsulfbwpmwdmic.supabase.co' || { echo '::error::Preview must use isolated staging'; exit 1; }
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo '::error::Preview publisher credentials missing'; exit 1; }
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
 
       - name: Build
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+          VITE_DEPLOY_ENV: preview
           VITE_APP_VERSION: ${{ github.sha }}
           # No SENTRY_AUTH_TOKEN: previews must not upload source maps or claim
           # a Sentry release. Only the production deploy does that.
@@ -649,17 +699,18 @@ jobs:
         run: |
           set -e
           test -f dist/_headers || { echo "::error::dist/_headers missing — headers would be dropped"; exit 1; }
-          test -f dist/wasm/web-ifc.wasm || { echo "::error::dist/wasm/web-ifc.wasm missing — IFC viewer would render nothing"; exit 1; }
+          compgen -G 'dist/assets/web-ifc-*.wasm' > /dev/null || { echo "::error::hashed IFC runtime missing — IFC viewer would render nothing"; exit 1; }
 
       - name: Upload preview version
         # Uses the pinned wrangler from devDependencies, not @latest, so the
         # deploy tool version is reviewed like any other dependency bump.
-        run: npx wrangler versions upload
+        run: npx wrangler versions upload --config wrangler.preview.jsonc
 
   # Staging has its own Worker and Supabase branch. Never inherit prod env.
   deploy-staging-cloudflare:
     name: Deploy to Cloudflare Workers (staging)
-    needs: [ci, secret-scan, edge-typecheck, commercial-postgres]
+    needs: [ci, secret-scan, edge-typecheck, commercial-postgres, dependency-audit]
+    environment: steelbuild-staging
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -667,13 +718,13 @@ jobs:
       group: cloudflare-staging-deploy
       cancel-in-progress: false
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.STAGING_CLOUDFLARE_ACCOUNT_ID }}
       VITE_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: npm
@@ -716,6 +767,7 @@ jobs:
   # the deployment. Environment guardrails additionally reject the production
   # hostname or a Supabase URL that is not the documented staging project.
   staging-e2e-readonly:
+    environment: steelbuild-staging
     name: E2E smoke (staging, read-only)
     needs: deploy-staging-cloudflare
     # The branch/event condition is LOAD-BEARING, not decoration. This job used
@@ -736,10 +788,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -763,7 +815,7 @@ jobs:
 
       - name: Upload staging Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: staging-playwright-readonly-report
           path: playwright-report/
@@ -774,6 +826,7 @@ jobs:
   # the job variable, E2E_MUTATIONS_ENABLED, and the disposable fixture marker.
   # They are staging-only and are never selected by staging-e2e-readonly.
   staging-e2e-mutations:
+    environment: steelbuild-staging
     name: E2E gates (staging, disposable mutations)
     needs: deploy-staging-cloudflare
     # Same load-bearing branch/event gate as staging-e2e-readonly above — see
@@ -787,10 +840,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -827,7 +880,7 @@ jobs:
 
       - name: Upload staging mutation Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: staging-playwright-mutation-report
           path: playwright-report/
@@ -858,10 +911,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -899,7 +952,7 @@ jobs:
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-report
           path: playwright-report/

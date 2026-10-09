@@ -99,7 +99,7 @@ describe("PhotoUploadModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 Photo" }));
 
     await waitFor(() => expect(photoCreate).toHaveBeenCalledOnce());
-    expect(uploadFile).toHaveBeenCalledWith({ file, workflow: "photo" });
+    expect(uploadFile).toHaveBeenCalledWith({ file, projectId: "project-1", workflow: "photo" });
     expect(photoCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         project_id: "project-1",

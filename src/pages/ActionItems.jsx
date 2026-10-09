@@ -15,6 +15,7 @@ import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { escapeCsvCell } from "@/lib/csv";
 import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
 import {
   buildActionItemAssignPatch,
@@ -38,7 +39,7 @@ function exportActionItemsToCSV(items) {
     ]),
   ];
   const csv = rows
-    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .map((r) => r.map(escapeCsvCell).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   void presentGeneratedFile({ blob, filename: "action-items.csv", title: "Action items" });

@@ -8,6 +8,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import type { LLMRequest, LLMResponse, ProviderClient } from "./types.ts";
+import { fetchWithDeadline } from "../../_shared/edgeOperation.ts";
 import { LLMError } from "./types.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -61,7 +62,7 @@ export const anthropicClient: ProviderClient = {
 
     let resp: Response;
     try {
-      resp = await fetch("https://api.anthropic.com/v1/messages", {
+      resp = await fetchWithDeadline("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type":     "application/json",
@@ -69,7 +70,7 @@ export const anthropicClient: ProviderClient = {
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify(payload),
-      });
+      }, 60_000, 256 * 1024);
     } catch (err) {
       throw new LLMError(
         `Anthropic fetch failed: ${err instanceof Error ? err.message : String(err)}`,

@@ -130,6 +130,16 @@ export function getPasswordRecoveryHold(): PasswordRecoveryHold | null {
   return hold;
 }
 
+/** A warm native callback must establish its own hint before the SDK event. */
+export function preparePasswordRecoveryCallback(): void {
+  initializePasswordRecovery();
+  if (callbackHintId) return;
+  const entry = unknownEntry();
+  callbackHintId = entry.id;
+  recoveryToken = null;
+  persist(entry);
+}
+
 export function refreshPasswordRecovery(): void {
   initializePasswordRecovery();
   if (scan()) publish();

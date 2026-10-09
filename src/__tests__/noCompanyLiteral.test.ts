@@ -79,6 +79,9 @@ const rel = (f: string) => f.replace(/.*\/src\//, "src/");
 
 describe("no company literal in executable source", () => {
   const files = sourceFiles(SRC);
+  // Read once for the three independent patterns; repeating thousands of disk
+  // reads inside each assertion needlessly hits timeouts on busy Windows hosts.
+  const sources = files.map(file => ({ file, source: readFileSync(file, 'utf8') }));
 
   it("scans the whole tree, not a broken glob", () => {
     // Without this, a wrong path makes every assertion below pass vacuously.
@@ -86,12 +89,11 @@ describe("no company literal in executable source", () => {
   });
 
   it.each(COMPANY_LITERAL)("names the company nowhere in code (%s)", (_label, pattern) => {
-    const offenders = files
-      .filter((f) => {
-        const source = readFileSync(f, "utf8");
-        return pattern.test(source) && pattern.test(stripComments(source, f));
+    const offenders = sources
+      .filter(({ file, source }) => {
+        return pattern.test(source) && pattern.test(stripComments(source, file));
       })
-      .map(rel);
+      .map(({ file }) => rel(file));
     expect(
       offenders,
       `these put a private company into the product's own logic:\n${offenders.join("\n")}`,

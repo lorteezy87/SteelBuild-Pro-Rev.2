@@ -15,6 +15,7 @@ import { calculateMarginRisk } from "@/services/marginRiskEngine";
 import { buildRiskSummary } from "./riskHub/riskControlCenter.derive";
 import RiskControlCenter from "./riskHub/RiskControlCenter";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { escapeCsvCell } from "@/lib/csv";
 
 export default function RiskHub() {
   const projectId = useProjectId();
@@ -77,7 +78,7 @@ export default function RiskHub() {
       ["Risk", "Category", "Severity", "Exposure", "Status", "Owner", "Detail"],
       ...filtered.map((r) => [r.label, r.category, r.severity, r.exposure, r.mitigationStatus ?? "Active", r.owner ?? "—", r.detail]),
     ];
-    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = rows.map((r) => r.map(escapeCsvCell).join(",")).join("\n");
     void presentGeneratedFile({
       blob: new Blob([csv], { type: "text/csv" }),
       filename: "risk-export.csv",

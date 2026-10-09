@@ -4515,7 +4515,6 @@ export type Database = {
       }
       email_accounts: {
         Row: {
-          access_token: string | null
           connection_type: string
           created_at: string
           created_by: string | null
@@ -4526,12 +4525,9 @@ export type Database = {
           last_sync_at: string | null
           project_id: string
           provider: string
-          refresh_token: string | null
-          token_expires_at: string | null
           updated_at: string
         }
         Insert: {
-          access_token?: string | null
           connection_type?: string
           created_at?: string
           created_by?: string | null
@@ -4542,12 +4538,9 @@ export type Database = {
           last_sync_at?: string | null
           project_id: string
           provider?: string
-          refresh_token?: string | null
-          token_expires_at?: string | null
           updated_at?: string
         }
         Update: {
-          access_token?: string | null
           connection_type?: string
           created_at?: string
           created_by?: string | null
@@ -4558,8 +4551,6 @@ export type Database = {
           last_sync_at?: string | null
           project_id?: string
           provider?: string
-          refresh_token?: string | null
-          token_expires_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -11394,6 +11385,10 @@ export type Database = {
       }
     }
     Functions: {
+      list_effective_feature_flags: {
+        Args: Record<PropertyKey, never>
+        Returns: { flag_key: string; enabled: boolean }[]
+      }
       _tmp_timeout_probe: { Args: never; Returns: string }
       accept_invitation: { Args: { p_token: string }; Returns: Json }
       acknowledge_transmittal: {
@@ -12958,6 +12953,10 @@ export type Database = {
           founding_org_id: string
           token_sha256: string
         }[]
+      }
+      get_email_account_verification: {
+        Args: { p_project_id: string }
+        Returns: { account_id: string; verified: boolean; send_provider: string | null }[]
       }
       get_my_project_role: { Args: { p_project_id: string }; Returns: string }
       get_next_sequence_number: {

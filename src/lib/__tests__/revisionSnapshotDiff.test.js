@@ -295,3 +295,18 @@ describe("recordVisualRevisionReview", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 });
+
+it("keeps the same paid operation key through automatic transport retries", async () => {
+  vi.useFakeTimers();
+  try {
+    const invoke = vi.fn().mockResolvedValueOnce({ data: null, error: { message: "Transport unavailable", context: { status: 503, text: async () => "" } } })
+      .mockResolvedValueOnce({ data: { tool_use: { input: { summary: "Review", deltas: [] } }, raw: {} }, error: null });
+    wireSupabase({ comparisons: { maybeSingle: null }, deltas: { list: [] }, invoke, rpc: makeRpc() });
+    const work = generateRevisionDiff({projectId:"p1",drawingId:"d1",fromRevisionId:"r1",toRevisionId:"r2",fromImageB64:"AAAA",toImageB64:"BBBB"});
+    await vi.advanceTimersByTimeAsync(15000);await work;
+    expect(invoke).toHaveBeenCalledTimes(2);
+    const first = invoke.mock.calls[0][1].headers["Idempotency-Key"];
+    expect(first).toMatch(/^[a-f0-9-]{36}$/i);
+    expect(invoke.mock.calls[1][1].headers["Idempotency-Key"]).toBe(first);
+  } finally { vi.useRealTimers(); }
+});

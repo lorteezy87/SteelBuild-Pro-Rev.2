@@ -1,12 +1,12 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
 import { stripPrivilegeMeta } from '@/lib/authMeta';
 import { queryClientInstance } from '@/lib/query-client';
 import { clearPendingPhotos } from '@/lib/field/blobStore';
 import { assertTermsAccepted, TERMS_VERSION } from '@/lib/signupClickwrap';
 import { passwordResetRedirect } from '@/lib/authRedirects';
+import { authCallbackFailureMessage, clearAuthCallbackFailure, subscribeAuthCallbackFailure } from '@/lib/authCallbackPolicy';
 import { ACTIVE_PROJECT_ID_KEY, PROJECTS_CACHE_KEY } from '@/lib/projectSelection';
 import { setActiveOrgId } from '@/lib/activeOrg';
 import { isNativePlatform } from '@/lib/native/platform';
@@ -120,6 +120,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Kept for API compatibility with components that read this flag
   const [isLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
+  const callbackFailure = useSyncExternalStore(subscribeAuthCallbackFailure, authCallbackFailureMessage, (): null => null);
   // Kept for API compatibility; no longer populated
   const [appPublicSettings] = useState<unknown>(null);
   // True while the user is in a Supabase PASSWORD_RECOVERY session (arrived via
@@ -210,9 +211,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // wipe the previous user's cached tenant data before theirs renders (M38).
   const currentUserIdRef = useRef<string | null>(null);
 
-  // Attribute Sentry events to an OPAQUE user id (no email / PII — M15) when
-  // signed in, and clear it on sign-out. Also wipes the previous user's client
-  // state whenever the signed-in identity changes or clears (M38).
+  // Keep user identity local; telemetry session/span envelopes can otherwise
+  // bypass event sanitizers. Wipe tenant state when the identity changes (M38).
   const syncIdentity = (nextUserId: string | null): void => {
     const prevUserId = currentUserIdRef.current;
     if (prevUserId !== nextUserId) setSignOutFailed(false);
@@ -221,10 +221,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         // Different user signed in on this device — drop the old tenant's data.
         clearTenantClientState();
       }
-      Sentry.setUser({ id: nextUserId });
     } else if (prevUserId) {
-      // Session ended — clear attribution and cached tenant data.
-      Sentry.setUser(null);
+      // Session ended — clear cached tenant data.
       clearTenantClientState();
     }
     currentUserIdRef.current = nextUserId;
@@ -348,6 +346,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (!data.user) throw new Error('Sign-in did not return a user.');
+      clearAuthCallbackFailure();
       await publishSessionUser(data.user, data.session?.access_token ?? null);
       return { success: true };
     } catch (error: unknown) {
@@ -635,7 +634,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       isLoadingAuth,
       isLoggingIn,
       isLoadingPublicSettings,
-      authError,
+      authError: authError?.message === 'Authentication required' && callbackFailure
+        ? { type: 'auth_required', message: callbackFailure } : authError,
       appPublicSettings,
       logout,
       loginWithPassword,

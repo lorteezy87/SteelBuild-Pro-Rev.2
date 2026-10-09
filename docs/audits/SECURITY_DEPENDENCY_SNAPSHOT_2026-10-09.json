@@ -1,0 +1,49 @@
+{
+  "observedDate": "2026-10-09",
+  "commands": [
+    "npm audit --omit=dev --json",
+    "npm audit --json"
+  ],
+  "production": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "allDependencies": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 5,
+    "critical": 0,
+    "total": 5
+  },
+  "affectedPackages": [
+    "braces",
+    "chokidar",
+    "fast-glob",
+    "micromatch",
+    "tailwindcss"
+  ],
+  "advisory": [
+    {
+      "source": 1240992,
+      "name": "braces",
+      "dependency": "braces",
+      "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+      "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+      "severity": "high",
+      "cwe": [
+        "CWE-674"
+      ],
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "range": "<=3.0.3"
+    }
+  ],
+  "disposition": "Release blocked; no exception or forced major-version migration added. npm proposes Tailwind4 as a breaking removal path."
+}

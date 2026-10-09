@@ -16,6 +16,7 @@ import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { supabase } from "@/lib/supabase";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { escapeCsvCell } from "@/lib/csv";
 import {
   bulkUpdateProductionStage,
   listPieceProduction,
@@ -51,7 +52,7 @@ function exportProductionCSV(rows) {
     p.external_ref || "",
   ]);
   const csv = [headers, ...data]
-    .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .map((row) => row.map(escapeCsvCell).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   void presentGeneratedFile({ blob, filename: "production-status.csv", title: "Production status" });

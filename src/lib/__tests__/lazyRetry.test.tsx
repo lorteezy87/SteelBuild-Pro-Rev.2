@@ -2,7 +2,7 @@
 import React, { Component, Suspense, type ReactNode } from 'react';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { lazyWithRetry } from '../lazyRetry';
+import { isStaleChunkError, lazyWithRetry } from '../lazyRetry';
 
 const LEGACY_KEY = '__steelbuild_chunk_reload';
 const staleError = new TypeError('Failed to fetch dynamically imported module');
@@ -69,6 +69,13 @@ afterEach(() => {
 });
 
 describe('lazy route recovery', () => {
+  it('recognizes Firefox import failures and preserves the one-shot guard', async () => {
+    failure = new TypeError('error loading dynamically imported module: https://app.example/assets/Page-old.js');
+    expect(isStaleChunkError(failure)).toBe(true);
+    await openPage(); cleanup(); await openPage();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(pageError).toBe(failure);
+  });
   it('reloads once on the first stale import with a persisted marker', async () => {
     await openPage();
     expect(reload).toHaveBeenCalledTimes(1);

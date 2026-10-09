@@ -1,3 +1,4 @@
+import { buildSafeEmailDocument } from "@/lib/emailBody";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, MouseEvent, ReactNode } from "react";
 import {
@@ -518,6 +519,7 @@ interface EmailBodyContentProps {
 
 export function EmailBodyContent({ message, attachments }: EmailBodyContentProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [remoteBody, setRemoteBody] = useState<string | null>(null);
 
   // Determine the best HTML content to render:
   // 1. Use body_html if available
@@ -566,21 +568,19 @@ export function EmailBodyContent({ message, attachments }: EmailBodyContentProps
     return () => iframe.removeEventListener("load", onLoad);
   }, [rawHtml]);
 
-  const htmlDoc = rawHtml
-    ? `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-        body { margin: 0; padding: 12px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 13px; line-height: 1.5; color: #d4d4d8; background: transparent; }
-        img { max-width: 100%; height: auto; }
-        a { color: #60a5fa; }
-        table { border-collapse: collapse; max-width: 100%; }
-        td, th { padding: 4px 8px; }
-        pre, code { font-family: var(--font-mono, monospace); font-size: 12px;
-          background: rgba(255,255,255,0.06); padding: 2px 4px; border-radius: 3px; }
-      </style></head><body>${rawHtml}</body></html>`
-    : null;
+  const bodyKey = JSON.stringify([message.id, rawHtml]);
+  const allowRemoteImages = remoteBody === bodyKey;
+  const safeBody = useMemo(() => rawHtml ? buildSafeEmailDocument(rawHtml, allowRemoteImages) : null, [rawHtml, allowRemoteImages]);
+  const htmlDoc = safeBody?.html;
 
   return (
     <div>
+      {safeBody && !allowRemoteImages && safeBody.blockedImages > 0 && (
+        <div style={{ marginBottom: 8, fontSize: 12, color: "var(--text-secondary)" }}>
+          Remote images are blocked to protect your privacy. {" "}
+          <button type="button" onClick={() => setRemoteBody(bodyKey)} style={{ minHeight: 44, padding: "8px 12px", color: "var(--text-primary)", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 6 }}>Load images for this message</button>
+        </div>
+      )}
       {/* Render HTML body in sandboxed iframe, or fallback to text */}
       {htmlDoc ? (
         <iframe

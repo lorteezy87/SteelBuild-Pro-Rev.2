@@ -58,7 +58,7 @@ export async function uploadPhotoItems({
     updateItem(item.id, { status: "uploading", error: null });
     try {
       const compressed = await dependencies.compress(item.file);
-      const uploaded = await dependencies.uploadFile({ file: compressed, workflow: "photo" });
+      const uploaded = await dependencies.uploadFile({ file: compressed, projectId, workflow: "photo" });
       await dependencies.createPhoto(
         createPhotoInsert(item, projectId, compressed, uploaded.file_url),
       );

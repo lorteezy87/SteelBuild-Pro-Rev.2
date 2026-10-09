@@ -456,15 +456,17 @@ function filenameFor(project, now = new Date()) {
  * @param {object} [opts.project]
  * @param {Array}  [opts.tasks]
  * @param {Date}   [opts.now]
+ * @param {() => boolean} [opts.isCurrent]
  * @returns {Promise<{pageCount:number, filename:string, presentation:"downloaded"|"shared"|"cancelled"|"failed"}>}
  */
-export async function exportGanttToPdf({ project = {}, tasks = [], now = new Date() } = {}) {
+export async function exportGanttToPdf({ project = {}, tasks = [], now = new Date(), isCurrent = undefined } = {}) {
   const pdf = buildGanttPdf({ project, tasks, now });
   const filename = filenameFor(project, now);
   const presentation = await presentGeneratedFile({
     blob: pdf.output("blob"),
     filename,
     title: "Schedule PDF",
+    isCurrent,
   });
   return { pageCount: pdf.internal.getNumberOfPages(), filename, presentation };
 }

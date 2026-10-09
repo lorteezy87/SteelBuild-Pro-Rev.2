@@ -16,6 +16,13 @@ type Workflow = {
 };
 
 describe("GitHub workflow files", () => {
+  it.each(workflows)("%s pins third-party actions to immutable commits", (name) => {
+    const source = readFileSync(new URL(name, workflowsDir), "utf8");
+    for (const [, action] of source.matchAll(/\buses:\s+([^\s#]+)/g)) {
+      if (action.startsWith('./')) continue;
+      expect(action).toMatch(/^[^@]+@[a-f0-9]{40}$/);
+    }
+  });
   it.each(workflows)("%s reads step-only contexts only inside steps", (name) => {
     const workflow = load(readFileSync(new URL(name, workflowsDir), "utf8")) as Workflow;
     const envMaps = [workflow.env, ...Object.values(workflow.jobs ?? {}).map((job) => job.env)];

@@ -142,8 +142,8 @@ describe("cost.computeCostUsd", () => {
     expect(computeCostUsd("anthropic", "claude-opus-4", 1_000_000, 1_000_000)).toBe(90);
   });
 
-  it("Anthropic Haiku 4 — 1M in + 1M out = $0.25 + $1.25 = $1.50", () => {
-    expect(computeCostUsd("anthropic", "claude-haiku-4", 1_000_000, 1_000_000)).toBe(1.5);
+  it("Anthropic Haiku 4.5 uses the verified $1 input / $5 output rates", () => {
+    expect(computeCostUsd("anthropic", "claude-haiku-4-5", 1_000_000, 1_000_000)).toBe(6);
   });
 
   it("Realistic small request — 1k input + 200 output on gpt-4o-mini ≈ $0.000270", () => {
@@ -161,9 +161,9 @@ describe("cost.computeCostUsd", () => {
     expect(computeCostUsd("xai", "grok-1", 1000, 1000)).toBeNull();
   });
 
-  it("Null/undefined token counts treated as 0", () => {
-    expect(computeCostUsd("openai", "gpt-4o-mini", null, null)).toBe(0);
-    expect(computeCostUsd("openai", "gpt-4o-mini", undefined, undefined)).toBe(0);
+  it("Missing usage remains unknown so quota reservations cannot be refunded", () => {
+    expect(computeCostUsd("openai", "gpt-4o-mini", null, null)).toBeNull();
+    expect(computeCostUsd("openai", "gpt-4o-mini", undefined, undefined)).toBeNull();
   });
 
   it("Rate card exposes both providers", () => {

@@ -78,6 +78,7 @@ export default function DrawingsPageModals({
     <>
       {showModal && (
         <SheetFormModal
+          projectId={editing?.project_id || activeProject?.id}
           initial={editing || EMPTY_FORM}
           onSave={onSave}
           onClose={onCloseSheetModal}

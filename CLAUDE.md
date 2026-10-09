@@ -15,14 +15,14 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - `npm run build` — production build
 - CI gates — every PR must pass all of them: `lint`, `typecheck`, `typecheck:js`, `typecheck:strict`, `typecheck:noimplicitany`, `check:no-new-js`, `test`, `build`.
   - New source files must be `.ts`/`.tsx` (enforced by `check:no-new-js`). Editing existing `.js`/`.jsx` files is fine.
-  - **A deploy is gated on four jobs, not just `ci`.** `deploy-cloudflare` and `preview-cloudflare` both declare `needs: [ci, secret-scan, supabase-drift, edge-typecheck]`. `edge-typecheck` is a Deno check over the released Edge Functions, so an Edge Function that does not type-check blocks the web deploy too.
+  - **Web publishers require `ci`, `secret-scan`, `supabase-drift`, `edge-typecheck`, `commercial-postgres` and `dependency-audit`; production additionally requires exact-revision `production-acceptance`.** `edge-typecheck` is a Deno check over the released Edge Functions, so an Edge Function that does not type-check blocks the web deploy too.
 - Tests run with `TZ=UTC` (`vite.config.js`), which hides local-vs-UTC bugs.
   - A test that must prove local-day behaviour has to inject the zone, for example by stubbing the date conversion or the `Date` getters.
   - Building dates from local parts passes vacuously on the UTC runner.
 
 ## Deploy — Cloudflare Workers
 - **Production:** the static-asset Worker `steelbuild-pro-rev-2`, configured in `wrangler.jsonc`.
-- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after green `ci`, `secret-scan`, `supabase-drift`, and `edge-typecheck` jobs. PRs get a Cloudflare preview.
+- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after all validation, dependency and exact-revision staging acceptance gates pass. PR previews use the separate preview Worker and staging backend. Environment credential restrictions and release fixtures must be configured; source YAML alone is not hosted acceptance.
 - **Custom domains:** `steelbuild-pro.com` and `www.steelbuild-pro.com`.
 - **Vercel is retired.** Don't reintroduce it.
 - **`wrangler.jsonc`:** keep `workers_dev` and `preview_urls` set explicitly. Adding `routes` silently turns both off, which once broke the post-deploy health check.

@@ -11,7 +11,7 @@
 //
 // EXTERNAL WIRE FORMAT IS UNCHANGED.
 //
-// Existing callers continue to work without code changes — they get the
+// Callers supply one stable Idempotency-Key per logical operation — they get the
 // same `{ text, content, tool_use, raw, protocol_version }` envelope.
 // The `useCase` parameter is OPTIONAL.
 //
@@ -31,7 +31,7 @@
 //     temperature?: number
 //     tools?:       Anthropic-style tool definitions
 //     tool_choice?: Anthropic-style tool-choice
-//     project_id?:  string                   // for telemetry only
+//     project_id?:  string                   // verified project scope for replay/telemetry
 //   }
 //
 // Response envelope (UNCHANGED — DO NOT BREAK):
@@ -60,7 +60,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 // deno-lint-ignore-file no-explicit-any
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2.117.2/edge-runtime.d.ts";
 
 import type { LLMResponse, ProviderClient } from "./providers/types.ts";
 import { LLMError } from "./providers/types.ts";
@@ -68,11 +68,12 @@ import { anthropicClient } from "./providers/anthropic.ts";
 import { openaiClient }    from "./providers/openai.ts";
 import { computeCostUsd, isModelPriced } from "./providers/cost.ts";
 import { getProviderForUseCase } from "./router.ts";
-import { checkUserQuota } from "./quota.ts";
+import { reserveLlmOperation } from "./quota.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 import { normalizeRequestLimits } from "./requestLimits.ts";
 import { authorizeTelemetryProject, readBoundedJson, RequestBoundaryError } from "./requestBoundary.ts";
+import { EdgeBoundaryError, boundedRequest, fetchWithDeadline, finishOperation } from "../_shared/edgeOperation.ts";
 import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 
 // Protocol versions:
@@ -134,7 +135,7 @@ async function authenticateRequest(req: Request): Promise<{ ok: true; userId: st
 
   const token = authHeader.slice("Bearer ".length).trim();
   try {
-    const userResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    const userResp = await fetchWithDeadline(`${supabaseUrl}/auth/v1/user`, {
       headers: {
         "Authorization": `Bearer ${token}`,
         "apikey": supabaseAnon,
@@ -143,7 +144,7 @@ async function authenticateRequest(req: Request): Promise<{ ok: true; userId: st
 
     if (!userResp.ok) {
       const errBody = await userResp.text();
-      console.error(`[llm-proxy] Auth /user returned ${userResp.status}: ${errBody.slice(0, 200)}`);
+      console.error("[llm-proxy] auth_failed", { status: userResp.status });
       return {
         ok: false,
         response: json({ error: "Invalid or expired session", protocol_version: PROTOCOL_VERSION }, 401, req),
@@ -161,8 +162,7 @@ async function authenticateRequest(req: Request): Promise<{ ok: true; userId: st
     if (mfaDenial) return { ok: false, response: mfaDenial };
     return { ok: true, userId: user.id };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[llm-proxy] Auth /user fetch threw:", msg);
+    console.error("[llm-proxy] auth_unavailable");
     return {
       ok: false,
       response: json({ error: "Auth service unreachable. Please retry.", protocol_version: PROTOCOL_VERSION }, 502, req),
@@ -200,7 +200,7 @@ async function recordTelemetry(row: TelemetryRow): Promise<void> {
     return;
   }
   try {
-    const resp = await fetch(`${supabaseUrl}/rest/v1/llm_telemetry`, {
+    const resp = await fetchWithDeadline(`${supabaseUrl}/rest/v1/llm_telemetry`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -212,11 +212,10 @@ async function recordTelemetry(row: TelemetryRow): Promise<void> {
     });
     if (!resp.ok) {
       const detail = (await resp.text()).slice(0, 300);
-      console.error(`[llm-proxy] telemetry insert ${resp.status}: ${detail}`);
+      console.error("[llm-proxy] telemetry_write_failed");
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[llm-proxy] telemetry insert threw: ${msg}`);
+    console.error("[llm-proxy] telemetry_write_failed");
   }
 }
 
@@ -259,6 +258,7 @@ async function handle(req: Request): Promise<Response> {
   let body: any;
   let projectId: string | null;
   try {
+    req = await boundedRequest(req, MAX_REQUEST_BYTES);
     body = await readBoundedJson(req, MAX_REQUEST_BYTES);
     projectId = await authorizeTelemetryProject(body.project_id, {
       url: Deno.env.get("SUPABASE_URL")!,
@@ -266,7 +266,7 @@ async function handle(req: Request): Promise<Response> {
       authorization: req.headers.get("Authorization")!,
     });
   } catch (err) {
-    if (!(err instanceof RequestBoundaryError)) throw err;
+    if (!(err instanceof RequestBoundaryError) && !(err instanceof EdgeBoundaryError)) throw err;
     return json(
       { error: err.message, protocol_version: PROTOCOL_VERSION },
       err.status,
@@ -330,39 +330,18 @@ async function handle(req: Request): Promise<Response> {
   }
 
   // ── Per-user daily spend/volume guard ───────────────────────────────────
-  // No-op unless a cap secret is set. Every configured quota fails closed on
-  // read failure: caller-controlled routing labels cannot waive spend controls.
-  const quota = await checkUserQuota(auth.userId);
-  if (!quota.ok) {
-    const res = json({ error: quota.error, protocol_version: PROTOCOL_VERSION }, quota.status, req);
-    res.headers.set("Retry-After", String(quota.retryAfterSeconds));
-    return res;
+  // Every operation is durably reserved, including when caps are disabled.
+  // Configured limits and the ledger fail closed before provider dispatch.
+  let reservation: Awaited<ReturnType<typeof reserveLlmOperation>>;
+  try {
+    reservation = await reserveLlmOperation(req, auth.userId, projectId, body, provider, model);
+    if (reservation.replay) return json(reservation.replay.result, reservation.replay.status, req);
+  } catch (error) {
+    if (!(error instanceof EdgeBoundaryError)) throw error;
+    return json({ error: error.message, protocol_version: PROTOCOL_VERSION }, error.status, req);
   }
 
-  // ── Diagnostic log (matches v7 format so existing log searches keep working)
-  try {
-    const msgCount = Array.isArray(body?.messages) ? body.messages.length : 0;
-    const toolCount = Array.isArray(body?.tools) ? body.tools.length : 0;
-    let contentBlocks = 0;
-    let docBytes = 0;
-    const firstMsg = body?.messages?.[0];
-    if (Array.isArray(firstMsg?.content)) {
-      contentBlocks = firstMsg.content.length;
-      for (const b of firstMsg.content) {
-        if (b?.type === "document" && typeof b?.source?.data === "string") {
-          docBytes += b.source.data.length;
-        }
-      }
-    }
-    console.log(
-      `[llm-proxy] useCase=${useCase} provider=${provider} model=${model} ` +
-      `maxTokens=${body?.maxTokens || "default"} msgs=${msgCount} blocks=${contentBlocks} ` +
-      `tools=${toolCount} docB64Bytes=${docBytes} ` +
-      `explicit=${explicitProvider ? "provider" : ""}${explicitModel ? "+model" : ""}`,
-    );
-  } catch (e) {
-    console.log("[llm-proxy] pre-dispatch log failed:", (e as Error)?.message);
-  }
+  console.log("[llm-proxy] provider_dispatch");
 
   // ── Provider call (timed) ──────────────────────────────────────────────
   const t0 = performance.now();
@@ -392,13 +371,18 @@ async function handle(req: Request): Promise<Response> {
       },
     });
 
-    return json(toWireEnvelope(result), 200, req);
+    const envelope = toWireEnvelope(result);
+    await finishOperation(reservation.operationId, 'completed', envelope, 200,
+      computeCostUsd(provider, model, result.inputTokens, result.outputTokens));
+    return json(envelope, 200, req);
   } catch (err) {
+    // A timeout or lost completion acknowledgement may follow provider acceptance.
+    // Preserve the reservation; never turn it into a fresh dispatch.
+    await finishOperation(reservation.operationId, 'unknown').catch(() => {});
     const latencyMs = Math.round(performance.now() - t0);
     const isLLMError = err instanceof LLMError;
     const status     = isLLMError ? (err as LLMError).status   : 500;
     const errorKind  = isLLMError ? (err as LLMError).errorKind : "internal_error";
-    const message    = err instanceof Error ? err.message : String(err);
 
     // Telemetry on the failure path too — without this, error rate
     // dashboards would only ever see successes.
@@ -422,16 +406,12 @@ async function handle(req: Request): Promise<Response> {
     });
 
     if (!isLLMError) {
-      const name = err instanceof Error ? err.name : "Error";
-      const stack = err instanceof Error && err.stack
-        ? err.stack.split("\n").slice(0, 5).join(" | ")
-        : null;
-      console.error(`[llm-proxy] ${provider} handler threw: ${name}: ${message}${stack ? " stack: " + stack : ""}`);
+      console.error("[llm-proxy] provider_failed");
     }
 
     return json(
-      { error: isLLMError ? message : "AI request failed. Please retry.", protocol_version: PROTOCOL_VERSION },
-      status,
+      { error: "AI request outcome is uncertain. Do not repeat it with a new request ID; ask an administrator to reconcile it.", operation_id: reservation.operationId, protocol_version: PROTOCOL_VERSION },
+      409,
       req,
     );
   }

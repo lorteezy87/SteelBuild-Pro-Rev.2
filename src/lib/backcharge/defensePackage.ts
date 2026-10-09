@@ -8,13 +8,10 @@
 import { computeTmTicketTotal, computeBackchargeAmount, sumTmTickets } from "./cost";
 import { BACKCHARGE_REASON_LABELS, BACKCHARGE_STATUS_LABELS } from "./types";
 import type { Backcharge, BackchargeEvent, TmTicket } from "./types";
+import { escapeCsvCell } from "@/lib/csv";
 
-function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
 function csvRow(cells: unknown[]): string {
-  return cells.map(csvCell).join(",");
+  return cells.map(escapeCsvCell).join(",");
 }
 
 const label = (

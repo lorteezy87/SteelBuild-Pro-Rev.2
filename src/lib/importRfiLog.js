@@ -96,7 +96,7 @@ async function arrayBufferToBase64(buf) {
 }
 
 /** Mirror of uploadShippingTicket — same storage path, same guards. */
-export async function uploadRfiLog(file) {
+export async function uploadRfiLog(file, projectId) {
   if (!file) throw new Error("No file provided.");
   if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
     throw new Error("RFI log must be a PDF.");
@@ -104,12 +104,12 @@ export async function uploadRfiLog(file) {
   if (file.size > MAX_PDF_BYTES) {
     throw new Error(`PDF exceeds 32 MB (${(file.size / 1e6).toFixed(1)} MB).`);
   }
-  const { file_url, path } = await integrations.Core.UploadFile({ file, workflow: "attachment" });
+  const { file_url, path } = await integrations.Core.UploadFile({ file, projectId, workflow: "attachment" });
   return { file_url, storage_path: path || "", file_name: file.name };
 }
 
 async function invokeProxyWithDetail(body) {
-  const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
+  const { data, error } = await supabase.functions.invoke("llm-proxy", { body, headers: { "Idempotency-Key": crypto.randomUUID() } });
   if (!error && !data?.error) return { data };
   let status = 0;
   let detail = error?.message || data?.error || "llm-proxy invocation failed";
@@ -131,6 +131,7 @@ async function invokeProxyWithDetail(body) {
 }
 
 export async function extractRfiLog({
+  file,
   storage_path,
   file_url,
   model    = DEFAULT_MODEL,
@@ -139,9 +140,12 @@ export async function extractRfiLog({
   project_id,
 }) {
   const path = storage_path || file_url;
-  if (!path) throw new Error("Missing storage path.");
+  if (!file && !path) throw new Error("Missing storage path.");
   let buf;
-  if (/^https?:\/\//i.test(path)) {
+  if (file) {
+    if (file.size > MAX_PDF_BYTES || !/\.pdf$/i.test(file.name)) throw new Error("RFI log must be a PDF up to 32 MB.");
+    buf = await file.arrayBuffer();
+  } else if (/^https?:\/\//i.test(path)) {
     const resp = await fetch(path);
     if (!resp.ok) throw new Error(`PDF fetch failed (${resp.status}).`);
     buf = await resp.arrayBuffer();

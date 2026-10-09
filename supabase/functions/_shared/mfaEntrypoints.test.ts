@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ts from 'typescript';
 import { mfaDenialForVerifiedUser } from './mfa';
+import * as operationBoundary from './edgeOperation';
 
 // Execute the real entrypoint functions with network/provider boundaries mocked.
 // Deno's npm:/jsr: imports are not loadable by Vitest, so only remove the import
@@ -37,13 +38,15 @@ beforeEach(() => vi.stubGlobal('Deno', { env: { get: () => 'configured-test-valu
 afterEach(() => vi.unstubAllGlobals());
 
 describe('enrolled AAL1 cannot reach protected Edge operations', () => {
-  it.each(['llm-proxy', 'email-send', 'project-export', 'account-delete', 'command-center-read', 'command-center-session-handoff', 'stripe-billing'])(
+  it.each(['llm-proxy', 'email-send', 'project-export', 'account-delete', 'stripe-billing'])(
     '%s returns MFA_REQUIRED before reading private records or causing effects', async (slug) => {
       const effects = vi.fn(() => { throw new Error('Protected operation reached'); });
       const authFetch = vi.fn(async () => json(user));
+      vi.stubGlobal('fetch', authFetch);
       const getUser = vi.fn(async () => ({ data: { user }, error: null }));
       const client = { auth: { getUser }, from: effects, rpc: effects, storage: { from: effects } };
       const bindings: Record<string, unknown> = {
+        ...operationBoundary,
         Deno: globalThis.Deno, Response, Request, URL, console,
         fetch: authFetch, mfaDenialForVerifiedUser,
         json, jsonResponse: json, errorResponse, corsHeaders: () => ({}), CORS: {},
@@ -63,8 +66,7 @@ describe('enrolled AAL1 cannot reach protected Edge operations', () => {
       } else if (slug === 'email-send' || slug === 'project-export') {
         bindings.verifyJwt = compile(slug, 'verifyJwt', bindings);
         handler = compile(slug, 'handle', bindings);
-      } else if (slug === 'command-center-session-handoff') {
-        handler = compile(slug, 'handleCreate', bindings);
+
       } else if (slug === 'stripe-billing') {
         handler = compile(slug, 'handleRequest', bindings);
       } else {

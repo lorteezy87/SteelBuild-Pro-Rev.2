@@ -4,7 +4,6 @@ import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  uploadRfiLog,
   extractRfiLog,
   resolveProjectForRfiLog,
   commitRfiLog,
@@ -16,7 +15,7 @@ const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 const AI      = "var(--ai-accent, var(--status-info))";
 
 /**
- * RFI log import wizard: upload PDF → AI extract → preview → confirm.
+ * RFI log import wizard: read PDF → AI extract → preview → confirm.
  * Mirrors the ShippingTicketImportModal pattern but with dedup on
  * (project_id, rfi_number) so re-running the import is safe.
  *
@@ -37,7 +36,6 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
 
   const [step, setStep] = useState("upload");  // upload | extracting | preview | committing | done
   const [file, setFile] = useState(null);
-  const [uploaded, setUploaded] = useState(null);
   const [parsed, setParsed] = useState(null);
   const [matchedProject, setMatched] = useState(null);
   const [chosenProjectId, setChosen] = useState(projectId || null);
@@ -52,7 +50,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
   useEffect(() => {
     sessionRef.current += 1;
     mountedRef.current = true;
-    setStep("upload"); setFile(null); setUploaded(null); setParsed(null);
+    setStep("upload"); setFile(null); setParsed(null);
     setMatched(null); setChosen(projectId || null); setLastResult(null); setErr(null);
     return () => {
       mountedRef.current = false;
@@ -75,7 +73,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
   if (!open) return null;
 
   const reset = () => {
-    setStep("upload"); setFile(null); setUploaded(null); setParsed(null);
+    setStep("upload"); setFile(null); setParsed(null);
     setMatched(null); setChosen(projectId || null); setLastResult(null); setErr(null);
   };
 
@@ -120,7 +118,6 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
         // see "we couldn't find a Subject column" etc.
         res = await readRfiCsvFile(file);
         guard.assert(projectId || chosenProjectId);
-        setUploaded(null); // no upload needed for CSV
         if (res.warnings?.length) {
           console.warn("[RfiLogImport] CSV warnings:", res.warnings);
         }
@@ -131,11 +128,10 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
           throw new Error(`No RFI rows found in the CSV.${detail}`);
         }
       } else {
-        // PDF path: upload + AI extraction (legacy, requires API credits).
-        const up = await uploadRfiLog(file);
-        guard.assert(projectId || chosenProjectId);
-        setUploaded(up);
-        res = await extractRfiLog({ ...up, project_id: projectId || chosenProjectId });
+        // PDF path: local bytes + AI extraction (requires API credits).
+        // This import does not persist an attachment. Parse the local PDF;
+        // never stage an unclassified file before the project is confirmed.
+        res = await extractRfiLog({ file, project_id: projectId || chosenProjectId });
       }
       guard.assert(projectId || chosenProjectId);
       setParsed(res);
@@ -428,7 +424,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
           )}
           {step === "preview" && (
             <>
-              <button onClick={() => { setParsed(null); setUploaded(null); setStep("upload"); }} style={btnGhost}>
+              <button onClick={() => { setParsed(null); setStep("upload"); }} style={btnGhost}>
                 BACK
               </button>
               <button onClick={runCommit} disabled={!chosenProjectId || rfis.length === 0}

@@ -15,6 +15,7 @@
  */
 import { isGoverningDrawingReleaseReady } from "@/lib/pieceControl/drawingReleaseReady";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { escapeCsvCell } from "@/lib/csv";
 
 /** Minimal drawing shape used by fab-release / turnover / claims helpers. */
 export interface DrawingLike {
@@ -274,7 +275,7 @@ export function groupByDate<T extends object>(
 
 // ── CSV manifest ─────────────────────────────────────────────────────────
 
-const CSV_QUOTE = (v: CsvCell): string => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+const CSV_QUOTE = escapeCsvCell;
 
 /**
  * Build the fab-release manifest CSV. One row per drawing.

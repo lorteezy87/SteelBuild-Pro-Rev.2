@@ -5,9 +5,8 @@
 // Supports compose (new) and reply modes with threading headers, plus
 // file attachments (base64) sent through whichever provider is active.
 //
-// Provider routing:
-//   1. Resend API (default) — transactional email, easiest setup.
-//   2. Microsoft Graph (optional) — send-as from shared mailbox.
+// Provider routing is fixed by a trusted, workspace-bound mailbox verification.
+// Client-editable email_accounts metadata never authorizes a provider identity.
 //
 // Stores every sent message in email_messages with direction='outbound'
 // so the Email Inbox shows a complete conversation history.
@@ -19,12 +18,14 @@
 //   RESEND_API_KEY (for Resend provider)
 //   — OR —
 //   MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_TENANT_ID (for Graph)
+//   EMAIL_RESEND_CONNECTION_ID / EMAIL_MSGRAPH_CONNECTION_ID: nonsecret IDs
+//   matching the operator-verified binding. Change them when provider identity changes.
 //
 // Deploy:
 //   supabase functions deploy email-send
 // ─────────────────────────────────────────────────────────────────────────────
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2.117.2/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
@@ -34,6 +35,7 @@ import {
   sanitizeAttachmentName,
 } from "../_shared/attachments.ts";
 import { normalizeRecipients } from "./recipients.ts";
+import { EdgeBoundaryError, boundedRequest, configuredLimit, fetchWithDeadline, operationKey, operationFingerprint, reserveOperation, finishOperation } from "../_shared/edgeOperation.ts";
 
 // Max combined raw (decoded) size of outbound attachments. base64 inflates
 // the payload ~33%, so the actual request body stays well under typical
@@ -53,7 +55,6 @@ const MAX_RECIPIENTS_PER_MESSAGE = 50;
 
 /** Rolling-window send cap per user. 0 disables (set via EMAIL_SEND_HOURLY_LIMIT). */
 const DEFAULT_SEND_HOURLY_LIMIT = 100;
-const SEND_WINDOW_MS = 60 * 60 * 1000;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ interface SendEmailRequest {
   in_reply_to_external_id?: string;
   /** Thread grouping key */
   thread_id?: string;
-  /** From address — must match a configured email account for the project */
+  /** From address — must match a server-verified mailbox for this project */
   from_email?: string;
   from_name?: string;
   /** File attachments (base64-encoded, no `data:` prefix) */
@@ -105,7 +106,7 @@ async function verifyJwt(req: Request): Promise<{ userId: string; email: string 
   if (!supabaseUrl || !serviceKey) return null;
 
   try {
-    const resp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    const resp = await fetchWithDeadline(`${supabaseUrl}/auth/v1/user`, {
       headers: {
         "Authorization": `Bearer ${token}`,
         "apikey": serviceKey,
@@ -132,83 +133,12 @@ async function verifyJwt(req: Request): Promise<{ userId: string; email: string 
  * filters from these identifiers.
  *
  * Validate the project id at the request boundary and the verified user id
- * before it is interpolated into the quota query.
+ * before passing it to the private reservation RPC.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
-}
-
-// ── Send Rate Limit ───────────────────────────────────────────────────────────
-
-/**
- * Rolling-hour outbound cap per user, counted off the `email_messages` rows
- * this function already writes (`sent_by`, `sent_at`, `direction='outbound'`)
- * — no new table.
- *
- * Fails CLOSED. That is the opposite of the llm-proxy quota default, and
- * deliberately so: there, an unverifiable cheap call costs fractions of a cent
- * and the rule is "telemetry never breaks the user's request". Here the
- * unbounded failure mode is a spam run from our verified domain, which costs
- * every customer's deliverability for weeks. A short outage that delays a few
- * emails with a clear retry message is the cheaper failure.
- *
- * Set EMAIL_SEND_HOURLY_LIMIT=0 to disable.
- */
-async function checkSendRateLimit(
-  userId: string,
-  supabaseUrl: string,
-  serviceKey: string,
-): Promise<{ ok: true } | { ok: false; status: 429 | 503; error: string; retryAfterSeconds: number }> {
-  const raw = Deno.env.get("EMAIL_SEND_HOURLY_LIMIT");
-  const limit = raw === undefined || raw === ""
-    ? DEFAULT_SEND_HOURLY_LIMIT
-    : Number(raw);
-  if (!Number.isFinite(limit) || limit <= 0) return { ok: true }; // explicitly disabled
-
-  if (!isUuid(userId)) {
-    return { ok: false, status: 503, error: "Send limits can't be verified right now.", retryAfterSeconds: 30 };
-  }
-
-  const sinceIso = new Date(Date.now() - SEND_WINDOW_MS).toISOString();
-  try {
-    const resp = await fetch(
-      `${supabaseUrl}/rest/v1/email_messages` +
-      `?sent_by=eq.${userId}&direction=eq.outbound&sent_at=gte.${encodeURIComponent(sinceIso)}` +
-      `&select=id&limit=1`,
-      {
-        headers: {
-          "apikey": serviceKey,
-          "Authorization": `Bearer ${serviceKey}`,
-          // Exact count in Content-Range without transferring the rows.
-          "Prefer": "count=exact",
-        },
-        // Bound the pre-send read so a stalled PostgREST can't hang the send.
-        signal: AbortSignal.timeout(2000),
-      },
-    );
-    if (!resp.ok) {
-      console.error(`[email-send] rate-limit read ${resp.status}`);
-      return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
-    }
-    // Content-Range: "0-0/123" — the total is after the slash.
-    const total = Number(resp.headers.get("content-range")?.split("/")[1]);
-    if (!Number.isFinite(total)) {
-      console.error("[email-send] rate-limit read returned no usable count");
-      return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
-    }
-    if (total >= limit) {
-      // Keep the configured cap in the SERVER log only, so a caller can't read
-      // the threshold off the response and pace just under it.
-      console.warn(`[email-send] rate limit BLOCK user=${userId} sent=${total} >= cap=${limit}`);
-      return { ok: false, status: 429, error: "Hourly send limit reached. Please try again later.", retryAfterSeconds: 900 };
-    }
-    return { ok: true };
-  } catch (err) {
-    console.error(`[email-send] rate-limit check threw: ${err instanceof Error ? err.message : err}`);
-    return { ok: false, status: 503, error: "Send limits can't be verified right now. Please retry shortly.", retryAfterSeconds: 30 };
-  }
 }
 
 // ── Project Send Authorization ────────────────────────────────────────────────
@@ -237,7 +167,7 @@ async function authorizeProjectSend(
   ];
   try {
     for (const check of checks) {
-      const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${check.rpc}`, {
+      const response = await fetchWithDeadline(`${supabaseUrl}/rest/v1/rpc/${check.rpc}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -290,7 +220,7 @@ async function sendViaResend(
       }));
     }
 
-    const resp = await fetch("https://api.resend.com/emails", {
+    const resp = await fetchWithDeadline("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -301,7 +231,7 @@ async function sendViaResend(
 
     if (!resp.ok) {
       const detail = await resp.text();
-      console.error(`[email-send] Resend error ${resp.status}: ${detail.slice(0, 300)}`);
+      console.error("[email-send] resend_failed", { status: resp.status });
       return { provider: "resend", provider_message_id: null, success: false, error: detail.slice(0, 200) };
     }
 
@@ -324,21 +254,20 @@ async function getMsGraphToken(tenantId: string, clientId: string, clientSecret:
       grant_type: "client_credentials",
     });
 
-    const resp = await fetch(
+    const resp = await fetchWithDeadline(
       `https://login.microsoftonline.com/${tenantId}/oauth2/v2/token`,
       { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: params },
     );
 
     if (!resp.ok) {
-      const detail = await resp.text();
-      console.error(`[email-send] MS Graph token error ${resp.status}: ${detail.slice(0, 200)}`);
+      console.error("[email-send] graph_token_failed");
       return null;
     }
 
     const data = await resp.json();
     return data.access_token || null;
   } catch (err) {
-    console.error(`[email-send] MS Graph token error: ${err instanceof Error ? err.message : err}`);
+    console.error("[email-send] graph_token_failed");
     return null;
   }
 }
@@ -387,7 +316,7 @@ async function sendViaMsGraph(
       }));
     }
 
-    const resp = await fetch(
+    const resp = await fetchWithDeadline(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromEmail)}/sendMail`,
       {
         method: "POST",
@@ -401,7 +330,7 @@ async function sendViaMsGraph(
 
     if (!resp.ok) {
       const detail = await resp.text();
-      console.error(`[email-send] MS Graph send error ${resp.status}: ${detail.slice(0, 300)}`);
+      console.error("[email-send] graph_send_failed", { status: resp.status });
       return { provider: "msgraph", provider_message_id: null, success: false, error: detail.slice(0, 200) };
     }
 
@@ -449,7 +378,7 @@ async function storeSentAttachments(
       const safeName = sanitizeAttachmentName(att.filename);
       const storagePath = `${projectId}/${messageId}/${safeName}`;
 
-      const uploadResp = await fetch(
+      const uploadResp = await fetchWithDeadline(
         `${supabaseUrl}/storage/v1/object/email-attachments/${storagePath}`,
         {
           method: "POST",
@@ -465,7 +394,7 @@ async function storeSentAttachments(
 
       if (!uploadResp.ok) {
         const detail = await uploadResp.text();
-        console.error(`[email-send] Storage upload failed for ${att.filename}: ${detail.slice(0, 200)}`);
+        console.error("[email-send] attachment_upload_failed");
         continue;
       }
 
@@ -480,7 +409,7 @@ async function storeSentAttachments(
         storage_bucket: "email-attachments",
       };
 
-      const attResp = await fetch(`${supabaseUrl}/rest/v1/email_attachments`, {
+      const attResp = await fetchWithDeadline(`${supabaseUrl}/rest/v1/email_attachments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -493,13 +422,13 @@ async function storeSentAttachments(
 
       if (!attResp.ok) {
         const detail = await attResp.text();
-        console.error(`[email-send] Insert attachment failed for ${att.filename}: ${detail.slice(0, 200)}`);
+        console.error("[email-send] attachment_record_failed");
         continue;
       }
 
       stored++;
     } catch (err) {
-      console.error(`[email-send] Attachment error for ${att.filename}: ${err instanceof Error ? err.message : err}`);
+      console.error("[email-send] attachment_failed");
     }
   }
   return stored;
@@ -553,7 +482,7 @@ async function storeSentMessage(
   };
 
   try {
-    const resp = await fetch(`${supabaseUrl}/rest/v1/email_messages`, {
+    const resp = await fetchWithDeadline(`${supabaseUrl}/rest/v1/email_messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -566,14 +495,14 @@ async function storeSentMessage(
 
     if (!resp.ok) {
       const detail = await resp.text();
-      console.error(`[email-send] Store sent message failed ${resp.status}: ${detail.slice(0, 300)}`);
+      console.error("[email-send] sent_record_failed", { status: resp.status });
       return null;
     }
 
     const [inserted] = await resp.json();
     return inserted?.id || null;
   } catch (err) {
-    console.error(`[email-send] Store error: ${err instanceof Error ? err.message : err}`);
+    console.error("[email-send] sent_record_failed");
     return null;
   }
 }
@@ -583,6 +512,7 @@ async function storeSentMessage(
 async function handle(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return errorResponse(405, "Method not allowed", req);
+  req = await boundedRequest(req, 30 * 1024 * 1024);
 
   // Authenticate
   const user = await verifyJwt(req);
@@ -679,54 +609,48 @@ async function handle(req: Request): Promise<Response> {
   const authorizationDenial = await authorizeProjectSend(req, body.project_id, supabaseUrl, anonKey);
   if (authorizationDenial) return authorizationDenial;
 
-  // Per-user hourly cap. Checked AFTER authorization (so an unauthorized caller
-  // can't probe it) and BEFORE the provider call (so a throttled user never
-  // reaches Resend / Graph and never burns domain reputation).
-  const rate = await checkSendRateLimit(user.userId, supabaseUrl, serviceKey);
-  if (!rate.ok) {
-    const res = errorResponse(rate.status, rate.error, req);
-    res.headers.set("Retry-After", String(rate.retryAfterSeconds));
-    return res;
-  }
-
-  // Determine the from address. A caller-supplied from_email must be one of the
-  // project's ACTIVE email accounts — otherwise a member could send as any
-  // address (spoofing) and the spoofed message would be persisted as legitimate
-  // project correspondence. When none is supplied we fall back to the first
-  // active account. Always fetch the active accounts so we can validate.
-  let fromEmail = body.from_email || "";
-  let fromName = body.from_name || "";
-
-  let activeAccounts: Array<{ email_address?: string; display_name?: string }> = [];
+  // Resolve authority exclusively from private, operator-verified bindings.
+  // The RPC compares current account/project/org identity and revocation state.
+  // A metadata edit, active toggle, or supplied From cannot create that authority.
+  type VerifiedMailbox = { account_id: string; email_address: string; display_name: string | null; send_provider: "resend" | "msgraph" | "inbound_only"; provider_connection_id: string };
+  let mailboxes: VerifiedMailbox[];
   try {
-    const acctResp = await fetch(
-      `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${body.project_id}&is_active=eq.true&select=email_address,display_name`,
-      { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
+    const acctResp = await fetchWithDeadline(
+      `${supabaseUrl}/rest/v1/rpc/get_verified_email_mailboxes`,
+      {
+        method: "POST",
+        headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_project_id: body.project_id }),
+      },
     );
-    if (acctResp.ok) {
-      const accts = await acctResp.json();
-      if (Array.isArray(accts)) activeAccounts = accts;
+    if (!acctResp.ok) throw new Error("Mailbox verification unavailable");
+    const rows = await acctResp.json();
+    if (!Array.isArray(rows) || !rows.every((row) => row && isUuid(row.account_id)
+      && typeof row.email_address === "string" && /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(row.email_address)
+      && (row.display_name === null || typeof row.display_name === "string")
+      && ["resend", "msgraph", "inbound_only"].includes(row.send_provider)
+      && typeof row.provider_connection_id === "string" && row.provider_connection_id.trim().length > 0)) {
+      throw new Error("Invalid mailbox verification result");
     }
-  } catch { /* best effort */ }
-
-  if (fromEmail) {
-    const match = activeAccounts.find(
-      (a) => (a.email_address || "").toLowerCase() === fromEmail.toLowerCase(),
-    );
-    if (!match) {
-      return errorResponse(403, "from_email is not an active sending account for this project", req);
-    }
-    fromName = fromName || match.display_name || "";
-  } else if (activeAccounts.length > 0) {
-    fromEmail = activeAccounts[0].email_address || "";
-    fromName = fromName || activeAccounts[0].display_name || "";
+    mailboxes = rows.filter((row) => row.send_provider !== "inbound_only");
+  } catch {
+    return errorResponse(503, "Mailbox verification is unavailable. Please try again later.", req);
   }
-
-  if (!fromEmail) {
-    return errorResponse(400, "No from_email provided and no active email account configured for this project", req);
+  if (body.from_email !== undefined && typeof body.from_email !== "string") {
+    return errorResponse(400, "from_email must be an email address", req);
   }
-
-  const fromFormatted = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+  const requestedFrom = body.from_email?.trim().toLowerCase();
+  const mailbox = requestedFrom ? mailboxes.find((row) => row.email_address.toLowerCase() === requestedFrom) : mailboxes[0];
+  if (!mailbox) {
+    return errorResponse(403, "No verified sending mailbox matches this project. Ask your workspace administrator to arrange mailbox verification.", req);
+  }
+  const fromEmail = mailbox.email_address;
+  // Keep editable display names presentation-only: never allow address/header
+  // syntax, and never let a request replace the verified From identity.
+  const fromName = (mailbox.display_name || "").replace(/[<>"\r\n]/g, "").trim().slice(0, 100);
+  const fromFormatted = fromName ? `${JSON.stringify(fromName)} <${fromEmail}>` : fromEmail;
+  body.from_email = fromEmail;
+  body.from_name = fromName;
 
   // Build threading headers
   const threadingHeaders: Record<string, string> = {};
@@ -743,33 +667,51 @@ async function handle(req: Request): Promise<Response> {
   const msClientSecret = Deno.env.get("MS_GRAPH_CLIENT_SECRET");
   const msTenantId = Deno.env.get("MS_GRAPH_TENANT_ID");
 
-  if (msClientId && msClientSecret && msTenantId) {
-    // Prefer Microsoft Graph when configured — sends as the actual shared mailbox
+  if ((mailbox.send_provider === "msgraph" && (!msClientId || !msClientSecret || !msTenantId || mailbox.provider_connection_id !== Deno.env.get("EMAIL_MSGRAPH_CONNECTION_ID")))
+    || (mailbox.send_provider === "resend" && (!resendKey || mailbox.provider_connection_id !== Deno.env.get("EMAIL_RESEND_CONNECTION_ID")))) {
+    return errorResponse(503, "The verified mailbox provider connection is unavailable.", req);
+  }
+  const operation = await reserveOperation({ kind: "email-send", userId: user.userId, projectId: body.project_id,
+    key: operationKey(req), fingerprint: await operationFingerprint({ body, account: mailbox.account_id, provider: mailbox.send_provider, connection: mailbox.provider_connection_id }),
+    countLimit: configuredLimit("EMAIL_SEND_HOURLY_LIMIT", DEFAULT_SEND_HOURLY_LIMIT) });
+  if (operation.replay) return jsonResponse(operation.replay.result, operation.replay.status, req);
+
+  if (mailbox.send_provider === "msgraph") {
+    if (!msClientId || !msClientSecret || !msTenantId || mailbox.provider_connection_id !== Deno.env.get("EMAIL_MSGRAPH_CONNECTION_ID")) {
+      return errorResponse(503, "The verified mailbox provider connection is unavailable.", req);
+    }
     const token = await getMsGraphToken(msTenantId, msClientId, msClientSecret);
-    if (!token) return errorResponse(502, "Failed to obtain Microsoft Graph token", req);
+    if (!token) {
+      await finishOperation(operation.operationId, "unknown", null, 409).catch(() => {});
+      return errorResponse(409, "The connection outcome could not be confirmed. Reconcile this operation before retrying.", req);
+    }
 
     result = await sendViaMsGraph(
       token, fromEmail, body.to, body.cc || [], body.bcc || [],
       body.subject, body.body_text, body.body_html || null,
       body.in_reply_to_external_id || null, attachments,
     );
-  } else if (resendKey) {
+  } else if (mailbox.send_provider === "resend") {
+    if (!resendKey || mailbox.provider_connection_id !== Deno.env.get("EMAIL_RESEND_CONNECTION_ID")) {
+      return errorResponse(503, "The verified mailbox provider connection is unavailable.", req);
+    }
     result = await sendViaResend(
       resendKey, fromFormatted, body.to, body.cc || [], body.bcc || [],
       body.subject, body.body_text, body.body_html || null,
       threadingHeaders, attachments,
     );
   } else {
-    return errorResponse(503, "No email send provider configured. Set RESEND_API_KEY or MS_GRAPH_* secrets.", req);
+    return errorResponse(503, "The verified mailbox provider connection is unavailable.", req);
   }
 
   if (!result.success) {
-    console.error(`[email-send] Send failed via ${result.provider}: ${result.error}`);
+    await finishOperation(operation.operationId, "unknown", null, 409).catch(() => {});
     return jsonResponse({
       success: false,
       provider: result.provider,
-      error: result.error,
-    }, 502, req);
+      operation_id: operation.operationId,
+      error: "Delivery could not be confirmed. Do not resend with a new operation key; ask your administrator to reconcile the provider outcome.",
+    }, 409, req);
   }
 
   // Store the sent message
@@ -781,29 +723,26 @@ async function handle(req: Request): Promise<Response> {
     attachmentsStored = await storeSentAttachments(supabaseUrl, serviceKey, body.project_id, storedId, attachments);
   }
 
-  // Log recipient COUNT, not addresses, and omit the subject — avoid leaking
-  // correspondence PII into function logs. from=project mailbox is retained for
-  // mailbox-level debugging.
-  console.log(
-    `[email-send] Sent: project=${body.project_id} from=${fromEmail} ` +
-    `recipients=${body.to.length} provider=${result.provider} ` +
-    `stored=${storedId || "failed"} attachments=${attachmentsStored}/${attachments.length}`,
-  );
+  // Operational phase only: no correspondence or mailbox identifiers in logs.
+  console.log("[email-send] send_completed");
 
-  return jsonResponse({
+  const completed = {
     success: true,
     provider: result.provider,
     message_id: storedId,
     provider_message_id: result.provider_message_id,
-  }, 200, req);
+  };
+  try { await finishOperation(operation.operationId, "completed", completed); }
+  catch { return errorResponse(409, "The provider accepted the message, but completion could not be recorded. Reconcile before repeating it.", req); }
+  return jsonResponse(completed, 200, req);
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
   try {
     return await handle(req);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof EdgeBoundaryError) return errorResponse(err.status, err.message, req);
     await reportError(err, "email-send", { unhandled: true });
-    return errorResponse(500, `Internal error: ${message}`, req);
+    return errorResponse(500, "Email request failed. Retry the same operation to check its outcome.", req);
   }
 });

@@ -2,6 +2,7 @@ import React from "react";
 import { BicPill } from "@/components/design-system";
 import { AGENDA_GROUPS } from "@/lib/commandCenter/rfiAgenda";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { escapeCsvCell } from "@/lib/csv";
 
 const GROUP_ACCENT = {
   Overdue: "var(--status-error)",
@@ -17,17 +18,12 @@ const PRIORITY_COLOR = {
   Low: "var(--text-muted)",
 };
 
-function csvCell(v) {
-  const s = String(v ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 function exportAgendaCsv(agenda) {
   const header = ["Group", "RFI", "Title", "Reason", "Ball In Court", "Priority"];
   const rows = agenda.items.map((i) => [
     i.group, i.rfiNumber || "", i.title, i.reason, i.bic, i.priority || "",
   ]);
-  const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
+  const csv = [header, ...rows].map((r) => r.map(escapeCsvCell).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   void presentGeneratedFile({
     blob,

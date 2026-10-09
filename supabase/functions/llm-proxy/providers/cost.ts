@@ -2,7 +2,7 @@
 //
 // LLM rate card. Prices are per 1M input/output tokens, USD.
 //
-// Source: vendor public pricing pages, captured May 2026. To refresh:
+// Source: vendor public pricing pages, verified 2026-10-08. To refresh:
 //   - Anthropic: https://www.anthropic.com/pricing#anthropic-api
 //   - OpenAI:    https://openai.com/api/pricing
 // When you bump a rate, also bump the comment date so future readers
@@ -15,21 +15,25 @@
 interface ModelRate {
   /** USD per 1,000,000 input tokens */
   inputPerM: number;
+  contextTokens: number;
+  maxOutputTokens: number;
   /** USD per 1,000,000 output tokens */
   outputPerM: number;
 }
 
-// Rates as of May 2026.
+// Rates/context: developers.openai.com/api/docs/models/{model};
+// platform.claude.com/docs/en/models/{model}/overview and /en/about-claude/pricing.
+// Opus 4 context: anthropic.com/claude/opus (200K). No beta/extended context headers.
 const RATE_CARD: Record<string, Record<string, ModelRate>> = {
   anthropic: {
-    "claude-sonnet-4-5": { inputPerM: 3.00,  outputPerM: 15.00 },
-    "claude-opus-4":     { inputPerM: 15.00, outputPerM: 75.00 },
-    "claude-haiku-4":    { inputPerM: 0.25,  outputPerM: 1.25 },
+    "claude-sonnet-4-5": { inputPerM: 3.00,  outputPerM: 15.00, contextTokens: 200_000, maxOutputTokens: 64_000 },
+    "claude-opus-4":     { inputPerM: 15.00, outputPerM: 75.00, contextTokens: 200_000, maxOutputTokens: 32_000 },
+    "claude-haiku-4-5":  { inputPerM: 1.00,  outputPerM: 5.00, contextTokens: 200_000, maxOutputTokens: 64_000 },
   },
   openai: {
-    "gpt-4o-mini":       { inputPerM: 0.15,  outputPerM: 0.60 },
-    "gpt-4o":            { inputPerM: 2.50,  outputPerM: 10.00 },
-    "gpt-4-turbo":       { inputPerM: 10.00, outputPerM: 30.00 },
+    "gpt-4o-mini":       { inputPerM: 0.15,  outputPerM: 0.60, contextTokens: 128_000, maxOutputTokens: 16_384 },
+    "gpt-4o":            { inputPerM: 2.50,  outputPerM: 10.00, contextTokens: 128_000, maxOutputTokens: 16_384 },
+    "gpt-4-turbo":       { inputPerM: 10.00, outputPerM: 30.00, contextTokens: 128_000, maxOutputTokens: 4_096 },
   },
 };
 
@@ -52,8 +56,10 @@ export function computeCostUsd(
   const rate = Object.hasOwn(providerRates, model) ? providerRates[model] : undefined;
   if (!rate) return null;
 
-  const inTok = Number(inputTokens) || 0;
-  const outTok = Number(outputTokens) || 0;
+  if (!Number.isSafeInteger(inputTokens) || inputTokens == null || inputTokens < 0
+    || !Number.isSafeInteger(outputTokens) || outputTokens == null || outputTokens < 0) return null;
+  const inTok = inputTokens;
+  const outTok = outputTokens;
   const cost = (inTok * rate.inputPerM + outTok * rate.outputPerM) / 1_000_000;
   // Round to 6 decimal places — matches numeric(12,6) on the column.
   return Math.round(cost * 1_000_000) / 1_000_000;
@@ -73,4 +79,14 @@ export function isModelPriced(provider: string, model: string): boolean {
 /** Exported for tests + admin tooling. */
 export function getRateCard(): typeof RATE_CARD {
   return RATE_CARD;
+}
+
+/** Conservative reservation covers the entire model context, including image/PDF tokens.
+ * No byte-to-token heuristic can safely predict multimodal billing. */
+export function modelCostReservation(provider: string, model: string, maxTokens: number): { cost: number; maxTokens: number } {
+  if (!isModelPriced(provider, model)) throw new Error('Unpriced model');
+  const rate = RATE_CARD[provider][model];
+  const output = Math.min(maxTokens, rate.maxOutputTokens);
+  const cost = (rate.contextTokens * rate.inputPerM + output * rate.outputPerM) / 1_000_000;
+  return { cost: Math.ceil(cost * 1_000_000) / 1_000_000, maxTokens: output };
 }

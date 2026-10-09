@@ -2,7 +2,7 @@
 // synthetic E2E user plus one synthetic org/project, then permanently completes
 // its private maintenance marker. No production/customer records are read.
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2.117.2/edge-runtime.d.ts";
 import {
   MaintenanceError,
   authorizeMaintenanceRequest,

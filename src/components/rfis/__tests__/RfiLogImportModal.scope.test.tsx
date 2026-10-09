@@ -47,16 +47,17 @@ it("does not commit a preview after its workspace evidence becomes invalid", asy
   await screen.findByText("Workspace changed");
   expect(mocks.commit).not.toHaveBeenCalled();
 });
-it("does not continue PDF extraction after upload finishes in another workspace", async () => {
-  let finish!: (value: { file_url: string }) => void;
-  mocks.upload.mockReturnValue(new Promise(done => { finish = done; }));
+it("does not accept a local PDF extraction after its workspace changes", async () => {
+  let finish!: (value: typeof parsed) => void;
+  mocks.extract.mockReturnValue(new Promise(done => { finish = done; }));
   const view = mount();
   fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(["pdf"], "rfis.pdf", { type: "application/pdf" })] } });
   fireEvent.click(screen.getByRole("button", { name: "EXTRACT" }));
-  await waitFor(() => expect(mocks.upload).toHaveBeenCalled());
+  await waitFor(() => expect(mocks.extract).toHaveBeenCalledWith(expect.objectContaining({ file: expect.any(File), project_id: "a" })));
   mocks.guard.mockImplementation(() => { throw new Error("Workspace changed"); });
-  await act(async () => { finish({ file_url: "fixture.pdf" }); });
-  expect(mocks.extract).not.toHaveBeenCalled();
+  await act(async () => { finish(parsed); });
+  expect(mocks.upload).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "IMPORT 1" })).toBeNull();
   expect(mocks.commit).not.toHaveBeenCalled();
 });
 it("does not let a closed and reopened importer accept an old extraction", async () => {

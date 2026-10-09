@@ -1,0 +1,197 @@
+{
+  "checkedDate": "2026-10-08",
+  "mode": "read-only",
+  "rulesets": [
+    {
+      "id": 18545487,
+      "name": "Branch Protection",
+      "target": "branch",
+      "source_type": "Repository",
+      "source": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "~DEFAULT_BRANCH"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        },
+        {
+          "type": "required_status_checks",
+          "parameters": {
+            "strict_required_status_checks_policy": true,
+            "do_not_enforce_on_create": false,
+            "required_status_checks": [
+              {
+                "context": "Lint + Typecheck + Test + Build",
+                "integration_id": 15368
+              }
+            ]
+          }
+        },
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 0,
+            "dismiss_stale_reviews_on_push": false,
+            "required_reviewers": [],
+            "require_code_owner_review": false,
+            "require_last_push_approval": false,
+            "required_review_thread_resolution": false,
+            "require_extra_approval_for_unattributed_changes": true,
+            "allowed_merge_methods": [
+              "merge",
+              "squash",
+              "rebase"
+            ]
+          }
+        }
+      ],
+      "node_id": "RRS_lACqUmVwb3NpdG9yec5HHoywzgEa-08",
+      "created_at": "2026-07-05T18:50:19.727-07:00",
+      "updated_at": "2026-09-21T20:20:43.945-07:00",
+      "bypass_actors": [],
+      "current_user_can_bypass": "never",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/lorteezy87/SteelBuild-Pro-Rev.2/rulesets/18545487"
+        },
+        "html": {
+          "href": "https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/rules/18545487"
+        }
+      }
+    },
+    {
+      "id": 16902323,
+      "name": "Default",
+      "target": "branch",
+      "source_type": "Repository",
+      "source": "lorteezy87/SteelBuild-Pro-Rev.2",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": []
+        }
+      },
+      "rules": [
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        },
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 0,
+            "dismiss_stale_reviews_on_push": false,
+            "required_reviewers": [],
+            "require_code_owner_review": false,
+            "require_last_push_approval": false,
+            "required_review_thread_resolution": false,
+            "require_extra_approval_for_unattributed_changes": true,
+            "allowed_merge_methods": [
+              "merge",
+              "squash",
+              "rebase"
+            ]
+          }
+        },
+        {
+          "type": "required_status_checks",
+          "parameters": {
+            "strict_required_status_checks_policy": false,
+            "do_not_enforce_on_create": false,
+            "required_status_checks": [
+              {
+                "context": "Lint + Typecheck + Test + Build Release Edge Function typecheck Secret scan (gitleaks)"
+              }
+            ]
+          }
+        }
+      ],
+      "node_id": "RRS_lACqUmVwb3NpdG9yec5HHoywzgEB6LM",
+      "created_at": "2026-05-26T17:08:56.359-07:00",
+      "updated_at": "2026-09-21T20:16:38.407-07:00",
+      "bypass_actors": [],
+      "current_user_can_bypass": "never",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/lorteezy87/SteelBuild-Pro-Rev.2/rulesets/16902323"
+        },
+        "html": {
+          "href": "https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/rules/16902323"
+        }
+      }
+    }
+  ],
+  "functions": [
+    {
+      "slug": "llm-proxy",
+      "version": 44,
+      "verify_jwt": false,
+      "ezbr_sha256": "7a390459cf3236e90686cfa7ca197a35b25afb21d3ac7e66d52e9fdc5c2cad35"
+    },
+    {
+      "slug": "email-ingest",
+      "version": 35,
+      "verify_jwt": false,
+      "ezbr_sha256": "c716f7472e52270c248038b8a1d9931be4fe97a58fd6f574d1fd7890b82ffebd"
+    },
+    {
+      "slug": "email-send",
+      "version": 31,
+      "verify_jwt": true,
+      "ezbr_sha256": "a04ba904e6c1ba10343a5cbfd7a15e6166e6caaefd52c133ed5a819cd0065041"
+    },
+    {
+      "slug": "stripe-billing",
+      "version": 31,
+      "verify_jwt": false,
+      "ezbr_sha256": "e5fa0e2edd0d1fe16420894f9c70aeb8d4127f2b49a4e69e2b08a6eb8c38b4d4"
+    },
+    {
+      "slug": "project-export",
+      "version": 31,
+      "verify_jwt": true,
+      "ezbr_sha256": "b17a52220b4afed0a970670a982fc8f732a802232451f6c074a7cac9b0de4f47"
+    },
+    {
+      "slug": "health",
+      "version": 16,
+      "verify_jwt": false,
+      "ezbr_sha256": "4ead87a3e944ef88f5baa4824dd9f6310c7c9da7fc2b43d943adc407e8b0921f"
+    },
+    {
+      "slug": "command-center-session-handoff",
+      "version": 15,
+      "verify_jwt": false,
+      "ezbr_sha256": "713e0cbf081757c8ae5452425ab5623a6feb2ad659be0ee9cc0ec96a855d40f2"
+    },
+    {
+      "slug": "command-center-read",
+      "version": 14,
+      "verify_jwt": false,
+      "ezbr_sha256": "2ac1111bcc3473ab7383ebb6de81e3b755098f877ab2028afea0766c5d3df7d3"
+    },
+    {
+      "slug": "account-delete",
+      "version": 4,
+      "verify_jwt": true,
+      "ezbr_sha256": "5cc29c4bf484a3fc5e30b7d32622c5ab5e4d58a5c49d36ac1bc0ae3a0838499d"
+    }
+  ],
+  "limitations": [
+    "No environment, secret-placement, provider configuration or deployed source parity verification.",
+    "Bundled Edge hashes are metadata, not hashes of local entrypoint text."
+  ]
+}

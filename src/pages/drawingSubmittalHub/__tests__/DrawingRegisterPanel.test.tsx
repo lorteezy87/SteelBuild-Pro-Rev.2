@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -106,6 +106,11 @@ describe('Drawing register revision workflow discoverability', () => {
   it('opens the existing saved summary through the set view', async () => {
     const { onOpenSummary } = mount();
     await userEvent.click(screen.getByRole('button', { name: 'Sets & revisions' }));
+    await act(async () => {
+      // This callback test needs the real lazy view to finish loading; flush
+      // its import and React commit instead of racing the default query timer.
+      await vi.dynamicImportSettled();
+    });
     await userEvent.click(await screen.findByRole('button', { name: /revised · 3/i }));
     expect(onOpenSummary).toHaveBeenCalledWith(summary);
     expect(screen.getByRole('button', { name: 'New Rev' })).toBeEnabled();

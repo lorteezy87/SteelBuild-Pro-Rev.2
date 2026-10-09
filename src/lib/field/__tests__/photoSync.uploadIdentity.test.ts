@@ -21,7 +21,7 @@ it("does not retry an old photo upload after identity changes during its backoff
     .mockResolvedValue({ data: { path: `${org}/uploads/old-photo.jpg` }, error: null });
   const createPhoto = vi.fn();
   const deleteBlob = vi.fn();
-  const result = replayPhotoCreate(makePhotoCreateOp("capture-a", { project_id: "shared-project" }, 1), {
+  const result = replayPhotoCreate(makePhotoCreateOp("capture-a", { project_id: "33333333-3333-4333-8333-333333333333" }, 1), {
     getBlob: async () => ({ blob: new Blob(["photo"], { type: "image/jpeg" }), meta: { name: "photo.jpg" } }),
     uploadFile: UploadFile,
     createPhoto,

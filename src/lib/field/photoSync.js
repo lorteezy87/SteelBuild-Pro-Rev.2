@@ -34,7 +34,7 @@ export async function replayPhotoCreate(op, deps, assertActive = () => {}) {
   const file = reconstructFile(stored.blob, stored.meta);
 
   // Upload first. If this throws (still offline), the op + blob stay queued.
-  const uploaded = await uploadFile({ file, assertActive });
+  const uploaded = await uploadFile({ file, projectId: meta.project_id, assertActive });
   assertActive();
   const fileUrl = uploaded?.file_url || uploaded?.path;
 

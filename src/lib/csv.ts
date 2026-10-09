@@ -29,7 +29,7 @@ export type ExportToCSVArgs = {
  */
 const FORMULA_LEAD = /^[=+\-@\t\r]/;
 
-const escapeCell = (cell: CsvCell): string => {
+export const escapeCsvCell = (cell: unknown): string => {
   let raw = cell == null ? "" : String(cell);
   // Neutralise only free TEXT. Numbers are checked before coercion so a
   // negative dollar figure still exports as a number, not as text.
@@ -40,7 +40,7 @@ const escapeCell = (cell: CsvCell): string => {
 
 export function exportToCSV({ filename, headers, rows }: ExportToCSVArgs): Promise<GeneratedFilePresentation> {
   const csv = [headers, ...rows]
-    .map((row) => row.map(escapeCell).join(","))
+    .map((row) => row.map(escapeCsvCell).join(","))
     .join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });

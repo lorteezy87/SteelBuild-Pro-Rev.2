@@ -8,6 +8,9 @@ export function assertIosReleaseChecks(run, jobs, sha) {
     'Secret scan (gitleaks)',
     'Supabase drift check',
     'Release Edge Function typecheck',
+    'Dependency audit (required)',
+    'Commercial SQL + concurrent PostgreSQL acceptance',
+    'Exact revision staging release acceptance',
   ];
   for (const name of required) {
     const matches = jobs.filter((job) => job.name === name);

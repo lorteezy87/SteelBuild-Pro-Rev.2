@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { normalizePieceMark } from "@/services/modelElementStatus";
 import { findGuidsByMark, describeSelection } from "@/lib/ifc/viewerSelection";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
-import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
+import { gzipBuffer, gunzipBuffer, assertInflatedIfcSize } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
 import {
   assertStorageObjectSize, describeEmptyRoster, describePersistFailure, describePersistProgress, formatMb,
@@ -235,6 +235,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
     let step = "extract";
     setRoster({ step: "extracting", done: 0, total: 0, phase: "index" });
     try {
+      assertInflatedIfcSize(buf.byteLength);
       // Reuse the viewer's already-parsed model when it is still open; a second
       // OpenModel of a 100 MB+ IFC is what used to push Safari over its memory
       // ceiling on the save path.
@@ -263,7 +264,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
 
       step = "upload";
       setRoster({ step: "saving", stage: `uploading ${formatMb(uploadFile.size)}` });
-      const up = await integrations.Core.UploadFile({ file: uploadFile });
+      const up = await integrations.Core.UploadFile({ file: uploadFile, projectId });
 
       step = "register";
       setRoster({ step: "saving", stage: `writing pieces 0 / ${result.rows.length.toLocaleString()}` });
@@ -308,6 +309,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
     setLoadErr(null); setRoster({ step: "idle" });
     resetViewerState();
     try {
+      assertInflatedIfcSize(file.size);
       const buf = await file.arrayBuffer();
       setModelFile(file);
       setSource("picked");
@@ -315,6 +317,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
       setBuffer(buf);
     } catch (err) {
       setLoadErr(err?.message || String(err));
+      toast.error(err?.message || String(err));
     }
   };
 
@@ -378,7 +381,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
             <p style={{ margin: 0, maxWidth: 460, textAlign: "center", color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
               Load an IFC export from your detailer (Tekla → IFC). It renders in the
               browser and colors each member by its fabrication status. Pieces stay
-              clickable for their mark, sequence, and links.
+              clickable for their mark, sequence, and links. Maximum decoded IFC size: 128 MiB.
             </p>
             <label className="sbd-btn sbd-btn-primary" style={{ cursor: "pointer" }}>
               Load IFC…
@@ -507,6 +510,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
           <div style={{ ...sectionHead, marginBottom: 0 }}>Model</div>
           <div style={{ fontSize: 12, color: "var(--text-primary)", marginTop: 2, wordBreak: "break-all" }}>{fileName}</div>
+          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>IFC limit: 128 MiB before compression</div>
           <label style={{ ...mono, fontSize: 10, color: "var(--accent)", cursor: "pointer", display: "inline-block", marginTop: 6 }}>
             {source === "stored" ? "Replace with updated model…" : "Load a different model…"}
             <input type="file" accept=".ifc" hidden onChange={pickFile} />

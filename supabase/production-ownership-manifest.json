@@ -8,14 +8,24 @@
     "functionLifecycle": "required",
     "functionOverrides": [
       {
+        "slug": "command-center-read",
+        "lifecycle": "deprecated",
+        "evidence": "Owner explicitly discontinued Desktop Command Center on 2026-10-09. Source now returns inert 410 without database or credential access. Delete exact reviewed hosted function; its continued presence intentionally fails drift until retirement is verified. No hosted deletion performed by this source change."
+      },
+      {
+        "slug": "command-center-session-handoff",
+        "lifecycle": "deprecated",
+        "evidence": "Owner explicitly discontinued Desktop Command Center on 2026-10-09. Browser credential handoff removed; source endpoint is inert 410. Candidate 20261009221740 revokes runtime handoff RPCs. Delete exact reviewed hosted function and verify absence; current presence intentionally fails drift. Existing companion refresh sessions need separately reviewed Auth-session revocation; removing an endpoint cannot revoke already-issued credentials."
+      },
+      {
         "slug": "account-delete",
         "lifecycle": "required",
         "evidence": "Deployed 2026-09-15 on the owner's explicit instruction (verify_jwt: true), superseding docs/PHASE_0_AGENT_HANDOFF.md's earlier 'keep frozen pending owner release' hold - that release is this instruction. Pre-deploy, confirmed hard_delete_organization (the RPC it calls) still carries the 20260912055243/20260912062606 fixes and its own ARCHIVE_FIRST guard against erasing an org with any live project. This activates DangerZone.jsx and DeleteAccountZone.jsx for real; see PR referencing 20260915100000 for the erase_my_account finding made during this deploy."
       },
       {
         "slug": "legacy-app-files-copy",
-        "lifecycle": "intentionally-frozen",
-        "evidence": "docs/app-files-tenant-isolation-plan.md: completed one-time production cutover; only the permanent 410 replacement may remain"
+        "lifecycle": "deprecated",
+        "evidence": "Security completion 2026-10-08: the user requested remediation of the audit, including EDGE-8/CI-9. Read-only production inventory confirms this completed one-time Rev.2 endpoint remains absent. Its active source entrypoint now returns permanent 410 without credentials or maintenance operations; historical implementation remains in Git. Any deployed reappearance must fail the inventory gate, including the disabled stub. No hosted function was deployed or deleted. See docs/audits/SECURITY_CONTROL_SNAPSHOT_2026-10-08.json."
       },
       {
         "slug": "staging-e2e-bootstrap",
@@ -24,6 +34,56 @@
       }
     ],
     "migrationOverrides": [
+      {
+        "version": "20261009221740",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - owner-authorized desktop companion retirement. Revokes all runtime create/redeem RPC and table access without deleting historical records. Coordinate hosted endpoint deletion, old client retirement and reviewed existing session revocation; manually apply/stamp exact payload. See supabase/tests/desktop-retirement/README.md."
+      },
+      {
+        "version": "20261009003246",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - active-project guard across 23 canonical piece command implementations, preserving latest paged/full model linkers and admin archival/restore/erasure. Aligns project-first archive/release locking and corrects UUID page cursor. Requires reviewed exact function definitions, real concurrent lock behavior and retained restore/erasure acceptance before manual apply/stamp. See supabase/tests/flags-sequences/README.md."
+      },
+      {
+        "version": "20261008201934",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - authoritative organization/project creation caps. Direct inserts are restricted and counted writes serialize on private organization revisions. Review exact SQL and plan contracts; verify real concurrent transactions before manual apply/stamp. See supabase/tests/creation-provenance/README.md."
+      },
+      {
+        "version": "20261008201944",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - submittal event project and actor provenance with active-project PM authorization. Verify existing internal callers before exact manual apply/stamp. See supabase/tests/creation-provenance/README.md."
+      },
+      {
+        "version": "20261008201945",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - service-only mail credentials and independently verified provider mailbox bindings. Coordinate the dependent handlers, provider verification, scopes and rotation before exact manual apply/stamp. See supabase/tests/private-email/README.md."
+      },
+      {
+        "version": "20261008234107",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - prepare app-files authoritative project/object disposition registry. Inventory and review all retained objects without inferring authority from editable URLs. Exact manual apply/stamp precedes coordinated new-path uploads and enforcement. See supabase/tests/app-files/README.md."
+      },
+      {
+        "version": "20261008234249",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - enforce app-files project membership and operation-specific roles. Requires complete reviewed object dispositions, new-path clients, shared-bucket coordination and staged Storage HTTP acceptance. Missing inventory aborts enforcement. See supabase/tests/app-files/README.md."
+      },
+      {
+        "version": "20261008235532",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - private atomic Edge operation reservations, replay and quota accounting. Coordinate exact SQL with operation-key clients, handlers and reviewed nonzero LLM caps; test real PostgreSQL concurrency and provider ambiguity. See supabase/tests/edge-quotas/README.md."
+      },
+      {
+        "version": "20261009001532",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - private raw feature-flag override maps and auth.uid-bound effective projection. Coordinated client/SQL cutover required; existing clients lose raw-table access. Verify platform-admin management before manual apply/stamp. See supabase/tests/flags-sequences/README.md."
+      },
+      {
+        "version": "20261009001555",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - writer-only public number allocation with transactional private allocation preserving approved viewer change-request creation. Verify membership dependency, concurrency and numbering past 999 before exact manual apply/stamp. See supabase/tests/flags-sequences/README.md."
+      },
       {
         "version": "20261008071019",
         "lifecycle": "required",

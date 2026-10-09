@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import AdminRoute from "../components/shared/AdminRoute";
 import LoadingSkeleton from "../components/shared/LoadingSkeleton";
-import DeleteDialog from "../components/shared/DeleteDialog";
-import { RefreshCw, Plus, Trash2, X } from "lucide-react";
+import { RefreshCw, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
 /**
@@ -17,9 +17,9 @@ import { toast } from "sonner";
  * admin toggle global flags, edit descriptions, and add per-email overrides
  * for opt-in betas without flipping the global flag.
  *
- * Writes go straight through `entities.FeatureFlag` — RLS is
- * permissive on writes for authenticated users, so the only thing keeping a
- * non-admin out of this surface is the AdminRoute wrap below.
+ * Raw rows are restricted by RLS to platform administrators. Organization
+ * owners/admins alone cannot read override maps. Ordinary feature consumers
+ * use the current-account effective-value RPC instead.
  */
 
 // ── small style helpers (mirrors UsersManagement.jsx idiom) ─────────
@@ -57,7 +57,6 @@ function FeatureFlagsAdminContent() {
   const qc = useQueryClient();
   const [newFlag, setNewFlag] = useState({ flag_key: "", description: "", enabled: false });
   const [overrideDrafts, setOverrideDrafts] = useState({});
-  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const { data: flags = [], isLoading, refetch } = useQuery({
     queryKey: ["feature_flags_admin"],
@@ -77,13 +76,25 @@ function FeatureFlagsAdminContent() {
   }, [qc]);
 
   const updateMut = useMutation({
-    mutationFn: ({ id, updates }) => entities.FeatureFlag.update(id, updates),
+    mutationFn: async ({ flag, enabled = flag.enabled, description = flag.description }) => {
+      const { data, error } = await supabase.rpc("set_feature_flag", {
+        p_flag_key: flag.flag_key, p_enabled: enabled, p_description: description ?? "",
+      });
+      if (error) throw error;
+      return data;
+    },
     onSuccess: () => invalidate(),
     onError: (err) => toast.error(err?.message || "Failed to update flag"),
   });
 
   const createMut = useMutation({
-    mutationFn: (record) => entities.FeatureFlag.create(record),
+    mutationFn: async (record) => {
+      const { data, error } = await supabase.rpc("set_feature_flag", {
+        p_flag_key: record.flag_key, p_enabled: record.enabled, p_description: record.description,
+      });
+      if (error) throw error;
+      return data;
+    },
     onSuccess: () => {
       invalidate();
       setNewFlag({ flag_key: "", description: "", enabled: false });
@@ -92,23 +103,25 @@ function FeatureFlagsAdminContent() {
     onError: (err) => toast.error(err?.message || "Failed to create flag"),
   });
 
-  const deleteMut = useMutation({
-    mutationFn: (id) => entities.FeatureFlag.delete(id),
-    onSuccess: () => {
-      invalidate();
-      setDeleteTarget(null);
-      toast.success("Flag deleted");
+  const overrideMut = useMutation({
+    mutationFn: async ({ flag, email, value }) => {
+      const { data, error } = await supabase.rpc("set_feature_flag_override", {
+        p_flag_key: flag.flag_key, p_email: email, p_value: value,
+      });
+      if (error) throw error;
+      return data;
     },
-    onError: (err) => toast.error(err?.message || "Failed to delete flag"),
+    onSuccess: () => invalidate(),
+    onError: (err) => toast.error(err?.message || "Failed to update override"),
   });
 
   const handleToggleEnabled = (flag) => {
-    updateMut.mutate({ id: flag.id, updates: { enabled: !flag.enabled } });
+    updateMut.mutate({ flag, enabled: !flag.enabled });
   };
 
   const handleDescriptionBlur = (flag, nextDescription) => {
     if ((flag.description || "") === (nextDescription || "")) return;
-    updateMut.mutate({ id: flag.id, updates: { description: nextDescription || null } });
+    updateMut.mutate({ flag, description: nextDescription });
   };
 
   const handleAddOverride = (flag) => {
@@ -118,9 +131,8 @@ function FeatureFlagsAdminContent() {
       toast.error("Enter a valid email");
       return;
     }
-    const overrides = { ...coerceOverrides(flag.user_overrides), [email]: !!draft.enabled };
-    updateMut.mutate(
-      { id: flag.id, updates: { user_overrides: overrides } },
+    overrideMut.mutate(
+      { flag, email, value: !!draft.enabled },
       {
         onSuccess: () => {
           setOverrideDrafts((d) => ({ ...d, [flag.id]: { email: "", enabled: true } }));
@@ -130,9 +142,7 @@ function FeatureFlagsAdminContent() {
   };
 
   const handleRemoveOverride = (flag, email) => {
-    const overrides = { ...coerceOverrides(flag.user_overrides) };
-    delete overrides[email];
-    updateMut.mutate({ id: flag.id, updates: { user_overrides: overrides } });
+    overrideMut.mutate({ flag, email, value: null });
   };
 
   const handleCreateFlag = () => {
@@ -141,15 +151,14 @@ function FeatureFlagsAdminContent() {
       toast.error("flag_key is required");
       return;
     }
-    if (!/^[a-z0-9_]+$/.test(key)) {
-      toast.error("flag_key must be lowercase letters, numbers, and underscores");
+    if (!/^[a-z][a-z0-9_]{2,63}$/.test(key)) {
+      toast.error("Use 3–64 lowercase letters, numbers, or underscores, starting with a letter");
       return;
     }
     createMut.mutate({
       flag_key: key,
       description: newFlag.description?.trim() || null,
       enabled: !!newFlag.enabled,
-      user_overrides: {},
     });
   };
 
@@ -278,6 +287,7 @@ function FeatureFlagsAdminContent() {
                         <input
                           type="checkbox"
                           checked={!!flag.enabled}
+                          disabled={updateMut.isPending}
                           onChange={() => handleToggleEnabled(flag)}
                         />
                         <span style={{
@@ -306,6 +316,7 @@ function FeatureFlagsAdminContent() {
                               </span>
                               <button
                                 onClick={() => handleRemoveOverride(flag, email)}
+                                disabled={overrideMut.isPending}
                                 title="Remove override"
                                 style={{
                                   background: "none", border: "none", cursor: "pointer",
@@ -347,7 +358,7 @@ function FeatureFlagsAdminContent() {
                             size="sm"
                             variant="secondary"
                             onClick={() => handleAddOverride(flag)}
-                            disabled={updateMut.isPending}
+                            disabled={overrideMut.isPending}
                           >
                             Add
                           </Button>
@@ -355,20 +366,7 @@ function FeatureFlagsAdminContent() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <button
-                        onClick={() => setDeleteTarget(flag)}
-                        title="Delete flag"
-                        style={{
-                          background: "none", border: "1px solid var(--border-default)",
-                          color: "var(--danger)",
-                          borderRadius: "var(--radius-btn)", padding: "6px 10px",
-                          cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4,
-                          fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-                          letterSpacing: "0.08em", textTransform: "uppercase",
-                        }}
-                      >
-                        <Trash2 size={12} /> Delete
-                      </button>
+                      <span style={{ color: "var(--text-muted)", fontSize: 11 }}>Turn a flag off using its switch; flags are retained for audit history.</span>
                     </TableCell>
                   </TableRow>
                 );
@@ -377,14 +375,6 @@ function FeatureFlagsAdminContent() {
           </TableBody>
         </Table>
       </div>
-
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-        title="Delete feature flag"
-        description={`Delete the flag "${deleteTarget?.flag_key}"? Any UI gated on this key will fall back to its default (off). This cannot be undone.`}
-      />
     </div>
   );
 }

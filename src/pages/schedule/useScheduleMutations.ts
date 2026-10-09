@@ -1,4 +1,5 @@
-import { useMutation } from "@tanstack/react-query";
+import { useOwnedMutation } from "@/hooks/useOwnedMutation";
+import { useOperationOwner, type OperationOwner } from "@/hooks/useOperationOwner";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { toast } from "sonner";
@@ -94,6 +95,7 @@ export function useScheduleMutations({
   setExportingPdf,
   fileInputRef,
 }: UseScheduleMutationsParams) {
+  const captureOwner = useOperationOwner(projectId);
   /**
    * The exact row patch a task update will write — the one place that answers
    * "what does saving this task actually change".
@@ -157,7 +159,9 @@ export function useScheduleMutations({
     id: string,
     fields: Record<string, any>,
     previous: ScheduleTask | undefined,
+    owner: OperationOwner,
   ) => {
+    if (!owner.isCurrent()) return;
     const revert: Record<string, any> = {};
     for (const key of Object.keys(fields)) {
       const prior = previous ? (previous as Record<string, any>)[key] : undefined;
@@ -165,16 +169,17 @@ export function useScheduleMutations({
     }
     try {
       await entities.ScheduleTask.update(id, revert);
+      if (!owner.isCurrent()) return;
       invalidateEntity(qc, "schedule_task", projectId);
       toast.success("Change reverted");
     } catch (err: unknown) {
-      toast.error(toUserErrorMessage(err, "Could not undo that change"));
+      if (owner.isCurrent()) toast.error(toUserErrorMessage(err, "Could not undo that change"));
     }
   };
 
   const scheduleTasksKey = getQueryKey("schedule_task", projectId) as unknown[];
 
-  const updateTaskMut = useMutation({
+  const updateTaskMut = useOwnedMutation(projectId, {
     mutationFn: (data: ScheduleTask) => {
       const { id, fields } = buildTaskUpdate(data);
       if (!id) throw new Error("Cannot update a task without an id");
@@ -182,7 +187,7 @@ export function useScheduleMutations({
     },
     // Paint the change immediately and let the refetch in onSettled confirm it.
     // Every edit used to round-trip before the bar moved (§4.2).
-    onMutate: async (data: ScheduleTask) => {
+    onMutate: async (data: ScheduleTask, owner) => {
       let patch: ReturnType<typeof buildTaskUpdate>;
       try {
         patch = buildTaskUpdate(data);
@@ -195,13 +200,14 @@ export function useScheduleMutations({
       if (!patch.id) return undefined;
 
       await qc.cancelQueries({ queryKey: scheduleTasksKey });
+      owner.assertCurrent();
       const snapshot = qc.getQueryData(scheduleTasksKey);
       qc.setQueryData(scheduleTasksKey, (rows: any) =>
         Array.isArray(rows)
           ? rows.map((row: any) => (row?.id === patch.id ? { ...row, ...patch.fields } : row))
           : rows,
       );
-      return { snapshot, id: patch.id, fields: patch.fields, previous: patch.previous };
+      return { snapshot, id: patch.id, fields: patch.fields, previous: patch.previous, owner };
     },
     onError: (err: unknown, _data: ScheduleTask, ctx: any) => {
       // Put the list back before reporting. A failed save must not leave the
@@ -216,7 +222,7 @@ export function useScheduleMutations({
         toast.success("Task updated", {
           action: {
             label: "Undo",
-            onClick: () => { void undoTaskUpdate(ctx.id, ctx.fields, ctx.previous); },
+            onClick: () => { void undoTaskUpdate(ctx.id, ctx.fields, ctx.previous, ctx.owner); },
           },
         });
       } else {
@@ -228,13 +234,14 @@ export function useScheduleMutations({
     onSettled: () => { invalidateEntity(qc, "schedule_task", projectId); },
   });
 
-  const reparentMut = useMutation({
-    mutationFn: (vars: { ids: string[]; newParentId: string | null; dropIndex?: number | null }) =>
+  const reparentMut = useOwnedMutation(projectId, {
+    mutationFn: (vars: { ids: string[]; newParentId: string | null; dropIndex?: number | null }, owner) =>
       reparentTasks(vars.ids, vars.newParentId, {
         tasks: enrichedTasks,
         dropIndex: vars.dropIndex ?? null,
         projectId: projectId || undefined,
         projectName: selectedProject?.name || undefined,
+        assertCurrent: owner.assertCurrent,
       }),
     onSuccess: (_r, vars) => {
       invalidateEntity(qc, "schedule_task", projectId);
@@ -247,7 +254,7 @@ export function useScheduleMutations({
     },
   });
 
-  const createTaskMut = useMutation({
+  const createTaskMut = useOwnedMutation(projectId, {
     mutationFn: (data: ScheduleTask) => {
       const scoped = withProjectId(data as Record<string, unknown>, projectId);
       assertScheduleDateRange(scoped as ScheduleTask);
@@ -283,19 +290,21 @@ export function useScheduleMutations({
    * than hide. Scans `scheduleTasks` (the whole project, unfiltered), never the
    * phase-filtered rows.
    */
-  const cleanupPredecessorsFor = async (deletedIds: string[]) => {
+  const cleanupPredecessorsFor = async (deletedIds: string[], owner: OperationOwner) => {
+    owner.assertCurrent();
     const patches = stripPredecessorLinks(scheduleTasks, deletedIds);
     if (patches.length === 0) return { patches, failed: 0 };
-    const results = await batchProcess(patches, (patch: any) =>
-      entities.ScheduleTask.update(patch.id, { dependencies: patch.dependencies }),
+    const results = await batchProcess(patches, (patch: any) => {
+      owner.assertCurrent();
+      return entities.ScheduleTask.update(patch.id, { dependencies: patch.dependencies }); },
     );
     return { patches, failed: results.failed.length };
   };
 
-  const deleteTaskMut = useMutation({
-    mutationFn: async (id: string) => {
+  const deleteTaskMut = useOwnedMutation(projectId, {
+    mutationFn: async (id: string, owner) => {
       await entities.ScheduleTask.delete(id);
-      return cleanupPredecessorsFor([id]);
+      return cleanupPredecessorsFor([id], owner);
     },
     onSuccess: (cleanup) => {
       invalidateEntity(qc, "schedule_task", projectId);
@@ -322,8 +331,8 @@ export function useScheduleMutations({
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
-  const bulkUpdateMut = useMutation({
-    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+  const bulkUpdateMut = useOwnedMutation(projectId, {
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }, owner) => {
       // Stamp actuals per task, not once for the batch: the patch depends on
       // what each task has already recorded. A task already carrying a finish
       // date keeps it — re-marking a batch Complete must not overwrite the day
@@ -332,6 +341,7 @@ export function useScheduleMutations({
       let stamped = 0;
 
       const results = await batchProcess(ids, (id: any) => {
+        owner.assertCurrent();
         const task = byId.get(id);
         const actuals = deriveActualsPatch({ task, nextStatus: status });
         if (hasActualsPatch(actuals)) stamped += 1;
@@ -376,16 +386,16 @@ export function useScheduleMutations({
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk update failed")),
   });
 
-  const bulkDeleteMut = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const results = await batchProcess(ids, (id: any) => entities.ScheduleTask.delete(id));
+  const bulkDeleteMut = useOwnedMutation(projectId, {
+    mutationFn: async (ids: string[], owner) => {
+      const results = await batchProcess(ids, (id: any) => { owner.assertCurrent(); return entities.ScheduleTask.delete(id); });
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
       // Clean up links only for the rows that actually went away. Using `ids`
       // here would strip links to tasks whose delete failed and are still live.
       const deleted = results.succeeded.map((s: any) => String(s.item));
-      const cleanup = await cleanupPredecessorsFor(deleted);
+      const cleanup = await cleanupPredecessorsFor(deleted, owner);
       return { ...results, cleanup };
     },
     onSuccess: (results, ids) => {
@@ -410,12 +420,12 @@ export function useScheduleMutations({
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
-  const bulkResourceMut = useMutation({
-    mutationFn: async ({ ids, resource_names }: { ids: string[]; resource_names: string }) => {
+  const bulkResourceMut = useOwnedMutation(projectId, {
+    mutationFn: async ({ ids, resource_names }: { ids: string[]; resource_names: string }, owner) => {
       const patch = buildScheduleResourceAssignPatch(resource_names);
       const results = await batchProcess(
         ids,
-        (id: any) => entities.ScheduleTask.update(id, patch),
+        (id: any) => { owner.assertCurrent(); return entities.ScheduleTask.update(id, patch); },
       );
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
@@ -436,8 +446,8 @@ export function useScheduleMutations({
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk resource assignment failed")),
   });
 
-  const bulkDateMut = useMutation({
-    mutationFn: async ({ ids, fields }: { ids: string[]; fields: Record<string, any> }) => {
+  const bulkDateMut = useOwnedMutation(projectId, {
+    mutationFn: async ({ ids, fields }: { ids: string[]; fields: Record<string, any> }, owner) => {
       const selected = enrichedTasks.filter((task) => task.id && ids.includes(task.id));
       const editable = filterEditableTasks(selected);
       const skipped = selected.length - editable.length;
@@ -450,7 +460,7 @@ export function useScheduleMutations({
 
       const results = await batchProcess(
         editable.map((task) => task.id as string),
-        (id: any) => entities.ScheduleTask.update(id, fields),
+        (id: any) => { owner.assertCurrent(); return entities.ScheduleTask.update(id, fields); },
       );
 
       if (results.failed.length > 0 && results.succeeded.length === 0) {
@@ -476,8 +486,8 @@ export function useScheduleMutations({
     onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk date update failed")),
   });
 
-  const bulkDurationMut = useMutation({
-    mutationFn: async ({ ids, mode, days }: { ids: string[]; mode: string; days: number }) => {
+  const bulkDurationMut = useOwnedMutation(projectId, {
+    mutationFn: async ({ ids, mode, days }: { ids: string[]; mode: string; days: number }, owner) => {
       const selected = enrichedTasks.filter((task) => task.id && ids.includes(task.id));
       const editable = filterEditableTasks(selected);
       const skipped = selected.length - editable.length;
@@ -489,6 +499,7 @@ export function useScheduleMutations({
       const results = await batchProcess(
         editable,
         (task: any) => {
+          owner.assertCurrent();
           // Read the DERIVED duration, not the stored column. Bulk Duration used
           // to read `task.duration` — stale on 199 of 338 dated rows — and then
           // rewrite end_date from it, moving a finish date using a number the UI
@@ -543,6 +554,7 @@ export function useScheduleMutations({
    * the partially created tasks are real and must appear.
    */
   const handleBulkAdd = async (rows: any[]) => {
+    const owner = captureOwner();
     if (!projectId) return;
     setBulkSaving(true);
     let created = 0;
@@ -551,6 +563,7 @@ export function useScheduleMutations({
       // Build a running snapshot of tasks so each new WBS is unique
       const snapshot = [...scheduleTasks];
       for (const row of rows) {
+        owner.assertCurrent();
         const scoped = withProjectId(row as Record<string, unknown>, projectId);
         const wbs = (scoped.wbs_code as string | undefined) || generateWBS(scoped.phase as string | undefined, snapshot);
         // The same couplings the single-task create applies — a bulk row is
@@ -560,6 +573,7 @@ export function useScheduleMutations({
         );
         const task = { ...ready, wbs_code: wbs };
         await entities.ScheduleTask.create(task as any);
+        owner.assertCurrent();
         snapshot.push(task as ScheduleTask);
         created += 1;
       }
@@ -567,6 +581,7 @@ export function useScheduleMutations({
       setShowBulkAdd(false);
       toast.success(`Created ${rows.length} task${rows.length !== 1 ? "s" : ""}`);
     } catch (err: unknown) {
+      if (!owner.isCurrent()) return;
       // Rows already written stay written; say so rather than implying none did.
       invalidateEntity(qc, "schedule_task", projectId);
       const detail = created > 0
@@ -574,11 +589,12 @@ export function useScheduleMutations({
         : "";
       toast.error(`Bulk add failed: ${toUserErrorMessage(err)}.${detail}`);
     } finally {
-      setBulkSaving(false);
+      if (owner.isCurrent()) setBulkSaving(false);
     }
   };
 
   const handleImportMpp = async (file: File) => {
+    const owner = captureOwner();
     if (!projectId) {
       toast.error("Select a project before importing");
       return;
@@ -595,6 +611,7 @@ export function useScheduleMutations({
 
     try {
       const allParsed = await readMsProjectXmlFile(file);
+      owner.assertCurrent();
       if (!allParsed.length) {
         throw new Error("Couldn't read tasks from the file. Please export the MPP as XML (File → Save As → XML) and retry.");
       }
@@ -603,17 +620,22 @@ export function useScheduleMutations({
         tasks: allParsed,
         projectId,
         qc,
+        assertCurrent: owner.assertCurrent,
       });
+      owner.assertCurrent();
       toast.success(`Imported ${created} tasks from ${file.name}`);
     } catch (e: unknown) {
-      toast.error(toUserErrorMessage(e, "Import failed"));
+      if (owner.isCurrent()) toast.error(toUserErrorMessage(e, "Import failed"));
     } finally {
-      setImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (owner.isCurrent()) {
+        setImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
     }
   };
 
   const handleExportIcs = async () => {
+    const owner = captureOwner();
     if (!projectId || scheduleTasks.length === 0) return;
     // Use the effective-date overlay so calendar entries match where the
     // Gantt actually places each task. Stored dates would put cascaded tasks
@@ -629,21 +651,27 @@ export function useScheduleMutations({
       filename: `schedule-${selectedProject?.project_number || "project"}.ics`,
       calendarName: `${selectedProject?.name || "Project"} — Schedule`,
       events,
+      isCurrent: owner.isCurrent,
     });
+    if (!owner.isCurrent()) return;
     if (presentation !== "downloaded" && presentation !== "shared") return;
     toast.success(`Exported ${events.length} tasks to calendar`);
   };
 
   const handleExportPdf = async () => {
+    const owner = captureOwner();
     if (!projectId || scheduleTasks.length === 0 || exportingPdf) return;
     setExportingPdf(true);
     const t = toast.loading("Generating PDF…");
     try {
       const { exportGanttToPdf } = await import("@/lib/exportGanttPdf");
+      owner.assertCurrent();
       const { pageCount, filename, presentation } = await exportGanttToPdf({
         project: selectedProject,
         tasks: tasksWithEffective.length ? tasksWithEffective : scheduleTasks,
+        isCurrent: owner.isCurrent,
       });
+      if (!owner.isCurrent()) return;
       if (presentation !== "downloaded" && presentation !== "shared") {
         toast.dismiss(t);
         return;
@@ -653,10 +681,11 @@ export function useScheduleMutations({
         { id: t },
       );
     } catch (err: unknown) {
+      if (!owner.isCurrent()) return;
       console.error("[Schedule] PDF export failed:", err);
       toast.error(`PDF export failed: ${toUserErrorMessage(err, "unknown error")}`, { id: t });
     } finally {
-      setExportingPdf(false);
+      if (owner.isCurrent()) setExportingPdf(false);
     }
   };
 

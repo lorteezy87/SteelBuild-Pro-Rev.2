@@ -59,6 +59,8 @@ export interface UploadedShippingTicket {
 }
 
 export interface ExtractShippingTicketArgs {
+  /** Parse before project confirmation; upload only after the review chooses it. */
+  file?: File;
   storage_path?: string | null;
   file_url?: string | null;
   model?: string;
@@ -98,7 +100,7 @@ interface LlmProxyResponse {
  * (missing OPENAI_API_KEY, rate limit, payload too large, etc.).
  */
 async function invokeProxyWithDetail(body: Record<string, unknown>): Promise<{ data: LlmProxyResponse | null }> {
-  const { data, error } = await supabase.functions.invoke<LlmProxyResponse>("llm-proxy", { body });
+  const { data, error } = await supabase.functions.invoke<LlmProxyResponse>("llm-proxy", { body, headers: { "Idempotency-Key": crypto.randomUUID() } });
   if (!error && !data?.error) return { data };
 
   let status = 0;
@@ -207,7 +209,7 @@ async function arrayBufferToBase64(buf: ArrayBuffer): Promise<string> {
 /**
  * Upload the PDF to storage and return { file_url, storage_path, file_name }.
  */
-export async function uploadShippingTicket(file: File | null | undefined): Promise<UploadedShippingTicket> {
+export async function uploadShippingTicket(file: File | null | undefined, projectId: string): Promise<UploadedShippingTicket> {
   if (!file) throw new Error("No file provided.");
   if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
     throw new Error("Shipping ticket must be a PDF.");
@@ -215,7 +217,7 @@ export async function uploadShippingTicket(file: File | null | undefined): Promi
   if (file.size > MAX_PDF_BYTES) {
     throw new Error(`PDF exceeds 32 MB (${(file.size / 1e6).toFixed(1)} MB).`);
   }
-  const { file_url, path } = await integrations.Core.UploadFile({ file, workflow: "attachment" });
+  const { file_url, path } = await integrations.Core.UploadFile({ file, projectId, workflow: "attachment" });
   return { file_url, storage_path: path || "", file_name: file.name };
 }
 
@@ -224,6 +226,7 @@ export async function uploadShippingTicket(file: File | null | undefined): Promi
  * Throws with a readable error on invalid/unparseable PDFs.
  */
 export async function extractShippingTicket({
+  file,
   storage_path,
   file_url,
   model    = DEFAULT_MODEL,
@@ -234,14 +237,17 @@ export async function extractShippingTicket({
 }: ExtractShippingTicketArgs): Promise<ShippingTicketExtraction> {
   // Download the file from storage, base64 it.
   const path = storage_path || file_url;
-  if (!path) throw new Error("Missing storage path.");
+  if (!file && !path) throw new Error("Missing storage path.");
   let buf: ArrayBuffer;
-  if (/^https?:\/\//i.test(path)) {
-    const resp = await fetch(path);
+  if (file) {
+    if (file.size > MAX_PDF_BYTES || !/\.pdf$/i.test(file.name)) throw new Error("Shipping ticket must be a PDF up to 32 MB.");
+    buf = await file.arrayBuffer();
+  } else if (/^https?:\/\//i.test(path!)) {
+    const resp = await fetch(path!);
     if (!resp.ok) throw new Error(`PDF fetch failed (${resp.status}).`);
     buf = await resp.arrayBuffer();
   } else {
-    const { data, error } = await supabase.storage.from(STORAGE_BUCKET).download(path);
+    const { data, error } = await supabase.storage.from(STORAGE_BUCKET).download(path!);
     if (error) throw new Error(`Storage download failed: ${error.message}`);
     buf = await data.arrayBuffer();
   }

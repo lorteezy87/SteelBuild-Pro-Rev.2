@@ -20,6 +20,15 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe('deny-only recovery persistence', () => {
+  it('binds a warm native callback hint to its SDK recovery event without orphaning a hold', async () => {
+    const store = await load();
+    expect(store.getPasswordRecoveryHold()).toBeNull();
+    store.preparePasswordRecoveryCallback();
+    expect(store.getPasswordRecoveryHold()?.phase).toBe('unresolved');
+    store.capturePasswordRecovery(session());
+    expect(stored()).toHaveLength(1);
+    expect(store.getPasswordRecoveryHold()).toMatchObject({ userId: 'a', phase: 'password' });
+  });
   it('restores owner and updated phase in a fresh runtime without storing credentials', async () => {
     const store = await load(); store.capturePasswordRecovery(session());
     store.markRecoveryPasswordUpdated(store.getPasswordRecoveryHold()!.id);

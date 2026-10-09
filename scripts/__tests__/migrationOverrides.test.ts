@@ -170,7 +170,7 @@ describe('the real manifest', () => {
     expect(report.missingMigrations).toContain(version);
   });
 
-  it.each(['20261008032524', '20261008071019'])('keeps security candidate %s required until its reviewed SQL is applied', (version) => {
+  it.each(['20261008032524', '20261008071019', '20261008201934', '20261008201944', '20261008201945', '20261008234107', '20261008234249', '20261008235532', '20261009001532', '20261009001555', '20261009003246', '20261009221740'])('keeps security candidate %s required until its reviewed SQL is applied', (version) => {
     const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
     expect(entry?.lifecycle).toBe('required');
     expect(entry?.evidence).toMatch(/PENDING PRODUCTION APPLY/);

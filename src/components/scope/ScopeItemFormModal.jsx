@@ -64,7 +64,7 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
     }
     setUploading(true);
     try {
-      const { file_url, path } = await integrations.Core.UploadFile({ file, workflow: "attachment" });
+      const { file_url, path } = await integrations.Core.UploadFile({ file, projectId: editing?.project_id || projectId, workflow: "attachment" });
       setFormData(prev => ({ ...prev, file_url, storage_path: path || "", file_name: file.name }));
       toast.success("PDF attached");
     } catch (err) {

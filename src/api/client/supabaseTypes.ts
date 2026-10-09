@@ -93,6 +93,11 @@ export type AuthMeResult = {
 
 export type UploadFileArgs = EntityRequestOptions & {
   file: File;
+  /** Mandatory for the default project scope; independently verified by RLS. */
+  projectId?: string | null;
+  /** Organization files require admin; avatars require the named caller. */
+  scope?: 'project' | 'organization' | 'avatar';
+  userId?: string;
   /** Cancels queued replay before each storage attempt, including retries. */
   assertActive?: () => void;
   /**

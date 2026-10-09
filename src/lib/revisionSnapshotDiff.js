@@ -192,11 +192,12 @@ export function buildDiffMessages({ fromImageB64, toImageB64, fromLabel, toLabel
 
 // ── llm-proxy invocation with short interactive backoff ───────────────────
 async function invokeLlmProxy(body, { maxAttempts = 3, onRetry } = {}) {
+  const operationId = crypto.randomUUID();
   let lastStatus = 0;
   let lastDetail = "Upstream request failed";
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
+      const { data, error } = await supabase.functions.invoke("llm-proxy", { body, headers: { "Idempotency-Key": operationId } });
       if (!error && !data?.error) return { data };
       let status = 0;
       let detail = error?.message || data?.error || "llm-proxy invocation failed";
@@ -217,6 +218,7 @@ async function invokeLlmProxy(body, { maxAttempts = 3, onRetry } = {}) {
     } catch (thrown) {
       lastDetail = thrown?.message || String(thrown);
     }
+    if ([400, 401, 403, 409, 413, 429].includes(lastStatus)) break;
     if (attempt < maxAttempts) {
       const delay = 4000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1500);
       if (typeof onRetry === "function") {

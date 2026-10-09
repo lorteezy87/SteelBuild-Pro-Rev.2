@@ -86,6 +86,19 @@ function fixture() {
 }
 
 describe('account erasure completion', () => {
+  it.each(['account', 'workspace'])('does not expose private RPC errors in %s erasure responses', async mode => {
+    const f = fixture();
+    const marker = 'PRIVATE_MARKER_secret_customer@example.invalid';
+    f.userClient.rpc = async () => ({ data: null, error: { message: marker } });
+    const response = mode === 'account'
+      ? await handleAccountDeletion(f.admin, f.userClient, CALLER)
+      : await handleOrgDeletion(f.admin, f.userClient, CALLER, ORG);
+    expect(response.status).toBe(400);
+    expect(await response.text()).not.toContain(marker);
+    expect(f.deleteUser).not.toHaveBeenCalled();
+    expect(f.objects.size).toBe(2);
+  });
+
   it('recovers durable scopes on retry after DB erasure and a Storage failure', async () => {
     const f = fixture();
     f.failRemove(true);

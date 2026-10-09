@@ -13,7 +13,10 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, it, expect, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ submittalFilter: vi.fn(), componentFilter: vi.fn(), featureFlags: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  submittalFilter: vi.fn(), componentFilter: vi.fn(), featureFlags: vi.fn(),
+  user: { id: "test-user-id", email: "viewer@example.test" },
+}));
 
 vi.mock("@/api/supabaseClient", () => {
   const noop = {
@@ -28,7 +31,6 @@ vi.mock("@/api/supabaseClient", () => {
       get: (_target, entity) => {
         if (entity === "Submittal") return { ...noop, filter: mocks.submittalFilter };
         if (entity === "SubmittalComponent") return { ...noop, filter: mocks.componentFilter };
-        if (entity === "FeatureFlag") return { ...noop, list: mocks.featureFlags };
         return noop;
       },
     }),
@@ -48,7 +50,7 @@ vi.mock("@/lib/supabase", () => ({
     auth: {
       getSession: vi
         .fn()
-        .mockResolvedValue({ data: { session: null }, error: null }),
+        .mockResolvedValue({ data: { session: { user: mocks.user } }, error: null }),
       onAuthStateChange: vi.fn(() => ({
         data: { subscription: { unsubscribe: vi.fn() } },
       })),
@@ -63,12 +65,16 @@ vi.mock("@/lib/supabase", () => ({
       };
       return chain;
     }),
-    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+    rpc: vi.fn(async (name) => ({
+      data: name === "list_effective_feature_flags" ? await mocks.featureFlags() : null,
+      error: null,
+    })),
   },
 }));
 
 import Submittals from "@/pages/Submittals";
 import { ProjectContext } from "@/components/shared/ProjectContext";
+import { AuthContext } from "@/lib/AuthContext";
 
 const TEST_PROJECT = {
   id: "test-project-id",
@@ -95,14 +101,16 @@ function renderSubmittals(initialEntry = "/Submittals") {
   };
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[initialEntry]}>
-        <RouteLocation />
-        <ProjectContext.Provider value={ctxValue}>
-          <Routes>
-            <Route path="/Submittals" element={<Submittals />} />
-          </Routes>
-        </ProjectContext.Provider>
-      </MemoryRouter>
+      <AuthContext.Provider value={{ user: mocks.user, isAuthenticated: true }}>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <RouteLocation />
+          <ProjectContext.Provider value={ctxValue}>
+            <Routes>
+              <Route path="/Submittals" element={<Submittals />} />
+            </Routes>
+          </ProjectContext.Provider>
+        </MemoryRouter>
+      </AuthContext.Provider>
     </QueryClientProvider>
   );
 }

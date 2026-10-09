@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ts from "typescript";
+import { boundedRequest, EdgeBoundaryError } from "../../_shared/edgeOperation";
 import * as webhookLogic from "../webhookLogic";
 import { billingReadiness } from "../configGuard";
 
@@ -104,7 +105,7 @@ function fixture(options: { failure?: Failure; current?: string | null; subscrip
   const runtime = { env: { get: (name: string) => env[name] }, serve: (value: Handler) => { handler = value; } };
   vi.stubGlobal("Deno", runtime);
   const reports: unknown[] = [];
-  const bindings = { Deno: runtime, Stripe: StripeFixture, createClient: () => client, ...webhookLogic, billingReadiness,
+  const bindings = { Deno: runtime, Stripe: StripeFixture, createClient: () => client, ...webhookLogic, billingReadiness, boundedRequest, EdgeBoundaryError,
     corsHeaders: () => ({}), isAllowedOrigin: () => false, mfaDenialForVerifiedUser: () => null,
     reportError: async (error: unknown) => { reports.push(error); }, console: { log() {}, warn() {}, error() {} } };
   new Function(...Object.keys(bindings), executable)(...Object.values(bindings));

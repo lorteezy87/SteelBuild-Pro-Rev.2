@@ -120,7 +120,7 @@ export function extractInAppPath(url: string): string | null {
     const u = new URL(url)
     // Only route verified Universal Links. An external URL delivered through
     // appUrlOpen must never be translated into an in-app route.
-    if (u.protocol !== 'https:' || !['steelbuild-pro.com', 'www.steelbuild-pro.com'].includes(u.hostname) || u.port) return null
+    if (u.protocol !== 'https:' || !['steelbuild-pro.com', 'www.steelbuild-pro.com'].includes(u.hostname) || u.port || u.username || u.password) return null
     const path = `${u.pathname}${u.search}${u.hash}`
     return path && path !== '/' ? path : null
   } catch {
@@ -130,14 +130,31 @@ export function extractInAppPath(url: string): string | null {
 
 function wireDeepLinks(): void {
   try {
-    void App.addListener('appUrlOpen', (event) => {
+    const openUrl = async (event: { url: string }) => {
       const path = extractInAppPath(event?.url || '')
       if (!path) return
+      const [{ handleNativeAuthCallback }, { preparePasswordRecoveryCallback }] = await Promise.all([
+        import('./authCallback'), import('@/lib/passwordRecovery'),
+      ])
+      const navigate = (target: string) => {
+        window.history.pushState({}, '', target)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }
+      if (await handleNativeAuthCallback(event.url, {
+        prepareRecovery: preparePasswordRecoveryCallback,
+        navigate,
+        exchangeCode: async (code) => {
+          const { supabase } = await import('@/lib/supabase')
+          return supabase.auth.exchangeCodeForSession(code)
+        },
+      })) return
       // Hand the path to the SPA router via the History API + popstate;
       // react-router's BrowserRouter listens for popstate.
-      window.history.pushState({}, '', path)
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
+      navigate(path)
+    }
+    void App.addListener('appUrlOpen', (event) => { void openUrl(event).catch(() => {}) })
+    // Handle a Universal Link that cold-launched the native app as well.
+    void App.getLaunchUrl?.().then(event => { if (event?.url) return openUrl(event) }).catch(() => {})
   } catch { /* deep links optional */ }
 }
 

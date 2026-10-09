@@ -32,7 +32,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 const ALLOW_HEADERS =
-  "authorization, x-client-info, apikey, content-type, x-supabase-auth, sentry-trace, baggage, stripe-signature, x-webhook-secret";
+  "authorization, x-client-info, apikey, content-type, idempotency-key, x-supabase-auth, sentry-trace, baggage, stripe-signature, x-webhook-secret";
 
 function configuredOrigins(): string[] | null {
   const raw = Deno.env.get("ALLOWED_ORIGINS");

@@ -8,9 +8,9 @@ import { STAGES, DISCIPLINES, EMPTY_FORM, mono, surface } from "./drawingsConfig
  * Modal for creating or editing a single drawing sheet.
  * Handles file upload via Supabase integration.
  *
- * @param {{ initial?: object, onSave: (form: object) => void, onClose: () => void, saving: boolean }} props
+ * @param {{ projectId?: string, initial?: object, onSave: (form: object) => void, onClose: () => void, saving: boolean }} props
  */
-export default function SheetFormModal({ initial, onSave, onClose, saving, existingSetNames = [] }) {
+export default function SheetFormModal({ projectId, initial, onSave, onClose, saving, existingSetNames = [] }) {
   const trapRef = useFocusTrap(true);
   const [form, setForm] = useState(initial || EMPTY_FORM);
   const [uploadFile, setUploadFile] = useState(null);
@@ -34,7 +34,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
     if (uploadFile) {
       setUploading(true);
       try {
-        const { file_url } = await integrations.Core.UploadFile({ file: uploadFile, workflow: "attachment" });
+        const { file_url } = await integrations.Core.UploadFile({ file: uploadFile, projectId, workflow: "attachment" });
         fileUrl = file_url;
       } catch (err) {
         toast.error("File upload failed: " + (err?.message || "Unknown error"));

@@ -65,15 +65,17 @@ const rel = (file: string) => file.replace(/.*\/src\//, "src/");
 
 describe("no caller invents an official record number", () => {
   const files = sourceFiles(SRC);
+  // Parse each source once; the independent guards inspect identical bytes.
+  const sources = files.map(file => ({ file, source: stripComments(readFileSync(file, "utf8")) }));
 
   it("scans the whole application source tree, not a broken glob", () => {
     expect(files.length).toBeGreaterThan(1000);
   });
 
   it.each(INVENTED_NUMBER)("mints no record number in the browser (%s)", (_label, pattern) => {
-    const offenders = files
-      .filter((file) => pattern.test(stripComments(readFileSync(file, "utf8"))))
-      .map(rel);
+    const offenders = sources
+      .filter(({ source }) => pattern.test(source))
+      .map(({ file }) => rel(file));
 
     expect(
       offenders,

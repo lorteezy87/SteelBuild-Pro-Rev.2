@@ -257,7 +257,7 @@ export function useRfiPageMutations(args: {
           try {
             // A saved record may not yet be in the refreshed register; validate its project scope.
             assertMutationScope?.(undefined, rfiRecord!.project_id || projectId || undefined);
-            const uploaded = await integrations.Core.UploadFile({ file, workflow: "attachment" });
+            const uploaded = await integrations.Core.UploadFile({ file, projectId: rfiRecord!.project_id || projectId, workflow: "attachment" });
             assertMutationScope?.(undefined, rfiRecord!.project_id || projectId || undefined);
             await entities.Document.create(
               buildRfiAttachmentDocumentPayload(

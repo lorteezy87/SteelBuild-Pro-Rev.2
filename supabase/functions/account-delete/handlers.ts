@@ -11,7 +11,6 @@ import { purgeWorkspaceStorage, StoragePurgeError } from "./storage.ts";
 import { CleanupReadError, readScopedRows, recoverErasedWorkspaceScopes } from "./cleanup.ts";
 
 export const CORS = {
-  "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "authorization, apikey, content-type",
 };
@@ -27,7 +26,7 @@ export function json(body: unknown, status = 200) {
 // incomplete cleanup and keep Auth users. An account retry recovers the erased
 // scopes from data_erasure_log before attempting Auth deletion again.
 function storageFailure(error: StoragePurgeError, mode: "account" | "workspace" = "account"): Response {
-  console.error(error.message);
+  console.error("[account-delete] storage_erasure_incomplete");
   return json({
     error: "STORAGE_ERASURE_FAILED",
     step: "storage",
@@ -40,7 +39,7 @@ function storageFailure(error: StoragePurgeError, mode: "account" | "workspace" 
 }
 
 function cleanupFailure(error: unknown, mode: "account" | "workspace" = "account"): Response {
-  console.error(error);
+  console.error("[account-delete] cleanup_incomplete");
   return json({
     error: "ACCOUNT_CLEANUP_INCOMPLETE",
     step: "cleanup",
@@ -94,7 +93,7 @@ export async function handleOrgDeletion(admin: any, userClient: any, callerId: s
   } catch (e) {
     if (e instanceof StoragePurgeError) return storageFailure(e, "workspace");
     if (e instanceof CleanupReadError) return cleanupFailure(e, "workspace");
-    return json({ error: "db_erasure_failed", detail: String((e as Error)?.message ?? e) }, 400);
+    return json({ error: "db_erasure_failed", detail: "Workspace erasure could not be completed. Verify all projects are archived and retry." }, 400);
   }
 
   // A workspace owner cannot delete another person's login, even if that person
@@ -154,7 +153,7 @@ export async function handleAccountDeletion(admin: any, userClient: any, callerI
     "erase_my_sole_member_workspaces",
     eraseSoleWorkspacesArgs(ACCOUNT_ERASURE_REASON),
   );
-  if (eraseErr) return json({ error: "account_deletion_failed", step: "erase", detail: eraseErr.message }, 400);
+  if (eraseErr) return json({ error: "account_deletion_failed", step: "erase", detail: "Account workspace erasure could not be completed. Please retry." }, 400);
   const erased = erasedWorkspaceIds(erasedBody);
   let storageRemoved: number;
   try {
@@ -180,7 +179,7 @@ export async function handleAccountDeletion(admin: any, userClient: any, callerI
           error: "RECORDS_REFERENCE_ACCOUNT",
           detail: "Records you created in a shared workspace still reference your account, so it couldn't be removed. Contact support@steelbuild-pro.com and we'll complete the deletion.",
         }
-      : { error: "account_deletion_failed", step: "delete_user", detail: delErr.message },
+      : { error: "account_deletion_failed", step: "delete_user", detail: "Account removal could not be completed. Please retry or contact support@steelbuild-pro.com." },
     blockedByRecords ? 409 : 400);
   }
 

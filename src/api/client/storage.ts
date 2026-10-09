@@ -9,11 +9,9 @@
 
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
+import { SIGNED_URL_EXPIRY_SECONDS } from '@/lib/fileUrlLifetime';
 
 // ─── File uploads & LLM integrations ─────────────────────────────────────────
-
-// Signed URL expiry in seconds (1 hour). Increase if long-lived links are needed.
-const SIGNED_URL_EXPIRY_SECONDS = 60 * 60;
 
 /**
  * Get a short-lived signed URL for a stored file path.
@@ -27,22 +25,15 @@ export const getSignedUrl = async (storagePath: string, bucket: string = 'app-fi
   return data.signedUrl;
 };
 
-// Trusted host for already-resolved (full http) file URLs: our own Supabase
-// project, where signed/public storage URLs live. Stored file_url values are
-// storage PATHS (verified across every file_url table: 0 rows hold a full URL),
-// so the ONLY legitimate full URL is one on this host. Any other host is
-// untrusted — a poisoned / user-controlled file_url must never be rendered or
-// opened as a trusted project file (#20).
-const TRUSTED_FILE_HOST = (() => {
-  try { return new URL(env.supabaseUrl).host; } catch { return ''; }
+const TRUSTED_FILE_ORIGIN = (() => {
+  try { return new URL(env.supabaseUrl).origin; } catch { return ''; }
 })();
 
 /**
  * Resolve a file_url to a usable URL.
  * If the value looks like a storage path (no protocol), generate a signed URL.
- * If it's already a full http(s) URL, return it ONLY when it's on our trusted
- * Supabase host; any other host is blocked (returns null) so a user-controlled
- * file_url can't surface arbitrary external content as a trusted project file.
+ * Old signed URLs are reduced to their owned bucket/path and signed again,
+ * enforcing current RLS rather than reusing another session's bearer token.
  *
  * Bucket-prefixed paths ("email-attachments/<project_id>/<message_id>/<file>")
  * sign against that bucket — email attachments live in their own private
@@ -50,13 +41,18 @@ const TRUSTED_FILE_HOST = (() => {
  */
 export const resolveFileUrl = async (fileUrl: string | null | undefined): Promise<string | null> => {
   if (!fileUrl) return null;
-  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
-    let host = '';
-    try { host = new URL(fileUrl).host; } catch { return null; }
-    if (host && host === TRUSTED_FILE_HOST) return fileUrl;
-    console.warn(`[resolveFileUrl] blocked untrusted external file URL (host: ${host || 'unparseable'})`);
-    return null;
+  if (/^https?:\/\//i.test(fileUrl)) {
+    let url: URL;
+    try { url = new URL(fileUrl); } catch { return null; }
+    if (url.origin !== TRUSTED_FILE_ORIGIN || url.username || url.password) return null;
+    const match = /^\/storage\/v1\/object\/(?:sign|authenticated|public)\/(app-files|email-attachments)\/(.+)$/.exec(url.pathname);
+    if (!match || /%2f|%5c/i.test(match[2])) return null;
+    let path: string;
+    try { path = decodeURIComponent(match[2]); } catch { return null; }
+    if (path.split('/').some(segment => !segment || segment === '.' || segment === '..') || /[\\\x00-\x1f]/.test(path)) return null;
+    return getSignedUrl(path, match[1]);
   }
+  if (/^[a-z][a-z\d+.-]*:/i.test(fileUrl) || fileUrl.startsWith('//')) return null;
   if (fileUrl.startsWith('email-attachments/')) {
     return getSignedUrl(fileUrl.slice('email-attachments/'.length), 'email-attachments');
   }

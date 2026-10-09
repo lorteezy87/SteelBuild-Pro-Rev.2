@@ -10,6 +10,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import type { LLMRequest, LLMResponse, ProviderClient } from "./types.ts";
+import { fetchWithDeadline } from "../../_shared/edgeOperation.ts";
 import { LLMError } from "./types.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -157,14 +158,14 @@ export const openaiClient: ProviderClient = {
 
     let resp: Response;
     try {
-      resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      resp = await fetchWithDeadline("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${OPENAI_API_KEY}`,
           "Content-Type":  "application/json",
         },
         body: JSON.stringify(payload),
-      });
+      }, 60_000, 256 * 1024);
     } catch (err) {
       throw new LLMError(
         `OpenAI fetch failed: ${err instanceof Error ? err.message : String(err)}`,

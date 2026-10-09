@@ -1,3 +1,4 @@
+import ResolvedPhotoLink from "@/components/shared/ResolvedPhotoLink";
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
 
@@ -229,37 +230,7 @@ export default function PunchlistList({
                 <div style={{ marginTop: "12px" }} onClick={(e) => e.stopPropagation()}>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Photos ({photos.length})</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {photos.map((p, idx) => {
-                      const url = p.file_url || p.path || p.url || "";
-                      return (
-                        <a
-                          key={idx}
-                          href={url || undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={p.name || `photo-${idx}`}
-                          style={{
-                            display: "block",
-                            width: 72,
-                            height: 72,
-                            borderRadius: 8,
-                            border: "1px solid var(--border-default)",
-                            overflow: "hidden",
-                            background: "var(--bg-input)",
-                          }}
-                        >
-                          {url ? (
-                            <img
-                              src={url}
-                              alt={p.name || `photo-${idx}`}
-                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                              onError={(e) => { e.currentTarget.style.display = "none"; }}
-                            />
-                          ) : null}
-                        </a>
-                      );
-                    })}
-                  </div>
+                    {photos.map((p, idx) => <ResolvedPhotoLink key={idx} fileUrl={typeof p === "string" ? p : p.file_url || p.path || p.url} name={p.name || `photo-${idx}`} size={72} />)}                  </div>
                 </div>
               )}
             </div>

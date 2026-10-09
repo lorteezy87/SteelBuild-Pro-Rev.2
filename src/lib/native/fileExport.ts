@@ -4,28 +4,33 @@ import { Share } from "@capacitor/share";
 import { toast } from "sonner";
 import { isNativeActionCancelled, nativeImpact } from "@/lib/native/capabilities";
 import { isNativePlatform } from "@/lib/native/platform";
+import { captureExportOwner } from '@/lib/exportOwner';
 
 export type GeneratedFilePresentation = "downloaded" | "shared" | "cancelled" | "failed";
 
 export interface GeneratedFileOptions {
+  isCurrent?: () => boolean;
   blob: Blob;
   filename: string;
   title?: string;
 }
 
 export interface GeneratedFilesOptions {
+  isCurrent?: () => boolean;
   files: Array<Pick<GeneratedFileOptions, "blob" | "filename">>;
   title: string;
   errorLabel?: string;
 }
 
 export interface RemoteFileOptions {
+  isCurrent?: () => boolean;
   url: string;
   filename: string;
   title?: string;
 }
 
 export interface RemoteFilesOptions {
+  isCurrent?: () => boolean;
   files: Array<Pick<RemoteFileOptions, "url" | "filename">>;
   title: string;
   errorLabel?: string;
@@ -91,20 +96,25 @@ async function shareCachedFiles({
   files,
   title,
   failureLabel,
+  isCurrent,
 }: {
   files: CachedFile[];
   title: string;
   failureLabel: string;
+  isCurrent: () => boolean;
 }): Promise<GeneratedFilePresentation> {
+  if (!isCurrent()) return 'cancelled';
   try {
     await Share.share({
       title,
       dialogTitle: `Share ${title}`,
       files: files.flatMap(({ uri }) => uri ? [uri] : []),
     });
+    if (!isCurrent()) return 'cancelled';
     await nativeImpact("light");
     return "shared";
   } catch (error) {
+    if (!isCurrent()) return 'cancelled';
     if (isNativeActionCancelled(error)) return "cancelled";
     toast.error(`Could not share ${failureLabel}.`);
     return "failed";
@@ -116,11 +126,13 @@ export async function presentGeneratedFile({
   blob,
   filename,
   title,
+  isCurrent,
 }: GeneratedFileOptions): Promise<GeneratedFilePresentation> {
   return presentGeneratedFiles({
     files: [{ blob, filename }],
     title: title?.trim() || safeFilename(filename),
     errorLabel: safeFilename(filename),
+    isCurrent,
   });
 }
 
@@ -129,7 +141,10 @@ export async function presentGeneratedFiles({
   files,
   title,
   errorLabel,
+  isCurrent: extraCheck,
 }: GeneratedFilesOptions): Promise<GeneratedFilePresentation> {
+  const isCurrent = captureExportOwner(extraCheck);
+  if (!isCurrent()) return 'cancelled';
   const preparedFiles = files.map(({ blob, filename }) => ({
     blob,
     browserFilename: filename.trim() || "steelbuild-export",
@@ -159,6 +174,7 @@ export async function presentGeneratedFiles({
       const cachedFile: CachedFile = { path };
       cachedFiles.push(cachedFile);
       const data = await blobToBase64(blob);
+      if (!isCurrent()) return 'cancelled';
       const { uri } = await Filesystem.writeFile({
         path,
         data,
@@ -166,13 +182,16 @@ export async function presentGeneratedFiles({
         recursive: true,
       });
       cachedFile.uri = uri;
+      if (!isCurrent()) return 'cancelled';
     }
     return await shareCachedFiles({
       files: cachedFiles,
       title: title.trim() || failureLabel,
       failureLabel,
+      isCurrent,
     });
   } catch (error) {
+    if (!isCurrent()) return 'cancelled';
     if (isNativeActionCancelled(error)) return "cancelled";
     toast.error(`Could not share ${failureLabel}.`);
     return "failed";
@@ -186,11 +205,13 @@ export async function presentRemoteFile({
   url,
   filename,
   title,
+  isCurrent,
 }: RemoteFileOptions): Promise<GeneratedFilePresentation> {
   return presentRemoteFiles({
     files: [{ url, filename }],
     title: title?.trim() || safeFilename(filename),
     errorLabel: safeFilename(filename),
+    isCurrent,
   });
 }
 
@@ -202,7 +223,10 @@ export async function presentRemoteFiles({
   files,
   title,
   errorLabel,
+  isCurrent: extraCheck,
 }: RemoteFilesOptions): Promise<GeneratedFilePresentation> {
+  const isCurrent = captureExportOwner(extraCheck);
+  if (!isCurrent()) return 'cancelled';
   const preparedFiles = files.map(({ url, filename }) => ({
     url,
     browserFilename: filename.trim() || "download",
@@ -233,21 +257,26 @@ export async function presentRemoteFiles({
   const cachedFiles: CachedFile[] = [];
   try {
     await Filesystem.mkdir({ path: batchDirectory, directory: Directory.Cache, recursive: true });
+    if (!isCurrent()) return 'cancelled';
     for (let index = 0; index < preparedFiles.length; index += 1) {
       const { url, nativeFilename } = preparedFiles[index];
       const path = `${batchDirectory}/${index}-${nativeFilename}`;
       const cachedFile: CachedFile = { path };
       cachedFiles.push(cachedFile);
       const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
+      if (!isCurrent()) return 'cancelled';
       await FileTransfer.downloadFile({ url, path: uri });
+      if (!isCurrent()) return 'cancelled';
       cachedFile.uri = uri;
     }
     return await shareCachedFiles({
       files: cachedFiles,
       title: title.trim() || failureLabel,
       failureLabel,
+      isCurrent,
     });
   } catch (error) {
+    if (!isCurrent()) return 'cancelled';
     if (isNativeActionCancelled(error)) return "cancelled";
     toast.error(`Could not share ${failureLabel}.`);
     return "failed";

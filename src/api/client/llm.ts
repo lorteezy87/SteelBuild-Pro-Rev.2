@@ -41,6 +41,7 @@ export const InvokeLLM = async ({ prompt, system, messages, response_json_schema
   // ── 1. Try Supabase Edge Function (llm-proxy) ──────────────────────────
   try {
     const { data, error } = await supabase.functions.invoke('llm-proxy', {
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
       body: { provider, prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files, tools, tool_choice, temperature, useCase, project_id },
     });
     if (error) {

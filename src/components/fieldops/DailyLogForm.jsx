@@ -559,6 +559,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
 
         {/* Photos */}
         <PhotoStripUploader
+          projectId={formData.project_id || projectId}
           label="Photos"
           value={formData.photos}
           onChange={(v) => setField("photos", v)}

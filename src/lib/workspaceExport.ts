@@ -7,11 +7,14 @@
  * (a user can't export a project they can't read) and writes an audit row per
  * project; this module only orchestrates, packages, and downloads.
  */
-import { supabase } from "@/lib/supabase";
+import { getActiveOrgId } from "@/lib/activeOrg";
+import { beginWorkspaceExport, type WorkspaceExportOwner } from "./workspaceExportOwner";
 import { readEdgeFunctionErrorBody } from "@/lib/edgeFunctionError";
 import { fetchAllRows } from "@/lib/pagedQuery";
 import { presentGeneratedFile, type GeneratedFilePresentation } from "@/lib/native/fileExport";
 import type { ProjectExportEnvelope } from "@/services/projectExportService";
+
+const exportOwners = new WeakMap<object, WorkspaceExportOwner>();
 
 export interface WorkspaceExportFailure {
   project_id: string;
@@ -53,10 +56,14 @@ async function readEdgeFunctionError(error: { message?: string; context?: unknow
 }
 
 /** Invoke the project-export Edge Function for one project (RLS-scoped + audited). */
-export async function exportProject(projectId: string): Promise<ProjectExportEnvelope> {
-  const { data, error } = await supabase.functions.invoke("project-export", {
+export async function exportProject(projectId: string, owner?: WorkspaceExportOwner): Promise<ProjectExportEnvelope> {
+  const run = owner ?? await beginWorkspaceExport(getActiveOrgId());
+  run.assertCurrent();
+  try {
+  const { data, error } = await run.client.functions.invoke("project-export", {
     body: { project_id: projectId },
   });
+  run.assertCurrent();
   if (error) throw new Error(await readEdgeFunctionError(error));
   // Defensive: honor an { error } body even on a 2xx (the Edge Function uses
   // non-2xx for failures, so this normally won't fire).
@@ -64,6 +71,7 @@ export async function exportProject(projectId: string): Promise<ProjectExportEnv
     throw new Error(String((data as { error: unknown }).error));
   }
   return data as ProjectExportEnvelope;
+  } finally { if (!owner) run.dispose(); }
 }
 
 /** Pure: bundle per-project envelopes into a workspace backup. Deterministic given its inputs. */
@@ -108,31 +116,41 @@ export async function exportWorkspace(
   projects: WorkspaceExportProject[],
   opts: {
     workspaceName?: string;
+    owner?: WorkspaceExportOwner;
     onProgress?: (done: number, total: number, name: string) => void;
     /** Per-project timeout (ms); a project that exceeds it is recorded as a failure. */
     perProjectTimeoutMs?: number;
   } = {},
 ): Promise<WorkspaceExport> {
+  const run = opts.owner ?? await beginWorkspaceExport(getActiveOrgId());
+  try {
+  run.assertCurrent();
   const envelopes: ProjectExportEnvelope[] = [];
   const failures: WorkspaceExportFailure[] = [];
   const total = projects.length;
   const timeoutMs = opts.perProjectTimeoutMs ?? DEFAULT_PER_PROJECT_TIMEOUT_MS;
   let done = 0;
   for (const p of projects) {
+    run.assertCurrent();
     opts.onProgress?.(done, total, p.name || "project");
     try {
-      envelopes.push(await withTimeout(exportProject(p.id), timeoutMs, p.name || "project"));
+      envelopes.push(await withTimeout(exportProject(p.id, run), timeoutMs, p.name || "project"));
     } catch (err) {
+      run.assertCurrent();
       failures.push({
         project_id: p.id,
         name: p.name ?? null,
         error: err instanceof Error ? err.message : String(err),
       });
     }
+    run.assertCurrent();
     done += 1;
   }
   opts.onProgress?.(done, total, "");
-  return buildWorkspaceExport(envelopes, { workspaceName: opts.workspaceName, failures });
+  const bundle = buildWorkspaceExport(envelopes, { workspaceName: opts.workspaceName, failures });
+  exportOwners.set(bundle, run);
+  return bundle;
+  } finally { if (!opts.owner) run.dispose(); }
 }
 
 /**
@@ -165,9 +183,13 @@ export async function exportWorkspace(
  * are not unique, and `.range()` windows over a non-total order can skip or
  * repeat rows.
  */
-export async function fetchWorkspaceProjects(orgId?: string | null): Promise<WorkspaceExportProject[]> {
+export async function fetchWorkspaceProjects(orgId?: string | null, owner?: WorkspaceExportOwner): Promise<WorkspaceExportProject[]> {
   if (!orgId?.trim()) throw new Error("Select a workspace before exporting its projects.");
-  return fetchAllRows<WorkspaceExportProject>(
+  const run = owner ?? await beginWorkspaceExport(orgId);
+  try {
+  run.assertCurrent();
+  if (run.orgId !== orgId) throw new Error("Workspace export owner mismatch");
+  return await fetchAllRows<WorkspaceExportProject>(
     async (start, end) => {
       // The no-restricted-syntax rule matches any `supabase.from()`, including
       // inside the page callback it recommends, so fetchAllRows cannot be used
@@ -175,8 +197,8 @@ export async function fetchWorkspaceProjects(orgId?: string | null): Promise<Wor
       // Every filter has to be applied BEFORE .order()/.range(): those return a
       // transform builder, which has no .eq(), so appending the org filter
       // afterwards throws "query.eq is not a function" at runtime.
-      // eslint-disable-next-line no-restricted-syntax
-      let query = supabase
+      run.assertCurrent();
+      let query = run.client
         .from("projects")
         .select("id, name")
         .eq("is_deleted", false);
@@ -185,10 +207,12 @@ export async function fetchWorkspaceProjects(orgId?: string | null): Promise<Wor
         .order("created_at", { ascending: false })
         .order("id", { ascending: true })
         .range(start, end);
+      run.assertCurrent();
       return { data: data as WorkspaceExportProject[] | null, error };
     },
     "workspace projects",
   );
+  } finally { if (!owner) run.dispose(); }
 }
 
 /** Slugify a workspace name + date into a stable download filename. */
@@ -204,11 +228,14 @@ export function workspaceExportFileName(bundle: WorkspaceExport): string {
 }
 
 /** Trigger a browser download of the workspace backup as JSON. */
-export function downloadWorkspaceExport(bundle: WorkspaceExport): Promise<GeneratedFilePresentation> {
+export function downloadWorkspaceExport(bundle: WorkspaceExport, owner?: WorkspaceExportOwner): Promise<GeneratedFilePresentation> {
+  const run = owner ?? exportOwners.get(bundle);
+  if (run && !run.isCurrent()) return Promise.resolve("cancelled");
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
   return presentGeneratedFile({
     blob,
     filename: workspaceExportFileName(bundle),
     title: "Workspace data export",
+    isCurrent: run?.isCurrent,
   });
 }

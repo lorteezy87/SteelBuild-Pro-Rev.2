@@ -1,17 +1,15 @@
 /**
  * useFeatureFlag.ts — homegrown Supabase-backed feature-flag hook.
  *
- * Reads `feature_flags` (migration 078) and exposes a per-user-resolved
- * Map of flag_key → enabled. Per-flag `user_overrides` (a JSON map of
- * { email: boolean }) takes precedence over the global `enabled` value
- * when the current user's email matches.
+ * Reads the authenticated effective-value projection. Override email maps
+ * stay on the server; cache identity includes the account, not just its email.
  *
  * Loads default to `false` so a UI gated on a flag never flashes the
  * feature on before the network responds.
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { type FeatureFlagKey } from "@/config/featureFlags";
 
@@ -72,12 +70,14 @@ export function useAllFlags() {
   const { user } = useAppSecurity();
   const email = user?.email?.toLowerCase() || null;
   return useQuery({
-    queryKey: ["feature_flags", email],
+    queryKey: ["feature_flags", user?.id, email],
+    enabled: Boolean(user?.id),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const rows = (await entities.FeatureFlag.list()) as unknown as FeatureFlagRow[];
-      return resolveFlagsForEmail(rows, email);
+      const { data, error } = await supabase.rpc("list_effective_feature_flags");
+      if (error) throw error;
+      return resolveFlagsForEmail(data ?? [], null);
     },
   });
 }

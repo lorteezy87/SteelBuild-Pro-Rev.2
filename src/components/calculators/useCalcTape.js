@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { load, save, pushRow } from "./tapeStore";
+import { useOwnedCalculatorState } from "@/hooks/useOwnedCalculatorState";
+import { pushRow } from "./tapeStore";
 
 /**
  * useCalcTape — thin React hook over tapeStore for persisted tape history.
@@ -9,19 +9,17 @@ import { load, save, pushRow } from "./tapeStore";
  * @returns {{ rows: Array, push: (entry: *) => void, clear: () => void }}
  */
 export default function useCalcTape(key, limit = 30) {
-  const [rows, setRows] = useState(() => load(key));
+  const [rows, setRows] = useOwnedCalculatorState(key, []);
 
   function push(entry) {
     setRows((prev) => {
       const next = pushRow(prev, entry, limit);
-      save(key, next);
       return next;
     });
   }
 
   function clear() {
     setRows([]);
-    save(key, []);
   }
 
   return { rows, push, clear };

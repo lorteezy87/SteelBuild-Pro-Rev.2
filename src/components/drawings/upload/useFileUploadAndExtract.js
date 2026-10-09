@@ -60,7 +60,7 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
         let fileUrl;
         try {
           const res = await withTimeout(
-            integrations.Core.UploadFile({ file, workflow: "drawings" }),
+            integrations.Core.UploadFile({ file, projectId: activeProject?.id, workflow: "drawings" }),
             UPLOAD_TIMEOUT_MS,
             "File upload"
           );
