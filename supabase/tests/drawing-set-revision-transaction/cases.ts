@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { ids, actor, execute, request, path, zoneA, zoneB, type Database } from './fixture.ts';
-import { command, parent, submit, execute as roundExecute } from '../submittal-revision-evidence/cases.ts';
+import { command, parent, submit, checklist, execute as roundExecute } from '../submittal-revision-evidence/cases.ts';
 
 type Payload=Awaited<ReturnType<typeof request>>;
 const sheet=(p:Payload)=>(p.sheets as Record<string,unknown>[])[0];
@@ -49,6 +49,7 @@ export async function runCases(db:Database){
   });
   await check('captured source and round evidence remain intact while new source becomes unapproved',async()=>{
     await roundExecute(db,command(await parent(db,ids.submittal),submit));
+    await roundExecute(db,command(await parent(db,ids.submittal),{status:'Approved',ball_in_court:'GC',metadata:{ofs_checklist:checklist}}));
     const evidence=(await snapshot(db))['public.submittal_round_revision_evidence'];
     const old=(await db.query('select to_jsonb(r)-array[\'is_current\',\'archived_at\',\'updated_at\',\'updated_by\'] row from public.drawing_revisions r where id=$1',[ids.revision])).rows[0].row;
     await allowed(db,await request(db));
@@ -56,6 +57,7 @@ export async function runCases(db:Database){
     assert.deepEqual((await db.query('select to_jsonb(r)-array[\'is_current\',\'archived_at\',\'updated_at\',\'updated_by\'] row from public.drawing_revisions r where id=$1',[ids.revision])).rows[0].row,old);
     const coverage=(await db.query('select public.get_submittal_revision_coverage($1) result',[ids.submittal])).rows[0].result as Record<string,unknown>;
     assert.equal(coverage.ok,false);
+    assert.equal((await parent(db,ids.submittal)).status,'Approved','Historical return approval stays in its original record');
   });
   await check('incomplete historical source is never backfilled',async()=>{
     await db.exec(`update public.drawing_revisions set file_url=null,pdf_page=null where id='${ids.revision}'`);

@@ -25,6 +25,6 @@
 - [x] Build a dedicated fixture from committed schema plus exact manifest guards; reproduce missing command before SQL and validation/topology failures while implementing.
 - [x] Implement private receipts, strict request validation, complete roster/version checks and atomic received-revision/header changes.
 - [x] Add deterministic zone/link/internal-dependency mapping, reject unsupported topology, retain original coordination rows and source snapshots.
-- [ ] Verify behavioral rejection/rollback at revision, zone, link, dependency, parent, header and receipt writes under actual PostgreSQL.
-- [ ] Exercise independent concurrent identical/different requests, request-wait permission revocation, row contention and erasure order; measure stated input/coordination bounds.
-- [ ] Add isolated PostgreSQL CI workflow, independent review and exact source evidence; keep candidate uninstalled.
+- [x] Verify behavioral rejection/rollback at revision, zone, link, dependency, parent, header and receipt writes under actual PostgreSQL.
+- [x] Exercise independent concurrent identical/different requests, request-wait permission revocation, explicit row contention/reverse parent locks and bounded implicit waits; measure stated input/coordination bounds. Actual hosted erasure remains a release gate.
+- [x] Add isolated PostgreSQL CI workflow, independent read-only review and exact source evidence; keep candidate uninstalled.

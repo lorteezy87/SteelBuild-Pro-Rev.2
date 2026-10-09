@@ -1,6 +1,6 @@
 # Drawing upload history: reproduced split writes and proposed transaction
 
-Status: **uninstalled source candidate; verification in progress**, based on main
+Status: **uninstalled source candidate; database proof passed**, based on main
 `04285069c`. Four local UI regressions still fail against the unchanged upload
 source and are deliberately excluded from this SQL candidate's commits. No
 product/helper change, migration promotion, hosted fixture, or production mutation
@@ -209,6 +209,36 @@ count/activity/watch triggers and installs the exact committed revision-manifest
 guards. Its membership/MFA helpers are controllable synthetic predicates for
 revocation testing. It is not a replica of every hosted RLS policy, Auth trigger,
 or audit trigger. Hosted rollback and authenticated acceptance remain required.
+
+Verification at source `3c367c994f29745961f6df2d3a6f4208bf738dbe`:
+
+- Dedicated [PostgreSQL run 37955711036](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/37955711036),
+  job `113905570369`, passed **58 behavioral checks and 26 independent-session
+  checks**. The same 58 behaviors passed PGlite; scoped strict TypeScript passed.
+- The combined maximum fixture included 250 revised sheets and source objects,
+  1,000 set parent rows, 10,000 existing history rows, 1,000 zones and hold rows,
+  2,000 links and 2,000 dependencies. The transaction took **821 ms** with a
+  **148,304-byte request** on that isolated PostgreSQL 17 CI runner. This is one
+  synthetic measurement, not a hosted latency or service-level guarantee.
+- Same-key retries returned one receipt; different-key contention left one
+  winner. Membership, PM and MFA revocation during the request wait rejected new
+  writes and receipt replays. Ten explicit lock stages returned NOWAIT contention;
+  incoming child/FK writes and Storage replacement waited until commit. A late
+  implicit-trigger wait timed out with full rollback; PM revocation during that
+  wait also rolled back all earlier mutations.
+- Injection at revision, zone, link, dependency, parent, set and private receipt
+  writes preserved complete before/after source, activity, round and evidence
+  snapshots. Current-source replacement invalidated coverage while retaining
+  historical evidence and incomplete old source fields.
+- Independent read-only review by the membership/billing agent found no source
+  blocker in the SQL/lock/topology/default-grant contract. That review did not
+  rerun the suite or establish hosted RLS acceptance.
+
+Candidate SQL SHA-256 (unchanged since initial source commit):
+`ac15f5a8633dff924cc3cb516d8f6b4ec983e0f4d1d562b386bbcffd06a59b29`.
+The first actual PostgreSQL attempt passed the 58 behaviors but exposed a test
+fixture reset missing public-schema USAGE; the isolated fixture was corrected,
+and the full subsequent run above passed. No application grants were broadened.
 
 ## Mandatory adoption and direct-write cutover
 
