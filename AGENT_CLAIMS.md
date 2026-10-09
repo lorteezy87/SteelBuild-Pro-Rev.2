@@ -30,7 +30,6 @@ Notes:
 
 ## Active claims
 
-| 2026-10-09 | codex-calculator-staging-acceptance | Protected read-only crane calculator viewport acceptance | new .github/workflows/calculator-acceptance.yml; playwright.calculator-*.config.ts; e2e/calculator-acceptance/**; scoped scripts tests and audit; playwright.config.ts single calculator discovery exclusion | Six authenticated sizes, true content/control clipping and WebGL checks, exact existing staging auth/guard reuse, bounded calculator-only screenshots; source only, no hosted dispatch. |
 
 
 
