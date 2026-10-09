@@ -30,7 +30,6 @@ Notes:
 
 ## Active claims
 
-| 2026-10-09 | codex-drawing-browser-diagnosis | Protected drawing browser setup diagnosis | e2e/drawing-evidence-{setup,reporter}.ts; e2e/staging-network.contract.spec.ts; e2e/stagingNetworkGuard.ts; scoped acceptance setup/reporter/network tests; docs/audits/DRAWING_BROWSER_SETUP_2026-10-09.md | Reproduce hosted browser-stage failure without credentials; parent-approved bounded local sink for exact Sentry envelope only, closed diagnostic substeps/categories; preserve external denial and WS policy, no hosted dispatch. |
 
 
 
