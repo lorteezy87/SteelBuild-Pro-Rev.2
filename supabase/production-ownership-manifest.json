@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261009070300",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Immutable shop-drawing round revision evidence and atomic PM workflow. Exact multi-set revision roster, source/page snapshot, explicit legacy attestation, project-consistent foreign keys, MFA and fail-closed release coverage. Requires dedicated SQL and independent PostgreSQL concurrency acceptance plus hosted staging rehearsal before manual exact-file application and ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/SUBMITTAL_REVISION_EVIDENCE_2026-10-09.md."
+      },
+      {
         "version": "20261008013546",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - Drawing Control governing-submittal gate candidate. Aligns evaluate_fab_release_set with exact drawing-set IDs, live recognized rounds, submitted-date ordering and fail-closed BIC stage mapping. Local SQL return-value tests pass; exact reviewed staging authentication, hold/RFI and release validation are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
