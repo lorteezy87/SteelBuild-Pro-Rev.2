@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import generalConfig from '../../playwright.config';
+import drawingConfig from '../../playwright.drawing-evidence.config';
 
 interface Step { uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, string> }
 interface Job { if?: string; needs?: string; environment?: string; steps: Step[] }
@@ -42,6 +44,13 @@ async function verify(options: {
 }
 
 describe('executed read-only drawing acceptance source gate', () => {
+  it('isolates protected drawing evidence from general discovery while retaining both dedicated viewports', () => {
+    const spec = 'drawing-revision-evidence.spec.ts';
+    expect(generalConfig.testIgnore).toContain(spec);
+    expect(drawingConfig.testMatch).toEqual([spec]);
+    expect(drawingConfig.testIgnore).toEqual([]);
+    expect(drawingConfig.projects?.map(project => project.name)).toEqual(['desktop', 'mobile']);
+  });
   it('emits only the checked main-ancestor SHA', async () => {
     const result = await verify();
     expect(result.setOutput).toHaveBeenCalledExactlyOnceWith('candidate_sha', candidate);

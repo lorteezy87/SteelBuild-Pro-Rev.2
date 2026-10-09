@@ -8,6 +8,8 @@ export default defineConfig({
   ...authenticatedConfig,
   globalSetup: './e2e/drawing-evidence-setup.ts',
   testMatch: ['drawing-revision-evidence.spec.ts'],
+  // This spec is intentionally excluded from the general runner.
+  testIgnore: [],
   fullyParallel: false,
   retries: 0,
   workers: 1,
