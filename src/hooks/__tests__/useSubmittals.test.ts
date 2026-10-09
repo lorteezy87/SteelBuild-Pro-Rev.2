@@ -41,6 +41,11 @@ describe('atomic reviewed submittal workflow', () => {
     expect(mocks.coverage).not.toHaveBeenCalled();
     expect(mocks.workflow).toHaveBeenCalledWith(expect.objectContaining({ revisionIds: ['reviewed-old'], requestId: 'stable-retry' }));
   });
+  it('advances linked Product Data without requiring or transmitting a Shop Drawing manifest', async () => {
+    await addSubmittalRound({ submittal: { ...base, submittal_type: 'Product Data', drawing_set_ids: ['set-1'] }, status: 'Submitted', revisionIds: ['drawing-rev'] });
+    expect(mocks.coverage).not.toHaveBeenCalled();
+    expect(mocks.workflow).toHaveBeenCalledWith(expect.objectContaining({ revisionIds: [] }));
+  });
   it('fails closed if coverage cannot be read', async () => {
     mocks.coverage.mockRejectedValueOnce(new Error('Evidence unavailable'));
     await expect(addSubmittalRound({ submittal: base, status: 'Submitted' })).rejects.toThrow('Evidence unavailable');

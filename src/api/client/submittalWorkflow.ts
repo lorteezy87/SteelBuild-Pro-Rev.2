@@ -70,8 +70,9 @@ async function requestIdentity(payload: Record<string, unknown>): Promise<string
 }
 function reviewArgs(review: SubmittalReview, revisionIds: readonly string[], requireEvidence = true) {
   if (!review.id || !review.updated_at || !review.status) throw new Error('Refresh this submittal and review its current status before saving.');
-  if (requireEvidence && (review.submittal_type ?? 'Shop Drawing') === 'Shop Drawing' && revisionIds.length === 0) throw new Error('Review the current drawing revisions before submitting or returning this Shop Drawing package.');
-  return { p_submittal_id: review.id, p_expected_updated_at: review.updated_at, p_expected_status: review.status, p_expected_current_round_id: review.current_round_id ?? null, p_expected_revision_ids: [...new Set(revisionIds)].sort() };
+  const shopDrawing = (review.submittal_type ?? 'Shop Drawing') === 'Shop Drawing';
+  if (requireEvidence && shopDrawing && revisionIds.length === 0) throw new Error('Review the current drawing revisions before submitting or returning this Shop Drawing package.');
+  return { p_submittal_id: review.id, p_expected_updated_at: review.updated_at, p_expected_status: review.status, p_expected_current_round_id: review.current_round_id ?? null, p_expected_revision_ids: shopDrawing ? [...new Set(revisionIds)].sort() : [] };
 }
 async function executeWorkflow(name: string, args: Record<string, unknown>, input: Pick<WorkflowInput, 'requestId' | 'client'>): Promise<WorkflowResult> {
   const generation = getActiveOrgGeneration();

@@ -10,11 +10,12 @@ export function useSubmittalRoundMutations({ submittals, invalidateAll }: RoundM
   async function save(data: CreateRoundInput, newRound: boolean): Promise<SubmittalRound> {
     const reviewed = submittals.find(row => row.id === data.submittal_id);
     if (!reviewed) throw new Error('Refresh and select this submittal before editing its round.');
-    const coverage = reviewed.revision_coverage ?? await getSubmittalRevisionCoverage(reviewed.id);
+    const shopDrawing = (reviewed.submittal_type ?? 'Shop Drawing') === 'Shop Drawing';
+    const coverage = shopDrawing ? reviewed.revision_coverage ?? await getSubmittalRevisionCoverage(reviewed.id) : null;
     const patch: Record<string, unknown> = {};
     for (const key of ['status', 'ball_in_court', 'submitted_date', 'returned_date', 'response_notes', 'file_url', 'markup_file_url', 'reviewer', 'submitted_by', 'revision']) if (data[key] !== undefined) patch[key] = data[key];
     if (newRound) patch.status = 'Submitted';
-    const result = await applySubmittalWorkflow({ review: reviewed, revisionIds: coverage.current_revision_ids, patch, newRound });
+    const result = await applySubmittalWorkflow({ review: reviewed, revisionIds: coverage?.current_revision_ids ?? [], patch, newRound });
     if (!result.round) throw new Error('No round was returned. Refresh the submittal before retrying.');
     return result.round as unknown as SubmittalRound;
   }

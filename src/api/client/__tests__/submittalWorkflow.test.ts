@@ -38,4 +38,8 @@ describe('atomic submittal client', () => {
     expect(() => validateSubmittalCreate({ submittal_type: 'Product Data', status: 'Submitted' })).not.toThrow();
     expect(() => validateSubmittalCreate({ submittal_type: 'Shop Drawing', status: 'Draft' })).not.toThrow();
   });
+  it('does not attach Shop Drawing revision evidence to a linked Product Data workflow', async () => {
+    await applySubmittalWorkflow({ review: { ...review, submittal_type: 'Product Data' }, revisionIds: ['linked-drawing-revision'], patch: { status: 'Submitted', ball_in_court: 'EOR', submitted_date: '2026-10-09' } });
+    expect(rpc).toHaveBeenCalledWith('apply_submittal_round_workflow', expect.objectContaining({ p_expected_revision_ids: [] }));
+  });
 });
