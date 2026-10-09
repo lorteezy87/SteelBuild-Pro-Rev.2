@@ -314,4 +314,11 @@ const LEDGER = new Set([
   // Committed file is the ledger payload byte-for-byte (sha256 9037d66d...,
   // 1929 bytes).
   '20260921034212',
+  // Applied and stamped atomically in production 2026-10-09 after the
+  // staging-hosted MFA acceptance. The ledger payload is the exact committed
+  // blob (sha256 8354f2ff700eb49b4d3e6580419c07087bc1e6cfbbe6222dec58bc1a52162e9e).
+  '20261007073051',
+  // Applied immediately after its MFA prerequisite. The exact committed blob
+  // is retained as statements[1] (sha256 29e8db4bd72c6f036aa8acc8437a73b4ef0defdad83787e6b809e50ba7a76eb6).
+  '20261007112918',
 ]);
