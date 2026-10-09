@@ -22,10 +22,10 @@ type Command = {text:string;values:unknown[]};
 const create = (name:string):Command => ({text:'select public.create_project($1::jsonb) result',values:[JSON.stringify({name,org_id:org})]});
 const insert = (name:string,workspace=org):Command => ({text:'insert into projects(org_id,name) values($1,$2) returning id',values:[workspace,name]});
 const restore = (name:string):Command => ({text:'update projects set is_deleted=false where name=$1 returning id',values:[name]});
-async function session(user=owner,privileged=false) {
+async function session(user=owner,privileged=false,isolation:'read committed'|'repeatable read'='read committed') {
   const client=await pool.connect();
   try {
-    await client.query('begin');
+    await client.query(isolation==='repeatable read'?'begin isolation level repeatable read':'begin');
     await client.query("select set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','authenticated',true)",[user]);
     if(!privileged) await client.query('set local role authenticated');
     return {client,pid:(await client.query('select pg_backend_pid() pid')).rows[0].pid};
@@ -125,6 +125,13 @@ try {
     await admin.query("insert into organization_members(org_id,user_id,role) values($1,$2,'owner')",[other,owner]);
     await admin.query('begin'); await admin.query('select id from organizations where id=$1 for update',[org]);
     try { await execute(insert('Independent',other)); } finally { await admin.query('commit'); }
+  });
+  await check('two pinned snapshots are both rejected before project admission',async()=> {
+    const sessions=await Promise.all([session(owner,true,'repeatable read'),session(owner,true,'repeatable read')]);
+    for(const s of sessions) await s.client.query('select count(*) from projects');
+    const results=await Promise.allSettled(sessions.map((s,i)=>finish(s.client,insert(`Snapshot ${i}`))));
+    assert.ok(results.every(r=>r.status==='rejected' && (r.reason as {code:string}).code==='40001'));
+    assert.equal(Number((await admin.query('select count(*) count from projects')).rows[0].count),0);
   });
   console.log(`${passed} independent-session project capacity checks passed`);
 } finally { admin.release(); await pool.end(); }

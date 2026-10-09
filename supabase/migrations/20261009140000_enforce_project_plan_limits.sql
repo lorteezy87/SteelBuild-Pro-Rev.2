@@ -18,6 +18,13 @@ BEGIN
      AND NEW.org_id IS NOT DISTINCT FROM OLD.org_id THEN
     RETURN NEW;
   END IF;
+  -- A parent lock cannot refresh an already pinned REPEATABLE READ snapshot
+  -- unless the parent tuple changed. PostgREST uses READ COMMITTED; privileged
+  -- import/maintenance transactions must use the same admission contract.
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'PROJECT_PLAN_ISOLATION: Retry project admission in a READ COMMITTED transaction'
+      USING ERRCODE = '40001';
+  END IF;
 
   IF TG_OP = 'INSERT' THEN
     SELECT o.plan INTO v_plan FROM public.organizations o
@@ -137,5 +144,4 @@ begin
   return v_result;
 end;
 $function$;
-
 

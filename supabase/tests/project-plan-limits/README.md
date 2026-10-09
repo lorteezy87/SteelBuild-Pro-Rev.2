@@ -14,6 +14,8 @@ Run `npm run test:postgres --prefix supabase/tests/project-plan-limits`. The run
 
 Only the org whose capacity changes is serialized. Restorations already hold a project row, so parent lock contention returns `55P03`/`PROJECT_PLAN_BUSY` for retry; they never wait in reverse order against erasure. Authenticated membership/admin checks are repeated at admission. Service-role and maintenance callers obey the same capacity; there is no caller-settable bypass.
 
+Active admissions require READ COMMITTED, the normal PostgREST transaction mode. A pinned REPEATABLE READ snapshot cannot observe another admission merely because it obtained the parent lock; other isolation levels therefore receive retryable `40001`/`PROJECT_PLAN_ISOLATION` before admission. Retry the operation in READ COMMITTED. Existing edits and archives are unaffected.
+
 This change does not add a restore API, alter plan sizes, remove over-limit existing projects, or introduce paid-module/trade-mode restrictions. Hosted application and ledger stamping remain separate release steps.
 
 `node supabase/tests/project-plan-limits/hosted-rollback.ts` prints a JSON object containing the exact candidate hash and a single transaction for explicitly selected staging rehearsal. It never connects. The transaction uses existing Auth/RLS/setup/archive triggers, ends in ROLLBACK and confirms zero remaining synthetic fixtures. Never execute it against production.

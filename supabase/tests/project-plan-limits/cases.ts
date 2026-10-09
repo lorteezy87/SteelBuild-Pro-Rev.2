@@ -105,5 +105,12 @@ export async function cases(query: Query) {
     await claims(query);
     await assert.rejects(query('select public.enforce_project_plan_limit()'),/permission denied/);
   });
+  await check('snapshot isolation cannot bypass an admission count',async()=> {
+    await query('begin isolation level repeatable read');
+    try {
+      await assert.rejects(query("insert into projects(org_id,name) values($1,'Stale snapshot')",[org]),/PROJECT_PLAN_ISOLATION/);
+    } finally { await query('rollback'); }
+    assert.equal(await count(),0);
+  });
   console.log(`${passed} project capacity behavioral checks passed`);
 }
