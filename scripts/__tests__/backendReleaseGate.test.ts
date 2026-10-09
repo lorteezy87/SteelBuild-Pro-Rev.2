@@ -11,17 +11,17 @@ const execute = new AsyncFunction('github', 'context', script) as (github: unkno
 
 afterEach(() => vi.unstubAllEnvs());
 
-function verify(options: { target?: string; ref?: string; failedJob?: string; stagingSha?: string; stagingSlug?: string; noStaging?: boolean } = {}) {
+function verify(options: { target?: string; slug?: string; ref?: string; failedJob?: string; stagingSha?: string; stagingSlug?: string; noStaging?: boolean } = {}) {
   vi.stubEnv('TARGET', options.target ?? 'production');
-  vi.stubEnv('FUNCTION', 'project-export');
+  vi.stubEnv('FUNCTION', options.slug ?? 'project-export');
   const sha = 'a'.repeat(40);
-  const names = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Supabase drift check'];
+  const names = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Commercial SQL + concurrent PostgreSQL acceptance', 'Supabase drift check'];
   const github = {
     rest: { actions: { listWorkflowRuns: 'runs', listJobsForWorkflowRun: 'jobs' } },
     paginate: vi.fn(async (method: string, params: { workflow_id?: string }) => {
       if (method === 'jobs') return names.map(name => ({ name, conclusion: options.failedJob === name ? 'failure' : 'success' }));
       if (params.workflow_id === 'ci.yml') return [{ id: 1, head_sha: sha, event: 'push', status: 'completed' }];
-      return options.noStaging ? [] : [{ head_sha: options.stagingSha ?? sha, event: 'workflow_dispatch', display_title: `Deploy ${options.stagingSlug ?? 'project-export'} to staging` }];
+      return options.noStaging ? [] : [{ head_sha: options.stagingSha ?? sha, event: 'workflow_dispatch', display_title: `Deploy ${options.stagingSlug ?? options.slug ?? 'project-export'} to staging` }];
     }),
   };
   return execute(github, { sha, ref: options.ref ?? 'refs/heads/main', repo: { owner: 'fixture', repo: 'app' } });
@@ -31,7 +31,13 @@ describe('executed backend release gate', () => {
   it('permits a checked production commit with matching staging evidence', async () => {
     await expect(verify()).resolves.toBeUndefined();
   });
-  it.each(['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Supabase drift check'])('blocks a failed %s', async (failedJob) => {
+  it.each(['llm-proxy', 'project-export', 'stripe-billing', 'email-send', 'command-center-read', 'command-center-session-handoff', 'account-delete'])('permits the reviewed %s with matching staging evidence', async (slug) => {
+    await expect(verify({ slug })).resolves.toBeUndefined();
+  });
+  it.each(['email-ingest', 'health', 'staging-e2e-bootstrap', 'sheets-api', 'sharepoint-proxy', 'all', ''])('rejects the unreviewed selection %s', async (slug) => {
+    await expect(verify({ slug })).rejects.toThrow('Unsupported');
+  });
+  it.each(['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Commercial SQL + concurrent PostgreSQL acceptance', 'Supabase drift check'])('blocks a failed %s', async (failedJob) => {
     await expect(verify({ failedJob })).rejects.toThrow('Required checks');
   });
   it('blocks production outside main', async () => {
@@ -43,8 +49,11 @@ describe('executed backend release gate', () => {
   it('allows staging before the new migration reaches production', async () => {
     await expect(verify({ target: 'staging', noStaging: true, failedJob: 'Supabase drift check' })).resolves.toBeUndefined();
   });
+  it('requires commercial transaction checks for staging too', async () => {
+    await expect(verify({ target: 'staging', failedJob: 'Commercial SQL + concurrent PostgreSQL acceptance' })).rejects.toThrow('Required checks');
+  });
   it('binds the frontend publisher to security checks too', () => {
     const ci = load(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')) as Workflow;
-    expect(ci.jobs['deploy-cloudflare'].needs).toEqual(expect.arrayContaining(['ci', 'secret-scan', 'supabase-drift', 'edge-typecheck']));
+    expect(ci.jobs['deploy-cloudflare'].needs).toEqual(expect.arrayContaining(['ci', 'secret-scan', 'supabase-drift', 'edge-typecheck', 'commercial-postgres']));
   });
 });
