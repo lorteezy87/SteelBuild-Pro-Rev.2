@@ -281,5 +281,27 @@ try {
       assert.equal(await scalar('select count(*)::int result from private.billing_checkout_intents'),0);
     } finally { await admin.query('rollback'); await pending; }
   });
+  await check('customer rebinding while expiry waits cannot renew the old reservation', async () => {
+    const operation = (await execute(reserve())).intent.operation_id;
+    await execute(bindCustomer(operation));
+    const future = new Date(Date.now()+3600000).toISOString();
+    await execute({ text:'select public.record_billing_checkout_session($1,$2,$3,$4,$5,$6,$7) result',
+      values:[org,checkoutActor,operation,'cus_checkout','cs_expiry','https://checkout.stripe.com/c/pay/expiry',future] });
+    const expired = new Date(Date.now()-10000).toISOString();
+    await admin.query('update private.billing_checkout_intents set session_expires_at=$1',[expired]);
+    await admin.query('begin');
+    await admin.query(orgLock,[org]);
+    const waiting = await session();
+    const pending = Promise.allSettled([finish(waiting.client,{ text:'select public.expire_billing_checkout_intent($1,$2,$3,$4,$5) result',
+      values:[org,checkoutActor,operation,'cs_expiry',expired] })]);
+    try {
+      await waitForLock([waiting.pid]);
+      await admin.query("update organizations set stripe_customer_id='cus_changed' where id=$1",[org]);
+      await admin.query('commit');
+      const [result] = await pending;
+      assert.equal(result.status,'rejected'); assert.equal(result.reason.code,'40001');
+      assert.equal(await scalar('select state result from private.billing_checkout_intents'),'open');
+    } finally { await admin.query('rollback'); await pending; }
+  });
   console.log(`${passed} concurrent PostgreSQL billing and checkout checks passed.`);
 } finally { admin.release(); await pool.end(); }

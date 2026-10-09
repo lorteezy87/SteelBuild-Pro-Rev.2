@@ -128,6 +128,15 @@ try {
   await check('provider billing mode cannot silently change an unresolved operation', async () => {
     await begin(); assert.equal((await begin({live:true})).decision,'reconcile');
   });
+  await check('a customer binding change during expiry verification cannot release the old reservation', async () => {
+    const operation = (await begin()).intent.operation_id; await bind(operation); await session(operation);
+    const expires = new Date(Date.now()-10000).toISOString();
+    await db.query('update private.billing_checkout_intents set session_expires_at=$1',[expires]);
+    await db.exec("update organizations set stripe_customer_id='cus_changed_during_provider_read'");
+    await rejected(() => expire(operation,expires),'40001');
+    assert.equal(await scalar('select state result from private.billing_checkout_intents'),'open');
+    assert.equal((await begin()).decision,'reconcile');
+  });
   await check('workspace erasure cascades reservation and old callbacks cannot recreate it', async () => {
     const operation = (await begin()).intent.operation_id;
     await db.exec('delete from organizations');

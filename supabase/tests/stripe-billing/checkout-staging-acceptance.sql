@@ -57,6 +57,17 @@ SELECT pg_temp.expect_checkout_error('Unexpired session cannot release its reser
  (SELECT operation_id FROM checkout_context),'cs_checkout_rollback',(SELECT expires_at FROM checkout_context))$q$,'40001');
 SELECT pg_temp.expect_checkout_error('Service role cannot bypass RPCs to read private intents',
  $q$SELECT * FROM private.billing_checkout_intents$q$,'42501');
+RESET ROLE;
+UPDATE private.billing_checkout_intents SET session_expires_at='2026-01-01T00:00:00Z' WHERE org_id='91da0000-0000-4000-8000-000000000011';
+UPDATE public.organizations SET stripe_customer_id='cus_changed_during_expiry' WHERE id='91da0000-0000-4000-8000-000000000011';
+SET LOCAL ROLE service_role;
+SELECT pg_temp.expect_checkout_error('Customer rebinding during provider expiry verification cannot release the reservation',
+ $q$SELECT public.expire_billing_checkout_intent('91da0000-0000-4000-8000-000000000011','91da0000-0000-4000-8000-000000000001',
+ (SELECT operation_id FROM checkout_context),'cs_checkout_rollback','2026-01-01T00:00:00Z')$q$,'40001');
+RESET ROLE;
+UPDATE public.organizations SET stripe_customer_id='cus_checkout_rollback' WHERE id='91da0000-0000-4000-8000-000000000011';
+UPDATE private.billing_checkout_intents SET session_expires_at=(SELECT expires_at FROM checkout_context) WHERE org_id='91da0000-0000-4000-8000-000000000011';
+SET LOCAL ROLE service_role;
 SELECT public.apply_stripe_billing_event('evt_checkout_rollback_paid','checkout.session.completed',
  '91da0000-0000-4000-8000-000000000011',0,'cus_checkout_rollback',NULL,'sub_checkout_rollback','cus_checkout_rollback',200,NULL,
  '{"plan":"pro","subscription_status":"active","stripe_customer_id":"cus_checkout_rollback","stripe_subscription_id":"sub_checkout_rollback","current_period_end":null}');

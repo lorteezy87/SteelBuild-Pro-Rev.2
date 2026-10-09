@@ -6,7 +6,7 @@ Repeated checkout requests previously created extra payable subscription session
 
 New migration: `20261009125901_durable_workspace_checkout_intents.sql`.
 
-SHA-256: `845001ac713361bab1d1d00b6d6d770caf32cf017b4249ecd680dc02f9e3b99c`.
+SHA-256: `ba0d72e62e8df02777f53d653593d7d9f41811798e0cfb0d551e367ce034eebb`.
 
 The original atomic-event migration `20261008071019` remains byte-identical. Apply/stamp/verify the new exact SQL after that prerequisite and before releasing the dependent `stripe-billing` handler. Its required ownership classification keeps an unapplied candidate visible to the production drift gate. Use the manual file-first release contract; never `db push`, `apply_migration` or ledger repair. This branch has not committed hosted SQL or deployed a function.
 
@@ -18,10 +18,10 @@ The typed `checkout.ts` orchestration freezes the configured price/mode/return b
 
 - Before implementation, both actual-entrypoint regressions failed: paid-workspace requests returned two 200 checkout URLs; failed customer-binding writes still returned payable sessions.
 - **108 focused tests** passed across billing handler/mapping, MFA, checkout/portal and required migration classification. These include 31 checkout/portal cases covering synthetic concurrent requests, lost provider responses, failed receipts, subscription status/pagination, expiry, stale access and erasure. Focused ESLint and diff checks passed.
-- **27 new PGlite SQL checks** passed against the actual candidate, including service-only grants, private-table denial, frozen operations, binding/session compare-and-set, expiry, uncertainty limits, revoked roles and erasure cascade. The existing 22 atomic billing checks remain unchanged.
-- **19 hosted staging checks** passed against the final exact SQL under rollback on `ndyfjffsulfbwpmwdmic`. The installed billing guards/RLS and atomic billing RPC were exercised. The actual audited `hard_delete_organization` erased the synthetic workspace, cascaded the private intent, retained its audit receipt and denied late customer-binding resurrection.
+- **28 new PGlite SQL checks** passed against the actual candidate, including service-only grants, private-table denial, frozen operations, binding/session compare-and-set, expiry, uncertainty limits, revoked roles and erasure cascade. The existing 22 atomic billing checks remain unchanged.
+- **20 hosted staging checks** passed against the final exact SQL under rollback on `ndyfjffsulfbwpmwdmic`. The installed billing guards/RLS and atomic billing RPC were exercised. The actual audited `hard_delete_organization` erased the synthetic workspace, cascaded the private intent, retained its audit receipt and denied late customer-binding resurrection.
 - A separate post-rollback query confirmed zero synthetic users, workspaces, billing receipts, erasure receipts or migration stamps. The candidate table and begin RPC were absent.
-- The required commercial PostgreSQL job now includes six additional independent-session checkout cases: simultaneous reservation, differing plans, repeated customer binding, conflicting sessions, concurrent membership revocation and erasure. Inspect exact-head CI for execution results; source presence alone does not establish a pass.
+- The required commercial PostgreSQL job now includes seven additional independent-session checkout cases: simultaneous reservation, differing plans, repeated customer binding, conflicting sessions, concurrent membership revocation, erasure and a customer-binding change during expiry verification. Inspect exact-head CI for execution results; source presence alone does not establish a pass.
 
 ## Remaining hosted/provider acceptance
 

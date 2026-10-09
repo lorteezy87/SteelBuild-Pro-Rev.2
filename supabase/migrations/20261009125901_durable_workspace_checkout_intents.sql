@@ -132,6 +132,7 @@ AS $$ DECLARE v_org public.organizations%ROWTYPE; v_intent private.billing_check
  SELECT * INTO v_intent FROM private.billing_checkout_intents WHERE org_id=p_org_id FOR UPDATE;
  IF NOT FOUND OR v_intent.operation_id IS DISTINCT FROM p_operation_id OR v_intent.session_id IS DISTINCT FROM p_session_id
     OR v_intent.state<>'open' OR p_expires_at IS DISTINCT FROM v_intent.session_expires_at OR p_expires_at>clock_timestamp()
+    OR v_intent.customer_id IS DISTINCT FROM v_org.stripe_customer_id
     OR private.checkout_decision(v_org)<>'intent' THEN
   RAISE EXCEPTION 'Checkout expiry could not be verified' USING ERRCODE='40001';
  END IF;
