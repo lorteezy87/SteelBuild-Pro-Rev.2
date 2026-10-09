@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261009125901",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - durable org-scoped checkout intent and service-only reservation/customer/session RPCs. Requires reviewed exact SQL, installed-schema staging rollback, independent PostgreSQL concurrency acceptance and verified manual ledger stamp before deploying dependent checkout handler. No frozen exemption. See docs/superpowers/specs/2026-10-09-durable-checkout-design.md and docs/audits/DURABLE_CHECKOUT_RELEASE_2026-10-09.md."
+      },
+      {
         "version": "20261008071019",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - atomic Stripe webhook candidate. Service-role-only snapshot/apply RPCs couple the organization billing state, revision check and unique processed-event receipt in one transaction. Requires exact SQL review, staged retry/concurrency/entitlement acceptance and matching ledger payload before deploying the dependent stripe-billing handler. Keep visible in missingMigrations until manually applied and stamped. See supabase/tests/stripe-billing/README.md and docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md."

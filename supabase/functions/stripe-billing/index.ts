@@ -24,6 +24,7 @@ import { reportError } from "../_shared/reportError.ts";
 import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 import { type BillingConfig, type OrgUpdate, subscriptionOrgUpdate, PAID_SUBSCRIPTION_STATUSES } from "./webhookLogic.ts";
 import { billingReadiness } from "./configGuard.ts";
+import { CheckoutError, createDurableCheckout } from "./checkout.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -230,58 +231,52 @@ async function handleRequest(req: Request): Promise<Response> {
   if (mfaDenial) return mfaDenial;
 
   // Only an owner/admin of the org may manage its billing.
-  const { data: membership } = await admin
+  const { data: membership, error: membershipError } = await admin
     .from("organization_members").select("role").eq("org_id", org_id).eq("user_id", user.id).maybeSingle();
+  if (membershipError) return json({ error: "Workspace billing access could not be verified" }, 503, req);
   if (!membership || !["owner", "admin"].includes(membership.role)) {
     return json({ error: "You don't have permission to manage this workspace's billing" }, 403, req);
   }
 
-  // Validate the Origin before it's baked into Stripe redirect URLs (#12). An
-  // unvalidated Origin would let an attacker point checkout success/cancel — and
-  // the billing-portal return — at an arbitrary site (post-payment open redirect).
-  // Any disallowed/missing origin falls back to the canonical production URL.
-  const rawOrigin = req.headers.get("origin") ?? "";
-  const origin = isAllowedOrigin(rawOrigin) ? rawOrigin : "https://steelbuild-pro.com";
+  // Payment return URLs come from reviewed server configuration. Browser Origin
+  // and request-body URLs never choose a checkout or portal redirect.
+  const configuredBase = Deno.env.get("STEELBUILD_BASE_URL") || "https://www.steelbuild-pro.com";
+  let origin: string;
+  try {
+    const parsed = new URL(configuredBase);
+    if (parsed.origin !== configuredBase || !isAllowedOrigin(configuredBase)) throw new Error("Invalid billing redirect configuration");
+    origin = parsed.origin;
+  } catch { return json({ error: "Billing return URL is not configured correctly" }, 503, req); }
 
   if (action === "checkout") {
     const PRICE: Record<string, string> = { pro: cfg.pricePro, business: cfg.priceBusiness };
     const priceId = plan && Object.hasOwn(PRICE, plan) ? PRICE[plan] : "";
     if (!priceId) return json({ error: `Plan "${plan}" isn't available for checkout yet` }, 400, req);
 
-    const { data: org } = await admin.from("organizations").select("stripe_customer_id, name").eq("id", org_id).single();
-    let customerId = org?.stripe_customer_id ?? null;
-    if (!customerId) {
-      const customer = await stripe.customers.create({ name: org?.name ?? undefined, email: user.email ?? undefined, metadata: { org_id } });
-      customerId = customer.id;
-      await admin.from("organizations").update({ stripe_customer_id: customerId }).eq("id", org_id);
+    try {
+      const url = await createDurableCheckout(admin, stripe, { orgId: org_id, actorId: user.id,
+        plan: plan!, priceId, livemode: cfg.livemode !== false, returnBase: origin });
+      return json({ url }, 200, req);
+    } catch (error) {
+      if (error instanceof CheckoutError) return json({ error: error.message, code: error.code, action: error.action }, error.status, req);
+      throw error;
     }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      client_reference_id: org_id,
-      metadata: { org_id, plan: plan ?? "" },
-      subscription_data: { metadata: { org_id, plan: plan ?? "" } },
-      allow_promotion_codes: true,
-      // H14 — Stripe Tax / AZ TPT. Requires Stripe Tax enabled in the
-      // dashboard and prices marked taxable. Collect a billing address so
-      // Tax can resolve jurisdiction; customer_update lets Stripe persist
-      // the address on the Customer for future invoices.
-      automatic_tax: { enabled: true },
-      tax_id_collection: { enabled: true },
-      billing_address_collection: "required",
-      customer_update: { address: "auto", name: "auto" },
-      success_url: `${origin}/Billing?status=success`,
-      cancel_url: `${origin}/Billing?status=cancel`,
-    });
-    return json({ url: session.url }, 200, req);
   }
 
   if (action === "portal") {
-    const { data: org } = await admin.from("organizations").select("stripe_customer_id").eq("id", org_id).single();
+    const { data: org, error: orgError } = await admin.from("organizations").select("stripe_customer_id").eq("id", org_id).single();
+    if (orgError) return json({ error: "Billing account could not be verified" }, 503, req);
     if (!org?.stripe_customer_id) return json({ error: "No billing account yet — start a subscription first" }, 400, req);
     const portal = await stripe.billingPortal.sessions.create({ customer: org.stripe_customer_id, return_url: `${origin}/Billing` });
+    const [currentMember, currentOrg] = await Promise.all([
+      admin.from("organization_members").select("role").eq("org_id", org_id).eq("user_id", user.id).maybeSingle(),
+      admin.from("organizations").select("stripe_customer_id").eq("id", org_id).maybeSingle(),
+    ]);
+    if (currentMember.error || currentOrg.error) return json({ error: "Billing access could not be rechecked" }, 503, req);
+    if (!currentMember.data || !["owner", "admin"].includes(currentMember.data.role)
+      || currentOrg.data?.stripe_customer_id !== org.stripe_customer_id) {
+      return json({ error: "Workspace billing access changed. Refresh your workspace before continuing." }, 403, req);
+    }
     return json({ url: portal.url }, 200, req);
   }
 

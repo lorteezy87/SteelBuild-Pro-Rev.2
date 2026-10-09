@@ -170,8 +170,7 @@ describe('the real manifest', () => {
     expect(report.missingMigrations).toContain(version);
   });
 
-  it('keeps atomic billing required until its reviewed SQL is applied', () => {
-    const version = '20261008071019';
+  it.each(['20261008071019', '20261009125901'])('keeps billing candidate %s required until its reviewed SQL is applied', (version) => {
     const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
     expect(entry?.lifecycle).toBe('required');
     expect(entry?.evidence).toMatch(/PENDING PRODUCTION APPLY/);
