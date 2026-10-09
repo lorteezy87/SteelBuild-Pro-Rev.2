@@ -1,6 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { FullResult, Reporter, TestCase, TestError, TestResult } from '@playwright/test/reporter';
 import { NETWORK_FAILURE_CATEGORIES, TELEMETRY_DISCARD_LIMIT } from './stagingNetworkGuard.js';
+import { READ_ONLY_FAILURE_CATEGORIES } from './acceptance.js';
+
+export const DRAWING_CASE_STAGES = ['submittal-register', 'fixture-identity', 'detail-open',
+  'evidence-read', 'evidence-assertions', 'detail-quiescence', 'drawing-register', 'matrix-open',
+  'matrix-assertions', 'matrix-expand', 'final-health'] as const;
+export type DrawingCaseStage = typeof DRAWING_CASE_STAGES[number];
+const CASE_CATEGORIES = [...NETWORK_FAILURE_CATEGORIES, ...READ_ONLY_FAILURE_CATEGORIES] as const;
 
 export const DRAWING_SETUP_STAGES = ['environment', 'identity', 'project', 'browser',
   'browser-launch', 'browser-context', 'browser-origin', 'browser-session', 'browser-projects',
@@ -22,7 +29,7 @@ export function setupFailureMessage(stage: DrawingSetupStage, diagnostics: Drawi
 
 /** Never serialize errors, attachments, request bodies, auth state or stdout. */
 export default class DrawingEvidenceReporter implements Reporter {
-  private cases: Array<{ viewport: string; status: TestResult['status'] }> = [];
+  private cases: Array<{ viewport: string; scenario: string; stage: string; failureCategories: string[]; status: TestResult['status'] }> = [];
   private globalErrors = 0;
   private setupFailureStages = new Set<DrawingSetupStage>();
   private setupFailureCategories = new Set<DrawingFailureCategory>();
@@ -30,7 +37,14 @@ export default class DrawingEvidenceReporter implements Reporter {
 
   onTestEnd(test: TestCase, result: TestResult): void {
     const project = test.parent.project()?.name;
-    this.cases.push({ viewport: project === 'desktop' || project === 'mobile' ? project : 'unknown', status: result.status });
+    const scenario = test.annotations.find(value => value.type === 'drawing-evidence-case')?.description;
+    const stage = test.annotations.find(value => value.type === 'drawing-evidence-stage')?.description;
+    const categories = test.annotations.filter(value => value.type === 'read-only-failure-category' || value.type === 'network-failure-category')
+      .map(value => value.description);
+    this.cases.push({ viewport: project === 'desktop' || project === 'mobile' ? project : 'unknown',
+      scenario: scenario === 'manifest' || scenario === 'legacy' ? scenario : 'unknown',
+      stage: DRAWING_CASE_STAGES.find(value => value === stage) || 'unknown',
+      failureCategories: [...new Set(CASE_CATEGORIES.filter(value => categories.includes(value)))], status: result.status });
   }
 
   onError(error: TestError): void {

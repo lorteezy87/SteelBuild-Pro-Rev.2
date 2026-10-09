@@ -103,7 +103,7 @@ describe('executed read-only drawing acceptance source gate', () => {
     expect(config).toContain("reporter: [['./e2e/drawing-evidence-reporter.ts']]");
     expect(config).toContain("trace: 'off'"); expect(config).toContain("video: 'off'");
     const spec = readFileSync(new URL('../../e2e/drawing-revision-evidence.spec.ts', import.meta.url), 'utf8');
-    expect(spec).toContain("import { test } from './drawing-evidence-test'");
+    expect(spec).toContain("import { test } from './drawing-evidence-test.js'");
     const setup = readFileSync(new URL('../../e2e/drawing-evidence-setup.ts', import.meta.url), 'utf8');
     expect(setup).toContain("newContext({ serviceWorkers: 'block' })");
     expect(setup.indexOf('await installStagingNetworkGuard(context)')).toBeLessThan(setup.indexOf('await context.newPage()'));

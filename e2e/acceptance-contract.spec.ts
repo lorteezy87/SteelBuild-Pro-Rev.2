@@ -47,11 +47,50 @@ test("accepts a loaded authenticated register with its scoped response and fixtu
   await visitRegister(page, "submittals", options);
 });
 
+test('waits for a pending detail read before navigation while preserving network failure detection', async ({ page }) => {
+  await fixture(page, { request: false });
+  let release: () => void = () => {};
+  const released = new Promise<void>(resolve => { release = resolve; });
+  let readStarted = false;
+  await page.context().route(`${API}/rest/v1/comments*`, async route => {
+    readStarted = true;
+    await released;
+    await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '[]' });
+  });
+  const probe = await observeReadOnlyPage(page, API);
+  await page.goto('/Submittals');
+  await page.evaluate(api => { void fetch(`${api}/rest/v1/comments`).then(() => { document.body.dataset.readFinished = 'yes'; }); }, API);
+  await expect.poll(() => readStarted).toBe(true);
+  let settled = false;
+  const settling = probe.settle().then(() => { settled = true; });
+  expect(settled).toBe(false);
+  release();
+  await settling;
+  probe.assertHealthy();
+  await expect(page.locator('body')).toHaveAttribute('data-read-finished', 'yes');
+  await page.goto('/DrawingSubmittalHub?hub_tab=matrix');
+  await probe.settle();
+  probe.assertHealthy();
+  expect(probe.diagnostics()).toEqual([]);
+});
+
+test('still rejects an aborted detail read and exposes only its closed category', async ({ page }) => {
+  await fixture(page, { request: false });
+  await page.context().route(`${API}/rest/v1/comments*`, route => route.abort('aborted'));
+  const probe = await observeReadOnlyPage(page, API);
+  await page.goto('/Submittals');
+  await page.evaluate(api => fetch(`${api}/rest/v1/comments`).catch(() => {}), API);
+  await probe.settle();
+  expect(() => probe.assertHealthy()).toThrow('Supabase request failed: /rest/v1/comments');
+  expect(probe.diagnostics()).toContain('request-failed');
+  expect(probe.diagnostics().every(category => !category.includes('/'))).toBe(true);
+});
+
 async function drawingFixture(page: Page, tab = "drawings", setName = TITLE) {
   await fixture(page, {
     table: "drawing_sets", body: [{ id: "fixture-set", project_id: PROJECT, set_name: setName, description: TITLE }],
     extraScript: `history.replaceState(null, '', '/DrawingSubmittalHub?hub_tab=${tab}'); await fetch(${JSON.stringify(`${API}/rest/v1/drawings?project_id=eq.${PROJECT}`)});`,
-    html: `<main aria-label="Main content"><h1>Detailing Control Center</h1>
+    html: `<main aria-label="Main content"><h1>Drawing Control</h1>
       <button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true');document.getElementById('set-row').hidden=false">Sets &amp; revisions</button>
       <table><tbody><tr id="set-row" hidden><td><span>${TITLE}</span></td></tr></tbody></table></main>`,
   });
@@ -183,7 +222,7 @@ test("accepts an exact drawing name beside its nested number badge and quote cha
   const name = `Owner's "Erection" Drawings`;
   await fixture(page, { table: "drawing_sets", body: [{ id: "set", project_id: PROJECT, set_name: name }],
     extraScript: `history.replaceState(null, '', '/DrawingSubmittalHub?hub_tab=drawings'); await fetch(${JSON.stringify(`${API}/rest/v1/drawings?project_id=eq.${PROJECT}`)});`,
-    html: `<main aria-label="Main content"><h1>Detailing Control Center</h1><button aria-pressed="true">Sets &amp; revisions</button><table><tbody><tr><td><span>${name}<span>STG-001</span></span></td></tr></tbody></table></main>` });
+    html: `<main aria-label="Main content"><h1>Drawing Control</h1><button aria-pressed="true">Sets &amp; revisions</button><table><tbody><tr><td><span>${name}<span>STG-001</span></span></td></tr></tbody></table></main>` });
   await visitRegister(page, "drawings", { ...options, fixtureText: name });
 });
 
