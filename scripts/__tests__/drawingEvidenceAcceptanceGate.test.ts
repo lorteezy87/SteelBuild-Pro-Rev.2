@@ -86,4 +86,20 @@ describe('executed read-only drawing acceptance source gate', () => {
     const upload = workflow.jobs.acceptance.steps.find(step => step.uses === 'actions/upload-artifact@v7');
     expect(upload?.with?.path.trim().split('\n')).toEqual(['test-results/drawing-evidence/**/*.png', 'test-results/drawing-evidence/summary.json']);
   });
+  it('wires a dedicated guarded setup, context and auth-state path without changing general setup', () => {
+    const config = readFileSync(new URL('../../playwright.drawing-evidence.config.ts', import.meta.url), 'utf8');
+    expect(config).toContain("globalSetup: './e2e/drawing-evidence-setup.ts'");
+    expect(config).toContain('storageState: DRAWING_STATE_PATH');
+    expect(config).toContain("serviceWorkers: 'block'");
+    expect(config).toContain("reporter: [['./e2e/drawing-evidence-reporter.ts']]");
+    expect(config).toContain("trace: 'off'"); expect(config).toContain("video: 'off'");
+    const spec = readFileSync(new URL('../../e2e/drawing-revision-evidence.spec.ts', import.meta.url), 'utf8');
+    expect(spec).toContain("import { test } from './drawing-evidence-test'");
+    const setup = readFileSync(new URL('../../e2e/drawing-evidence-setup.ts', import.meta.url), 'utf8');
+    expect(setup).toContain("newContext({ serviceWorkers: 'block' })");
+    expect(setup.indexOf('await installStagingNetworkGuard(context)')).toBeLessThan(setup.indexOf('await context.newPage()'));
+    const general = readFileSync(new URL('../../playwright.config.ts', import.meta.url), 'utf8');
+    expect(general).toContain('globalSetup: "./e2e/global-setup.ts"');
+    expect(general).toContain('storageState: "e2e/.auth/state.json"');
+  });
 });
