@@ -34,6 +34,7 @@ import { buildProjectExport, buildExportAuditRecord, PROJECT_EXPORT_TABLES, type
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
+import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 
 // Additional object inventory supplements, rather than replaces, the v2 file references.
 const PROJECT_EXPORT_STORAGE_BUCKETS = ["app-files", "email-attachments"] as const;
@@ -56,7 +57,8 @@ async function verifyJwt(
   token: string,
   supabaseUrl: string,
   anonKey: string,
-): Promise<AuthedUser | null> {
+  request: Request,
+): Promise<AuthedUser | Response | null> {
   try {
     const resp = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
@@ -64,6 +66,8 @@ async function verifyJwt(
     if (!resp.ok) return null;
     const user = await resp.json();
     if (!user?.id) return null;
+    const mfaDenial = mfaDenialForVerifiedUser(user, `Bearer ${token}`, request);
+    if (mfaDenial) return mfaDenial;
     const meta = user.user_metadata || {};
     return {
       id: user.id,
@@ -235,7 +239,8 @@ async function handle(req: Request): Promise<Response> {
     return errorResponse(500, "Edge function not configured", req);
   }
 
-  const user = await verifyJwt(token, supabaseUrl, anonKey);
+  const user = await verifyJwt(token, supabaseUrl, anonKey, req);
+  if (user instanceof Response) return user;
   if (!user) return errorResponse(401, "Invalid or expired session", req);
 
   // RLS-scoped client: anon key + caller JWT. Every select below is filtered by

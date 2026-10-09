@@ -21,6 +21,7 @@ import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
+import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 import { type BillingConfig, checkoutOrgUpdate, subscriptionOrgUpdate } from "./webhookLogic.ts";
 import { billingReadiness } from "./configGuard.ts";
 
@@ -197,6 +198,8 @@ async function handleRequest(req: Request): Promise<Response> {
   const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return json({ error: "Not authenticated" }, 401, req);
+  const mfaDenial = mfaDenialForVerifiedUser(user, authHeader, req);
+  if (mfaDenial) return mfaDenial;
 
   // Only an owner/admin of the org may manage its billing.
   const { data: membership } = await admin

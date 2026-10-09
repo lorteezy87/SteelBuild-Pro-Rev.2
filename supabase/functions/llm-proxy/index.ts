@@ -73,6 +73,7 @@ import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 import { normalizeRequestLimits } from "./requestLimits.ts";
 import { authorizeTelemetryProject, readBoundedJson, RequestBoundaryError } from "./requestBoundary.ts";
+import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 
 // Protocol versions:
 //   v3 = verify_jwt disabled
@@ -156,6 +157,8 @@ async function authenticateRequest(req: Request): Promise<{ ok: true; userId: st
         response: json({ error: "Invalid session - no user returned", protocol_version: PROTOCOL_VERSION }, 401, req),
       };
     }
+    const mfaDenial = mfaDenialForVerifiedUser(user, authHeader, req);
+    if (mfaDenial) return { ok: false, response: mfaDenial };
     return { ok: true, userId: user.id };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
