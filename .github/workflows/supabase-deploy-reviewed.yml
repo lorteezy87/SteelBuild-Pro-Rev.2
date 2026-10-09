@@ -15,7 +15,7 @@ on:
         description: Reviewed function
         type: choice
         required: true
-        options: [llm-proxy, project-export, stripe-billing]
+        options: [llm-proxy, project-export, stripe-billing, email-send, command-center-read, command-center-session-handoff, account-delete]
 
 permissions:
   contents: read
@@ -39,7 +39,7 @@ jobs:
           script: |
             const target = process.env.TARGET;
             const slug = process.env.FUNCTION;
-            if (!['staging', 'production'].includes(target) || !['llm-proxy', 'project-export', 'stripe-billing'].includes(slug)) {
+            if (!['staging', 'production'].includes(target) || !['llm-proxy', 'project-export', 'stripe-billing', 'email-send', 'command-center-read', 'command-center-session-handoff', 'account-delete'].includes(slug)) {
               throw new Error('Unsupported deployment selection');
             }
             if (target === 'production' && context.ref !== 'refs/heads/main') {
@@ -48,7 +48,7 @@ jobs:
             const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               ...context.repo, workflow_id: 'ci.yml', head_sha: context.sha, per_page: 100,
             });
-            const required = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck'];
+            const required = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Commercial SQL + concurrent PostgreSQL acceptance'];
             if (target === 'production') required.push('Supabase drift check');
             let verified = false;
             for (const run of runs) {
@@ -90,7 +90,7 @@ jobs:
         env:
           FUNCTION: ${{ inputs.function }}
         run: |
-          case "$FUNCTION" in llm-proxy|project-export|stripe-billing) ;; *) exit 1 ;; esac
+          case "$FUNCTION" in llm-proxy|project-export|stripe-billing|email-send|command-center-read|command-center-session-handoff|account-delete) ;; *) exit 1 ;; esac
           deno check --node-modules-dir=none --no-config --no-lock "supabase/functions/$FUNCTION/index.ts"
       - name: Preserve existing deployment before replacement
         env:
@@ -104,7 +104,7 @@ jobs:
             production) project=kjrwqagyeswwoxpjkcko ;;
             *) exit 1 ;;
           esac
-          case "$FUNCTION" in llm-proxy|project-export|stripe-billing) ;; *) exit 1 ;; esac
+          case "$FUNCTION" in llm-proxy|project-export|stripe-billing|email-send|command-center-read|command-center-session-handoff|account-delete) ;; *) exit 1 ;; esac
           mkdir -p "$RUNNER_TEMP/backend-before/supabase"
           cp supabase/config.toml "$RUNNER_TEMP/backend-before/supabase/config.toml"
           curl --fail --silent --show-error -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
@@ -135,8 +135,8 @@ jobs:
             *) exit 1 ;;
           esac
           case "$FUNCTION" in
-            llm-proxy|stripe-billing) flags=(--no-verify-jwt) ;;
-            project-export) flags=() ;;
+            llm-proxy|stripe-billing|command-center-read|command-center-session-handoff) flags=(--no-verify-jwt) ;;
+            project-export|email-send|account-delete) flags=() ;;
             *) exit 1 ;;
           esac
           npx --yes supabase@2.117.0 functions deploy "$FUNCTION" --project-ref "$project" --use-api "${flags[@]}"
