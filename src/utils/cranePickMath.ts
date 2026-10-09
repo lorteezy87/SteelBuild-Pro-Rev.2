@@ -310,7 +310,7 @@ export function buildExtendedWarnings({ slingUtilization, shackleUtilization, ho
     if (flat < 30) {
       red.push({
         severity: "red",
-        message: `Offset CG: the long leg is at ${flat.toFixed(1)}° — below 30°. Lengthen the sling or move the pick points.`,
+        message: `Offset CG: the long leg is at ${flat.toFixed(1)}° — below 30°. Stop for sling-manufacturer or qualified person review. At unchanged pick-point spacing, more hook height increases both angles. Recheck both leg lengths, load shares, headroom and all ratings before changing the rigging.`,
       });
     }
   }

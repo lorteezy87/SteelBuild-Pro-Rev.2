@@ -39,6 +39,13 @@ describe("groundBearing", () => {
   });
 
   it.each([
+    ["finite load addition overflow", { outriggerReaction: 1e308, matWeight: 1e308 }],
+    ["finite area multiplication overflow", { padLength: 1e200, padWidth: 1e200 }],
+    ["finite area multiplication underflow", { padLength: 1e-200, padWidth: 1e-200 }],
+    ["pressure division overflow", { padLength: 1e-155, padWidth: 1e-155 }],
+    ["pressure division underflow", { outriggerReaction: Number.MIN_VALUE, padLength: 1e150, padWidth: 1e150 }],
+    ["utilization division overflow", { allowableBearing: Number.MIN_VALUE }],
+    ["required area underflow", { outriggerReaction: Number.MIN_VALUE, allowableBearing: 1e308, padLength: 1, padWidth: 1 }],
     ["zero reaction", { outriggerReaction: 0 }],
     ["negative mat weight", { matWeight: -1 }],
     ["zero length", { padLength: 0 }],
