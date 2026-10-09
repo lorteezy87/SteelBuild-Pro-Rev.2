@@ -1,21 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FullResult } from '@playwright/test/reporter';
-import { APP, ORG, PROJECT, STAGING, STATE } from '../../e2e/synthetic-pdf/fixture';
+import { APP, ORG, PROJECT, STAGING, STATE } from '../../e2e/synthetic-pdf/fixture.js';
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(), launch: vi.fn(), close: vi.fn(), remove: vi.fn(), write: vi.fn(),
   evaluate: vi.fn(), storageState: vi.fn(), guard: vi.fn(),
 }));
 vi.mock('node:fs', () => ({ mkdirSync: vi.fn(), rmSync: mocks.remove, writeFileSync: mocks.write }));
-vi.mock('../../e2e/synthetic-pdf/guard', () => ({
+vi.mock('../../e2e/synthetic-pdf/guard.js', () => ({
   ScopedTransport: class { send = mocks.send; }, installBrowserGuard: mocks.guard,
 }));
 vi.mock('@playwright/test', () => {
   const assertion = () => ({ toBeVisible: vi.fn(), toBe: vi.fn() });
   return { chromium: { launch: mocks.launch }, expect: Object.assign(assertion, { poll: assertion }) };
 });
-import setup from '../../e2e/synthetic-pdf/setup';
-import Reporter from '../../e2e/synthetic-pdf/reporter';
+import setup from '../../e2e/synthetic-pdf/setup.js';
+import Reporter from '../../e2e/synthetic-pdf/reporter.js';
 
 const session = { access_token: 'sensitive-access-token', refresh_token: 'sensitive-refresh-token',
   user: { id: '11111111-1111-4111-a111-111111111111' }, expires_in: 3600 };

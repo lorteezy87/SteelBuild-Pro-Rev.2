@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APP_ORIGIN, STAGING_ORIGIN, allowsStagingBrowserRequest as allows } from '../../e2e/stagingNetworkGuard';
+import { APP_ORIGIN, STAGING_ORIGIN, allowsStagingBrowserRequest as allows } from '../../e2e/stagingNetworkGuard.js';
 
 describe('shared staging browser policy', () => {
   it.each([

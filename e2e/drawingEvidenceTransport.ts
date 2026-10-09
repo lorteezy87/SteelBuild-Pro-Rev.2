@@ -1,4 +1,4 @@
-import { APP_ORIGIN, STAGING_ORIGIN } from './stagingNetworkGuard';
+import { APP_ORIGIN, STAGING_ORIGIN } from './stagingNetworkGuard.js';
 
 export const DRAWING_PROJECT_ID = '6573ede6-e29d-4d15-8855-403029735231';
 export const DRAWING_ORG_ID = 'b0d853ce-2ad7-470e-bf23-c962cf72699f';
@@ -45,7 +45,15 @@ export function allowsDrawingSetupRequest(path: string, method: string, authenti
  */
 export class DrawingEvidenceTransport {
   private requests = 0;
-  constructor(private key: string, private bearer?: string, private network: typeof fetch = fetch) { assertStagingPublicKey(key); }
+  private key: string;
+  private bearer?: string;
+  private network: typeof fetch;
+  constructor(key: string, bearer?: string, network: typeof fetch = fetch) {
+    assertStagingPublicKey(key);
+    this.key = key;
+    this.bearer = bearer;
+    this.network = network;
+  }
   async send(path: string, method = 'GET', body?: unknown): Promise<Response> {
     if (++this.requests > 3 || !allowsDrawingSetupRequest(path, method, !!this.bearer, body)) {
       throw new Error('Blocked out-of-scope drawing setup request');

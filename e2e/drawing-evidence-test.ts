@@ -1,5 +1,5 @@
-import { readOnlyTest } from './acceptance';
-import { STAGING_ORIGIN, installStagingNetworkGuard } from './stagingNetworkGuard';
+import { readOnlyTest } from './acceptance.js';
+import { STAGING_ORIGIN, installStagingNetworkGuard } from './stagingNetworkGuard.js';
 
 // The context fixture is established before page/auto observer fixtures. It
 // remains guarded until Playwright closes the context, including popup traffic.

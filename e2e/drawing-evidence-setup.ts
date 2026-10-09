@@ -1,12 +1,12 @@
 import { chromium, expect } from '@playwright/test';
 import { mkdirSync, rmSync } from 'node:fs';
-import { observeReadOnlyPage } from './acceptance';
-import { APP_ORIGIN, STAGING_ORIGIN, installStagingNetworkGuard } from './stagingNetworkGuard';
-import type { DrawingSetupStage } from './drawing-evidence-reporter';
+import { observeReadOnlyPage } from './acceptance.js';
+import { APP_ORIGIN, STAGING_ORIGIN, installStagingNetworkGuard } from './stagingNetworkGuard.js';
+import type { DrawingSetupStage } from './drawing-evidence-reporter.js';
 import {
   DRAWING_ORG_ID, DRAWING_PROJECT_ID, DRAWING_STATE_PATH, ORG_READ, PROJECT_READ,
   DrawingEvidenceTransport, assertDrawingEvidenceEnvironment, assertDrawingParent, validateDrawingSession,
-} from './drawingEvidenceTransport';
+} from './drawingEvidenceTransport.js';
 
 /** Dedicated to the protected drawing runner; general E2E setup is unchanged. */
 export default async function drawingEvidenceSetup(): Promise<void> {

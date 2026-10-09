@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { APP_ORIGIN, STAGING_ORIGIN } from '../../e2e/stagingNetworkGuard';
+import { APP_ORIGIN, STAGING_ORIGIN } from '../../e2e/stagingNetworkGuard.js';
 import {
   DRAWING_PROJECT_ID, DRAWING_ORG_ID, ORG_READ, PROJECT_READ, DrawingEvidenceTransport,
   allowsDrawingSetupRequest, assertDrawingEvidenceEnvironment, assertDrawingParent, validateDrawingSession,
-} from '../../e2e/drawingEvidenceTransport';
+} from '../../e2e/drawingEvidenceTransport.js';
 
 const key = 'sb_publishable_synthetic';
 const env = {
