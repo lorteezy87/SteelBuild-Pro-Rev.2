@@ -3,17 +3,17 @@
  *
  * Imported as the FIRST statement in main.jsx so the SDK is active before any
  * application code runs (per the Sentry React SDK guide). Wires error capture,
- * performance tracing, and session replay (fully masked).
+ * performance tracing. Replay and structured logs remain disabled.
  *
- * DSN resolution: the VITE_SENTRY_DSN env var wins (set it in the Vercel
- * project env to rotate/override); the project DSN below is a safe public
+ * DSN resolution: the VITE_SENTRY_DSN build env var wins (set it in the
+ * Cloudflare build environment to rotate/override); the DSN below is a public
  * fallback so monitoring works out of the box. A Sentry DSN is a write-only
  * ingest key designed to ship in the browser bundle — it is NOT a secret.
  *
- * Privacy: replayIntegration runs with maskAllText + blockAllMedia, so session
- * replays show layout/interactions but never readable project/financial
- * content. Sampling is production-tuned (10% traces, 10% sessions, 100% of
- * error sessions).
+ * DOM masking alone does not establish that URLs and other recording metadata
+ * exclude private project or authentication data. Replay and logs require their
+ * own reviewed sanitization and envelope acceptance before they can be enabled.
+ * Error-event/breadcrumb scrubbing below remains a separate, limited boundary.
  *
  * Follow-up (optional, needs a SENTRY_AUTH_TOKEN build secret): add
  * @sentry/vite-plugin to upload source maps for readable stack traces.
@@ -30,13 +30,10 @@ if (DSN) {
     environment: import.meta.env.MODE,
     release: import.meta.env.VITE_APP_VERSION || undefined,
     // PII off: don't auto-attach IP address / user identifiers / request headers.
-    // Session replay is already masked (below); if richer triage is ever needed,
-    // attach only minimal scrubbed identifiers explicitly (e.g. hashed user id,
-    // org id) via Sentry.setUser — never email / financial / document data.
+    // Never attach email, financial, document, or raw authentication data.
     sendDefaultPii: false,
     integrations: [
       Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
     ],
     tracesSampleRate: 0.1,
     // Trace-propagation adds `sentry-trace` + `baggage` request headers to
@@ -53,9 +50,9 @@ if (DSN) {
       "localhost",
       /^https:\/\/(www\.)?steelbuild-pro\.com/,
     ],
-    replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
-    enableLogs: true,
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: 0,
+    enableLogs: false,
     // Scrub sensitive data before anything leaves the browser (M15). Query
     // strings can carry projectId / redirect targets / tokens, and Postgres
     // unique-violation messages echo the conflicting ROW VALUES ("Key

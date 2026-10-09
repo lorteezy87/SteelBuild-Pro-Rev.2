@@ -3,7 +3,7 @@
 // Render test for the register's release affordance. Covers the field-confirmed
 // bug fix: a row with no current revision must show an ENABLED "Set up revision
 // tracking" button (not a dead disabled distribution select), and clicking it
-// provisions a revision via ensureCurrentRevision and refetches the register. A
+// provisions a revision via provisionRegisterRevision and refetches the register. A
 // row that already has a current revision shows the distribution select.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -12,12 +12,13 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { toast } from "sonner";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import type { DrawingRegisterGridPanelProps } from "../DrawingRegisterGridPanel";
 import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
 import { buildSetPackages } from "@/pages/drawingSubmittalHub/format";
 
-const ensureCurrentRevision = vi.fn().mockResolvedValue({ id: "rev-new", is_current: true });
+const provisionRegisterRevision = vi.fn().mockResolvedValue({ id: "rev-new", is_current: true });
 const invalidateQueries = vi.fn();
 const setEvidence = vi.hoisted(() => ({
   gate: { isPending: true, isError: false, isFetching: false, data: null as any, refetch: vi.fn() },
@@ -46,8 +47,9 @@ vi.mock("@/components/shared/useAppSecurity", () => ({
 vi.mock("../useSheetSetEvidence", () => ({
   useSheetSetEvidence: () => setEvidence,
 }));
-vi.mock("@/lib/drawingHub/revisions", () => ({
-  ensureCurrentRevision: (...a: any[]) => ensureCurrentRevision(...a),
+vi.mock("../registerProvision", () => ({
+  provisionRegisterRevision: (...a: any[]) => provisionRegisterRevision(...a),
+  rowsNeedingProvisioning: (rows: DrawingRegisterRow[]) => rows.filter((row) => !row.current_revision_id),
 }));
 vi.mock("@/components/drawings/RevisionUploadModal", () => ({
   default: ({ onComplete }: { onComplete: (result: { complete: boolean; failed: number }) => void }) => (
@@ -118,7 +120,7 @@ describe("DrawingRegisterGridPanel — release affordance", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     canEdit = true;
-    ensureCurrentRevision.mockResolvedValue({ id: "rev-new", is_current: true });
+    provisionRegisterRevision.mockResolvedValue({ id: "rev-new", is_current: true });
   });
 
   it("shows an enabled provision button (not a disabled select) for a row with no current revision", () => {
@@ -137,13 +139,14 @@ describe("DrawingRegisterGridPanel — release affordance", () => {
     expect(screen.queryByRole("button", { name: /set up revision tracking/i })).not.toBeInTheDocument();
   });
 
-  it("provisions a revision on click with the mapped drawing, then invalidates the register query", async () => {
-    registerRows = [makeRow({ drawing_id: "dwg-9", project_id: "proj-9", current_revision_id: null, current_revision: "B" })];
+  it("provisions a revision on click with the active project and register identity, then invalidates the register query", async () => {
+    registerRows = [makeRow({ drawing_id: "dwg-9", project_id: "proj-1", current_revision_id: null, current_revision: null })];
     renderGrid();
     await userEvent.click(screen.getByRole("button", { name: /set up revision tracking/i }));
-    await waitFor(() => expect(ensureCurrentRevision).toHaveBeenCalledTimes(1));
-    expect(ensureCurrentRevision).toHaveBeenCalledWith({
-      drawing: expect.objectContaining({ id: "dwg-9", project_id: "proj-9", revision: "B" }),
+    await waitFor(() => expect(provisionRegisterRevision).toHaveBeenCalledTimes(1));
+    expect(provisionRegisterRevision).toHaveBeenCalledWith({
+      row: expect.objectContaining({ drawing_id: "dwg-9", project_id: "proj-1" }),
+      projectId: "proj-1",
       userId: "user-1",
     });
     await waitFor(() =>
@@ -169,13 +172,33 @@ describe("DrawingRegisterGridPanel — release affordance", () => {
     ];
     renderGrid();
     await userEvent.click(screen.getByRole("button", { name: /set up tracking for all \(2\)/i }));
-    // One ensureCurrentRevision per UNTRACKED row (a + c), not the tracked one (b).
-    await waitFor(() => expect(ensureCurrentRevision).toHaveBeenCalledTimes(2));
-    const provisionedIds = ensureCurrentRevision.mock.calls.map((c) => c[0].drawing.id).sort();
+    // One provisionRegisterRevision per UNTRACKED row (a + c), not the tracked one (b).
+    await waitFor(() => expect(provisionRegisterRevision).toHaveBeenCalledTimes(2));
+    const provisionedIds = provisionRegisterRevision.mock.calls.map((c) => c[0].row.drawing_id).sort();
     expect(provisionedIds).toEqual(["a", "c"]);
     await waitFor(() =>
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-register", "proj-1"] }),
     );
+  });
+
+  it("shows the missing source requirement without a success toast for a single sheet", async () => {
+    registerRows = [makeRow()];
+    provisionRegisterRevision.mockRejectedValueOnce(new Error("Complete this sheet's source PDF before setting up revision tracking."));
+    renderGrid();
+    await userEvent.click(screen.getByRole("button", { name: /set up revision tracking/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("source PDF")));
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it("reports partial bulk completion with the failed sheet and concrete metadata requirement", async () => {
+    registerRows = [makeRow({ drawing_id: "a", sheet_number: "S101" }), makeRow({ drawing_id: "b", sheet_number: "S102" })];
+    provisionRegisterRevision.mockResolvedValueOnce({ id: "new-revision" })
+      .mockRejectedValueOnce(new Error("Complete this sheet's revision code before setting up revision tracking."));
+    renderGrid();
+    await userEvent.click(screen.getByRole("button", { name: /set up tracking for all \(2\)/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/1\/2 set up; 1 failed\. S102:.*revision code/)));
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
 
