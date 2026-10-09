@@ -617,6 +617,7 @@ export function DrawingRegisterGridPanel({
                     />
                   </th>
                 )}
+                <th aria-label="Watch" style={{ width: 32, textAlign: "center" }} />
                 <th>Sheet</th>
                 <th>Title</th>
                 <th>Disc.</th>

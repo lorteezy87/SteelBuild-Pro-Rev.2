@@ -101,7 +101,7 @@ export function SheetContextPanel({ entry, projectId, panelRef }: {
     && submittal.submittal_type !== "Shop Drawing",
   );
   const related = pickMostRecentSubmittal(relatedSetLinks);
-  const needsShopClassification = Boolean(
+  const needsShopDrawingPackage = Boolean(
     !governingId && related && trustedGate?.blockers.some((blocker) => blocker.kind === "no_submittal"),
   );
   const approvalStage = governingId && trustedGate?.governingStage !== "Not Started"
@@ -129,8 +129,8 @@ export function SheetContextPanel({ entry, projectId, panelRef }: {
         ? { label: "Review current revision", href: hubHref("drawings", { hub_view: "reviews" }) }
         : approvalStage === "R&R" && governingId
           ? { label: "Respond to returned submittal", href: submittalRecordHref(governingId) }
-          : needsShopClassification && related
-            ? { label: "Classify linked record as Shop Drawing", href: submittalRecordHref(related.id) }
+          : needsShopDrawingPackage && explicitSetId
+            ? { label: "Create a Shop Drawing package", href: createSubmittalHref(explicitSetId) }
           : !governingId && historical && explicitSetId
             ? { label: "Verify and link historical submittal", href: submittalRecordHref(historical.id) }
             : !governingId && trustedGate && explicitSetId
@@ -152,12 +152,12 @@ export function SheetContextPanel({ entry, projectId, panelRef }: {
           {setUrl ? <Link to={setUrl}>Open linked set</Link> : <small>Set link {NOT_VERIFIED.toLowerCase()}</small>}
         </div>
         <div>
-          <dt>Current revision <small>drawing_revisions</small></dt>
+          <dt>Current revision</dt>
           <dd data-evidence="revision">{revision}</dd>
           {!row.current_revision_id && row.current_revision && <small>Legacy label {row.current_revision}; current revision is untracked.</small>}
         </div>
         <div>
-          <dt>Revision distribution <small>release_status</small></dt>
+          <dt>Revision distribution</dt>
           <dd data-evidence="distribution">{distribution}</dd>
           <small>Distribution is separate from fabrication authorization.</small>
         </div>
@@ -205,11 +205,10 @@ export function SheetContextPanel({ entry, projectId, panelRef }: {
                 : gate.isError || !trustedGate
                   ? "Server approval evidence unavailable."
                   : "Server found no governing Shop Drawing submittal."}</small>
-              {needsShopClassification && related && explicitSetId && (
+              {needsShopDrawingPackage && related && explicitSetId && (
                 <>
                   <small>{relatedSetLinks.length} set-ID-linked record{relatedSetLinks.length === 1 ? "" : "s"} do not govern Shop Drawing approval.</small>
-                  <small>Classify one as Shop Drawing if appropriate, or create/link a Shop Drawing submittal.</small>
-                  <Link to={createSubmittalHref(explicitSetId)}>Create or link a Shop Drawing submittal</Link>
+                  <small>Reviewed non-Shop records cannot be reclassified. Create a Shop Drawing package linked to this set for drawing review and fabrication authorization.</small>
                 </>
               )}
               {historical && (
