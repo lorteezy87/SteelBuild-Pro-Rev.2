@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-09 | codex-piece-type-fixture | Exact Shop Drawing evidence failure fixture | src/lib/pieceControl/__tests__/relationshipsRepository.test.ts | Parent-requested full-CI regression diagnosis; keep fail-closed readiness unchanged. |
+
 | 2026-10-09 | codex-synthetic-pdf-acceptance | Bounded staging PDF evidence acceptance | e2e/synthetic-pdf/**; e2e/synthetic-pdf-evidence.spec.ts; playwright.synthetic-pdf.config.ts; .github/workflows/synthetic-pdf-acceptance.yml; scripts/__tests__/syntheticPdfAcceptance*.test.ts; docs/audits/SYNTHETIC_PDF_ACCEPTANCE_PLAN_2026-10-09.md | Source-only protected Actions test using scoped existing staging credentials, real synthetic PDFs, exact RPC evidence and archival cleanup; no hosted dispatch. |
 
 
