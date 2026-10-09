@@ -88,6 +88,28 @@ try{
     assert.equal((await admin.query('select count(*)::int n from steelbuild_workflow.round_context')).rows[0].n,0);
     const dangling=await admin.query("select r.request_id from steelbuild_workflow.round_requests r where not exists(select 1 from public.submittals s where s.id=(r.result->'submittal'->>'id')::uuid)");assert.equal(dangling.rows.length,0);
   });
+  for(const field of ['is_member','is_pm','mfa_satisfied']) {
+    await check(`${field} revoked during request-key wait denies mutation`,async()=>{
+      const id=await draft();const request=randomUUID();const c=command(await parent(db,id),submit,request);
+      const lock=await pool.connect();await lock.query('begin');await lock.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[`round-workflow:${ids.project}:${request}`]);
+      const consumer=await session();const result=finish(consumer,c).then(()=>null,e=>e);await waiting(consumer);
+      await admin.query(`update auth.test_access set ${field}=false where user_id=$1`,[ids.pm]);await lock.query('commit');lock.release();
+      assert.match((await result).message,/ROUND_NOT_AUTHORIZED/);await admin.query(`update auth.test_access set ${field}=true where user_id=$1`,[ids.pm]);
+      assert.equal((await admin.query('select count(*)::int n from public.submittal_rounds where submittal_id=$1',[id])).rows[0].n,0);
+    });
+  }
+  await check('PM downgrade while waiting on linked set is rechecked after row locks',async()=>{
+    const id=await draft();const c=command(await parent(db,id),submit);const lock=await pool.connect();await lock.query('begin');await lock.query('select id from public.drawing_sets where id=$1 for update',[ids.set]);
+    const consumer=await session();const result=finish(consumer,c).then(()=>null,e=>e);await waiting(consumer);
+    await admin.query('update auth.test_access set is_pm=false where user_id=$1',[ids.pm]);await lock.query('commit');lock.release();
+    assert.match((await result).message,/ROUND_NOT_AUTHORIZED/);await admin.query('update auth.test_access set is_pm=true where user_id=$1',[ids.pm]);
+  });
+  await check('publish rechecks workspace membership after revision lock waits',async()=>{
+    const lock=await pool.connect();await lock.query('begin');await lock.query('select id from public.drawing_sets where id=$1 for update',[ids.set]);
+    const consumer=await session();const result=consumer.query("select public.publish_drawing_revision($1,'released_for_shop')",[ids.revision]).then(()=>null,e=>e);await waiting(consumer);
+    await admin.query('update auth.test_access set is_member=false where user_id=$1',[ids.pm]);await lock.query('commit');lock.release();
+    assert.match((await result).message,/Not authorized/);await consumer.query('rollback');consumer.release();await admin.query('update auth.test_access set is_member=true where user_id=$1',[ids.pm]);
+  });
   console.log(`${checks} independent-session concurrency checks passed`);
 }catch(error){console.error(error instanceof Error?error.stack:error);process.exitCode=1;}
 finally{admin.release();await pool.end();}

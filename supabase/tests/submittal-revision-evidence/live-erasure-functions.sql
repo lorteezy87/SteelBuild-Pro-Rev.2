@@ -150,4 +150,3 @@ begin
 end $function$
 ;
 REVOKE ALL ON FUNCTION public.erasure_toggle_user_triggers(text[],boolean,text[]) FROM PUBLIC,anon,authenticated,service_role;
-

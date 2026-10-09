@@ -32,11 +32,14 @@ export async function initialize(db: Database): Promise<void> {
     create function auth.jwt() returns jsonb language sql stable as $$ select current_setting('request.jwt.claims',true)::jsonb $$;
     create table auth.users (id uuid primary key);
     insert into auth.users values ('${ids.pm}'),('${ids.viewer}'),('${ids.foreign}');
-    create function steelbuild_security.satisfies_mfa() returns boolean language sql stable as $$ select auth.jwt()->>'aal'='aal2' $$;
-    create function public.user_has_project_access(p_project_id uuid) returns boolean language sql stable as $$
-      select p_project_id='${ids.project}'::uuid and auth.uid() in ('${ids.pm}'::uuid,'${ids.viewer}'::uuid) $$;
-    create function public.user_has_project_role_at_least(p_project_id uuid,p_role text) returns boolean language sql stable as $$
-      select p_project_id='${ids.project}'::uuid and auth.uid()='${ids.pm}'::uuid $$;
+    create table auth.test_access(user_id uuid primary key,is_member boolean,is_pm boolean,mfa_satisfied boolean);
+    insert into auth.test_access values('${ids.pm}',true,true,true),('${ids.viewer}',true,false,true),('${ids.foreign}',false,false,true);
+    create function steelbuild_security.satisfies_mfa() returns boolean language sql stable security definer set search_path='' as $$
+      select auth.jwt()->>'aal'='aal2' and coalesce((select mfa_satisfied from auth.test_access where user_id=auth.uid()),false) $$;
+    create function public.user_has_project_access(p_project_id uuid) returns boolean language sql stable security definer set search_path='' as $$
+      select p_project_id='${ids.project}'::uuid and coalesce((select is_member from auth.test_access where user_id=auth.uid()),false) $$;
+    create function public.user_has_project_role_at_least(p_project_id uuid,p_role text) returns boolean language sql stable security definer set search_path='' as $$
+      select p_project_id='${ids.project}'::uuid and coalesce((select is_pm from auth.test_access where user_id=auth.uid()),false) $$;
     create table public.projects (id uuid primary key, org_id uuid not null, metadata jsonb default '{}');
     insert into public.projects values ('${ids.project}','${ids.org}','{}'),('${ids.foreignProject}','${ids.foreign}','{}');
     alter table public.projects add column name text default 'Synthetic steel project', add column project_number text default 'P-1', add column is_deleted boolean default false;
