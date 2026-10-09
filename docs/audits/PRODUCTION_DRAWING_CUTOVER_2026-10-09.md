@@ -3,6 +3,13 @@
 Status: **read-only preflight, not approval or execution of a production cutover**.
 No SQL, ledger, customer record, source PDF, account, or provider state was changed.
 
+The cutover affects fifteen stored approved/released Shop Drawing packages with
+no captured manifest. **The 84 incomplete revision sources are metadata routing
+gaps with existing parent-sheet/set PDF hints, not 84 absent PDFs.** However,
+all 84 parent revision codes differ from their current revision rows. Every
+package requires PM source review; neither status history nor these hints
+justifies automatic copying, attestation or release.
+
 ## Observation and exact candidate
 
 Source: main `e69d8cb7d5feaa31e2bb6bf79a2185368312513f`.
@@ -107,6 +114,13 @@ or that steel has actually been fabricated.
   span eleven packages. This is a revision metadata routing gap, **not a finding
   that those PDFs are absent**. The parent references remain review material,
   not proof that the file was part of the original submitted/approved roster.
+- Comparing trimmed codes exactly, all 84 incomplete revisions differ from
+  their parent sheet revision number. Fifty-nine sheet/set file references
+  match after the supported app-files/ prefix removal; twenty-five differ.
+  Among the nineteen source-complete revisions, all nineteen file/page pairs
+  match their parent sheet, seventeen revision codes match and two differ.
+  No normalization was invented to force a match, and none of these comparisons
+  establishes which document was originally approved.
 - At package level: **3 complete current source rosters, 2 partial, 9 with zero
   eligible current PDF sources, 1 empty package**. Only two of the three complete
   packages also have a matching live round. The third has no round.
