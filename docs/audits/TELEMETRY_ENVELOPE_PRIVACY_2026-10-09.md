@@ -43,3 +43,29 @@ This intentionally removes arbitrary exception/message text, fingerprints, tags,
 Validated identifiers and numeric timing are permitted metadata; this is not a claim that every conceivable value or covert channel is impossible. Normal browser network metadata such as the connection address and user agent is outside the event-body schema; no hosted provider retention/access audit or historical-data purge was performed. This policy covers the configured browser Sentry client, not every arbitrary application network path or the local debugging ring buffer. SDK upgrades must rerun the actual-envelope and browser transport contracts before release.
 
 Reference: [Sentry's attachment documentation](https://docs.sentry.io/platforms/javascript/enriching-events/attachments/) describes scope/hint attachment behavior. The installed SDK source, rather than documentation for a different release, determined the final transport placement above.
+# Performance-report compatibility follow-up
+
+Exact push run `37956488782` on `0484f8705ec49357a82eefc10baf743929ee9dff`
+passed lint, all TypeScript gates, the full unit suite, foundation browser tests
+and production build. Its final bundle gate failed because the report's global
+HTML path regex counted the inert JSON asset inventory as initial downloads.
+On the retained local build, that meant 444 referenced files / 3,187.3 KiB gzip,
+although only four script/link asset tags were fetched initially / 124.5 KiB
+gzip. The full generated total was 3,226.3 KiB gzip.
+
+The report now parses trusted build HTML using the already-declared `jsdom`
+dependency, with its default script execution and resource loading disabled.
+Only actual external script and stylesheet/preload/modulepreload tags contribute
+to initial asset accounting; prefetch and conditional tags are conservatively
+counted too. Inline JSON, script strings, comments and template content do not
+fetch those named resources and no longer inflate that metric. Existing total
+asset accounting and the **320 KiB initial / 3,600 KiB total** budgets are unchanged.
+The manifest's inline HTML bytes are reported separately in this audit; this
+existing asset metric does not measure HTML transfer size or all runtime fetches.
+
+An actual-command regression failed before this correction; afterward all **11
+CLI cases** pass, including both quote forms, unquoted/reordered attributes,
+real script/link budget failures, inert data, and the unchanged total-size gate.
+Parsing stays in the existing CommonJS script to preserve the declared Node >=20
+runtime support; it does not depend on Node24's TypeScript loader. New tests are
+TypeScript, and the actual `tsconfig.scripts.json` and scoped lint checks pass.
