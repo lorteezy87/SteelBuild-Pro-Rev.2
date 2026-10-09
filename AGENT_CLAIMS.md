@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-09 | codex-manifest-ci-fixtures | Exact-evidence readiness fixture reconciliation | src/pages/workPackages/__tests__/{WorkPackages.evidence.test.tsx,analytics.test.js}; src/pages/drawingSubmittalHub/__tests__/format.test.ts; src/components/drawings/__tests__/{ExportFabReleaseModal.evidence.test.tsx,drawingsUtils.test.js} | Parent-approved corrections from full-suite CI; preserve missing-evidence blocking and supply current-round fixtures only to proven-ready scenarios. |
+
 | 2026-10-09 | codex-manifest-hosted-acceptance | Main-only staging drawing acceptance | .github/workflows/drawing-evidence-acceptance.yml; playwright.drawing-evidence.config.ts; e2e/drawing-revision-evidence.spec.ts; e2e/drawing-evidence-reporter.ts; scripts/__tests__/drawingEvidenceAcceptanceGate.test.ts | Parent-approved exact main-ancestor source gate, existing encrypted staging credentials, read-only desktop/mobile browser checks; screenshots and sanitized summary only. |
 
 | 2026-10-09 | codex-manifest-readonly-acceptance | Revision coverage browser acceptance guard | e2e/acceptance.ts; e2e/acceptance-contract.spec.ts | Parent-approved exact allowlist for two inspected read-only coverage RPCs and browser regressions preserving write blocking. |
