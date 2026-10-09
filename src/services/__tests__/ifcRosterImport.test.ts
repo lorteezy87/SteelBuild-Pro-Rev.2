@@ -102,7 +102,7 @@ vi.mock("@/lib/pieceControl/modelElementLink", () => ({
   linkModelElementsToPieces: (...a: unknown[]) => mocks.state.link(...a),
 }));
 
-import { importIfcRoster } from "../ifcRosterImport";
+import { importIfcRoster, removeProjectModel } from "../ifcRosterImport";
 
 const rows = Array.from({ length: 700 }, (_, i) => ({
   element_guid: `G${i}`, piece_mark: `B${i % 50}`, assembly_mark: `B${i % 50}`, part_mark: `p${i}`,
@@ -188,17 +188,39 @@ describe("importIfcRoster", () => {
 
     const elementCalls = mocks.state.calls.filter((c) => c.table === "model_elements");
     const updates = elementCalls.filter((c) => opNames(c)[0] === "update");
-    // 2300 rows → pages of 1000, 1000, 300, then a final empty probe.
-    expect(updates).toHaveLength(3);
-    expect((updates[0].ops.find(([op]) => op === "in")?.[2] as string[])).toHaveLength(1000);
-    expect((updates[2].ops.find(([op]) => op === "in")?.[2] as string[])).toHaveLength(300);
-    // Every page is bounded — no statement is allowed to touch the whole roster.
+    // 2300 rows → eleven pages of 200, then a final page of 100.
+    expect(updates).toHaveLength(12);
+    expect((updates[0].ops.find(([op]) => op === "in")?.[2] as string[])).toHaveLength(200);
+    expect((updates[11].ops.find(([op]) => op === "in")?.[2] as string[])).toHaveLength(100);
+    // Every page is bounded for both the database statement and request URL.
     for (const u of updates) {
       const ids = u.ops.find(([op]) => op === "in")?.[2] as string[];
-      expect(ids.length).toBeLessThanOrEqual(1000);
+      expect(ids.length).toBeLessThanOrEqual(200);
     }
     // And it actually finished the job.
     expect(mocks.state.elements.filter((r) => !r.is_deleted)).toHaveLength(0);
+  });
+
+  it("keeps removal id filters below the gateway request-line limit", async () => {
+    mocks.state.elements = Array.from({ length: 501 }, (_, i): ElementRow => ({
+      id: `00000000-0000-4000-8000-${i.toString().padStart(12, "0")}`,
+      model_id: "active-model",
+      is_deleted: false,
+      deleted_at: null,
+    }));
+
+    await removeProjectModel("p1");
+
+    const updates = mocks.state.calls.filter(
+      (call) => call.table === "model_elements" && opNames(call)[0] === "update",
+    );
+    expect(updates.length).toBeGreaterThan(1);
+    for (const update of updates) {
+      const ids = update.ops.find(([op]) => op === "in")?.[2] as string[];
+      const encodedFilterLength = encodeURIComponent(`(${ids.join(",")})`).length;
+      expect(encodedFilterLength).toBeLessThan(8_000);
+    }
+    expect(mocks.state.elements.every((row) => row.is_deleted)).toBe(true);
   });
 
   it("rolls back to the previous model when the RETIRE step fails", async () => {
