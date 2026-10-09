@@ -116,7 +116,7 @@ describe("fabrication package evidence", () => {
   });
 
   it('blocks export evidence when exact revision coverage fails after the row reads succeed', async () => {
-    database.tables.submittals = [{ id: 's1', project_id: 'project-1', is_deleted: false, status: 'Approved', updated_at: '2026-10-09T00:00:00Z' }];
+    database.tables.submittals = [{ id: 's1', project_id: 'project-1', submittal_type: 'Shop Drawing', is_deleted: false, status: 'Approved', updated_at: '2026-10-09T00:00:00Z' }];
     database.failCoverage = true;
     await expect(loadFabApprovalEvidence('project-1', ['drawing-1'])).rejects.toThrow('Evidence unavailable');
   });

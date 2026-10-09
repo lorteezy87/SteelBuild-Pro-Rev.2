@@ -34,12 +34,16 @@ describe('atomic submittal client', () => {
   });
   it('rejects imported drawing approvals without changing their meaning; other types retain their creation behavior', () => {
     expect(() => validateSubmittalCreate({ submittal_type: 'Shop Drawing', status: 'Approved' })).toThrow(/Draft/);
-    expect(() => validateSubmittalCreate({ status: 'Submitted' })).toThrow(/Draft/);
+    expect(() => validateSubmittalCreate({ status: 'Submitted' })).not.toThrow(); // Unclassified is never drawing authority.
     expect(() => validateSubmittalCreate({ submittal_type: 'Product Data', status: 'Submitted' })).not.toThrow();
     expect(() => validateSubmittalCreate({ submittal_type: 'Shop Drawing', status: 'Draft' })).not.toThrow();
   });
   it('does not attach Shop Drawing revision evidence to a linked Product Data workflow', async () => {
     await applySubmittalWorkflow({ review: { ...review, submittal_type: 'Product Data' }, revisionIds: ['linked-drawing-revision'], patch: { status: 'Submitted', ball_in_court: 'EOR', submitted_date: '2026-10-09' } });
+    expect(rpc).toHaveBeenCalledWith('apply_submittal_round_workflow', expect.objectContaining({ p_expected_revision_ids: [] }));
+  });
+  it.each([null, undefined, '', ' ', 'shop drawing', 'Unknown'])('never infers Shop Drawing revision capture from type %j', async submittal_type => {
+    await applySubmittalWorkflow({ review: { ...review, submittal_type }, revisionIds: ['linked-drawing-revision'], patch: { status: 'Submitted' } });
     expect(rpc).toHaveBeenCalledWith('apply_submittal_round_workflow', expect.objectContaining({ p_expected_revision_ids: [] }));
   });
 });

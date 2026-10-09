@@ -34,6 +34,7 @@ Notes:
 
 
 
+
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
 | 2026-10-09 | codex-release-status-docs | Current source/staging/production release record | README.md; CLAUDE.md; docs/audits/PRODUCTION_RELEASE_2026-10-08.md; docs/runbooks/owner-checklist.md; installed staging evidence summaries | Replace superseded PR499 checkpoint and unsafe retired deployment directions with verified SQL and current publication boundaries; no readiness claim or policy change. |

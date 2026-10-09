@@ -89,7 +89,7 @@ test('drawing register, exact revision evidence and approval matrix agree', asyn
   const fixtureRows = probe.rows.get('submittals')?.filter(row => row.title === submittalOptions.fixtureText) || [];
   expect(fixtureRows.length, 'The existing Shop Drawing fixture must be unambiguous').toBe(1);
   const submittal = fixtureRows[0];
-  expect(submittal.submittal_type ?? 'Shop Drawing').toBe('Shop Drawing');
+  expect(submittal.submittal_type, 'Never infer Shop Drawing authority from a legacy NULL type').toBe('Shop Drawing');
   const submittalId = String(submittal.id);
   await expect.poll(() => coverage.batch.has(submittalId), { message: 'Register must load authoritative revision coverage' }).toBe(true);
   await coverage.settle();
@@ -138,7 +138,13 @@ test('drawing register, exact revision evidence and approval matrix agree', asyn
   const row = matrix.getByRole('row').filter({ has: page.getByRole('button', { name: drawingOptions.fixtureText!, exact: true }) });
   await expect(row).toBeVisible();
   await expect(row.getByRole('link', { name: String(submittal.submittal_number), exact: true })).toBeVisible();
-  if (!detailCoverage.ok && ['Approved', 'Approved as Noted', 'Released for Fabrication'].includes(String(submittal.status))) {
+  if (submittal.status === 'Draft') {
+    await expect(row.getByText('Draft', { exact: true })).toBeVisible();
+    await expect(row.getByText('IFA', { exact: true })).toBeVisible();
+    await expect(row.getByText(/^(Approved|Approved as Noted|Released for Fabrication|IFC|Released)$/i)).toHaveCount(0);
+    expect(detailCoverage.ok, 'A Draft without reviewed submission cannot be release evidence').toBe(false);
+  } else if (!detailCoverage.ok && (submittal.status === 'Released for Fabrication'
+    || (['Approved', 'Approved as Noted'].includes(String(submittal.status)) && ['GC', 'Owner'].includes(String(submittal.ball_in_court))))) {
     await expect(row.getByText('Revision evidence required', { exact: true })).toBeVisible();
   }
   const disclosure = row.getByRole('button', { name: drawingOptions.fixtureText!, exact: true });
@@ -150,4 +156,40 @@ test('drawing register, exact revision evidence and approval matrix agree', asyn
   await expect(page.locator('vite-error-overlay')).toHaveCount(0);
   await page.getByRole('main', { name: 'Main content', exact: true })
     .screenshot({ path: testInfo.outputPath('approval-matrix.png') });
+});
+
+test('legacy untyped approval is excluded from drawing authority', async ({ page }, testInfo) => {
+  const options = { ...acceptanceOptions('submittals'), fixtureText: 'Staging erection drawings' };
+  const coverage = collectCoverage(page, options.supabaseUrl);
+  const probe = await observeReadOnlyPage(page, options.supabaseUrl, options.projectId);
+  await visitRegister(page, 'submittals', options);
+  const rows = probe.rows.get('submittals')?.filter(row => row.title === options.fixtureText) || [];
+  expect(rows).toHaveLength(1);
+  const legacy = rows[0];
+  expect(legacy.submittal_type).toBeNull();
+  expect(legacy.status).toBe('Approved');
+  const list = page.getByRole('region', { name: 'Submittal register list', exact: true });
+  await list.getByRole('button', { name: /^Open submittal / })
+    .filter({ has: page.getByText(options.fixtureText, { exact: true }) }).click();
+  const details = page.getByRole('region', { name: 'Submittal details', exact: true });
+  await expect(details.getByText(/This legacy record has no submittal type and cannot govern drawing approval/)).toBeVisible();
+  await expect(details.getByRole('region', { name: 'Exact revision evidence', exact: true })).toHaveCount(0);
+  await details.screenshot({ path: testInfo.outputPath('legacy-unclassified.png') });
+
+  await page.goto('/DrawingSubmittalHub?hub_tab=matrix');
+  const matrix = page.getByRole('table', { name: 'Approval matrix', exact: true });
+  await expect(matrix).toBeVisible();
+  const row = matrix.getByRole('row').filter({ has: page.getByRole('button', { name: 'STG Erection Drawings', exact: true }) });
+  await expect(row).toBeVisible();
+  await expect(row.getByRole('link', { name: String(legacy.submittal_number), exact: true })).toHaveCount(0);
+  await expect(row.getByText('Approved', { exact: true })).toHaveCount(0);
+  await expect(row.getByText('from sheets', { exact: true })).toBeVisible();
+  await expect(row.getByRole('link', { name: 'Create submittal for STG Erection Drawings', exact: true })
+    .or(row.getByText('No submittal', { exact: true }))).toBeVisible();
+  await probe.settle();
+  await coverage.settle();
+  expect(coverage.batch.has(String(legacy.id))).toBe(false);
+  expect(coverage.single.has(String(legacy.id))).toBe(false);
+  probe.assertHealthy();
+  await row.screenshot({ path: testInfo.outputPath('legacy-no-governing-submittal.png') });
 });
