@@ -181,7 +181,7 @@ export function getExportProjectName(project: Record<string, unknown> | null | u
   return typeof name === "string" && name.trim() ? name.trim() : "project";
 }
 
-/** The `activities` row the service role writes for every successful export — the audit the client cannot forge. */
+/** Mandatory export activity; the database stamps the actor from the caller JWT. */
 export function buildExportAuditRecord(args: { projectId: string; project: Record<string, unknown>; envelope: ProjectExportEnvelope; performedBy: string; performedByUserId?: string | null; timestamp?: string }) {
   const tableCount = Object.keys(args.envelope.tables).length;
   return {
