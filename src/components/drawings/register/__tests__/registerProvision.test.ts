@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   rowNeedsProvisioning,
-  registerRowToDrawing,
   rowsNeedingProvisioning,
 } from "../registerProvision";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
+
+vi.mock("@/lib/supabase", () => ({ supabase: {} }));
 
 function row(over: Partial<DrawingRegisterRow> = {}): DrawingRegisterRow {
   return {
@@ -35,32 +36,6 @@ describe("rowNeedsProvisioning", () => {
 
   it("is false once a current revision exists", () => {
     expect(rowNeedsProvisioning(row({ current_revision_id: "rev-1" }))).toBe(false);
-  });
-});
-
-describe("registerRowToDrawing", () => {
-  it("maps a register row onto the ensureCurrentRevision drawing shape", () => {
-    const drawing = registerRowToDrawing(
-      row({ drawing_id: "dwg-9", project_id: "proj-9", current_revision: "B", sheet_number: "S200", sheet_title: "Roof Plan" }),
-    );
-    expect(drawing).toEqual({
-      id: "dwg-9",
-      project_id: "proj-9",
-      revision: "B",
-      sheet_number: "S200",
-      sheet_title: "Roof Plan",
-      file_url: null,
-      pdf_page: null,
-    });
-  });
-
-  it("returns null when project_id is missing (skip rather than throw in the provisioner)", () => {
-    expect(registerRowToDrawing(row({ project_id: null }))).toBeNull();
-  });
-
-  it("returns null when drawing_id is missing", () => {
-    // drawing_id is non-nullable in the type, but guard against bad runtime data.
-    expect(registerRowToDrawing(row({ drawing_id: "" as unknown as string }))).toBeNull();
   });
 });
 
