@@ -39,6 +39,15 @@ interface EntityRegistration {
 const evidenceFamily = (name: string, projectId?: string | null): RegistryKey =>
   projectId ? [name, projectId] : [name];
 
+const revisionReadinessFamilies = (projectId?: string | null): RegistryKey[] => [
+  ["submittals"], ["submittals-all"], ["submittal-revision-coverage"], ["submittal-revision-documents"],
+  ["submittals-dashboard"],
+  evidenceFamily("submittals-for-wps", projectId),
+  evidenceFamily("field-plan-submittals", projectId),
+  evidenceFamily("piece-relationships", projectId),
+  evidenceFamily("fab-release-canonical-gates", projectId),
+];
+
 const REGISTRY: Record<string, EntityRegistration> = {
 
   // ── Core entities ─────────────────────────────────────────────────────
@@ -57,6 +66,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   drawing: {
     primary:  (pid) => ["drawings", pid],
     families: (pid) => [
+      ...revisionReadinessFamilies(pid),
       evidenceFamily("constraints", pid),
       ["drawings", pid],
       ["drawings"],
@@ -80,6 +90,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   drawingSet: {
     primary:  (pid) => ["drawing-sets", pid],
     families: (pid) => [
+      ...revisionReadinessFamilies(pid),
       ["drawing-sets"],            // hub, FabRelease, CommandCenter (covers scoped + unscoped)
       ["drawing_sets"],            // Drawings, Submittals, RFIFormModal, upload modal
       ["drawing-register", pid],   // Doc Control register view (drawing_register_view)
@@ -441,6 +452,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   submittal: {
     primary:  (pid) => ["submittals", pid],
     families: (pid) => [
+      ...revisionReadinessFamilies(pid),
       evidenceFamily("constraints", pid),
       ["submittals", pid],
       ["submittals"],
@@ -453,6 +465,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   submittal_round: {
     primary:  (pid) => ["submittal-rounds", pid],
     families: (pid) => [
+      ...revisionReadinessFamilies(pid),
       ["submittal-rounds", pid],
       ["submittal-rounds"],
     ],
@@ -513,6 +526,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   drawing_revision: {
     primary:  (pid) => ["drawing-revisions", pid],
     families: (pid) => [
+      ...revisionReadinessFamilies(pid),
       ["drawing-revisions", pid],
       ["drawing-revisions"],
       ["drawings", pid],

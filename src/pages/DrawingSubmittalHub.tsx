@@ -725,7 +725,8 @@ function DetailingControlCenter() {
   const updateOwnerMut = useMutation({
     mutationFn: async ({ item, owner }: { item: TriageItem; owner: string }) => {
       if (item._submittalId) {
-        await entities.Submittal.update(item._submittalId, { ball_in_court: owner });
+        const reviewed = submittals.find(row => row.id === item._submittalId);
+        await entities.Submittal.update(item._submittalId, { ball_in_court: owner }, { submittalReview: reviewed });
       } else if (item._ownerScope === "First sheet owner" && item._firstSheetId) {
         // `drawings` has no assigned_to (nor ball_in_court) column — only
         // `reviewer`. The `as any` here was hiding a guaranteed PGRST204: this

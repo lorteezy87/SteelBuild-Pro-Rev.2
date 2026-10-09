@@ -1,5 +1,11 @@
 # Atomic billing events and production backup boundary
 
+Current hosted state (October 9, 13:09 UTC): the exact migration below is applied
+and stamped in staging and production, with matching payload and function hashes.
+Installed staging acceptance passed all 20 checks and left no synthetic fixture
+rows. See `PRODUCTION_RELEASE_2026-10-08.md`. The matching Edge handler is not yet
+deployed; payment readiness remains incomplete for the reasons below.
+
 This ports only the committed billing/backup changes from `1fc3078f1af7ef79524654d3640ab7015da465f2`. The `stripe-billing` entrypoint and mapping module, migration, backup script/workflow and original focused tests preserve that source. Account deletion is a separately reviewed release. No uncommitted security-worktree files are included.
 
 ## Result and deployment order
@@ -20,7 +26,7 @@ The storage backup workflow admits scheduled/manual runs from `main` only. The s
 
 ## Monetization blockers still open
 
-**This is not complete payment readiness.** `node supabase/tests/stripe-billing/diagnose-checkout.mjs` reproduces two unresolved behaviors using the actual entrypoint with synthetic boundaries:
+**This slice alone is not complete payment readiness.** The original `diagnose-checkout.mjs` at PR #513 reproduced two behaviors using the actual entrypoint with synthetic boundaries. Its executable replacement is the durable checkout regression suite described in `DURABLE_CHECKOUT_RELEASE_2026-10-09.md`:
 
 1. Two requests from an already-paid workspace create two new subscription Checkout Sessions, without an idempotency key or an existing-subscription gate.
 2. Concurrent requests without a bound customer create two customers and two sessions even when both workspace customer-binding writes return errors.

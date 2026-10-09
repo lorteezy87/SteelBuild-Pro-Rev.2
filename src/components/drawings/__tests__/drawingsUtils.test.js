@@ -7,6 +7,7 @@ import {
   filterDrawingsBySet,
 } from "../drawingsUtils";
 import { buildTriage } from "@/pages/drawingSubmittalHub/format";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 
 const PAST = "2020-01-01";
 const FUTURE = "2999-01-01";
@@ -86,7 +87,7 @@ describe("computeStatsFromSubmittals overdue authority", () => {
     const stats = computeStatsFromSubmittals(
       [{ id: "d-1", drawing_set_id: "set-1", due_date: PAST, stage: "OFA" }],
       drawingSets,
-      [{ id: "sub-1", submittal_type: "Shop Drawing", drawing_set_ids: ["set-1"], status: "Released for Fabrication", required_date: PAST }],
+      [{ id: "sub-1", submittal_type: "Shop Drawing", drawing_set_ids: ["set-1"], status: "Released for Fabrication", required_date: PAST, ...verifiedSubmittalEvidence('sub-1') }],
     );
     expect(stats.overdue).toBe(0);
   });

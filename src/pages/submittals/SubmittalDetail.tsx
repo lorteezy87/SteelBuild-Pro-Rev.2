@@ -44,6 +44,7 @@ import {
 import { LinkedDrawingSets } from "./LinkedDrawingSets";
 import { SubmittalDrawingTypeComponents } from "./SubmittalDrawingTypeComponents";
 import type { DrawingSet, Submittal, SubmittalRoundRecord } from "./types";
+import SubmittalRevisionEvidence from './SubmittalRevisionEvidence';
 
 type GenericProps = Record<string, unknown>;
 
@@ -364,6 +365,8 @@ export function SubmittalDetail({
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 20px" }}>
+        {submittal.id && submittal.submittal_type === 'Shop Drawing' && <SubmittalRevisionEvidence submittal={{ ...submittal, id: submittal.id }} />}
+        {!submittal.submittal_type && <p role="status">This legacy record has no submittal type and cannot govern drawing approval.{submittal.status === 'Draft' && !submittal.current_round_id ? ' Choose a type explicitly before submitting this Draft.' : ' Create a new Shop Drawing package for a new drawing review.'}</p>}
         <SubmittalReviewStrip
           submittal={submittal}
           allSubmittals={allSubmittals}
@@ -555,14 +558,18 @@ export function SubmittalDetail({
 
         <DetailSection title="Details">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <EditableMeta
+            {submittal.status !== 'Draft' || submittal.current_round_id ? (
+              <DetailSection title="Type">
+                <span title="Type is fixed after a review round begins. Create a new package for a different classification.">{submittal.submittal_type || 'Unclassified'}</span>
+              </DetailSection>
+            ) : <EditableMeta
               label="Type"
               kind="select"
               value={submittal.submittal_type}
               choices={TYPES}
               allowClear
               onCommit={(value) => patch("submittal_type", value)}
-            />
+            />}
             <EditableMeta
               label="Discipline"
               value={submittal.discipline}

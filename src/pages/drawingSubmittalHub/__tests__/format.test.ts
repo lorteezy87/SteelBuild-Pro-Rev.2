@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import {
   CLOSED_SUBMITTAL_STATUSES,
   buildCurrentRevisionIdMap,
@@ -126,8 +127,12 @@ describe("isClosedPackage (the layer the reported bug lives in)", () => {
   });
 
   it("closes a package whose latest submittal is Released for Fabrication or Void", () => {
-    expect(isClosedPackage(pkg({ submittals: [{ status: "Released for Fabrication", round_number: 1 }] }))).toBe(true);
+    expect(isClosedPackage(pkg({ submittals: [{ id: 'released-sub', status: "Released for Fabrication", round_number: 1, ...verifiedSubmittalEvidence('released-sub') }] }))).toBe(true);
     expect(isClosedPackage(pkg({ submittals: [{ status: "Void", round_number: 1 }] }))).toBe(true);
+  });
+
+  it("keeps a status-only fabrication release open without exact revision evidence", () => {
+    expect(isClosedPackage(pkg({ submittals: [{ id: 'released-sub', status: 'Released for Fabrication', round_number: 1 }] }))).toBe(false);
   });
 
   it("does not close an in-flight (Submitted) submittal package", () => {
@@ -192,9 +197,8 @@ describe("isClosedPackage (the layer the reported bug lives in)", () => {
     ).toBe(false);
   });
 
-  it("keeps a MANUALLY-released package (detailing_state) closed even with a mid-flow submittal", () => {
-    // Manual release stays authoritative via the detailing_state signal — must
-    // not regress when the deprecated columns are gated.
+  it("keeps a manually marked release open while the submittal is still mid-flow", () => {
+    // Manual state is workflow context; it cannot prove fabrication release.
     expect(
       isClosedPackage(
         pkg({
@@ -202,7 +206,7 @@ describe("isClosedPackage (the layer the reported bug lives in)", () => {
           submittals: [{ status: "Approved", round_number: 1, ball_in_court: "EOR" }],
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("closes when every sheet is individually released", () => {

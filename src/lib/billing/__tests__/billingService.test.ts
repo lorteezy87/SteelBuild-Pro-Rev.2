@@ -1,11 +1,74 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const invokeMock = vi.fn();
+const countQuery = vi.hoisted(() => ({ from: vi.fn(), select: vi.fn(), eq: vi.fn(), or: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
-  supabase: { functions: { invoke: (...args: unknown[]) => invokeMock(...args) } },
+  supabase: { functions: { invoke: (...args: unknown[]) => invokeMock(...args) }, from: countQuery.from },
 }));
 
-import { startCheckout, openBillingPortal } from "../billingService";
+import { startCheckout, openBillingPortal, getWorkspaceProjectCount, getWorkspaceMemberCount, getWorkspacePendingInvitationCount } from "../billingService";
+
+describe.each([
+  { name: 'members', table: 'organization_members', read: getWorkspaceMemberCount, pending: false },
+  { name: 'invitations', table: 'organization_invitations', read: getWorkspacePendingInvitationCount, pending: true },
+])('exact workspace $name usage', ({ table, read, pending }) => {
+  beforeEach(() => {
+    Object.values(countQuery).forEach(mock => mock.mockReset());
+    countQuery.from.mockReturnValue(countQuery); countQuery.select.mockReturnValue(countQuery);
+  });
+  function response(count: number | null, error: Error | null = null) {
+    if (pending) countQuery.eq.mockReturnValueOnce(countQuery);
+    countQuery.eq.mockResolvedValueOnce({ count, error });
+  }
+  it('counts beyond the page cap without fetching profiles or bearer tokens', async () => {
+    response(2001);
+    await expect(read('org-a')).resolves.toBe(2001);
+    expect(countQuery.from).toHaveBeenCalledExactlyOnceWith(table);
+    expect(countQuery.select).toHaveBeenCalledExactlyOnceWith('id', { head: true, count: 'exact' });
+    expect(countQuery.eq).toHaveBeenNthCalledWith(1, 'org_id', 'org-a');
+    if (pending) expect(countQuery.eq).toHaveBeenNthCalledWith(2, 'status', 'pending');
+    expect(countQuery.eq).toHaveBeenCalledTimes(pending ? 2 : 1);
+  });
+  it('requires a workspace before requesting usage', async () => {
+    await expect(read('')).rejects.toThrow('Select a workspace'); expect(countQuery.from).not.toHaveBeenCalled();
+  });
+  it.each([null, -1, 1.5])('rejects unavailable or invalid count %s', async count => {
+    response(count); await expect(read('org-a')).rejects.toThrow('unavailable');
+  });
+  it('preserves a confirmed zero', async () => {
+    response(0); await expect(read('org-a')).resolves.toBe(0);
+  });
+  it('propagates a failed count read', async () => {
+    response(null, new Error('count failed')); await expect(read('org-a')).rejects.toThrow('count failed');
+  });
+});
+
+describe("workspace project count", () => {
+  beforeEach(() => {
+    Object.values(countQuery).forEach(mock => mock.mockReset());
+    countQuery.from.mockReturnValue(countQuery); countQuery.select.mockReturnValue(countQuery); countQuery.eq.mockReturnValue(countQuery);
+  });
+  it("requests an exact head count for one org including legacy nondeleted nulls", async () => {
+    countQuery.or.mockResolvedValue({ count: 2001, error: null });
+    await expect(getWorkspaceProjectCount("org-a")).resolves.toBe(2001);
+    expect(countQuery.from).toHaveBeenCalledExactlyOnceWith("projects");
+    expect(countQuery.select).toHaveBeenCalledWith("id", { head: true, count: "exact" });
+    expect(countQuery.eq).toHaveBeenCalledExactlyOnceWith("org_id", "org-a");
+    expect(countQuery.or).toHaveBeenCalledWith("is_deleted.is.null,is_deleted.eq.false");
+  });
+  it("does not query without a workspace", async () => {
+    await expect(getWorkspaceProjectCount("")).rejects.toThrow("Select a workspace"); expect(countQuery.from).not.toHaveBeenCalled();
+  });
+  it.each([null, undefined, -1, 1.5, NaN])("does not turn a missing or invalid count into zero: %s", async (count) => {
+    countQuery.or.mockResolvedValue({ count, error: null });
+    await expect(getWorkspaceProjectCount("org-a")).rejects.toThrow("unavailable");
+  });
+  it("preserves zero when confirmed and propagates read failures", async () => {
+    countQuery.or.mockResolvedValueOnce({ count: 0, error: null }).mockResolvedValueOnce({ count: null, error: new Error("denied") });
+    await expect(getWorkspaceProjectCount("org-a")).resolves.toBe(0);
+    await expect(getWorkspaceProjectCount("org-a")).rejects.toThrow("denied");
+  });
+});
 
 describe("billingService", () => {
   beforeEach(() => invokeMock.mockReset());

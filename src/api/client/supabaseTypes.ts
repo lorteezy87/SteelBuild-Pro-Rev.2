@@ -9,6 +9,8 @@
 import type { Database } from '@/types/supabase';
 import type { UploadWorkflow } from '@/lib/uploadValidation';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { RevisionCoverageSummary } from '@/lib/submittalRevisionEvidence';
+import type { SubmittalReview } from './submittalWorkflow';
 
 // ─── Type helpers (DB row shapes) ─────────────────────────────────────────────
 
@@ -27,7 +29,7 @@ export type Update<T extends TableName> = Tables[T]['Update'];
 export type RowWithAliases<T extends TableName> = Row<T> & {
   created_date?: string | null;
   updated_date?: string | null;
-};
+} & (T extends 'submittals' ? { revision_coverage?: RevisionCoverageSummary | null } : {});
 
 export type Conditions = Record<string, unknown>;
 
@@ -40,6 +42,8 @@ export type EntityRequestOptions = {
   changeOrderReview?: { updatedAt: string | null; status: string; amount: number | null };
   /** Original SOV revision shown to the editor, including microsecond precision. */
   sovItemReview?: { updatedAt: string | null };
+  /** Original submittal version shown to the person making this workflow decision. */
+  submittalReview?: SubmittalReview;
 };
 
 export type EntityClient<T extends TableName> = {

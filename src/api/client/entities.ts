@@ -28,6 +28,7 @@ import {
 import { createEntityClient } from './entityClient';
 import { withChangeOrderLifecycle } from './changeOrderLifecycle';
 import { withReviewedSovSaves } from './sovLifecycle';
+import { withSubmittalLifecycle } from './submittalLifecycle';
 import { createNumberedRecord } from './numberedCreate';
 import type { NumberedKind } from './numberedCreate';
 import type { EntityRequestOptions, Insert, RowWithAliases, Update } from './supabaseTypes';
@@ -334,7 +335,7 @@ export const entities = {
   // without one still gets weekend-aware scheduling.
   ProjectCalendar:       createEntityClient('project_calendars'),
   ScheduleBaselineTask:  createEntityClient('schedule_baseline_tasks'),
-  Submittal:             createEntityClient('submittals'),
+  Submittal:             withSubmittalLifecycle(createEntityClient('submittals')),
   SubmittalRound:        createEntityClient('submittal_rounds'),
   // Phase 4 submittal-logic: per-drawing-type (Shop/Erection/Part) received +
   // released tracking, gated by the `submittal_drawing_types` flag at the UI.

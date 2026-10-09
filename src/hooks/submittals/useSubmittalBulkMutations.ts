@@ -11,11 +11,12 @@ import type {
 
 type BulkMutationContext = Pick<
   SubmittalMutationContext,
-  "invalidateAll"
+  "invalidateAll" | "submittals"
 >;
 
 export function useSubmittalBulkMutations({
   invalidateAll,
+  submittals,
 }: BulkMutationContext) {
   const bulkUpdate = useMutation<BulkResult, Error, BulkUpdateVars>({
     mutationFn: async ({ ids, patch }) => {
@@ -25,6 +26,7 @@ export function useSubmittalBulkMutations({
           await entities.Submittal.update(
             id,
             patch as Update<"submittals">,
+            { submittalReview: submittals.find(row => row.id === id) },
           );
           results.succeeded++;
         } catch (error: unknown) {

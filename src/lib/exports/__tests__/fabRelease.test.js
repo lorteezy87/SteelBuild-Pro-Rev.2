@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import {
   isApprovedForFab,
   isApprovedForTurnover,
@@ -84,6 +85,7 @@ describe("isApprovedForFab (Slice 8 IFC/Released)", () => {
           submittals: [
             {
               id: "s1",
+              ...verifiedSubmittalEvidence('s1'),
               submittal_type: "Shop Drawing",
               status: "Approved",
               ball_in_court: "GC",
@@ -97,7 +99,7 @@ describe("isApprovedForFab (Slice 8 IFC/Released)", () => {
 
   it("rejects Product Data approval and timestamp-deleted drawings or sets", () => {
     const evidence = {
-      submittals: [{ id: "s1", submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] }],
+      submittals: [{ id: "s1", ...verifiedSubmittalEvidence('s1'), submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] }],
       drawingSets: [{ id: "set-1" }],
     };
     expect(isApprovedForFab(released, evidence)).toBe(true);

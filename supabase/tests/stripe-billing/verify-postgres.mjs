@@ -25,6 +25,8 @@ const org = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
 const update = { plan: 'pro', subscription_status: 'active', stripe_subscription_id: 'sub_current', stripe_customer_id: 'cus_test', current_period_end: null };
 let passed = 0;
+let checkoutReady = false;
+const checkoutActor = '10000000-0000-4000-8000-000000000010';
 const scalar = async (sql, args = []) => (await admin.query(sql, args)).rows[0]?.result;
 const snapshot = (id = org) => scalar('select public.get_stripe_billing_snapshot($1) result', [id]);
 const apply = (overrides = {}) => {
@@ -35,6 +37,10 @@ const apply = (overrides = {}) => {
 async function check(name, run) {
   await admin.query('truncate organizations, billing_events, private.stripe_billing_sync_state cascade');
   await admin.query("insert into organizations(id,plan,stripe_customer_id,stripe_subscription_id,subscription_status) values($1,'business','cus_test','sub_current','active'),($2,'business','cus_test','sub_current','active')", [org, other]);
+  if (checkoutReady) {
+    await admin.query("update organizations set plan='free',stripe_customer_id=null,stripe_subscription_id=null,subscription_status=null");
+    await admin.query("insert into organization_members values($1,$2,'owner')", [org,checkoutActor]);
+  }
   await run();
   passed++;
   console.log(`PASS ${name}`);
@@ -211,5 +217,91 @@ try {
       assert.equal(await scalar('select count(*)::int result from billing_events where org_id is null'), 1);
     } finally { await first.client.query('rollback'); first.client.release(); if (pending) await pending; else eraser.release(); }
   });
-  console.log(`${passed} concurrent PostgreSQL billing checks passed.`);
+  await admin.query('create table organization_members(org_id uuid references organizations(id) on delete cascade,user_id uuid,role text,primary key(org_id,user_id))');
+  await admin.query(await readFile(new URL('../../migrations/20261009125901_durable_workspace_checkout_intents.sql', import.meta.url), 'utf8'));
+  checkoutReady = true;
+  const reserve = (plan = 'pro') => ({ text:'select public.begin_billing_checkout($1,$2,$3,$4,false,$5) result', values:[org,checkoutActor,plan,`price_${plan}`,'https://www.steelbuild-pro.com'] });
+  const bindCustomer = operation => ({ text:'select public.bind_billing_checkout_customer($1,$2,$3,$4) result', values:[org,checkoutActor,operation,'cus_checkout'] });
+  await check('eight independent checkout requests reserve exactly one operation', async () => {
+    const results = await contend(orgLock,[org],Array.from({length:8},()=>reserve()));
+    assert.ok(results.every(r=>r.status==='fulfilled' && r.value.decision==='intent'));
+    assert.equal(new Set(results.map(r=>r.value.intent.operation_id)).size,1);
+    assert.equal(await scalar('select count(*)::int result from private.billing_checkout_intents'),1);
+  });
+  await check('different plans cannot allocate simultaneous checkout operations', async () => {
+    const results = await contend(orgLock,[org],[reserve('pro'),reserve('business')]);
+    assert.ok(results.every(r=>r.status==='fulfilled'));
+    assert.equal(new Set(results.map(r=>r.value.intent.operation_id)).size,1);
+    assert.equal(new Set(results.map(r=>r.value.intent.plan)).size,1);
+  });
+  await check('simultaneous same-key provider results confirm one customer binding', async () => {
+    const operation = (await execute(reserve())).intent.operation_id;
+    const results = await contend(orgLock,[org],Array.from({length:8},()=>bindCustomer(operation)));
+    assert.ok(results.every(r=>r.status==='fulfilled'));
+    assert.equal(await scalar('select stripe_customer_id result from organizations where id=$1',[org]),'cus_checkout');
+    assert.equal(await scalar('select customer_id result from private.billing_checkout_intents'),'cus_checkout');
+  });
+  await check('a competing different provider session cannot replace the confirmed payable session', async () => {
+    const operation = (await execute(reserve())).intent.operation_id;
+    await execute(bindCustomer(operation));
+    const queries = ['cs_one','cs_two'].map(id=>({ text:'select public.record_billing_checkout_session($1,$2,$3,$4,$5,$6,$7) result',
+      values:[org,checkoutActor,operation,'cus_checkout',id,`https://checkout.stripe.com/c/pay/${id}`,new Date(Date.now()+3600000).toISOString()] }));
+    const results = await contend(orgLock,[org],queries);
+    assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+    assert.equal(results.filter(r=>r.status==='rejected' && r.reason.code==='22023').length,1);
+    assert.equal(await scalar("select count(*)::int result from private.billing_checkout_intents where state='open'"),1);
+  });
+  await check('membership removal while checkout waits denies every provider-binding callback', async () => {
+    const operation = (await execute(reserve())).intent.operation_id;
+    await admin.query('begin');
+    await admin.query(orgLock,[org]);
+    const waiting = await session();
+    const pending = Promise.allSettled([finish(waiting.client,bindCustomer(operation))]);
+    try {
+      await waitForLock([waiting.pid]);
+      await admin.query('delete from organization_members where org_id=$1',[org]);
+      await admin.query('commit');
+      const [result] = await pending;
+      assert.equal(result.status,'rejected'); assert.equal(result.reason.code,'42501');
+      assert.equal(await scalar('select stripe_customer_id result from organizations where id=$1',[org]),null);
+    } finally { await admin.query('rollback'); await pending; }
+  });
+  await check('erasure while checkout waits removes the intent and refuses resurrection', async () => {
+    const operation = (await execute(reserve())).intent.operation_id;
+    await admin.query('begin');
+    await admin.query(orgLock,[org]);
+    const waiting = await session();
+    const pending = Promise.allSettled([finish(waiting.client,bindCustomer(operation))]);
+    try {
+      await waitForLock([waiting.pid]);
+      await admin.query('delete from organizations where id=$1',[org]);
+      await admin.query('commit');
+      const [result] = await pending;
+      assert.equal(result.status,'rejected'); assert.equal(result.reason.code,'P0002');
+      assert.equal(await scalar('select count(*)::int result from private.billing_checkout_intents'),0);
+    } finally { await admin.query('rollback'); await pending; }
+  });
+  await check('customer rebinding while expiry waits cannot renew the old reservation', async () => {
+    const operation = (await execute(reserve())).intent.operation_id;
+    await execute(bindCustomer(operation));
+    const future = new Date(Date.now()+3600000).toISOString();
+    await execute({ text:'select public.record_billing_checkout_session($1,$2,$3,$4,$5,$6,$7) result',
+      values:[org,checkoutActor,operation,'cus_checkout','cs_expiry','https://checkout.stripe.com/c/pay/expiry',future] });
+    const expired = new Date(Date.now()-10000).toISOString();
+    await admin.query('update private.billing_checkout_intents set session_expires_at=$1',[expired]);
+    await admin.query('begin');
+    await admin.query(orgLock,[org]);
+    const waiting = await session();
+    const pending = Promise.allSettled([finish(waiting.client,{ text:'select public.expire_billing_checkout_intent($1,$2,$3,$4,$5) result',
+      values:[org,checkoutActor,operation,'cs_expiry',expired] })]);
+    try {
+      await waitForLock([waiting.pid]);
+      await admin.query("update organizations set stripe_customer_id='cus_changed' where id=$1",[org]);
+      await admin.query('commit');
+      const [result] = await pending;
+      assert.equal(result.status,'rejected'); assert.equal(result.reason.code,'40001');
+      assert.equal(await scalar('select state result from private.billing_checkout_intents'),'open');
+    } finally { await admin.query('rollback'); await pending; }
+  });
+  console.log(`${passed} concurrent PostgreSQL billing and checkout checks passed.`);
 } finally { admin.release(); await pool.end(); }

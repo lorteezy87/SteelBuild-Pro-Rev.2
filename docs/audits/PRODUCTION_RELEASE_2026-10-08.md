@@ -125,3 +125,120 @@ were modified by this release. Hosted browser review/save remains separate.
 
 The five Drawing Control migrations and the new exact-revision manifest still
 hold the frontend release. No frontend or Edge publication has occurred.
+
+## Atomic billing SQL — October 9, 13:09 UTC
+
+After PR #513 merged as `00cc7a70f3bb6eb1d5864f5f3f7358d03bac0aeb`, the
+exact `20261008071019_atomic_stripe_billing_events.sql` payload was applied and
+stamped on staging, then production. SHA-256:
+`3dfc1339eb999c33b5bad396d439958c8a6e6820071a612e33e686db9d5bbe44`.
+The apply refused existing stamps and checked the full payload hash inside the
+same transaction as the DDL and ledger insert. No customer entitlement changed.
+
+The installed staging implementation passed all 20 rollback acceptance checks;
+the subsequent read found zero synthetic users, workspaces or billing receipts.
+Both environments have identical function-definition hashes:
+
+- `apply_stripe_billing_event`: MD5 `6eab633a3ea6894831e03c7b199ee2a5`.
+- `get_stripe_billing_snapshot`: MD5 `2f17457721ddacc9b4f211cd058c1cb0`.
+
+Both functions are SECURITY DEFINER with empty search paths and service-role-only
+execution. The private synchronization table has RLS and no direct SELECT grants
+for anonymous, authenticated or service roles. Exact source CI run `37933404737`
+passed application, secret, Edge and commercial PostgreSQL gates. Drift remains
+blocked by other pending required SQL; the Tailwind build dependency advisory is
+separate. The matching billing handler has not been deployed. Durable checkout
+and real Stripe test-mode acceptance remain open; this SQL alone does not prevent
+duplicate subscription charges.
+
+### Temporary frontend publication hold
+
+On October 9, the repository variable `CLOUDFLARE_ENABLED` was changed from
+`true` to `false` while the combined source and database release is integrated.
+This preserves the current live Worker and prevents an intervening green main
+push from publishing before its reviewed Edge dependencies and staging browser
+acceptance are ready. Staging remains enabled. Restore this exact variable to
+`true` after those checks, then publish the tested main commit through the normal
+five-gate workflow; leaving the hold set is not a completed production update.
+
+## Installed staging membership and revision evidence — October 9
+
+Staging received the exact reviewed membership and final round-manifest SQL
+in one transaction. The apply checked the five existing Drawing Control ledger
+hashes, refused duplicate stamps and verified each original source payload.
+
+| Version | Staging ledger SHA-256 |
+| --- | --- |
+| `20261008032524` | `281a52c5d64136f81cf30e37240990f575eb2cea920398511d7e08b524984dbf` |
+| `20261009070300` | `b4b77581e51a0c61ee63d47fa34d1010a123bb1759bee6889e0ca0ec719b0ea7` |
+
+The installed membership suite passed 53 checks, including actual archive and
+hard-erasure RPCs. The installed revision suite passed 31 checks covering source
+capture, replay, PM/MFA/workspace guards, legacy reconciliation, stale/replaced
+Storage sources, corrective transitions and erasure. Its pre-migration legacy
+fixture is constructed inside the rollback transaction with only the new
+submittal workflow guard temporarily disabled under its transactional DDL lock;
+the guard is restored before any assertion. Storage edits are scoped to the
+synthetic app-files object and evidence comparisons to the synthetic project.
+
+A separate verification found the guard enabled, matching ledger payloads,
+14 recorded function definitions/grant sets and zero synthetic users, workspaces,
+projects, project grants, Storage objects, workflow receipts or erasure receipts.
+No PDF bytes or customer rows were changed. These two migrations are still
+pending production application, as are the five Drawing Control prerequisites.
+Authenticated browser acceptance remains separate.
+
+## Installed staging checkout and project capacity — October 9, 13:41–13:43 UTC
+
+Both exact reviewed candidates were manually applied and stamped on staging
+`ndyfjffsulfbwpmwdmic`; neither is installed in production. Checkout source
+`2907a5a47` and capacity source `33c205f8b` passed their application, secret,
+Edge and commercial PostgreSQL jobs. The combined integration remains subject
+to its own complete checks and browser acceptance.
+
+| Version | Staging ledger SHA-256 | Installed rollback checks |
+| --- | --- | --- |
+| `20261009125901` | `ba0d72e62e8df02777f53d653593d7d9f41811798e0cfb0d551e367ce034eebb` | 20 |
+| `20261009140000` | `b22297e7d1c6fd1f3e2f5ae1af080695a28404cf450c563085a73754743f0311` | 18 |
+
+Each apply refused existing candidates, verified its prerequisite payload and
+source hash, and stamped the full original SQL in the same bounded transaction.
+The capacity apply also required the observed original `create_project`
+definition (MD5 `b933684ffdb42e8d4e28a3c013897556`) before replacing it.
+Separate verification found zero synthetic users, organizations, projects,
+project grants, checkout intents, billing receipts or erasure receipts.
+
+The four checkout RPCs remain service-only with empty search paths; the private
+intent table has RLS and no direct SELECT grants for anon, authenticated or
+service roles. The capacity trigger is enabled. `create_project` remains
+authenticated-only; the trigger helper has no caller EXECUTE grants. Installed
+definition hashes are retained with the local release evidence. The capacity
+rule preserves current Free/Pro/Business/Enterprise limits and ordinary edits
+after downgrade; it adds no new paid-module restrictions. Provider test-mode
+delivery, historical subscription reconciliation and Edge deployment remain open.
+
+### Legacy submittal type and browser fixture limits
+
+Read-only staging inspection found that the original STG-0001 erection submittal
+has a NULL type, no current round and no revision roster. The canonical governing
+submittal predicate and installed SQL require exact `Shop Drawing`; the legacy
+record cannot authorize fabrication release. It must not be silently retyped or
+treated as verified approval. Client defaults and acceptance fixtures are being
+aligned to this strict contract. A separately identified synthetic Draft can
+test missing-evidence behavior, but does not establish verified or stale PDF
+acceptance. Existing customer and legacy fixture rows remain unchanged.
+
+On October 9 at 14:01 UTC, the separately named synthetic Draft fixture was
+installed on staging after the exact prepared script passed a rollback rehearsal.
+Source: `aa4e1b3069044cb591ccecae35d715a6b0950bfa`, file
+`supabase/tests/drawing-evidence-browser/draft-fixture.sql`, SHA-256
+`a2006e2133c3e9a65e5633b3e8d0bdeb0c5328d1c20d81caf5b8806d17baf9cb`.
+The script locked and compared every existing STG-0001 set, sheet and submittal,
+plus its project and organization, before committing; none changed. Readback
+confirmed one new `SYNTHETIC - Revision Evidence Draft` set, one blank sheet and
+one exact-type `Shop Drawing` Draft, with reciprocal links and zero review
+rounds, revisions, signoffs or evidence. Source files and submission/approval
+dates remain NULL. This is retained test data, not a migration or a ledger stamp.
+The original untyped approval remains unchanged. Four protected desktop/mobile
+browser cases target this Draft and the legacy exclusion; authenticated execution
+and separate real-PDF approval/staleness acceptance remain pending.

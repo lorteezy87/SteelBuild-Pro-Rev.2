@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useRef, type ReactNode } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
@@ -10,6 +10,11 @@ import { passwordResetRedirect } from '@/lib/authRedirects';
 import { ACTIVE_PROJECT_ID_KEY, PROJECTS_CACHE_KEY } from '@/lib/projectSelection';
 import { setActiveOrgId } from '@/lib/activeOrg';
 import { isNativePlatform } from '@/lib/native/platform';
+import {
+  getPasswordRecoveryHold, subscribePasswordRecovery, capturePasswordRecovery,
+  recoveryAppliesTo, markRecoveryPasswordUpdated, clearPasswordRecoveryAfterSignOut, refreshPasswordRecovery,
+  type PasswordRecoveryPhase,
+} from '@/lib/passwordRecovery';
 
 // Clear every trace of the previous user's tenant data from the browser so it
 // can never render for the next user on a shared device (M38): the React Query
@@ -79,6 +84,8 @@ export type AuthContextValue = {
   }) => Promise<SignUpResult>;
   // H22 — self-serve credential recovery/rotation.
   isPasswordRecovery: boolean;
+  passwordRecoveryPhase: PasswordRecoveryPhase | null;
+  finishPasswordRecovery: () => Promise<{ success: boolean; error?: string }>;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   // H23 — TOTP multi-factor auth. `mfaRequired` gates the app when the session
@@ -110,6 +117,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
   const signOutInFlightRef = useRef(false);
+  const signOutAttemptRef = useRef<{
+    userId: string | null;
+    accessToken: string | null;
+    recoveryId: string | null;
+  } | null>(null);
   // Kept for API compatibility with components that read this flag
   const [isLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
@@ -119,7 +131,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // the emailed reset link). AuthenticatedApp renders the set-new-password screen
   // instead of the normal app so the recovery session is used only to set a new
   // password, then cleared. (H22)
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const recoveryHold = useSyncExternalStore(subscribePasswordRecovery, getPasswordRecoveryHold, (): null => null);
+  const isPasswordRecovery = recoveryAppliesTo(recoveryHold, user?.id ?? null);
+  const passwordRecoveryPhase = isPasswordRecovery ? recoveryHold?.phase ?? null : null;
   // True when the current session is aal1 but the user has a verified TOTP
   // factor (i.e. must complete an MFA challenge before entering the app). H23.
   const [mfaRequired, setMfaRequired] = useState(false);
@@ -224,6 +238,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // All ways of accepting a session share the same MFA barrier. Generation
   // checks prevent profile/MFA responses from a previous identity winning later.
   const publishSessionUser = async (sbUser: SupabaseUser, accessToken: string | null, allowBackground = false): Promise<void> => {
+    refreshPasswordRecovery();
     const generation = ++sessionGenerationRef.current;
     ++mfaGenerationRef.current;
     const preserveVerifiedSession = allowBackground &&
@@ -260,6 +275,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const generation = sessionGenerationRef.current;
       try {
         if (event === 'SIGNED_OUT') {
+          const attempt = signOutAttemptRef.current;
+          // An older SDK request can emit SIGNED_OUT after a new login or
+          // recovery has arrived. It may only release the session it captured.
+          if (attempt && (currentUserIdRef.current !== attempt.userId ||
+              currentSessionAccessTokenRef.current !== attempt.accessToken)) return;
+          const record = getPasswordRecoveryHold();
+          const recoveryId = attempt ? attempt.recoveryId :
+            record && recoveryAppliesTo(record, currentUserIdRef.current) ? record.id : null;
+          if (recoveryId) {
+            clearPasswordRecoveryAfterSignOut(recoveryId, currentUserIdRef.current);
+          }
           clearSessionUser();
           setAuthError({ type: 'auth_required', message: 'Authentication required' });
           return;
@@ -317,7 +343,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       // The emailed reset link establishes a recovery session and fires this
       // event; flag it so the app shows the set-new-password screen (H22).
-      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
+      if (event === 'PASSWORD_RECOVERY') capturePasswordRecovery(session);
       handleSession(session, event);
     });
 
@@ -438,10 +464,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Set a new password. Used both from the recovery screen (H22) and from
   // Settings → Profile for a signed-in user rotating their credential.
   const updatePassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    const updatingUserId = currentUserIdRef.current;
+    const updatingToken = currentSessionAccessTokenRef.current;
+    const record = getPasswordRecoveryHold();
+    const recovery = recoveryAppliesTo(record, updatingUserId) ? record : null;
+    if (recovery && (!updatingUserId || recovery.userId !== updatingUserId || recovery.phase !== 'password')) {
+      return { success: false, error: 'This recovery session is unavailable. Sign out and request a new reset link.' };
+    }
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      setIsPasswordRecovery(false);
+      if (recovery) {
+        if (currentUserIdRef.current !== updatingUserId || currentSessionAccessTokenRef.current !== updatingToken ||
+            getPasswordRecoveryHold()?.id !== recovery.id) {
+          return { success: false, error: 'Your session changed. Please try again.' };
+        }
+        if (!markRecoveryPasswordUpdated(recovery.id)) {
+          return { success: false, error: 'Your recovery state changed. Finish signing out and try again.' };
+        }
+      }
       return { success: true };
     } catch (error: unknown) {
       const err = error as { message?: string } | undefined;
@@ -512,31 +553,59 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const logout = async (): Promise<void> => {
-    if (signOutInFlightRef.current) return;
+  const signOutSession = async (): Promise<{ success: boolean; error?: string }> => {
+    if (signOutInFlightRef.current) return { success: false, error: 'Sign-out is already in progress.' };
     signOutInFlightRef.current = true;
     setIsSigningOut(true);
     const signingOutUserId = currentUserIdRef.current;
+    const signingOutToken = currentSessionAccessTokenRef.current;
+    const record = getPasswordRecoveryHold();
+    const recovery = recoveryAppliesTo(record, signingOutUserId) ? record : null;
+    signOutAttemptRef.current = {
+      userId: signingOutUserId,
+      accessToken: signingOutToken,
+      recoveryId: recovery?.id ?? null,
+    };
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       // The SDK clears its persisted session only after a successful sign-out.
       // Do not erase a different identity that arrived while this request ran.
-      if (currentUserIdRef.current === signingOutUserId) {
+      // SIGNED_OUT may already have cleared these refs during the SDK call.
+      if ((currentUserIdRef.current === signingOutUserId && currentSessionAccessTokenRef.current === signingOutToken) ||
+          (!currentUserIdRef.current && !currentSessionAccessTokenRef.current)) {
         clearSessionUser();
+        if (recovery && getPasswordRecoveryHold() && !clearPasswordRecoveryAfterSignOut(recovery.id, signingOutUserId)) {
+          throw new Error('Recovery state could not be cleared.');
+        }
+        if (getPasswordRecoveryHold() && getPasswordRecoveryHold()?.id !== recovery?.id) {
+          return { success: false, error: 'Your recovery session changed. Please finish signing out.' };
+        }
         setSignOutFailed(false);
+        return { success: true };
       }
+      return { success: false, error: 'Your session changed. Please try again.' };
     } catch {
       // Both returned and thrown failures leave the SDK session intact. Keep
       // the app and tenant data intact too, and show a retryable, honest state.
       // This message is generic: never expose server errors or session values.
-      if (signingOutUserId && currentUserIdRef.current === signingOutUserId) {
+      if (currentUserIdRef.current === signingOutUserId || (recovery && !currentUserIdRef.current)) {
         setSignOutFailed(true);
       }
+      return { success: false, error: 'Sign-out did not complete. Please try again.' };
     } finally {
+      signOutAttemptRef.current = null;
       signOutInFlightRef.current = false;
       setIsSigningOut(false);
     }
+  };
+
+  const logout = async (): Promise<void> => { await signOutSession(); };
+  const finishPasswordRecovery = async (): Promise<{ success: boolean; error?: string }> => {
+    if (!recoveryAppliesTo(getPasswordRecoveryHold(), currentUserIdRef.current)) {
+      return { success: false, error: 'Your recovery session changed.' };
+    }
+    return signOutSession();
   };
 
   const retryMfaStatus = async (): Promise<void> => {
@@ -590,6 +659,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       loginWithPassword,
       signUpWithPassword,
       isPasswordRecovery,
+      passwordRecoveryPhase,
+      finishPasswordRecovery,
       sendPasswordReset,
       updatePassword,
       mfaRequired,
@@ -619,7 +690,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           }}
         >
           <p style={{ margin: '0 0 12px', lineHeight: 1.5 }}>
-            Sign-out did not complete. You are still signed in. Check your connection and try again.
+            Sign-out did not complete. {isAuthenticated ? 'You are still signed in. ' : ''}Check your connection and try again.
           </p>
           <button
             type="button"

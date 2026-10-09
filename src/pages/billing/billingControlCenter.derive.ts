@@ -24,11 +24,13 @@ export interface BillingSummaryInput {
   currentPeriodEnd: string | null | undefined;
   stripeCustomerId: string | null | undefined;
   /** Number of accepted workspace members (for seat-capacity KPI). */
-  memberCount: number;
+  memberCount: number | null;
   /** Number of pending (not-yet-accepted) workspace invites. */
-  pendingCount: number;
+  pendingCount: number | null;
+  seatCountIsWorkspaceTotal?: boolean;
   /** Number of active projects in the workspace. */
-  projectCount: number;
+  projectCount: number | null;
+  projectCountIsWorkspaceTotal?: boolean;
 }
 
 export interface BillingKpi {
@@ -54,9 +56,9 @@ export interface BillingSummary {
   isPastDue: boolean;
   /** Whether the org has a Stripe customer record. */
   hasStripeCustomer: boolean;
-  seats: SeatCapacity;
+  seats: SeatCapacity | null;
   projectLimit: number | null;
-  projectCount: number;
+  projectCount: number | null;
   projectsUnlimited: boolean;
   /** KPI cells, ready to pass to KpiStrip. */
   kpis: BillingKpi[];
@@ -129,7 +131,7 @@ export function buildBillingSummary(input: BillingSummaryInput): BillingSummary 
   const daysUntilRenewal =
     planKey !== "free" && planKey !== "enterprise" ? daysUntilDate(renewalDate) : null;
 
-  const seats = seatCapacity(
+  const seats = input.memberCount === null || input.pendingCount === null || input.seatCountIsWorkspaceTotal === false ? null : seatCapacity(
     input.memberCount,
     input.pendingCount,
     plan.limits.members,
@@ -175,7 +177,17 @@ export function buildBillingSummary(input: BillingSummaryInput): BillingSummary 
   })();
 
   // 4. Seat usage (members + pending vs limit)
-  const seatKpi: BillingKpi = {
+  const seatKpi: BillingKpi = input.seatCountIsWorkspaceTotal === false ? {
+    label: "Members",
+    value: input.memberCount === null ? "—" : String(input.memberCount),
+    sublabel: input.memberCount === null ? "member usage unavailable" : "pending invitations visible to admins",
+    tone: "neutral",
+  } : !seats ? {
+    label: "Seats Used",
+    value: "—",
+    sublabel: "seat usage unavailable",
+    tone: "neutral",
+  } : {
     label: "Seats Used",
     value: seats.unlimited ? `${seats.used}` : `${seats.used} / ${seats.limit}`,
     sublabel: seats.unlimited
@@ -189,7 +201,17 @@ export function buildBillingSummary(input: BillingSummaryInput): BillingSummary 
   };
 
   // 5. Project usage
-  const projectKpi: BillingKpi = {
+  const projectKpi: BillingKpi = input.projectCount === null ? {
+    label: input.projectCountIsWorkspaceTotal === false ? "Projects you can access" : "Projects",
+    value: "—",
+    sublabel: "project usage unavailable",
+    tone: "neutral",
+  } : input.projectCountIsWorkspaceTotal === false ? {
+    label: "Projects you can access",
+    value: String(input.projectCount),
+    sublabel: "workspace total may be higher",
+    tone: "neutral",
+  } : {
     label: "Projects",
     value: projectsUnlimited ? `${input.projectCount}` : `${input.projectCount} / ${projectLimit}`,
     sublabel: projectsUnlimited

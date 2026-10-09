@@ -29,6 +29,9 @@ vi.mock('@/hooks/useFeatureFlag', () => ({ useFlag: () => false }));
 vi.mock('@/lib/billing/billingService', () => ({
   startCheckout: vi.fn(),
   openBillingPortal: vi.fn(),
+  getWorkspaceProjectCount: vi.fn().mockResolvedValue(0),
+  getWorkspaceMemberCount: vi.fn().mockResolvedValue(1),
+  getWorkspacePendingInvitationCount: vi.fn().mockResolvedValue(0),
 }));
 
 import Billing from '@/pages/Billing.jsx';

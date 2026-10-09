@@ -7,9 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import type { WorkPackage } from "../types";
 import type WpControlCenter from "../WpControlCenter";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 
 const mocks = vi.hoisted(() => ({
   projectId: "project-1" as string | null,
+  orgGeneration: 0,
+  coverage: vi.fn(),
   projects: vi.fn(), packages: vi.fn(), drawings: vi.fn(), drawingSets: vi.fn(), submittals: vi.fn(), deliveries: vi.fn(), releases: vi.fn(), pieces: vi.fn(), pieceDrawingSets: vi.fn(), pieceDrawings: vi.fn(), update: vi.fn(), create: vi.fn(),
   lastStatusAction: null as null | (() => void),
   lastSave: null as null | ((data: Record<string, unknown>) => void),
@@ -23,7 +26,8 @@ vi.mock("@/api/supabaseClient", () => ({ entities: {
   Drawing: { list: mocks.drawings },
   Delivery: { filterAll: mocks.deliveries },
 } }));
-vi.mock("@/lib/supabase", () => ({ supabase: {} }));
+vi.mock("@/lib/supabase", () => ({ supabase: { rpc: mocks.coverage } }));
+vi.mock("@/lib/activeOrg", () => ({ getActiveOrgGeneration: () => mocks.orgGeneration, getActiveOrgId: () => 'org-1' }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/pieceControl/pagedSelect", () => ({
   fetchAllProjectRowsPaged: (_client: unknown, table: string, projectId: string, options: unknown) => {
@@ -83,7 +87,7 @@ const project = { id: "project-1", name: "Steel job", piece_control_mode: "live"
 const packageRow = { id: "wp-1", project_id: project.id, wp_number: "WP-001", name: "North frame", phase: "Detailing", status: "Not Started", linked_drawing_ids: ["drawing-1"] };
 const drawing = { id: "drawing-1", project_id: project.id, drawing_set_id: "set-1", stage: "IFC" };
 const drawingSet = { id: "set-1", project_id: project.id };
-const shopSubmittal = { id: "shop-1", project_id: project.id, submittal_type: "Shop Drawing", drawing_set_ids: [drawingSet.id], status: "Released for Fabrication" };
+const shopSubmittal = { id: "shop-1", project_id: project.id, submittal_type: "Shop Drawing", drawing_set_ids: [drawingSet.id], status: "Released for Fabrication", current_round_id: 'review-round', updated_at: '2026-10-09T00:00:00.123456Z' };
 const piece = { id: "piece-1", work_package_id: packageRow.id, lifecycle_status: "fabricated" };
 const pieceDrawingSet = { project_id: project.id, piece_id: piece.id, drawing_set_id: drawingSet.id };
 const sources = ["packages", "projects", "drawings", "drawingSets", "submittals", "deliveries", "releases", "pieces", "pieceDrawingSets", "pieceDrawings"] as const;
@@ -120,11 +124,20 @@ function mockProjectTwoEvidence() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.projectId = project.id;
+  mocks.orgGeneration = 0;
   mocks.lastStatusAction = null;
   mocks.lastSave = null;
   mocks.lastBulkSave = null;
   mocks.formPieceDriven = undefined;
   sources.forEach(source => mocks[source].mockReset().mockResolvedValue(rows[source]));
+  mocks.coverage.mockReset().mockImplementation(async (_name: string, args: { p_submittal_ids: string[] }) => {
+    const submittals = await mocks.submittals.mock.results.at(-1)?.value as Array<Record<string, unknown>>;
+    return { data: args.p_submittal_ids.map(id => {
+      const row = submittals.find(candidate => candidate.id === id)!;
+      return { ...verifiedSubmittalEvidence(id).revision_coverage, submittal_status: row.status,
+        submittal_updated_at: row.updated_at, round_id: row.current_round_id ?? null, evidence: [] as unknown[] };
+    }), error: null };
+  });
   mocks.update.mockResolvedValue({ ...packageRow, status: "Complete" });
   mocks.create.mockResolvedValue({ ...packageRow, id: "created-wp" });
 });
@@ -243,6 +256,47 @@ describe("Work Packages evidence boundary", () => {
     await waitFor(() => expect(mocks.update).toHaveBeenCalledWith("wp-1", { status: "Complete" }));
   });
 
+  it("waits for revision coverage before presenting clear drawings or transitions", async () => {
+    mocks.coverage.mockReturnValue(new Promise(() => {}));
+    renderPage();
+    await waitFor(() => expect(mocks.coverage).toHaveBeenCalledWith('get_submittal_revision_coverages', { p_submittal_ids: [shopSubmittal.id] }));
+    expect(screen.getByRole('status', { name: 'Work package evidence' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Production workflow' })).not.toBeInTheDocument();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['failed', 'incomplete', 'stale'] as const)('blocks %s revision coverage instead of trusting status-only rows', async failure => {
+    mocks.coverage.mockResolvedValue(failure === 'failed' ? { data: null, error: { message: 'Coverage unavailable' } }
+      : failure === 'incomplete' ? { data: [], error: null }
+        : { data: [{ ...verifiedSubmittalEvidence(shopSubmittal.id).revision_coverage,
+          submittal_status: shopSubmittal.status, submittal_updated_at: '2026-10-09T00:00:00.123455Z', evidence: [] }], error: null });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.queryByRole('region', { name: 'Production workflow' })).not.toBeInTheDocument();
+    expect(screen.queryByText('1 drawing stage clear')).not.toBeInTheDocument();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('shows a blocked package when coverage confirms the transmitted manifest is missing', async () => {
+    mocks.coverage.mockResolvedValue({ data: [{ ...verifiedSubmittalEvidence(shopSubmittal.id).revision_coverage,
+      submittal_status: shopSubmittal.status, submittal_updated_at: shopSubmittal.updated_at,
+      ok: false, reason: 'missing_manifest', captured_revision_ids: [], missing_revision_ids: ['pdf-revision'], evidence: [] }], error: null });
+    renderPage();
+    expect(await screen.findByText('0 drawing stage clear')).toBeInTheDocument();
+  });
+
+  it('rejects a workspace change while the raw submittal read is pending', async () => {
+    let resolve!: (value: typeof shopSubmittal[]) => void;
+    mocks.submittals.mockReturnValue(new Promise(done => { resolve = done; }));
+    renderPage();
+    await waitFor(() => expect(mocks.submittals).toHaveBeenCalledOnce());
+    mocks.orgGeneration++;
+    await act(async () => { resolve([shopSubmittal]); });
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(mocks.coverage).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Production workflow' })).not.toBeInTheDocument();
+  });
+
   it("uses the assigned lot's set instead of a different approved work-package sheet", async () => {
     const blockedSheet = { id: "drawing-2", project_id: project.id, drawing_set_id: "set-2", stage: "OFA" };
     mocks.pieces.mockResolvedValue([{ ...piece, lifecycle_status: "not_started" }]);
@@ -250,7 +304,7 @@ describe("Work Packages evidence boundary", () => {
     mocks.drawingSets.mockResolvedValue([drawingSet, { id: "set-2", project_id: project.id }]);
     mocks.submittals.mockResolvedValue([
       shopSubmittal,
-      { id: "shop-2", project_id: project.id, submittal_type: "Shop Drawing", drawing_set_ids: ["set-2"], status: "Submitted", ball_in_court: "EOR" },
+      { id: "shop-2", project_id: project.id, submittal_type: "Shop Drawing", drawing_set_ids: ["set-2"], status: "Submitted", ball_in_court: "EOR", updated_at: shopSubmittal.updated_at },
     ]);
     mocks.pieceDrawingSets.mockResolvedValue([{ ...pieceDrawingSet, drawing_set_id: "set-2" }]);
     const { client } = renderPage();

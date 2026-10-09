@@ -25,9 +25,29 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261009125901",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - durable org-scoped checkout intent and service-only reservation/customer/session RPCs. Requires reviewed exact SQL, installed-schema staging rollback, independent PostgreSQL concurrency acceptance and verified manual ledger stamp before deploying dependent checkout handler. No frozen exemption. See docs/superpowers/specs/2026-10-09-durable-checkout-design.md and docs/audits/DURABLE_CHECKOUT_RELEASE_2026-10-09.md."
+      },
+      {
+        "version": "20261009140000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - project plan capacity guard. Serializes active project admission at the organization parent, closes direct INSERT and concurrent RPC bypasses, rechecks authenticated membership after waits, and refuses restore lock inversion with a retryable error. No quota exemption for service/maintenance writes and no new paid-module policy. Requires exact source review, real PostgreSQL concurrency and installed-schema staging rollback before manual application and matching ledger stamp. See docs/audits/PROJECT_PLAN_LIMITS_2026-10-09.md."
+      },
+      {
         "version": "20261008071019",
         "lifecycle": "required",
-        "evidence": "PENDING PRODUCTION APPLY - atomic Stripe webhook candidate. Service-role-only snapshot/apply RPCs couple the organization billing state, revision check and unique processed-event receipt in one transaction. Requires exact SQL review, staged retry/concurrency/entitlement acceptance and matching ledger payload before deploying the dependent stripe-billing handler. Keep visible in missingMigrations until manually applied and stamped. See supabase/tests/stripe-billing/README.md and docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md."
+        "evidence": "APPLIED staging and production 2026-10-09 13:09 UTC. Exact ledger payload SHA-256 3dfc1339eb999c33b5bad396d439958c8a6e6820071a612e33e686db9d5bbe44; matching function definitions and service-only grants verified. All 20 installed staging acceptance checks passed under rollback. Service-role-only snapshot/apply RPCs couple organization billing state, revision check and unique receipt. Retain required classification so a missing stamp still blocks publication. Matching handler and durable checkout/provider acceptance remain pending. See docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md and docs/audits/PRODUCTION_RELEASE_2026-10-08.md."
+      },
+      {
+        "version": "20261008032524",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local membership-revocation candidate. Requires current workspace membership in all three explicit project-role resolvers, including callers that bypass ordinary project RLS; preserves role precedence, execution grants and current archived-project administration. Isolated SQL regressions cover removed viewer/field/PM/admin/owner roles and refused archival. Requires exact reviewed staging application and matching ledger payload before release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/membership-revocation/README.md and docs/audits/MEMBERSHIP_EMAIL_CLOSEOUT_RELEASE_2026-10-09.md."
+      },
+      {
+        "version": "20261009070300",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Immutable shop-drawing round revision evidence and atomic PM workflow. Exact multi-set revision roster, source/page snapshot, explicit legacy attestation, project-consistent foreign keys, MFA and fail-closed release coverage. Requires dedicated SQL and independent PostgreSQL concurrency acceptance plus hosted staging rehearsal before manual exact-file application and ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/SUBMITTAL_REVISION_EVIDENCE_2026-10-09.md."
       },
       {
         "version": "20261008013546",

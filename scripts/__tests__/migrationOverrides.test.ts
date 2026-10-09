@@ -170,13 +170,13 @@ describe('the real manifest', () => {
     expect(report.missingMigrations).toContain(version);
   });
 
-  it('keeps atomic billing required until its reviewed SQL is applied', () => {
-    const version = '20261008071019';
+  it.each(['20261008071019', '20261008032524', '20261009125901'])('requires billing/membership migration %s when its stamp is absent', (version) => {
     const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
     expect(entry?.lifecycle).toBe('required');
-    expect(entry?.evidence).toMatch(/PENDING PRODUCTION APPLY/);
+    expect(entry?.evidence).toMatch(/2026-10-09/);
     const report = compareDrift(manifest, local, [...LEDGER].map(version => ({ version })), []);
     expect(report.missingMigrations).toContain(version);
+    expect(report.hasDrift).toBe(true);
   });
 
   it('keeps pending account deletion migrations required by the drift gate', () => {

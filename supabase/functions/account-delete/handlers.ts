@@ -26,53 +26,33 @@ export function json(body: unknown, status = 200) {
 // Database rows have already been erased when Storage is reached. Report the
 // incomplete cleanup and keep Auth users. An account retry recovers the erased
 // scopes from data_erasure_log before attempting Auth deletion again.
-function storageFailure(error: StoragePurgeError): Response {
+function storageFailure(error: StoragePurgeError, mode: "account" | "workspace" = "account"): Response {
   console.error(error.message);
   return json({
     error: "STORAGE_ERASURE_FAILED",
     step: "storage",
-    detail: "Workspace records were erased, but file cleanup did not finish. Account sign-ins were kept. Retry account deletion to finish file cleanup, or contact support@steelbuild-pro.com.",
+    detail: mode === "workspace"
+      ? "Workspace records were erased, but file cleanup did not finish. Account sign-ins were kept. Contact support@steelbuild-pro.com to finish workspace cleanup."
+      : "Workspace records were erased, but file cleanup did not finish. Account sign-ins were kept. Retry account deletion to finish file cleanup, or contact support@steelbuild-pro.com.",
     storage_bucket: error.bucket,
     storage_prefix: error.prefix,
   }, 503);
 }
 
-function cleanupFailure(error: unknown): Response {
+function cleanupFailure(error: unknown, mode: "account" | "workspace" = "account"): Response {
   console.error(error);
   return json({
     error: "ACCOUNT_CLEANUP_INCOMPLETE",
     step: "cleanup",
-    detail: "Cleanup could not be verified. Account deletion was not completed. Retry or contact support@steelbuild-pro.com.",
+    detail: mode === "workspace"
+      ? "Workspace cleanup could not be verified. Account sign-ins were kept. Contact support@steelbuild-pro.com to finish workspace cleanup."
+      : "Cleanup could not be verified. Account deletion was not completed. Retry or contact support@steelbuild-pro.com.",
   }, 503);
 }
 
-// Verify every membership count before deleting any orphaned Auth users.
-// A null count or failed read is unknown, never proof of zero memberships.
-async function deleteOrphanedUsers(admin: any, ids: Iterable<string>, skip?: string): Promise<number> {
-  const orphaned: string[] = [];
-  for (const uid of new Set(ids)) {
-    if (uid === skip) continue;
-    const { count, error } = await admin
-      .from("organization_members")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", uid);
-    if (error || !Number.isSafeInteger(count) || count < 0) {
-      throw new CleanupReadError("Cannot verify remaining account memberships");
-    }
-    if (count === 0) orphaned.push(uid);
-  }
-  let deleted = 0;
-  for (const uid of orphaned) {
-    const { error } = await admin.auth.admin.deleteUser(uid);
-    if (error) throw new CleanupReadError("Orphaned account deletion failed");
-    deleted++;
-  }
-  return deleted;
-}
-
 // Erase one organization the caller OWNS: DB rows (caller-scoped RPC, which
-// self-verifies owner) + Storage (service role). Returns storage objects removed
-// and the org's member ids (so the caller can sweep now-orphaned auth users).
+// self-verifies owner) + Storage (service role). Account identities are independent
+// of this workspace and are never deletion targets of this operation.
 // `reason` is required by the RPC (see plan.ts).
 async function eraseOwnedOrg(
   admin: any,
@@ -80,12 +60,10 @@ async function eraseOwnedOrg(
   orgId: string,
   reason: string,
   callerId: string,
-): Promise<{ storageRemoved: number; memberIds: string[]; projectsDeleted: number }> {
-  // Snapshot project + member ids BEFORE the DB rows are erased.
+): Promise<{ storageRemoved: number; projectsDeleted: number }> {
+  // Snapshot project ids BEFORE the DB rows are erased.
   const projects = await readScopedRows(admin, "projects", "id", { org_id: orgId });
   const projectIds = projects.map(project => project.id as string);
-  const members = await readScopedRows(admin, "organization_members", "user_id", { org_id: orgId }, "user_id");
-  const memberIds = members.map(member => member.user_id as string);
 
   // DB erasure via the caller-scoped RPC (self-verifies owner).
   const { error: rpcErr } = await userClient.rpc("hard_delete_organization", eraseOrgArgs(orgId, reason));
@@ -94,7 +72,7 @@ async function eraseOwnedOrg(
   // The journal also captures projects added after our pre-erasure snapshot.
   const scopes = await recoverErasedWorkspaceScopes(admin, callerId, { orgIds: [orgId], projectIds }, orgId);
   const storageRemoved = await purgeWorkspaceStorage(admin, scopes.orgIds, scopes.projectIds);
-  return { storageRemoved, memberIds, projectsDeleted: scopes.projectIds.length };
+  return { storageRemoved, projectsDeleted: scopes.projectIds.length };
 }
 
 // Mode A — erase an organization. Caller must be the org OWNER.
@@ -105,7 +83,7 @@ export async function handleOrgDeletion(admin: any, userClient: any, callerId: s
     .eq("org_id", orgId)
     .eq("user_id", callerId)
     .maybeSingle();
-  if (ownerError) return cleanupFailure(ownerError);
+  if (ownerError) return cleanupFailure(ownerError, "workspace");
   if (!ownerRow || ownerRow.role !== "owner") {
     return json({ error: "forbidden", detail: "Only the organization owner can delete the workspace." }, 403);
   }
@@ -114,23 +92,20 @@ export async function handleOrgDeletion(admin: any, userClient: any, callerId: s
   try {
     erased = await eraseOwnedOrg(admin, userClient, orgId, WORKSPACE_ERASURE_REASON, callerId);
   } catch (e) {
-    if (e instanceof StoragePurgeError) return storageFailure(e);
-    if (e instanceof CleanupReadError) return cleanupFailure(e);
+    if (e instanceof StoragePurgeError) return storageFailure(e, "workspace");
+    if (e instanceof CleanupReadError) return cleanupFailure(e, "workspace");
     return json({ error: "db_erasure_failed", detail: String((e as Error)?.message ?? e) }, 400);
   }
 
-  let usersDeleted: number;
-  try {
-    usersDeleted = await deleteOrphanedUsers(admin, erased.memberIds);
-  } catch (error) {
-    return cleanupFailure(error);
-  }
+  // A workspace owner cannot delete another person's login, even if that person
+  // currently has no remaining memberships. Only explicit self-account deletion
+  // below may remove an Auth identity, and its target is always the caller.
   return json({
     ok: true,
     org_id: orgId,
     projects_deleted: erased.projectsDeleted,
     storage_objects_removed: erased.storageRemoved,
-    users_deleted: usersDeleted,
+    users_deleted: 0,
   });
 }
 
