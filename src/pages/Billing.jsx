@@ -31,19 +31,19 @@ export default function Billing() {
   const { busy, upgrade, manage } = useBillingActions({ orgId, canManage, native, refetchOrgs });
 
   const memberUsage = useQuery({
-    queryKey: ["billing-member-count", orgId, currentRole],
+    queryKey: ["org-members", orgId, "billing-count", currentRole],
     queryFn: () => getWorkspaceMemberCount(orgId),
     enabled: !!orgId,
     staleTime: 60_000,
   });
   const invitationUsage = useQuery({
-    queryKey: ["billing-invitation-count", orgId, currentRole],
+    queryKey: ["org-invites", orgId, "billing-count", currentRole],
     queryFn: () => getWorkspacePendingInvitationCount(orgId),
     enabled: !!orgId && canManage,
     staleTime: 60_000,
   });
   const projectUsage = useQuery({
-    queryKey: ["billing-project-count", orgId, currentRole],
+    queryKey: ["projects", orgId, "billing-count", currentRole],
     queryFn: () => getWorkspaceProjectCount(orgId),
     enabled: !!orgId,
     staleTime: 5 * 60_000,

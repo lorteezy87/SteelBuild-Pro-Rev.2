@@ -46,6 +46,18 @@ beforeEach(() => {
 afterEach(() => { cleanup(); setActiveOrgId(null); vi.useRealTimers(); });
 
 describe('Billing workspace isolation', () => {
+  it.each([
+    { reader: 'count', prefix: ['projects'], label: 'Project count', before: '3' },
+    { reader: 'members', prefix: ['org-members', 'org-a'], label: 'Member count', before: '2' },
+    { reader: 'invites', prefix: ['org-invites', 'org-a'], label: 'Pending count', before: '1' },
+  ] as const)('refreshes $label through the existing mutation invalidation prefix', async ({ reader, prefix, label, before }) => {
+    const view = mount(); await waitFor(() => expect(screen.getByLabelText(label)).toHaveTextContent(before));
+    mocks[reader].mockResolvedValue(4);
+    await act(async () => { await view.client.invalidateQueries({ queryKey: prefix }); });
+    await waitFor(() => expect(screen.getByLabelText(label)).toHaveTextContent('4'));
+    expect(mocks[reader]).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps both member and invitation usage unknown while loading', () => {
     mocks.members.mockReturnValue(new Promise(() => {})); mocks.invites.mockReturnValue(new Promise(() => {}));
     mount();
@@ -82,12 +94,12 @@ describe('Billing workspace isolation', () => {
     await waitFor(() => expect(screen.getByLabelText('Project count')).toHaveTextContent('3'));
     expect(mocks.count).toHaveBeenCalledWith('org-a');
     expect(mocks.list).not.toHaveBeenCalled();
-    expect(view.client.getQueryData(['billing-project-count', 'org-a', 'owner'])).toBe(3);
+    expect(view.client.getQueryData(['projects', 'org-a', 'billing-count', 'owner'])).toBe(3);
     mocks.count.mockResolvedValue(8);
     act(() => { mocks.orgId = 'org-b'; setActiveOrgId('org-b'); }); view.refresh();
     await waitFor(() => expect(screen.getByLabelText('Project count')).toHaveTextContent('8'));
     expect(mocks.count).toHaveBeenCalledWith('org-b');
-    expect(view.client.getQueryData(['billing-project-count', 'org-a', 'owner'])).toBe(3);
+    expect(view.client.getQueryData(['projects', 'org-a', 'billing-count', 'owner'])).toBe(3);
   });
 
   it('shows unknown project usage when the count read fails', async () => {
