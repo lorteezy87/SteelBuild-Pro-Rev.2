@@ -37,19 +37,12 @@ export function fixtureFor(runId: string, attempt: string, now = new Date()) {
 }
 export type Fixture = ReturnType<typeof fixtureFor>;
 
-export function assertPublicKey(key: string): void {
-  if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return;
-  try {
-    const parts = key.split('.');
-    if (parts.length === 3 && JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')).role === 'anon') return;
-  } catch { /* Never include key contents in diagnostics. */ }
-  throw new Error('Synthetic acceptance requires a public anon or publishable key');
-}
+export { assertStagingPublicKey as assertPublicKey } from '../drawingEvidenceTransport';
 
 export function assertRuntime(env: Record<string, string | undefined> = process.env): void {
   if (env.GITHUB_ACTIONS !== 'true' || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch'
     || env.SYNTHETIC_PDF_ACCEPTANCE !== 'reviewed-staging-only' || env.E2E_TARGET !== 'staging'
-    || env.E2E_SUPABASE_URL !== STAGING || env.E2E_BASE_URL !== APP
+    || env.E2E_SUPABASE_URL !== STAGING || env.E2E_BASE_URL !== APP || env.E2E_EXPECTED_SUPABASE_REF !== 'ndyfjffsulfbwpmwdmic'
     || !/^[a-f0-9]{40}$/.test(env.ACCEPTANCE_CANDIDATE_SHA || '')) {
     throw new Error('Synthetic PDF acceptance requires the protected main-only staging workflow');
   }

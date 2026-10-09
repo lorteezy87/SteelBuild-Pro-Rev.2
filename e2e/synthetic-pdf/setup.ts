@@ -1,18 +1,29 @@
 import { chromium, expect } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { APP, ORG, PROJECT, STATE, assertPublicKey, assertRuntime, fixtureFor } from './fixture';
 import { ScopedTransport, installBrowserGuard } from './guard';
+import { validateDrawingSession } from '../drawingEvidenceTransport';
+import type { SyntheticSetupStage } from './reporter';
 
 export default async function setup(): Promise<void> {
+  let stage: SyntheticSetupStage = 'environment';
+  try { await executeSetup(nextStage => { stage = nextStage; }); }
+  catch { throw new Error(`Synthetic PDF setup failed: ${stage}`); }
+}
+
+async function executeSetup(onStage: (stage: SyntheticSetupStage) => void): Promise<void> {
   assertRuntime();
+  // A failed sign-in must never reuse the previous run's cached credentials.
+  rmSync(STATE, { force: true });
   const key = process.env.E2E_SUPABASE_ANON_KEY || '';
   if (!key || !process.env.E2E_USER || !process.env.E2E_PASS) throw new Error('Missing protected staging credentials');
   assertPublicKey(key);
-  const auth = new ScopedTransport(null, key, key);
+  onStage('identity');
+  const auth = new ScopedTransport(null, key);
   const response = await auth.send('/auth/v1/token?grant_type=password', 'POST', { email: process.env.E2E_USER, password: process.env.E2E_PASS });
   if (!response.ok) throw new Error('Protected staging sign-in failed');
-  const session = await response.json();
-  if (!session?.access_token || !session?.refresh_token || !session?.user?.id) throw new Error('Incomplete staging session');
+  const session = validateDrawingSession(await response.json());
+  onStage('project');
   const api = new ScopedTransport(fixtureFor(process.env.GITHUB_RUN_ID!, process.env.GITHUB_RUN_ATTEMPT!), key, session.access_token);
   const projectResponse = await api.send(`/rest/v1/projects?id=eq.${PROJECT}&limit=100&select=id,name,project_number,org_id,is_deleted,on_hold`);
   const orgResponse = await api.send(`/rest/v1/organizations?id=eq.${ORG}&limit=100&select=id,name`);
@@ -24,6 +35,7 @@ export default async function setup(): Promise<void> {
   const role = await api.send('/rest/v1/rpc/get_my_project_role', 'POST', { p_project_id: PROJECT });
   if (!role.ok || !['pm', 'admin', 'owner'].includes(await role.json())) throw new Error('Synthetic acceptance requires existing PM permission');
 
+  onStage('browser');
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({ serviceWorkers: 'block' });
