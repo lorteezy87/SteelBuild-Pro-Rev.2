@@ -1,0 +1,97 @@
+name: Bounded staging backend acceptance
+run-name: Bounded backend acceptance for ${{ inputs.candidate_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact reviewed 40-character commit already reachable from main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: staging-backend-acceptance
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      candidate_sha: ${{ steps.source.outputs.candidate_sha }}
+    steps:
+      - name: Verify exact main ancestor and source checks
+        id: source
+        uses: actions/github-script@v9
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        with:
+          script: |
+            if (context.ref !== 'refs/heads/main' || context.eventName !== 'workflow_dispatch') {
+              throw new Error('Acceptance must be dispatched from main');
+            }
+            const sha = process.env.CANDIDATE_SHA;
+            if (!/^[a-f0-9]{40}$/.test(sha || '')) throw new Error('Use an exact lowercase commit SHA');
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              ...context.repo, basehead: `${sha}...${context.sha}`,
+            });
+            if (comparison.merge_base_commit?.sha !== sha) {
+              throw new Error('Candidate is not reachable from this main commit');
+            }
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              ...context.repo, workflow_id: 'ci.yml', head_sha: sha, per_page: 100,
+            });
+            const required = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Commercial SQL + concurrent PostgreSQL acceptance'];
+            let verified = false;
+            for (const run of runs) {
+              if (run.head_sha !== sha || run.event !== 'push' || run.status !== 'completed') continue;
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: run.id, per_page: 100,
+              });
+              if (required.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) {
+                verified = true; break;
+              }
+            }
+            if (!verified) throw new Error('Required source checks have not passed together for this exact commit');
+            core.setOutput('candidate_sha', sha);
+
+  acceptance:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    # Repository environment settings must restrict this environment to main.
+    environment: staging-backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.candidate_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      # Pure Node + exact checked-in TypeScript; no install hooks or dependency
+      # network is needed in the job which consumes staging credentials.
+      - name: Run bounded reads and rejection checks
+        env:
+          ACCEPTANCE_CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
+          E2E_TARGET: staging
+          E2E_EXPECTED_SUPABASE_REF: ndyfjffsulfbwpmwdmic
+          E2E_USER: ${{ secrets.STAGING_E2E_USER }}
+          E2E_PASS: ${{ secrets.STAGING_E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+        run: node scripts/staging-backend-acceptance/run.ts
+      - name: Retain sanitized result only (INCOMPLETE is not a green release gate)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-acceptance-${{ needs.verify.outputs.candidate_sha }}
+          path: test-results/backend-acceptance/summary.json
+          if-no-files-found: error
+          retention-days: 7

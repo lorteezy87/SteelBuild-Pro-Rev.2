@@ -1,5 +1,6 @@
 import { expect, type Page, type Response } from '@playwright/test';
-import { acceptanceOptions, observeReadOnlyPage, readOnlyTest as test, visitRegister } from './acceptance';
+import { acceptanceOptions, observeReadOnlyPage, visitRegister } from './acceptance';
+import { test } from './drawing-evidence-test';
 
 interface Coverage {
   submittal_id: string;

@@ -318,7 +318,7 @@ export function calculateMarginRisk(sources: MarginRiskSources = {}) {
   const allItems = signals.flatMap(s => s.items).sort((a, b) => b.exposure - a.exposure);
 
   // Exposure by area
-  const byArea: Record<string, { area: string; exposure: number; items: RiskItem[] }> = {};
+  const byArea: Record<string, { area: string; exposure: number; items: RiskItem[] }> = Object.create(null);
   for (const item of allItems) {
     const area = item.area || "Unassigned";
     if (!byArea[area]) byArea[area] = { area, exposure: 0, items: [] };
@@ -327,7 +327,7 @@ export function calculateMarginRisk(sources: MarginRiskSources = {}) {
   }
 
   // Exposure by work package
-  const byWorkPackage: Record<string, { workPackageId: string; exposure: number; items: RiskItem[] }> = {};
+  const byWorkPackage: Record<string, { workPackageId: string; exposure: number; items: RiskItem[] }> = Object.create(null);
   for (const item of allItems) {
     const wpId = item.workPackageId || "unlinked";
     if (!byWorkPackage[wpId]) byWorkPackage[wpId] = { workPackageId: wpId, exposure: 0, items: [] };

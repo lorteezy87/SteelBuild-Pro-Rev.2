@@ -17,7 +17,7 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: ["foundation.spec.ts", "executive.spec.ts", "command-brief.spec.ts", "acceptance-contract.spec.ts"],
+  testIgnore: ["foundation.spec.ts", "executive.spec.ts", "command-brief.spec.ts", "acceptance-contract.spec.ts", "staging-network.contract.spec.ts", "drawing-revision-evidence.spec.ts", "synthetic-pdf-evidence.spec.ts", "synthetic-pdf/**"],
   globalSetup: "./e2e/global-setup.ts",
   timeout: 45_000,
   expect: { timeout: 15_000 },

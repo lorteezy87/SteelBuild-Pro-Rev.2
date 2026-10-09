@@ -1,12 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import generalConfig from '../../playwright.config.js';
-import drawingConfig from '../../playwright.drawing-evidence.config.js';
 
 interface Step { uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, string> }
 interface Job { if?: string; needs?: string; environment?: string; steps: Step[] }
-const workflow = load(readFileSync(new URL('../../.github/workflows/drawing-evidence-acceptance.yml', import.meta.url), 'utf8')) as { jobs: Record<string, Job> };
+const workflow = load(readFileSync(new URL('../../.github/workflows/synthetic-pdf-acceptance.yml', import.meta.url), 'utf8')) as { jobs: Record<string, Job> };
 const script = workflow.jobs.verify.steps[0].with?.script;
 if (!script) throw new Error('Missing candidate verification script');
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
@@ -43,14 +41,7 @@ async function verify(options: {
   return { setOutput, github };
 }
 
-describe('executed read-only drawing acceptance source gate', () => {
-  it('isolates protected drawing evidence from general discovery while retaining both dedicated viewports', () => {
-    const spec = 'drawing-revision-evidence.spec.ts';
-    expect(generalConfig.testIgnore).toContain(spec);
-    expect(drawingConfig.testMatch).toEqual([spec]);
-    expect(drawingConfig.testIgnore).toEqual([]);
-    expect(drawingConfig.projects?.map(project => project.name)).toEqual(['desktop', 'mobile']);
-  });
+describe('executed synthetic PDF acceptance source gate', () => {
   it('emits only the checked main-ancestor SHA', async () => {
     const result = await verify();
     expect(result.setOutput).toHaveBeenCalledExactlyOnceWith('candidate_sha', candidate);
@@ -88,27 +79,11 @@ describe('executed read-only drawing acceptance source gate', () => {
     expect(checkout?.with?.ref).toBe('${{ needs.verify.outputs.candidate_sha }}');
     const credentialSteps = workflow.jobs.acceptance.steps.filter(step => step.env?.E2E_PASS);
     expect(credentialSteps).toHaveLength(1);
-    expect(credentialSteps[0].run).toBe('npx playwright test --config playwright.drawing-evidence.config.ts');
+    expect(credentialSteps[0].run).toBe('npx playwright test --config playwright.synthetic-pdf.config.ts');
     expect(credentialSteps[0].env?.E2E_BASE_URL).toBe('http://127.0.0.1:4173');
     expect(credentialSteps[0].env?.E2E_TARGET).toBe('staging');
     expect(credentialSteps[0].env?.E2E_EXPECTED_SUPABASE_REF).toBe('ndyfjffsulfbwpmwdmic');
     const upload = workflow.jobs.acceptance.steps.find(step => step.uses === 'actions/upload-artifact@v7');
-    expect(upload?.with?.path.trim().split('\n')).toEqual(['test-results/drawing-evidence/**/*.png', 'test-results/drawing-evidence/summary.json']);
-  });
-  it('wires a dedicated guarded setup, context and auth-state path without changing general setup', () => {
-    const config = readFileSync(new URL('../../playwright.drawing-evidence.config.ts', import.meta.url), 'utf8');
-    expect(config).toContain("globalSetup: './e2e/drawing-evidence-setup.ts'");
-    expect(config).toContain('storageState: DRAWING_STATE_PATH');
-    expect(config).toContain("serviceWorkers: 'block'");
-    expect(config).toContain("reporter: [['./e2e/drawing-evidence-reporter.ts']]");
-    expect(config).toContain("trace: 'off'"); expect(config).toContain("video: 'off'");
-    const spec = readFileSync(new URL('../../e2e/drawing-revision-evidence.spec.ts', import.meta.url), 'utf8');
-    expect(spec).toContain("import { test } from './drawing-evidence-test'");
-    const setup = readFileSync(new URL('../../e2e/drawing-evidence-setup.ts', import.meta.url), 'utf8');
-    expect(setup).toContain("newContext({ serviceWorkers: 'block' })");
-    expect(setup.indexOf('await installStagingNetworkGuard(context)')).toBeLessThan(setup.indexOf('await context.newPage()'));
-    const general = readFileSync(new URL('../../playwright.config.ts', import.meta.url), 'utf8');
-    expect(general).toContain('globalSetup: "./e2e/global-setup.ts"');
-    expect(general).toContain('storageState: "e2e/.auth/state.json"');
+    expect(upload?.with?.path.trim().split('\n')).toEqual(['test-results/synthetic-pdf/**/*.png', 'test-results/synthetic-pdf/summary.json', 'test-results/synthetic-pdf/evidence.json']);
   });
 });
