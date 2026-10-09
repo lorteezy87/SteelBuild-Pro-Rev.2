@@ -65,7 +65,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
   const [form, setForm] = useState({
     submittal_number: initial.submittal_number || "",
     title:            initial.title            || "",
-    submittal_type:   initial.submittal_type   || "Shop Drawing",
+    submittal_type:   initial.submittal_type   ?? (initial.id ? "" : "Shop Drawing"),
     discipline:       initial.discipline       || "",
     spec_section:     initial.spec_section     || "",
     revision:         initial.revision         || "0",
@@ -82,6 +82,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
 
   const setField = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
   const isEdit = !!initial.id;
+  const typeLocked = isEdit && (initial.status !== 'Draft' || !!initial.current_round_id);
   const submitInFlight = useRef(false);
 
   const handleSubmit = async () => {
@@ -135,6 +136,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
         submittal_number: number,
         project_id: projectId,
         project_name: projectName,
+        submittal_type: form.submittal_type || null,
         round_number: Number(form.round_number) || 1,
         submitted_date: form.submitted_date || null,
         required_date: form.required_date || null,
@@ -249,12 +251,13 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
           )}
           <div>
             <Label>Type</Label>
-            <Select value={form.submittal_type} onValueChange={(v) => setField("submittal_type", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select disabled={typeLocked} value={form.submittal_type} onValueChange={(v) => setField("submittal_type", v)}>
+              <SelectTrigger aria-label="Submittal type"><SelectValue placeholder="Unclassified" /></SelectTrigger>
               <SelectContent>
                 {TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
+            {isEdit && !initial.submittal_type && <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 11 }}>This legacy record is unclassified and cannot govern drawing approval.{typeLocked ? ' Create a new Shop Drawing package for a new drawing review.' : ' Choose a type explicitly before submitting this Draft.'}</p>}
           </div>
           <div>
             <Label>Discipline</Label>

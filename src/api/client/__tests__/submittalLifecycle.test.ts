@@ -9,6 +9,11 @@ const row = { id: 's', status: 'Approved', ball_in_court: 'GC', submittal_type: 
 function coverage(id: string): SubmittalRevisionCoverage { return { project_id: 'p', reason: 'missing_manifest', submittal_id: id, submittal_status: row.status, submittal_updated_at: row.updated_at, round_id: 'r', ok: false, current_revision_ids: ['rev'], captured_revision_ids: [], missing_revision_ids: ['rev'], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [], evidence: [] }; }
 beforeEach(() => { workflowRpc.mockReset(); setActiveOrgId('org'); });
 describe('complete revision coverage reads', () => {
+  it.each([null, undefined, '', ' ', 'shop drawing', 'Unknown', 'Product Data'])('does not hydrate non-Shop type %j into drawing authority', async submittal_type => {
+    const untyped = { ...row, submittal_type };
+    expect(await hydrateSubmittalRevisionCoverage([untyped])).toEqual([untyped]);
+    expect(workflowRpc).not.toHaveBeenCalled();
+  });
   it.each(['list', 'listAll', 'filter', 'filterAll', 'get'] as const)('rejects a workspace switch while the base %s read is pending', async method => {
     const list = async () => { setActiveOrgId('other-org'); return [row]; };
     const base = { list, listAll: list, filter: list, filterAll: list, get: async () => (await list())[0] } as unknown as EntityClient<'submittals'>;

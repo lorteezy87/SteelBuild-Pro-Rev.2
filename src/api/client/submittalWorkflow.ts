@@ -46,7 +46,7 @@ export function isSubmittalWorkflowPatch(patch: Record<string, unknown>): boolea
   return !!metadata && typeof metadata === 'object' && ['ofs_checklist', 'ofs_override_reason', 'comment_override_reason', 'workflow_substatus'].some(key => key in metadata);
 }
 export function validateSubmittalCreate(record: Record<string, unknown>): void {
-  if ((record.submittal_type ?? 'Shop Drawing') === 'Shop Drawing' && (record.status ?? 'Draft') !== 'Draft') {
+  if (record.submittal_type === 'Shop Drawing' && (record.status ?? 'Draft') !== 'Draft') {
     throw new Error('Create this Shop Drawing submittal as Draft, review the linked PDFs and revisions, then submit it through the status workflow. Imported approval or submission is not evidence.');
   }
 }
@@ -70,7 +70,7 @@ async function requestIdentity(payload: Record<string, unknown>): Promise<string
 }
 function reviewArgs(review: SubmittalReview, revisionIds: readonly string[], requireEvidence = true) {
   if (!review.id || !review.updated_at || !review.status) throw new Error('Refresh this submittal and review its current status before saving.');
-  const shopDrawing = (review.submittal_type ?? 'Shop Drawing') === 'Shop Drawing';
+  const shopDrawing = review.submittal_type === 'Shop Drawing';
   if (requireEvidence && shopDrawing && revisionIds.length === 0) throw new Error('Review the current drawing revisions before submitting or returning this Shop Drawing package.');
   return { p_submittal_id: review.id, p_expected_updated_at: review.updated_at, p_expected_status: review.status, p_expected_current_round_id: review.current_round_id ?? null, p_expected_revision_ids: shopDrawing ? [...new Set(revisionIds)].sort() : [] };
 }
@@ -126,7 +126,7 @@ function sameTimestamp(left: string | null | undefined, right: string | null | u
 /** Every requested row must be present; missing pages never mean no blockers. */
 export async function hydrateSubmittalRevisionCoverage<T extends SubmittalReview>(rows: readonly T[], client: RpcClient = supabase as unknown as RpcClient): Promise<Array<T & { revision_coverage?: RevisionCoverageSummary | null }>> {
   const generation = getActiveOrgGeneration();
-  const shopRows = rows.filter(row => (row.submittal_type ?? 'Shop Drawing') === 'Shop Drawing');
+  const shopRows = rows.filter(row => row.submittal_type === 'Shop Drawing');
   const byId = new Map<string, SubmittalRevisionCoverage>();
   const ids = [...new Set(shopRows.map(row => row.id))];
   for (let start = 0; start < ids.length; start += 200) {
@@ -142,7 +142,7 @@ export async function hydrateSubmittalRevisionCoverage<T extends SubmittalReview
   }
   if (generation !== getActiveOrgGeneration()) throw new Error('Workspace changed. Reload revision evidence.');
   return rows.map(row => {
-    if ((row.submittal_type ?? 'Shop Drawing') !== 'Shop Drawing') return row;
+    if (row.submittal_type !== 'Shop Drawing') return row;
     const coverage = byId.get(row.id);
     if (!coverage || coverage.submittal_status !== row.status || !sameTimestamp(coverage.submittal_updated_at, row.updated_at) || (coverage.round_id ?? null) !== (row.current_round_id ?? null)) throw new Error('A submittal changed while revision evidence loaded. Reload the register.');
     return { ...row, revision_coverage: coverage };

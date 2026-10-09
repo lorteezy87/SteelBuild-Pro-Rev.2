@@ -31,7 +31,7 @@ export function withSubmittalLifecycle<T extends EntityClient<'submittals'>>(bas
     // Keep the reviewed snapshot identical on retry. A fresh read here would
     // reject the committed version before the server could replay its receipt.
     const coverage = review.revision_coverage;
-    if ((review.submittal_type ?? 'Shop Drawing') === 'Shop Drawing' && !coverage) throw new Error('Reload this submittal and review its exact revision evidence before saving.');
+    if (review.submittal_type === 'Shop Drawing' && !coverage) throw new Error('Reload this submittal and review its exact revision evidence before saving.');
     const result = await applySubmittalWorkflow({ review, revisionIds: coverage?.current_revision_ids ?? [], patch, client: options?.client, requestId: options?.clientOperationId });
     return addAliases(result.submittal as RowWithAliases<'submittals'>, 'submittals');
   };

@@ -10,12 +10,12 @@ on:
         type: string
       drawing_fixture:
         description: Exact existing drawing-set fixture name in STG-0001
-        default: STG Erection Drawings
+        default: SYNTHETIC - Revision Evidence Draft
         required: true
         type: string
       submittal_fixture:
         description: Exact existing Shop Drawing submittal title in STG-0001
-        default: Staging erection drawings
+        default: SYNTHETIC - Revision evidence draft
         required: true
         type: string
 

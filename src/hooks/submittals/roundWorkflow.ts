@@ -275,7 +275,7 @@ export async function addSubmittalRound(
 
   let updated: unknown;
   try {
-    const shopDrawing = (submittal.submittal_type ?? 'Shop Drawing') === 'Shop Drawing';
+    const shopDrawing = submittal.submittal_type === 'Shop Drawing';
     const coverage = !shopDrawing || input.revisionIds ? null : submittal.revision_coverage ?? await getSubmittalRevisionCoverage(submittal.id);
     const result = await applySubmittalWorkflow({
       review: submittal,

@@ -249,7 +249,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
         "Not Started";
       const dueDate = getSubmittalDueDate(submittal);
       const revisionEvidenceReady = hasExactSubmittalRevisionEvidence(submittal);
-      const shopDrawing = (submittal.submittal_type ?? 'Shop Drawing') === 'Shop Drawing';
+      const shopDrawing = submittal.submittal_type === 'Shop Drawing';
       // Always a submittal due date → working-day-aware when the flag is on.
       const closed = submittal.status === 'Void' || (CLOSED_SUBMITTAL_STATUSES.has(submittal.status) && (!shopDrawing || revisionEvidenceReady));
       const due = dueInfoFor(dueDate, { closed, useWorkdays });
