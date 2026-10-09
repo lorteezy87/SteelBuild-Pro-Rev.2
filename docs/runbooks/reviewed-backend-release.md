@@ -1,7 +1,12 @@
 # Reviewed backend releases
 
 The manual `Deploy reviewed Supabase function` workflow deploys one of
-`llm-proxy`, `project-export`, or `stripe-billing`. It cannot deploy every
+`llm-proxy`, `project-export`, `stripe-billing`, `email-send`,
+`command-center-read`, `command-center-session-handoff`, or `account-delete`.
+The seven-function review is recorded in
+`docs/audits/BACKEND_RELEASE_CANDIDATE_2026-10-07.md`; account erasure also
+requires the two corrections in `ERASURE_FOLLOWUP_CANDIDATE_2026-10-07.md`.
+It cannot deploy every
 function, modify the shared database, copy production secrets to staging, or
 publish another application's `sheets-api`. All other functions still require
 their own source/contract review before joining this release path.
@@ -19,6 +24,13 @@ Use the narrowest available credential scope. These secrets are intentionally
 distinct from the existing repository-wide inventory token. No credential has
 been fabricated or copied by this PR, and the workflow stops if one is missing.
 
+As of the October 9 release preparation, both environments and their main-only
+branch policies exist; production has the owner's required-reviewer rule.
+Their distinct deployment secrets still need owner provisioning. Run staging
+from the final main commit, verify it, then release production from that same
+SHA. Keep credential values in GitHub environment secrets, never in the repo
+or conversation.
+
 This is not yet a complete fix for CI-2: the existing repository-wide Supabase
 and Cloudflare credentials remain accessible to branch workflows until the
 owner migrates/rotates them and supplies separate preview credentials. Merely
@@ -29,7 +41,8 @@ adding an `environment:` line would not remove that access.
 1. Obtain approval for the named functions and exact database changes. Review
    current deployed source before replacing it: this project is shared with
    another application. Download and preserve the prior source and JWT modes.
-2. Verify the candidate with the normal CI job, secret scan, Edge typecheck and
+2. Verify the candidate with the normal CI job, secret scan, Edge typecheck,
+   `Commercial SQL + concurrent PostgreSQL acceptance`, and
    the transactional SQL boundary tests on staging. For production, the normal
    Supabase drift check must also pass. Never suppress a pending migration.
 3. Apply a reviewed migration with its exact SQL and matching ledger payload
@@ -51,10 +64,18 @@ adding an `environment:` line would not remove that access.
 7. Record deployment version, source SHA, JWT setting and smoke results. Check
    production using non-destructive requests and the actual browser workflow.
 
-The JWT modes match the verified live contracts: `project-export` verifies at
-the gateway; `llm-proxy` authenticates its bearer token internally;
-`stripe-billing` verifies webhook signatures and authenticates non-webhook
-actions internally. Do not enable gateway JWT verification for Stripe webhooks.
+The JWT modes match the verified live contracts. `project-export`, `email-send`,
+and `account-delete` verify at the gateway and retain their handler checks.
+`llm-proxy`, `command-center-read`, and `command-center-session-handoff`
+authenticate internally. `stripe-billing` verifies webhook signatures and
+authenticates non-webhook actions internally. Do not enable gateway JWT
+verification for Stripe webhooks. This release path does not include
+`email-ingest`, `health`, or the staging bootstrap endpoint.
+
+For the seven-function package, also verify enrolled-MFA rejection/acceptance,
+workspace membership revocation, project scoping, session handoff token
+audience/expiry, and synthetic account deletion after the erasure SQL fixes.
+Do not send customer email or delete customer records for a release smoke test.
 
 The workflow downloads the previous function into an isolated runner directory
 and uploads it with the deployment inventory before publishing. Failure to
