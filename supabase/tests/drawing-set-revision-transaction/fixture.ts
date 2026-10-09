@@ -26,6 +26,7 @@ export async function initialize(db:Database){
     await db.exec(statement[0]);
   }
   await db.exec(`
+    grant usage on schema public to anon,authenticated,service_role;
     alter table public.drawing_holds add foreign key(drawing_id) references public.drawings(id);
     create function public.user_is_org_member(p_org uuid) returns boolean language sql stable security definer set search_path='' as $$
       select p_org='${ids.org}'::uuid and coalesce((select is_member from auth.test_access where user_id=auth.uid()),false) $$;
