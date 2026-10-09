@@ -116,7 +116,14 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('steelbuild.app-file-request:'||v_actor::text||':'||p_request_id::text,0));
   PERFORM 1 FROM public.organizations WHERE id=v_org FOR SHARE;
   PERFORM 1 FROM public.projects WHERE id=v_project AND org_id=v_org FOR SHARE;
-  PERFORM 1 FROM auth.users WHERE id=v_actor FOR KEY SHARE;
+  -- Auth erasure owns the user before its membership cascade takes the org.
+  -- Never wait org -> user against that inverse order; the whole reservation
+  -- rolls back and its stable request ID can be retried after erasure settles.
+  BEGIN
+    PERFORM 1 FROM auth.users WHERE id=v_actor FOR KEY SHARE NOWAIT;
+  EXCEPTION WHEN lock_not_available THEN
+    RAISE EXCEPTION 'FILE_RESERVATION_BUSY: Account state is changing; retry the same request' USING ERRCODE='55P03';
+  END;
   PERFORM steelbuild_storage.assert_reservation_access(v_actor,v_org,v_project,v_floor);
 
   SELECT * INTO v_existing FROM steelbuild_storage.object_bindings
