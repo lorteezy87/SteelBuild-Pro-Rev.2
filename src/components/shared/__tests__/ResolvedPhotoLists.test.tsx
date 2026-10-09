@@ -2,10 +2,13 @@
 import { createContext, type ComponentType } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Database } from '@/types/supabase';
+
+type LinkLabelRow = Database['public']['Tables']['action_items']['Row'] | Database['public']['Tables']['rfis']['Row'];
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn() }));
 vi.mock('@/api/supabaseClient', () => ({ resolveFileUrl: mocks.resolve, entities: {} }));
-vi.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: [] }) }));
+vi.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: [] as LinkLabelRow[] }) }));
 vi.mock('@/lib/AuthContext', () => ({ AuthContext: createContext({ isAuthenticated: true, user: { id: 'user' }, isLoadingAuth: false }) }));
 import DailyLogsList from '@/components/fieldops/DailyLogsList';
 import PunchlistList from '@/components/punchlist/PunchlistList';

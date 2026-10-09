@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { escapeCsvCell } from '../csv';
+import type { DrawingPackage, FabFlag } from '@/pages/fabRelease/types';
 
 vi.mock('@/lib/native/fileExport', () => ({ presentGeneratedFile: vi.fn() }));
 
@@ -30,7 +31,7 @@ const cases = [
   { file: 'src/pages/rfis/AgendaPanel.jsx', name: 'exportAgendaCsv', data: (value: string) => ({ items: [{ title: value, group: 'Blocking', reason: value }] }), extra: {} },
   { file: 'src/pages/ActionItems.jsx', name: 'exportActionItemsToCSV', data: (value: string) => [{ title: value }], extra: {} },
   { file: 'src/pages/ProductionStatus.jsx', name: 'exportProductionCSV', data: (value: string) => [{ piece_mark: value, quantity: -5 }], extra: {} },
-  { file: 'src/pages/fabRelease/exportCsv.ts', name: 'exportFabReleaseCSV', data: (value: string) => [{ wp_number: value, crew: value, _signals: { stage: 'test', drawing: { packages: [] }, flags: [] } }], extra: { num: Number, getWorkPackageDisplayName: () => 'Package', stageMeta: () => ({ label: 'Stage' }), drawingPackageLabel: String } },
+  { file: 'src/pages/fabRelease/exportCsv.ts', name: 'exportFabReleaseCSV', data: (value: string) => [{ wp_number: value, crew: value, _signals: { stage: 'test', drawing: { packages: [] as DrawingPackage[] }, flags: [] as FabFlag[] } }], extra: { num: Number, getWorkPackageDisplayName: () => 'Package', stageMeta: () => ({ label: 'Stage' }), drawingPackageLabel: String } },
 ];
 describe('active CSV exporters', () => {
   for (const item of cases) it.each(['=1+1', '+cmd', '-cmd', '@SUM(A1)', '\tcmd', '\rcmd', 'commas, quotes" and\nnewlines'])(`${item.name} safely serializes %j`, async value => {

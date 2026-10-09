@@ -4,9 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import NudgeDraftModal from '../../rfis/NudgeDraftModal';
 import { ComposeEmailModal, ReplyEmailModal } from '../modals';
+import type { ReplyDefaults } from '@/services/emailSendService';
 const mocks = vi.hoisted(()=>({send:vi.fn(),success:vi.fn(),error:vi.fn()}));
 vi.mock('@/api/supabaseClient',()=>({entities:{}}));
-vi.mock('@/services/emailSendService',()=>({sendEmail:mocks.send,buildReplyDefaults:()=>({to:['sender@example.invalid'],cc:[],subject:'Re: Drawings',quoted_body:'\n> Original',reply_to_message_id:'message-a',thread_id:'thread-a',in_reply_to_external_id:'external-a'})}));
+vi.mock('@/services/emailSendService',()=>({sendEmail:mocks.send,buildReplyDefaults:():ReplyDefaults=>({to:['sender@example.invalid'],cc:[],subject:'Re: Drawings',quoted_body:'\n> Original',reply_to_message_id:'message-a',thread_id:'thread-a',in_reply_to_external_id:'external-a'})}));
 vi.mock('sonner',()=>({toast:{success:mocks.success,error:mocks.error}}));
 vi.mock('@/lib/rfiNudge',()=>({buildRfiNudge:()=>({suggestedTo:['gc@example.invalid'],subject:'RFI follow-up',body:'Please respond'}),parseEmails:(value:string)=>value.split(',')}));
 vi.mock('@/components/design-system',()=>({Button:({children,onClick,disabled}:{children:ReactNode;onClick:()=>void;disabled?:boolean})=><button onClick={onClick} disabled={disabled}>{children}</button>,Modal:({children,footer}:{children:ReactNode;footer:ReactNode})=><section>{children}{footer}</section>}));

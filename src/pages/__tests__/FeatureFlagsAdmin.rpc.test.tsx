@@ -8,10 +8,10 @@ const mocks = vi.hoisted(() => ({ list: vi.fn(), rpc: vi.fn(), error: vi.fn(), s
 vi.mock('@/api/supabaseClient', () => ({ entities: { FeatureFlag: { list: mocks.list } } }));
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc: mocks.rpc } }));
 vi.mock('@/components/shared/AdminRoute', () => ({ default: ({ children }: { children: ReactNode }) => children }));
-vi.mock('@/components/shared/LoadingSkeleton', () => ({ default: () => null }));
+vi.mock('@/components/shared/LoadingSkeleton', () => ({ default: (): null => null }));
 vi.mock('@/components/design-system', () => ({
   CommandBar: ({ children }: { children: ReactNode }) => children,
-  KpiTile: () => null,
+  KpiTile: (): null => null,
 }));
 vi.mock('sonner', () => ({ toast: { error: mocks.error, success: mocks.success } }));
 import FeatureFlagsAdmin from '../FeatureFlagsAdmin';

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+type ExportSessionSnapshot = { data: { session: { access_token: string; user: { id: string } } }; error: null };
 const auth = vi.hoisted(() => ({ token: 'token-a', user: 'user-a' }));
-vi.mock('@/lib/supabase', () => ({ supabase: { auth: { getSession: async () => ({ data: { session: { access_token: auth.token, user: { id: auth.user } } }, error: null }) } } }));
+vi.mock('@/lib/supabase', () => ({ supabase: { auth: { getSession: async (): Promise<ExportSessionSnapshot> => ({ data: { session: { access_token: auth.token, user: { id: auth.user } } }, error: null }) } } }));
 vi.mock('@/lib/env', () => ({ env: { supabaseUrl: 'https://project.supabase.co', supabaseAnonKey: 'public-test-key' } }));
 vi.mock('@/lib/native/fileExport', () => ({ presentGeneratedFile: vi.fn() }));
 import { setActiveOrgId } from '@/lib/activeOrg';
