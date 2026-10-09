@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261007073051",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local server-MFA candidate only; not applied or stamped. Enforces opted-in MFA through a shared-project PostgREST pre-request hook, restrictive Storage policy, and restrictive policies on the current Realtime publication. Isolated PGlite tests cover AAL1/AAL2, onboarding, definer RPCs, tenant boundaries, public/service access, failed lookup and existing-hook preservation. Shared-app configuration review and staging HTTP/Auth/Storage/Realtime verification are required before manual application; preserve the drift gate's missing-migration report until the exact reviewed SQL is applied and stamped. See supabase/tests/server-mfa/README.md."
+      },
+      {
         "version": "20261007112918",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - local atomic numbered-record creation candidate. Creates project-scoped idempotency receipts and transactional CO, delivery, SOV, change-request and backcharge creation while preserving official sequence allocation, project authorization, MFA and existing guards. Requires reviewed staged application and exact ledger-payload verification before frontend release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/commercial-create/README.md and supabase/tests/commercial-postgres/README.md."
