@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -47,6 +47,33 @@ vi.mock("@/components/submittals/DrawingSetSelector", () => ({
 import SubmittalFormModal from "../SubmittalFormModal";
 
 describe("SubmittalFormModal numbering", () => {
+  it('keeps new Product Data review statuses available but never offers fabrication release', async () => {
+    const submit = vi.fn();
+    render(<SubmittalFormModal open initial={{ title: 'Material certificate', submittal_type: 'Product Data' }} projectId="project-1" onClose={vi.fn()} onSubmit={submit} />);
+    const status = screen.getByDisplayValue('Draft');
+    expect(within(status).queryByRole('option', { name: 'Released for Fabrication' })).not.toBeInTheDocument();
+    await userEvent.selectOptions(status, 'Approved');
+    await userEvent.click(screen.getByRole('button', { name: 'CREATE' }));
+    expect(submit).toHaveBeenCalledWith(expect.objectContaining({ submittal_type: 'Product Data', status: 'Approved' }));
+  });
+  it('starts a new Shop Drawing review at Draft when its type changes from approved Product Data', async () => {
+    const submit = vi.fn();
+    render(<SubmittalFormModal open initial={{ title: 'Reviewed package', submittal_type: 'Product Data', status: 'Approved', submitted_date: '2026-10-01' }} projectId="project-1" onClose={vi.fn()} onSubmit={submit} />);
+    await userEvent.selectOptions(screen.getByDisplayValue('Product Data'), 'Shop Drawing');
+    expect(screen.getByDisplayValue('Draft')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Released for Fabrication' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'CREATE' }));
+    expect(submit).toHaveBeenCalledWith(expect.objectContaining({ submittal_type: 'Shop Drawing', status: 'Draft', submitted_date: null }));
+  });
+  it('preserves an existing non-Shop historical release visibly without writing a new lifecycle decision', async () => {
+    const submit = vi.fn();
+    render(<SubmittalFormModal open initial={{ id: 'legacy', submittal_number: 'LEG-4', title: 'Legacy package', submittal_type: 'Product Data', status: 'Released for Fabrication' }} projectId="project-1" onClose={vi.fn()} onSubmit={submit} />);
+    expect(screen.getByDisplayValue('Released for Fabrication')).toBeDisabled();
+    expect(screen.getByText(/Historical release status.*does not govern drawing approval/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'SAVE' }));
+    expect(submit).toHaveBeenCalledWith(expect.objectContaining({ submittal_type: 'Product Data' }));
+    expect(submit.mock.calls[0][0]).not.toHaveProperty('status');
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getNextFormattedNumber.mockResolvedValue("SUB-042");
