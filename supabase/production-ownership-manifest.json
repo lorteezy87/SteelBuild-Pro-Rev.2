@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261007112918",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local atomic numbered-record creation candidate. Creates project-scoped idempotency receipts and transactional CO, delivery, SOV, change-request and backcharge creation while preserving official sequence allocation, project authorization, MFA and existing guards. Requires reviewed staged application and exact ledger-payload verification before frontend release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/commercial-create/README.md and supabase/tests/commercial-postgres/README.md."
+      },
+      {
         "version": "20260927160000",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - not yet in the ledger. Replaces the 27 NO ACTION foreign keys to auth.users that make account deletion fail (\"Database error deleting user\"): ON DELETE SET NULL on 16 authorship columns; foreign key dropped, uuid kept, on 11 audit and sign-off columns (owner decision 2026-09-27). Aborts if a targeted column still blocks. Adds erase_my_sole_member_workspaces(text), locking parent organizations before its sole-member snapshot and declaring a 60s timeout hoisted by PostgREST 14 before the RPC statement, for the account-delete Edge Function. Production ledger absence and PostgREST 14.5 were rechecked 2026-10-05; staged HTTP timeout and concurrency verification remain deployment prerequisites: apply this before deploying the function version that calls it. Once applied and recorded as 20260927160000, move the version into the LEDGER literal in scripts/__tests__/migrationOverrides.test.ts and drop this override."
