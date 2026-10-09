@@ -245,3 +245,15 @@ describe("buildBillingSummary — business unlimited", () => {
     expect(s.kpis.find((k) => k.label === "Projects")?.tone).toBe("neutral");
   });
 });
+
+describe("project usage evidence", () => {
+  const base = { planKey: "pro", subscriptionStatus: "active", currentPeriodEnd: null, stripeCustomerId: "cus_test", memberCount: 1, pendingCount: 0 };
+  it("does not invent zero or remaining capacity from an unknown count", () => {
+    const summary = buildBillingSummary({ ...base, projectCount: null });
+    expect(summary.kpis.find(kpi => kpi.label === "Projects")).toMatchObject({ value: "—", sublabel: "project usage unavailable", tone: "neutral" });
+  });
+  it("does not describe a member's accessible subset as workspace capacity", () => {
+    const summary = buildBillingSummary({ ...base, projectCount: 2, projectCountIsWorkspaceTotal: false });
+    expect(summary.kpis.find(kpi => kpi.label === "Projects you can access")).toMatchObject({ value: "2", sublabel: "workspace total may be higher", tone: "neutral" });
+  });
+});

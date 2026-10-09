@@ -6,6 +6,19 @@
 
 import { supabase } from "@/lib/supabase";
 
+/** Exact, RLS-visible usage without a row-cap or another workspace's cache. */
+export async function getWorkspaceProjectCount(orgId: string): Promise<number> {
+  if (!orgId) throw new Error("Select a workspace to load project usage");
+  // eslint-disable-next-line no-restricted-syntax -- HEAD exact count returns no rows, so PostgREST's row cap cannot truncate this usage read.
+  const { count, error } = await supabase.from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .or("is_deleted.is.null,is_deleted.eq.false");
+  if (error) throw error;
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) throw new Error("Project usage is unavailable");
+  return count;
+}
+
  
 async function invokeBilling(action: string, payload: Record<string, unknown>): Promise<any> {
   const { data, error } = await supabase.functions.invoke("stripe-billing", { body: { action, ...payload } });

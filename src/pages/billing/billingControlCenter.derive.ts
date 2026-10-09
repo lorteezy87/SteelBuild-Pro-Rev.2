@@ -28,7 +28,8 @@ export interface BillingSummaryInput {
   /** Number of pending (not-yet-accepted) workspace invites. */
   pendingCount: number;
   /** Number of active projects in the workspace. */
-  projectCount: number;
+  projectCount: number | null;
+  projectCountIsWorkspaceTotal?: boolean;
 }
 
 export interface BillingKpi {
@@ -56,7 +57,7 @@ export interface BillingSummary {
   hasStripeCustomer: boolean;
   seats: SeatCapacity;
   projectLimit: number | null;
-  projectCount: number;
+  projectCount: number | null;
   projectsUnlimited: boolean;
   /** KPI cells, ready to pass to KpiStrip. */
   kpis: BillingKpi[];
@@ -189,7 +190,17 @@ export function buildBillingSummary(input: BillingSummaryInput): BillingSummary 
   };
 
   // 5. Project usage
-  const projectKpi: BillingKpi = {
+  const projectKpi: BillingKpi = input.projectCount === null ? {
+    label: input.projectCountIsWorkspaceTotal === false ? "Projects you can access" : "Projects",
+    value: "—",
+    sublabel: "project usage unavailable",
+    tone: "neutral",
+  } : input.projectCountIsWorkspaceTotal === false ? {
+    label: "Projects you can access",
+    value: String(input.projectCount),
+    sublabel: "workspace total may be higher",
+    tone: "neutral",
+  } : {
     label: "Projects",
     value: projectsUnlimited ? `${input.projectCount}` : `${input.projectCount} / ${projectLimit}`,
     sublabel: projectsUnlimited
