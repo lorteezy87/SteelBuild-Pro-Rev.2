@@ -244,7 +244,7 @@ DECLARE s public.submittals; n public.submittals; r public.submittal_rounds; rev
   v_actor uuid:=auth.uid(); v_project uuid; v_payload jsonb; v_prior steelbuild_workflow.round_requests;
   v_ids uuid[]; v_expected uuid[]; v_sets uuid[]; v_round_sets uuid[]; v_capture boolean:=false;
   v_legacy boolean:=p_attestation IS NOT NULL; v_result jsonb; v_coverage jsonb; v_path text; v_org uuid;
-  v_new boolean; v_number integer; v_metadata jsonb; v_source_count integer;
+  v_new boolean; v_number integer; v_metadata jsonb; v_source_count integer; v_require_sources boolean;
 BEGIN
   SELECT project_id INTO v_project FROM public.submittals WHERE id=p_submittal_id AND NOT coalesce(is_deleted,false) AND deleted_at IS NULL;
   IF v_actor IS NULL OR v_project IS NULL OR NOT coalesce(steelbuild_security.satisfies_mfa(),false)
@@ -276,35 +276,38 @@ BEGIN
   IF s.project_id IS DISTINCT FROM v_project OR s.updated_at IS DISTINCT FROM p_expected_updated_at OR s.status IS DISTINCT FROM p_expected_status OR s.current_round_id IS DISTINCT FROM p_expected_current_round_id THEN
     RAISE EXCEPTION 'ROUND_STALE: Reload the submittal before applying a workflow command' USING ERRCODE='40001'; END IF;
   IF coalesce(s.is_deleted,false) OR s.deleted_at IS NOT NULL THEN RAISE EXCEPTION 'ROUND_INACTIVE: The submittal is inactive'; END IF;
+  -- Returning, rejecting or voiding a package cannot grant release authority.
+  -- Preserve those corrective actions even when the source register is broken.
+  v_require_sources:=v_legacy OR coalesce(p_patch->>'status',s.status) NOT IN ('Draft','Void','Revise and Resubmit','Rejected');
   SELECT coalesce(array_agg(DISTINCT x ORDER BY x),'{}') INTO v_sets FROM unnest(coalesce(s.drawing_set_ids,'{}')) x;
   IF s.submittal_type='Shop Drawing' THEN
-    IF cardinality(v_sets)=0 OR cardinality(v_sets)<>cardinality(s.drawing_set_ids) OR array_position(v_sets,NULL) IS NOT NULL THEN
+    IF v_require_sources AND (cardinality(v_sets)=0 OR cardinality(v_sets)<>cardinality(s.drawing_set_ids) OR array_position(v_sets,NULL) IS NOT NULL) THEN
       RAISE EXCEPTION 'ROUND_ROSTER_INVALID: Link complete, distinct drawing sets before submission'; END IF;
     -- FOR UPDATE, not NO KEY UPDATE: immediate parent FKs block incoming sheets
     -- and revisions while the reviewed roster is locked. Refresh after waits.
-    PERFORM ds.id FROM public.drawing_sets ds WHERE ds.id=ANY(v_sets) ORDER BY ds.id FOR UPDATE;
-    IF EXISTS(SELECT 1 FROM unnest(v_sets) x WHERE NOT EXISTS(SELECT 1 FROM public.drawing_sets ds WHERE ds.id=x AND ds.project_id=v_project AND NOT ds.is_deleted AND ds.deleted_at IS NULL)) THEN
+    PERFORM ds.id FROM public.drawing_sets ds WHERE ds.id=ANY(v_sets) AND ds.project_id=v_project ORDER BY ds.id FOR UPDATE;
+    IF v_require_sources AND EXISTS(SELECT 1 FROM unnest(v_sets) x WHERE NOT EXISTS(SELECT 1 FROM public.drawing_sets ds WHERE ds.id=x AND ds.project_id=v_project AND NOT ds.is_deleted AND ds.deleted_at IS NULL)) THEN
       RAISE EXCEPTION 'ROUND_ROSTER_INVALID: Foreign, missing, or inactive drawing set'; END IF;
-    PERFORM d.id FROM public.drawings d WHERE d.drawing_set_id=ANY(v_sets) ORDER BY d.id FOR UPDATE;
+    PERFORM d.id FROM public.drawings d WHERE d.drawing_set_id=ANY(v_sets) AND d.project_id=v_project ORDER BY d.id FOR UPDATE;
     PERFORM rr.id FROM public.drawing_revisions rr JOIN public.drawings d ON d.id=rr.drawing_id
-      WHERE d.drawing_set_id=ANY(v_sets) ORDER BY rr.id FOR UPDATE OF rr;
+      WHERE d.drawing_set_id=ANY(v_sets) AND d.project_id=v_project AND rr.project_id=v_project ORDER BY rr.id FOR UPDATE OF rr;
     -- Lock both the current and captured source objects before checking coverage.
     -- A return approval must refresh Storage metadata after waits just as a new
     -- capture does. Storage writers hold object locks independently of drawings.
     PERFORM obj.id FROM storage.objects obj WHERE obj.bucket_id='app-files' AND obj.name IN (
       SELECT regexp_replace(rr.file_url,'^app-files/','') FROM public.drawing_revisions rr
-        JOIN public.drawings d ON d.id=rr.drawing_id WHERE d.drawing_set_id=ANY(v_sets) AND rr.is_current
+        JOIN public.drawings d ON d.id=rr.drawing_id WHERE d.drawing_set_id=ANY(v_sets) AND d.project_id=v_project AND rr.project_id=v_project AND rr.is_current
       UNION SELECT e.storage_path FROM public.submittal_round_revision_evidence e WHERE e.round_id=s.current_round_id)
       ORDER BY obj.name,obj.id FOR SHARE;
     IF NOT coalesce(steelbuild_security.satisfies_mfa(),false) OR NOT public.user_has_project_access(v_project)
        OR NOT public.user_has_project_role_at_least(v_project,'pm') THEN
       RAISE EXCEPTION 'ROUND_NOT_AUTHORIZED: Access changed while waiting; sign in and review again' USING ERRCODE='42501'; END IF;
     v_coverage:=public.get_submittal_revision_coverage(s.id);
-    IF jsonb_array_length(v_coverage->'foreign_drawing_set_ids')>0 THEN RAISE EXCEPTION 'ROUND_ROSTER_INVALID: A linked set has inconsistent project ownership'; END IF;
-    IF jsonb_array_length(v_coverage->'missing_current_drawing_ids')>0 OR jsonb_array_length(v_coverage->'empty_drawing_set_ids')>0 THEN
+    IF v_require_sources AND jsonb_array_length(v_coverage->'foreign_drawing_set_ids')>0 THEN RAISE EXCEPTION 'ROUND_ROSTER_INVALID: A linked set has inconsistent project ownership'; END IF;
+    IF v_require_sources AND (jsonb_array_length(v_coverage->'missing_current_drawing_ids')>0 OR jsonb_array_length(v_coverage->'empty_drawing_set_ids')>0) THEN
       RAISE EXCEPTION 'ROUND_SOURCE_INCOMPLETE: Every linked set needs live sheets with an active exact revision; reconcile the register before submission'; END IF;
     SELECT coalesce(array_agg(x::uuid ORDER BY x::uuid),'{}') INTO v_ids FROM jsonb_array_elements_text(v_coverage->'current_revision_ids') x;
-    IF v_ids IS DISTINCT FROM v_expected THEN RAISE EXCEPTION 'ROUND_STALE_ROSTER: The complete current revision roster changed; review it again' USING ERRCODE='40001'; END IF;
+    IF v_require_sources AND v_ids IS DISTINCT FROM v_expected THEN RAISE EXCEPTION 'ROUND_STALE_ROSTER: The complete current revision roster changed; review it again' USING ERRCODE='40001'; END IF;
   ELSIF cardinality(v_expected)<>0 THEN RAISE EXCEPTION 'ROUND_ROSTER_INVALID: Non-shop submittals do not capture drawing approval evidence';
   END IF;
   SELECT * INTO r FROM public.submittal_rounds WHERE id=s.current_round_id AND submittal_id=s.id AND project_id=s.project_id FOR UPDATE;
@@ -323,9 +326,9 @@ BEGIN
       RAISE EXCEPTION 'ROUND_EVIDENCE_IMMUTABLE: This round already has evidence; resubmit changed revisions'; END IF;
     v_new:=r.id IS NULL; v_capture:=true;
   ELSE
-    v_new:=n.status IN ('Submitted','Under Review') AND (r.id IS NULL OR s.status IN ('Revise and Resubmit','Rejected'));
+    v_new:=n.status IN ('Submitted','Under Review') AND (r.id IS NULL OR s.status IN ('Draft','Revise and Resubmit','Rejected'));
     IF p_new_round AND NOT v_new THEN RAISE EXCEPTION 'ROUND_TRANSITION_INVALID: A new round requires a draft or returned package'; END IF;
-    IF r.id IS NULL AND NOT v_new AND n.status NOT IN ('Draft','Void') THEN
+    IF r.id IS NULL AND NOT v_new AND v_require_sources THEN
       RAISE EXCEPTION 'ROUND_LEGACY_RECONCILIATION_REQUIRED: Reconcile or submit exact revision evidence before recording a return'; END IF;
     v_capture:=v_new AND s.submittal_type='Shop Drawing';
     IF s.submittal_type='Shop Drawing' AND NOT v_new AND n.status IN ('Submitted','Under Review','Approved','Approved as Noted','Released for Fabrication')

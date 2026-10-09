@@ -18,6 +18,7 @@ CREATE FUNCTION pg_temp.round_command(patch jsonb,id uuid DEFAULT 'ba090000-0000
 DECLARE s public.submittals; roster uuid[]; BEGIN
  SELECT * INTO s FROM public.submittals WHERE submittals.id=round_command.id;
  SELECT coalesce(array_agg(x::uuid ORDER BY x::uuid),'{}') INTO roster FROM jsonb_array_elements_text(public.get_submittal_revision_coverage(id)->'current_revision_ids') x;
+ IF s.submittal_type IS DISTINCT FROM 'Shop Drawing' THEN roster:='{}'; END IF;
  RETURN public.apply_submittal_round_workflow(id,gen_random_uuid(),s.updated_at,s.status,s.current_round_id,roster,patch,false);
 END $$;
 SET LOCAL ROLE authenticated;
@@ -33,15 +34,34 @@ SELECT pg_temp.assert_round('foreign Storage RLS hides fixture PDF',(SELECT coun
 SELECT pg_temp.round_actor('ba090000-0000-4000-8000-000000000010','aal1');
 SELECT pg_temp.expect_round_error('verified factor requires aal2',$q$SELECT public.apply_submittal_round_workflow('ba090000-0000-4000-8000-000000000050',gen_random_uuid(),now(),'Draft',NULL,'{}','{}',false)$q$,'ROUND_NOT_AUTHORIZED');
 SELECT pg_temp.round_actor('ba090000-0000-4000-8000-000000000010');
+SAVEPOINT unlinked_draft;
+UPDATE public.submittals SET drawing_set_ids='{}' WHERE id='ba090000-0000-4000-8000-000000000050';
+DO $$ BEGIN IF pg_temp.round_command('{"status":"Void"}')->'submittal'->>'status'<>'Void' THEN RAISE EXCEPTION 'Unlinked Draft could not be voided'; END IF; END $$;
+ROLLBACK TO unlinked_draft;
+SELECT pg_temp.assert_round('unlinked Draft can be voided without source evidence',true);
 INSERT INTO round_test_receipts(kind,parent_snapshot,request_id) SELECT 'first',to_jsonb(s),gen_random_uuid() FROM public.submittals s WHERE id='ba090000-0000-4000-8000-000000000050';
 UPDATE round_test_receipts SET result=public.apply_submittal_round_workflow('ba090000-0000-4000-8000-000000000050',request_id,(parent_snapshot->>'updated_at')::timestamptz,'Draft',NULL,ARRAY['ba090000-0000-4000-8000-000000000040','ba090000-0000-4000-8000-000000000041']::uuid[],'{"status":"Submitted","ball_in_court":"EOR","submitted_date":"2026-10-09"}',false) WHERE kind='first';
 SELECT pg_temp.assert_round('atomic multi-set source capture',(SELECT jsonb_array_length(result->'evidence')=2 AND result->'submittal'->>'status'='Submitted' FROM round_test_receipts WHERE kind='first'));
 SELECT pg_temp.assert_round('same command replays identical receipt',(SELECT result=public.apply_submittal_round_workflow('ba090000-0000-4000-8000-000000000050',request_id,(parent_snapshot->>'updated_at')::timestamptz,'Draft',NULL,ARRAY['ba090000-0000-4000-8000-000000000040','ba090000-0000-4000-8000-000000000041']::uuid[],'{"status":"Submitted","ball_in_court":"EOR","submitted_date":"2026-10-09"}',false) FROM round_test_receipts WHERE kind='first'));
+SAVEPOINT rejected_to_draft;
+SELECT pg_temp.round_command('{"status":"Rejected"}');
+SELECT pg_temp.round_command('{"status":"Draft"}');
+DO $$ BEGIN IF pg_temp.round_command('{"status":"Submitted","ball_in_court":"EOR","submitted_date":"2026-10-09"}')->'round'->>'round_number'<>'2' THEN RAISE EXCEPTION 'Rejected to Draft could not resubmit'; END IF; END $$;
+ROLLBACK TO rejected_to_draft;
+SELECT pg_temp.assert_round('Rejected to Draft can submit a new exact-source round',true);
 SELECT pg_temp.expect_round_error('immutable captured page denied',$q$UPDATE public.drawing_revisions SET pdf_page=9 WHERE id='ba090000-0000-4000-8000-000000000040'$q$,'ROUND_EVIDENCE_IMMUTABLE');
 SELECT pg_temp.expect_round_error('existing OFS checklist guard retained',$q$SELECT pg_temp.round_command('{"status":"Approved","ball_in_court":"GC"}')$q$,'SUBMITTAL_GATE_BLOCKED');
 SELECT pg_temp.assert_round('failed approval leaves parent and round Submitted',(SELECT s.status='Submitted' AND r.status='Submitted' FROM public.submittals s JOIN public.submittal_rounds r ON r.id=s.current_round_id WHERE s.id='ba090000-0000-4000-8000-000000000050'));
 SELECT pg_temp.round_command('{"status":"Approved","ball_in_court":"GC","metadata":{"ofs_checklist":{"markups_incorporated":true,"comments_addressed":true,"sheets_ready":true,"authorized_to_issue":true}}}');
 SELECT pg_temp.assert_round('valid return preserves exact evidence',(public.get_submittal_revision_coverage('ba090000-0000-4000-8000-000000000050')->>'ok')::boolean);
+SAVEPOINT missing_pdf_correction;
+RESET ROLE;
+UPDATE storage.objects SET name='ba090000-0000-4000-8000-000000000001/uploads/missing-original.pdf' WHERE name='ba090000-0000-4000-8000-000000000001/uploads/round-evidence.pdf';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.round_command('{"status":"Revise and Resubmit"}');
+SELECT pg_temp.expect_round_error('missing PDF still denies resubmission',$q$SELECT pg_temp.round_command('{"status":"Submitted","ball_in_court":"EOR","submitted_date":"2026-10-09"}')$q$,'ROUND_SOURCE_INCOMPLETE');
+ROLLBACK TO missing_pdf_correction;
+SELECT pg_temp.assert_round('missing PDF allows correction but never resubmission',true);
 SELECT pg_temp.assert_round('legacy approval has no automatic evidence',public.get_submittal_revision_coverage('ba090000-0000-4000-8000-000000000051')->>'reason'='missing_manifest');
 SELECT public.reconcile_submittal_round_evidence(id,gen_random_uuid(),updated_at,status,current_round_id,ARRAY['ba090000-0000-4000-8000-000000000040','ba090000-0000-4000-8000-000000000041']::uuid[],'Synthetic test PM reviewed the original transmittal and these exact revision pages.') FROM public.submittals WHERE id='ba090000-0000-4000-8000-000000000051';
 SELECT pg_temp.assert_round('legacy reconciliation supports released package without current BIC',(public.get_submittal_revision_coverage('ba090000-0000-4000-8000-000000000051')->>'ok')::boolean AND (SELECT status='Released for Fabrication' AND ball_in_court IS NULL FROM public.submittals WHERE id='ba090000-0000-4000-8000-000000000051'));
@@ -94,4 +114,4 @@ SELECT public.hard_delete_project('ba090000-0000-4000-8000-000000000002','Rollba
 RESET ROLE;
 SELECT pg_temp.assert_round('actual authorized project erasure clears private receipts',NOT EXISTS(SELECT 1 FROM steelbuild_workflow.round_requests WHERE project_id='ba090000-0000-4000-8000-000000000002') AND NOT EXISTS(SELECT 1 FROM public.submittal_round_revision_evidence WHERE project_id='ba090000-0000-4000-8000-000000000002'));
 SELECT pg_temp.assert_round('successful commands leave no private bypass context',NOT EXISTS(SELECT 1 FROM steelbuild_workflow.round_context));
-DO $$ BEGIN IF (SELECT count(*) FROM round_test_results)<>28 THEN RAISE EXCEPTION 'Expected 28 hosted assertions'; END IF; END $$;
+DO $$ BEGIN IF (SELECT count(*) FROM round_test_results)<>31 THEN RAISE EXCEPTION 'Expected 31 hosted assertions'; END IF; END $$;

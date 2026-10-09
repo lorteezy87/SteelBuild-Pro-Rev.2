@@ -26,7 +26,7 @@ keys, incoming sheets, revision swaps, post-capture insert blocking and removals
 
 `node hosted-rollback.ts` prints JSON containing a SHA-256 and reviewable SQL.
 It does not connect or read credentials. The SQL runs the exact candidate plus
-synthetic fixtures and 28 assertions in a transaction ending in ROLLBACK, then
+synthetic fixtures and 31 assertions in a transaction ending in ROLLBACK, then
 checks that the candidate, ledger stamp and fixtures are absent. Only the explicit
 staging branch may be selected by its caller. This rehearsal passed against the
 actual hosted trigger graph, Auth/MFA, Storage RLS, authorship cleanup, archive

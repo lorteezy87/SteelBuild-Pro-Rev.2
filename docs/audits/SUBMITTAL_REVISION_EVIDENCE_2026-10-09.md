@@ -36,6 +36,12 @@ active in the transaction. New round numbers are assigned under the parent
 lock. Direct Shop Drawing lifecycle/round writes are rejected. Create a Draft
 first, review its sources, then use the command; imported approval is not
 silently treated as evidence.
+Corrective transitions to Draft, Void, Revise and Resubmit or Rejected retain
+authorization, parent-version checks and existing legal transition rules, but do
+not require complete sources or capture approval evidence. Existing source rows
+are still locked. An unlinked Draft can be voided; a missing PDF can be returned
+for correction, while resubmission remains blocked until sources are complete.
+Rejected → Draft → Submitted starts a new reviewed round.
 
 `reconcile_submittal_round_evidence` accepts the same first six arguments plus
 `p_attestation text`. A PM must inspect the original transmission and attest
@@ -121,7 +127,7 @@ PM reconciliation/resubmission; report the actual affected count before release.
 
 ## Verification boundary
 
-The dedicated PGlite suite passes 24 behavioral checks. The PostgreSQL suite
+The dedicated PGlite suite passes 27 behavioral checks. The PostgreSQL suite
 includes 18 independent-session scenarios; it is a required CI step. The earlier
 12-scenario head `79306342e` passed commercial CI job `113725795662`; the final
 source additionally tests object-update waits, post-capture replacement,
@@ -130,13 +136,14 @@ source replacement. Both captures and return approvals lock source objects befor
 evaluating coverage and recheck authority after those waits.
 
 On 2026-10-09 the exact candidate with SHA-256
-`72170a79cddc634a25d09cb8a5cdd8679010cf05c2909cd2b8fea2e09605bdec`
-passed **28 hosted staging assertions** on `ndyfjffsulfbwpmwdmic` in one rolled-back
+`b4b77581e51a0c61ee63d47fa34d1010a123bb1759bee6889e0ca0ec719b0ea7`
+passed **31 hosted staging assertions** on `ndyfjffsulfbwpmwdmic` in one rolled-back
 transaction. The rehearsal used actual Auth/MFA, workspace/project permissions,
 Storage RLS, installed workflow/audit triggers, and installed soft/hard erasure
 commands. It covered two-set capture/replay, PM/viewer/foreign-membership/AAL
 denials, existing OFS checks, legacy reconciliation, non-Shop submission, new
-revision invalidation, R&R, storage source changes, Auth FK cleanup and project
+revision invalidation, corrective/void transitions with missing sources,
+Rejected-to-Draft resubmission, linked Product Data, R&R, storage source changes, Auth FK cleanup and project
 erasure. No policies or triggers were disabled. Storage tests changed only
 synthetic metadata; they did not upload, read or delete PDF bytes.
 

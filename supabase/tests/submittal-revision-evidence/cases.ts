@@ -48,6 +48,11 @@ export async function runCases(db:Database):Promise<number> {
     await assert.rejects(execute(db,command(s,{...submit,project_id:ids.foreignProject})),/ROUND_PATCH_INVALID/);
     assert.equal((await db.query('select id from public.submittal_rounds')).rows.length,0);
   });
+  await check('an unlinked Draft can be voided without creating evidence',()=>rollback(async()=>{
+    await db.query("update public.submittals set drawing_set_ids='{}' where id=$1",[ids.submittal]);
+    const result=await flow({status:'Void'},ids.submittal,[]);assert.equal(result.submittal.status,'Void');
+    assert.equal(result.round,null);assert.equal(result.evidence.length,0);
+  }));
   let submitted:Result;
   const first=command(await parent(db),submit);
   await check('atomic submission captures exact PDF source and page across all linked sets',async()=>{
@@ -66,6 +71,11 @@ export async function runCases(db:Database):Promise<number> {
   await check('open sent round updates without replacing immutable evidence',async()=>{
     const result=await flow({status:'Under Review'});assert.equal(result.round.id,submitted.round.id);assert.deepEqual(result.evidence,submitted.evidence);
   });
+  await check('Rejected to Draft remains able to submit a new reviewed round',()=>rollback(async()=>{
+    await flow({status:'Rejected'});await flow({status:'Draft'},ids.submittal,[]);
+    const result=await flow(submit);assert.equal(result.round.round_number,2);assert.notEqual(result.round.id,submitted.round.id);
+    assert.deepEqual(result.evidence.map(e=>e.drawing_revision_id).sort(),reviewed);
+  }));
   await check('direct BIC, round status, roster and evidence source writes are rejected',async()=>{
     await assert.rejects(db.query("update public.submittals set ball_in_court='GC' where id=$1",[ids.submittal]),/ROUND_WORKFLOW_REQUIRED/);
     await assert.rejects(db.query("update public.submittal_rounds set status='Approved' where id=$1",[submitted.round.id]),/ROUND_WORKFLOW_REQUIRED/);
@@ -88,6 +98,14 @@ export async function runCases(db:Database):Promise<number> {
     const result=await flow({status:'Approved',ball_in_court:'GC',returned_date:'2026-10-09',metadata:{ofs_checklist:checklist}});
     assert.equal(result.round.id,submitted.round.id);assert.equal((await coverage(db)).ok,true);
   });
+  await check('missing PDF permits corrective R and R but still blocks resubmission',()=>rollback(async()=>{
+    const original=(await coverage(db)).evidence;await db.exec('reset role');
+    await db.query("update storage.objects set name='missing-original.pdf' where name=$1",[sourcePath]);await db.exec('set role authenticated');
+    const result=await flow({status:'Revise and Resubmit'},ids.submittal,[]);assert.equal(result.submittal.status,'Revise and Resubmit');
+    assert.deepEqual(result.evidence,original);await db.exec('savepoint rejected_resubmission');
+    await assert.rejects(flow(submit),/ROUND_SOURCE_INCOMPLETE/);await db.exec('rollback to savepoint rejected_resubmission');
+    assert.equal((await parent(db)).status,'Revise and Resubmit');
+  }));
   await check('legacy approval fails closed until explicit exact-source PM attestation',async()=>{
     assert.equal((await coverage(db,ids.legacy)).reason,'missing_manifest');
     const s=await parent(db,ids.legacy);

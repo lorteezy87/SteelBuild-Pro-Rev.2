@@ -34,7 +34,7 @@ INSERT INTO public.drawing_revisions(id,project_id,drawing_id,revision_code,shee
 INSERT INTO public.submittals(id,project_id,submittal_number,title,submittal_type,drawing_set_ids) VALUES
  ('ba090000-0000-4000-8000-000000000050','ba090000-0000-4000-8000-000000000002','ROUND-TEST-1','Test shop package','Shop Drawing',ARRAY['ba090000-0000-4000-8000-000000000020','ba090000-0000-4000-8000-000000000021']::uuid[]),
  ('ba090000-0000-4000-8000-000000000051','ba090000-0000-4000-8000-000000000002','ROUND-TEST-2','Legacy package','Shop Drawing',ARRAY['ba090000-0000-4000-8000-000000000020','ba090000-0000-4000-8000-000000000021']::uuid[]),
- ('ba090000-0000-4000-8000-000000000052','ba090000-0000-4000-8000-000000000002','ROUND-TEST-3','Product data','Product Data','{}');
+ ('ba090000-0000-4000-8000-000000000052','ba090000-0000-4000-8000-000000000002','ROUND-TEST-3','Product data','Product Data',ARRAY['ba090000-0000-4000-8000-000000000020']::uuid[]);
 UPDATE public.submittals SET status='Submitted',ball_in_court='EOR',submitted_date='2026-10-01' WHERE id='ba090000-0000-4000-8000-000000000051';
 UPDATE public.submittals SET status='Approved',ball_in_court='GC',metadata='{"ofs_checklist":{"markups_incorporated":true,"comments_addressed":true,"sheets_ready":true,"authorized_to_issue":true}}' WHERE id='ba090000-0000-4000-8000-000000000051';
 UPDATE public.submittals SET status='Released for Fabrication',ball_in_court=NULL WHERE id='ba090000-0000-4000-8000-000000000051';

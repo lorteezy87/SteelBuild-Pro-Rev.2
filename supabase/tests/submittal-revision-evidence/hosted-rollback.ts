@@ -28,7 +28,7 @@ ${migration}
 ${cases}
 ROLLBACK;
 SELECT jsonb_build_object(
- 'candidate_sha256','${sha256}', 'checks_passed',28,
+ 'candidate_sha256','${sha256}', 'checks_passed',31,
  'candidate_absent',to_regclass('public.submittal_round_revision_evidence') IS NULL,
  'ledger_absent',NOT EXISTS(SELECT 1 FROM supabase_migrations.schema_migrations WHERE version='20261009070300'),
  'synthetic_users_remaining',(SELECT count(*) FROM auth.users WHERE email LIKE 'round-evidence-%@example.invalid'),
