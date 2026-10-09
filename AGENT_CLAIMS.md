@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-09 | codex-revision-manifest-client | Atomic submittal frontend and evidence review | src/hooks/submittals/**; src/hooks/useSubmittals.ts; src/pages/submittals/**; src/api/client/{entities,submittal*,supabaseTypes}.ts; src/lib/{submittalRevisionEvidence,detailingPackageState,fabReleaseGate}*; src/lib/pieceControl/{drawingReleaseReady,readiness,relationshipsRepository}.ts; src/lib/exports/fabRelease*.ts; src/pages/{DrawingSubmittalHub.tsx,drawingSubmittalHub/**,drawings/useDrawingsPageController.ts}; src/components/submittals/{NewRoundModal.jsx,processBoard.derive.ts}; src/services/cacheRegistry.ts; src/test/fixtures/submittalEvidence.ts; related tests | Scoped continuation of parent-approved immutable revision manifests; coordinate RPC contract with revision-manifest-db; preserve all prior claims. |
+
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
 | 2026-10-09 | codex-atomic-billing-backup-port | Atomic Stripe receipts and backup execution guard | supabase/functions/stripe-billing/{index,webhookLogic}.ts and tests; supabase/migrations/20261008071019_atomic_stripe_billing_events.sql; supabase/tests/stripe-billing/**; .github/workflows/{ci,storage-backup}.yml scoped steps; scripts/storage-backup.mjs and scoped tests; required migration classification; docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md | Port only committed billing and backup fixes from 1fc3078f1; preserve MFA and current CI; validate real PostgreSQL concurrency and staging rollback before root-led release. |

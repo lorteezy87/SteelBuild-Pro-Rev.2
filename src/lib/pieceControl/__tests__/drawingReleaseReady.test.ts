@@ -1,3 +1,4 @@
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import { describe, expect, it } from "vitest";
 import {
   buildPieceImpact,
@@ -37,7 +38,7 @@ describe("isGoverningDrawingReleaseReady", () => {
     expect(
       isGoverningDrawingReleaseReady(drawing, {
         submittals: [
-          { id: "s1", submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] },
+          { id: "s1", ...verifiedSubmittalEvidence("s1"), submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] },
         ],
       }).ready,
     ).toBe(true);
@@ -46,7 +47,7 @@ describe("isGoverningDrawingReleaseReady", () => {
       isGoverningDrawingReleaseReady(drawing, {
         submittals: [
           {
-            id: "s1",
+            id: "s1", ...verifiedSubmittalEvidence("s1"),
             submittal_type: "Shop Drawing",
             status: "Released for Fabrication",
             ball_in_court: null,
@@ -62,7 +63,7 @@ describe("isGoverningDrawingReleaseReady", () => {
       isGoverningDrawingReleaseReady(drawing, {
         submittals: [
           {
-            id: "s1",
+            id: "s1", ...verifiedSubmittalEvidence("s1"),
             submittal_type: "Shop Drawing",
             status: "Approved as Noted",
             ball_in_court: "Detailer",
@@ -76,7 +77,7 @@ describe("isGoverningDrawingReleaseReady", () => {
       isGoverningDrawingReleaseReady(drawing, {
         submittals: [
           {
-            id: "s1",
+            id: "s1", ...verifiedSubmittalEvidence("s1"),
             submittal_type: "Shop Drawing",
             status: "Revise and Resubmit",
             ball_in_court: "Detailer",
@@ -91,7 +92,7 @@ describe("isGoverningDrawingReleaseReady", () => {
     expect(isGoverningDrawingReleaseReady(drawing, {
       submittals: [
         { id: "void", status: "Void", submitted_date: "2026-09-02", drawing_set_ids: ["set-1"] },
-        { id: "approved", submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", submitted_date: "2026-09-01", drawing_set_ids: ["set-1"] },
+        { id: "approved", ...verifiedSubmittalEvidence("approved"), submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", submitted_date: "2026-09-01", drawing_set_ids: ["set-1"] },
       ],
     })).toMatchObject({ ready: true, stage: "IFC", governingSubmittalId: "approved" });
   });
@@ -100,7 +101,7 @@ describe("isGoverningDrawingReleaseReady", () => {
     expect(isGoverningDrawingReleaseReady(drawing, {
       submittals: [
         { id: "deleted", status: "Revise and Resubmit", submitted_date: "2026-09-02", deleted_at: "2026-09-03T00:00:00Z", drawing_set_ids: ["set-1"] },
-        { id: "approved", submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", submitted_date: "2026-09-01", drawing_set_ids: ["set-1"] },
+        { id: "approved", ...verifiedSubmittalEvidence("approved"), submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", submitted_date: "2026-09-01", drawing_set_ids: ["set-1"] },
       ],
     })).toMatchObject({ ready: true, stage: "IFC", governingSubmittalId: "approved" });
   });
@@ -186,7 +187,7 @@ describe("buildPieceImpact", () => {
       evidence: {
         submittals: [
           {
-            id: "s1",
+            id: "s1", ...verifiedSubmittalEvidence("s1"),
             submittal_type: "Shop Drawing",
             status: "Revise and Resubmit",
             ball_in_court: "Detailer",
@@ -230,7 +231,7 @@ describe("buildPieceImpact", () => {
       evidence: {
         submittals: [
           {
-            id: "s1",
+            id: "s1", ...verifiedSubmittalEvidence("s1"),
             submittal_type: "Shop Drawing",
             status: "Approved",
             ball_in_court: "GC",

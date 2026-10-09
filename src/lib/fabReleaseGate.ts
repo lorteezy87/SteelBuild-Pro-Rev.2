@@ -94,6 +94,8 @@ export interface FabReleaseGateArgs {
   /** Submittal evidence for IFC/Released readiness (Slice 8). */
   submittals?: Array<{
     id: string;
+    current_round_id?: string | null;
+    revision_coverage?: import('@/lib/submittalRevisionEvidence').RevisionCoverageSummary | null;
     submittal_type?: string | null;
     status: string;
     ball_in_court?: string | null;
@@ -270,7 +272,7 @@ export function computeFabReleaseGate({
       kind: "not_ifc_ready",
       title: `${notIfcReady.length} sheet${plural(notIfcReady.length)} not IFC / Released for fabrication`,
       sheets: notIfcReady,
-      action: "Advance governing submittals to IFC or Released before releasing the package.",
+      action: "Verify exact current-round PDF revision evidence and advance governing submittals to IFC or Released before releasing the package.",
     });
   }
   if (blockingRfis.length) {

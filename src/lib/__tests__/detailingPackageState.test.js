@@ -1,3 +1,4 @@
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import { describe, it, expect } from "vitest";
 import {
   DRAFTING_STATES,
@@ -131,10 +132,10 @@ describe("compareDetailingStates", () => {
 // submittal and on the deprecated set_approval_status flag — so it reported
 // packages as released to fab that the shop never received.
 describe("isPackageReleasedForFab", () => {
-  it("counts the real release states", () => {
-    expect(isPackageReleasedForFab({}, [{ submittal_type: "Shop Drawing", status: "Released for Fabrication" }], [])).toBe(true);
-    expect(isPackageReleasedForFab({ detailing_state: "Partially Released" }, [], [])).toBe(true);
-    expect(isPackageReleasedForFab({ detailing_state: "Released for Erection" }, [], [])).toBe(true);
+  it("requires exact evidence even when a release state is recorded", () => {
+    expect(isPackageReleasedForFab({}, [{ id: 'released', ...verifiedSubmittalEvidence('released'), submittal_type: "Shop Drawing", status: "Released for Fabrication" }], [])).toBe(true);
+    expect(isPackageReleasedForFab({ detailing_state: "Partially Released" }, [], [])).toBe(false);
+    expect(isPackageReleasedForFab({ detailing_state: "Released for Erection" }, [], [])).toBe(false);
   });
 
   it("does NOT count a Void submittal as released to fab", () => {

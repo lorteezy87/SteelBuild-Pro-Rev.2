@@ -8,6 +8,10 @@ export type SubmittalRound = RowWithAliases<"submittal_rounds">;
 export interface AddRoundInput {
   submittal: {
     id: string;
+    updated_at?: string | null;
+    current_round_id?: string | null;
+    submittal_type?: string | null;
+    revision_coverage?: import('@/lib/submittalRevisionEvidence').RevisionCoverageSummary | null;
     project_id: string;
     drawing_set_ids?: string[] | null;
     total_rounds?: number | null;
@@ -31,8 +35,12 @@ export interface AddRoundInput {
   bumpRevision?: boolean;
   bumpTextRevision?: boolean;
   currentRevision?: string | null;
+  revision?: string | null;
   extraPatch?: Record<string, unknown> | null;
   fabReleaseOverrideReason?: string | null;
+  revisionIds?: readonly string[];
+  requestId?: string;
+  newRound?: boolean;
 }
 
 export interface CurrentRoundLite {

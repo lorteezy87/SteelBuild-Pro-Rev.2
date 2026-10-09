@@ -9,8 +9,10 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { effectiveDetailingState, isPackageReleasedForFab } from "@/lib/detailingPackageState";
+import { submittalRevisionEvidenceBlockReason } from '@/lib/submittalRevisionEvidence';
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { usePermissions } from "@/services/permissions";
+import { invalidateEntities } from '@/services/cacheRegistry';
 import { TitleblockActionButton } from "@/components/drawings/register/TitleblockActionButton";
 import {
   accent,
@@ -99,7 +101,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
       <GridCell style={{ color: textMuted }}>{r.setNo}</GridCell>
       <GridCell style={{ color: textMuted }}>{r.discipline}</GridCell>
       <GridCell align="right">{r.sheetCount}</GridCell>
-      <GridCell>{r.effectiveState && r.effectiveState !== "Not Started" ? <OperationalStateChip state={r.effectiveState} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</GridCell>
+      <GridCell>{r.effectiveState && r.effectiveState !== "Not Started" ? <OperationalStateChip state={r.effectiveState} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}{r.revisionEvidenceReason && <span title={r.revisionEvidenceReason} style={{ display: 'block', color: 'var(--cmd-warn-text)', fontSize: 11 }}>Revision evidence required</span>}</GridCell>
       <GridCell>{r.health ? <HealthChip health={r.health} onClick={() => h.setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</GridCell>
       <GridCell style={{ color: textMuted }}>{r.releasedCount}/{r.sheetCount}</GridCell>
       <GridCell><DueChip info={r.due} /></GridCell>
@@ -264,15 +266,9 @@ export function DrawingRegisterTable({
   const allSheets = useMemo(() => (setPackages || []).flatMap((p: any) => p.sheets || []), [setPackages]);
   const existingSetNames = useMemo(() => [...new Set((setPackages || []).map((p: any) => p.name).filter(Boolean))], [setPackages]);
   const refetchDrawings = () => {
-    // Scope every key with projectId — bare ["drawings"] refetches every
-    // project's drawing queries still in the cache (portfolio fan-out).
-    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-    qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
-    qc.invalidateQueries({ queryKey: ["drawing-revisions", projectId] });
-    // Doc Control register reads the current revision from drawing_register_view
-    // under this key — without it the register served a stale revision after an
-    // upload until a manual page reload.
-    qc.invalidateQueries({ queryKey: ["drawing-register", projectId] });
+    // A new revision changes immutable approval coverage as well as the sheet.
+    // Refresh all consumers so old approval cannot linger as a release claim.
+    void invalidateEntities(qc, ['drawing', 'drawingSet', 'drawing_revision'], projectId);
   };
 
   const rowBtn: CSSProperties = {
@@ -310,6 +306,7 @@ export function DrawingRegisterTable({
         const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
         return {
           pkg, due, sheetCount, releasedCount, discipline, maxRev, dominantStage,
+          revisionEvidenceReason: ['IFC', 'Released', 'Partially Released', 'Released for Erection'].includes(effectiveState) ? submittalRevisionEvidenceBlockReason(latestSubmittal) : null,
           // `status` (raw latest-submittal status) is retained for the search
           // filter below ONLY — it does NOT drive the Status cell, which renders
           // from `effectiveState` (the coalesced operational state).
@@ -464,7 +461,7 @@ export function DrawingRegisterTable({
                   // Status cell is swapped here.
                   ? <span title="Workflow status only. Verify the drawing-set and work-package fabrication release gates."><StatusPill tone={registerStatusTone(r.effectiveState)}>{r.effectiveState}</StatusPill></span>
                   : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>
-                }</Td>
+                }{r.revisionEvidenceReason && <span title={r.revisionEvidenceReason} style={{ display: 'block', color: 'var(--cmd-warn-text)', fontSize: 11 }}>Revision evidence required</span>}</Td>
                 <Td>{r.health ? <HealthChip health={r.health} onClick={() => setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</Td>
                 <Td className="is-num" style={{ color: textMuted }}>{r.releasedCount}/{r.sheetCount}</Td>
                 <Td><DueChip info={r.due} /></Td>

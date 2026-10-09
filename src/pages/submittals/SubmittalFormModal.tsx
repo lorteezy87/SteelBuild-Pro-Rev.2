@@ -8,6 +8,7 @@ import { STATUSES, TYPES, BIC_CHOICES } from "./format";
 import { DRAWING_TYPES, type DrawingType } from "@/lib/submittalComponents";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import type { DrawingSet, Submittal } from "./types";
+import { validateSubmittalCreate } from "@/api/client/submittalWorkflow";
 
 // DrawingSetSelector is still .jsx, so TS infers its array props from `[]`
 // default params as `never[]`; cast at the boundary (removable once it is
@@ -85,6 +86,10 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
 
   const handleSubmit = async () => {
     if (saving || submitInFlight.current) return;
+    if (!isEdit) {
+      try { validateSubmittalCreate(form); }
+      catch (error) { toast.error(error instanceof Error ? error.message : String(error)); return; }
+    }
     let number = form.submittal_number.trim();
     if (!form.title.trim()) {
       toast.error("Title is required");
@@ -134,6 +139,10 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
         submitted_date: form.submitted_date || null,
         required_date: form.required_date || null,
       };
+      if (isEdit) {
+        // Lifecycle decisions belong to the reviewed atomic status workflow.
+        for (const key of ['status', 'ball_in_court', 'revision', 'round_number', 'submitted_date']) delete record[key];
+      }
       if (isSplit && parentSubmittal?.id) {
         record.parent_submittal_id = parentSubmittal.id;
         record.split_reason = splitReason.trim() || null;
@@ -164,7 +173,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
           </div>
           <div>
             <Label>Revision</Label>
-            <Input value={form.revision} onChange={(e) => setField("revision", e.target.value)} placeholder="0" />
+            <Input disabled={isEdit} value={form.revision} onChange={(e) => setField("revision", e.target.value)} placeholder="0" />
           </div>
           <div style={{ gridColumn: "1 / span 2" }}>
             <Label>Title *</Label>
@@ -257,11 +266,11 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
           </div>
           <div>
             <Label>Round</Label>
-            <Input type="number" min="1" value={form.round_number} onChange={(e) => setField("round_number", e.target.value)} />
+            <Input disabled type="number" min="1" value={form.round_number} />
           </div>
           <div>
             <Label>Submitted Date</Label>
-            <Input type="date" value={form.submitted_date} onChange={(e) => setField("submitted_date", e.target.value)} />
+            <Input disabled={isEdit || form.submittal_type === 'Shop Drawing'} type="date" value={form.submitted_date} onChange={(e) => setField("submitted_date", e.target.value)} />
           </div>
           <div>
             <Label>Required Date</Label>
@@ -269,16 +278,16 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
           </div>
           <div>
             <Label>Status</Label>
-            <Select value={form.status} onValueChange={(v) => setField("status", v)}>
+            <Select disabled={isEdit} value={form.status} onValueChange={(v) => setField("status", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {(!isEdit && form.submittal_type === 'Shop Drawing' ? ['Draft'] : STATUSES).map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label>Ball-in-court</Label>
-            <Select value={form.ball_in_court} onValueChange={(v) => setField("ball_in_court", v)}>
+            <Select disabled={isEdit} value={form.ball_in_court} onValueChange={(v) => setField("ball_in_court", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {BIC_CHOICES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
@@ -292,6 +301,9 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
           <div>
             <Label>Reviewer</Label>
             <Input value={form.reviewer} onChange={(e) => setField("reviewer", e.target.value)} placeholder="EOR / Architect" />
+          </div>
+          <div style={{ gridColumn: "1 / span 2", color: 'var(--text-secondary)', fontSize: 12 }}>
+            Submit, return, or approve from the status workflow after saving these details. Shop Drawing submissions capture the exact current PDF revisions.
           </div>
           <div style={{ gridColumn: "1 / span 2" }}>
             <Label>Notes</Label>

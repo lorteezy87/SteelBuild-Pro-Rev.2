@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import type { Update } from "@/api/supabaseClient";
+import { isSubmittalWorkflowPatch } from '@/api/client/submittalWorkflow';
 import {
   applyOptimisticRowPatch,
   shouldRollbackOptimistic,
@@ -56,9 +57,11 @@ export function useSubmittalMutations({
       if (!id) throw new Error("Update requires an id.");
       const previousStatus =
         submittals.find((submittal) => submittal.id === id)?.status ?? null;
+      const reviewed = submittals.find((submittal) => submittal.id === id);
       const updated = await entities.Submittal.update(
         id,
         data as Update<"submittals">,
+        { submittalReview: reviewed },
       );
       if (typeof data.status === "string") {
         await runStatusTriggers({
@@ -72,6 +75,9 @@ export function useSubmittalMutations({
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<Submittal[]>(queryKey);
+      // Approval and submission are server decisions. An optimistic status can
+      // make previously captured revisions appear released before validation.
+      if (isSubmittalWorkflowPatch(variables)) return { previous };
       queryClient.setQueryData<Submittal[]>(queryKey, (current) =>
         applyOptimisticRowPatch(
           current,

@@ -406,6 +406,7 @@ function MatrixRow({ row, roundsBySubmittal, useWorkdays = false, canCreateSubmi
         <td>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
             <StageChip stage={row.stage} />
+            {!row.revisionEvidenceReady && sub && ['IFC', 'Released'].includes(row.stage) && <span title={row.revisionEvidenceReason || undefined}><Pill tone="warn">Revision evidence required</Pill></span>}
             {row.stageSource === "sheets" && (
               <span
                 style={{ ...muted, fontSize: 11 }}

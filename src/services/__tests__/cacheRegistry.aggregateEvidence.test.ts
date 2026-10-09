@@ -4,6 +4,18 @@ import { invalidateEntity } from "../cacheRegistry";
 
 describe.each([
   {
+    name: "piece exact-revision readiness",
+    sources: ["drawing", "drawingSet", "drawing_revision", "submittal", "submittal_round"],
+    affected: ["piece-relationships", "project-a"],
+    other: ["piece-relationships", "project-b"],
+  },
+  {
+    name: "canonical fabrication release gate",
+    sources: ["drawing", "drawingSet", "drawing_revision", "submittal", "submittal_round"],
+    affected: ["fab-release-canonical-gates", "project-a", ["wp-a"]],
+    other: ["fab-release-canonical-gates", "project-b", ["wp-b"]],
+  },
+  {
     name: "change-order review",
     sources: ["project", "sov_item", "rfi"],
     affected: ["change-orders", "project-a", "org-a", "evidence"],

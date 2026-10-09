@@ -1,15 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FabApprovalEvidenceRows } from "../fabReleaseEvidence";
+import type { SubmittalRevisionCoverage } from '@/api/client/submittalWorkflow';
 
 type Row = Record<string, unknown>;
 const database = vi.hoisted(() => ({
   tables: {} as Record<string, Row[]>,
   failTable: "",
+  failCoverage: false,
+  coverageCalls: [] as string[][],
   calls: [] as Array<{ table: string; filters: Record<string, unknown>; start: number; end: number; order: string[] }>,
 }));
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
+    async rpc(_name: string, args: { p_submittal_ids: string[] }): Promise<{ data: SubmittalRevisionCoverage[] | null; error: { message: string } | null }> {
+      database.coverageCalls.push(args.p_submittal_ids);
+      if (database.failCoverage) return { data: null, error: { message: 'Evidence unavailable' } };
+      return { data: args.p_submittal_ids.map((id): SubmittalRevisionCoverage => {
+        const row = database.tables.submittals.find(candidate => candidate.id === id)!;
+        return { project_id: String(row.project_id), reason: 'missing_manifest', submittal_id: id, submittal_status: String(row.status), submittal_updated_at: String(row.updated_at), round_id: null, ok: false, current_revision_ids: [], captured_revision_ids: [], missing_revision_ids: [], stale_revision_ids: [], missing_current_drawing_ids: [], foreign_drawing_set_ids: [], empty_drawing_set_ids: [], evidence: [] };
+      }), error: null };
+    },
     from(table: string) {
       const filters: Record<string, unknown> = {};
       const order: string[] = [];
@@ -51,6 +62,8 @@ import {
 beforeEach(() => {
   database.tables = {};
   database.failTable = "";
+  database.failCoverage = false;
+  database.coverageCalls = [];
   database.calls = [];
 });
 
@@ -59,6 +72,7 @@ describe("fabrication package evidence", () => {
     const drawingIds = Array.from({ length: 501 }, (_, index) => `drawing-${String(index).padStart(3, "0")}`);
     database.tables.submittals = Array.from({ length: 1001 }, (_, index) => ({
       id: `sub-${String(index).padStart(4, "0")}`, project_id: "project-1", is_deleted: false,
+      submittal_type: 'Shop Drawing', status: 'Draft', updated_at: '2026-10-09T00:00:00Z',
     })).reverse();
     database.tables.submittals.push({ id: "foreign-sub", project_id: "project-2", is_deleted: false });
     database.tables.drawing_signoffs = [
@@ -78,6 +92,9 @@ describe("fabrication package evidence", () => {
 
     expect(evidence.submittals).toHaveLength(1001);
     expect(evidence.submittals[0].id).toBe("sub-0000");
+    expect(evidence.submittals[0].revision_coverage?.ok).toBe(false);
+    expect(database.coverageCalls).toHaveLength(6);
+    expect(database.coverageCalls.every(ids => ids.length <= 200)).toBe(true);
     expect(evidence.drawingSignoffs).toHaveLength(1002);
     expect(evidence.drawingRevisions).toHaveLength(2);
     expect(database.calls.filter((call) => call.table === "submittals")).toHaveLength(3);
@@ -86,6 +103,12 @@ describe("fabrication package evidence", () => {
     expect(database.calls.filter((call) => Array.isArray(call.filters.drawing_id)).every((call) =>
       (call.filters.drawing_id as string[]).length <= 500,
     )).toBe(true);
+  });
+
+  it('blocks export evidence when exact revision coverage fails after the row reads succeed', async () => {
+    database.tables.submittals = [{ id: 's1', project_id: 'project-1', is_deleted: false, status: 'Approved', updated_at: '2026-10-09T00:00:00Z' }];
+    database.failCoverage = true;
+    await expect(loadFabApprovalEvidence('project-1', ['drawing-1'])).rejects.toThrow('Evidence unavailable');
   });
 
   it("rejects a failed later page instead of returning a credible-looking subset", async () => {

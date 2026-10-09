@@ -1,3 +1,4 @@
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import { describe, it, expect } from "vitest";
 import { registerStatusTone, isClosedPackage } from "../format";
 import { buildDrawingRegisterRows } from "../drawingRegister.derive";
@@ -53,7 +54,7 @@ describe("registerStatusTone", () => {
 describe("Drawing Register: released claim vs terminal-for-triage", () => {
   it("a governing released submittal is both released and terminal", () => {
     const parent: any = { id: "ds1", detailing_state: null, set_approval_status: "approved" };
-    const submittals = [{ id: "s", submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Released for Fabrication", round_number: 1, approved_date: "2026-09-01" }];
+    const submittals = [{ id: "s", ...verifiedSubmittalEvidence("s"), submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Released for Fabrication", round_number: 1, approved_date: "2026-09-01" }];
     const [row] = rowsFor(parent, submittals);
     expect(isPackageReleasedForFab(parent, submittals, [])).toBe(true);
     expect(row.done).toBe(true);
@@ -62,7 +63,7 @@ describe("Drawing Register: released claim vs terminal-for-triage", () => {
 
   it("a Void-only set is NOT shown as released, though it is terminal", () => {
     const parent: any = { id: "ds1", detailing_state: null };
-    const submittals = [{ id: "s", submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Void", round_number: 1 }];
+    const submittals = [{ id: "s", ...verifiedSubmittalEvidence("s"), submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Void", round_number: 1 }];
     const [row] = rowsFor(parent, submittals);
     expect(isClosedPackage({ key: "k", setId: "ds1", parent, sheets: [], submittals } as any)).toBe(true);
     expect(row.done).toBe(false); // the shop never received it
@@ -102,7 +103,7 @@ describe("triage atRiskCount excludes closed packages", () => {
   }
 
   it("does not count a Void-only set as at risk", () => {
-    const t = triageFor({ id: "ds1", detailing_state: null }, [{ id: "s", submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Void", round_number: 1 }]);
+    const t = triageFor({ id: "ds1", detailing_state: null }, [{ id: "s", ...verifiedSubmittalEvidence("s"), submittal_type: "Shop Drawing", drawing_set_ids: ["ds1"], status: "Void", round_number: 1 }]);
     expect(t.atRiskCount).toBe(0);
   });
 

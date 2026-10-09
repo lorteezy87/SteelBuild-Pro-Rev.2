@@ -44,6 +44,8 @@ export interface DrawingLike {
 export interface FabApprovalEvidence {
   submittals?: Array<{
     id: string;
+    current_round_id?: string | null;
+    revision_coverage?: import('@/lib/submittalRevisionEvidence').RevisionCoverageSummary | null;
     submittal_type?: string | null;
     status: string;
     ball_in_court?: string | null;

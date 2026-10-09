@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { hydrateSubmittalRevisionCoverage } from '@/api/client/submittalWorkflow';
 import type { CommentDispositionLike } from "@/lib/commentDispositionGate";
 import {
   isMissingSchemaObjectError,
@@ -222,6 +223,13 @@ export async function fetchPieceRelationshipSnapshot(
     drawingSignoffsSource,
     commentDispositionsSource,
   ];
+  try {
+    submittalsSource.rows = await hydrateSubmittalRevisionCoverage(submittalsSource.rows);
+  } catch (error) {
+    console.warn('[piece-relationships] exact revision evidence unavailable:', error);
+    submittalsSource.rows = [];
+    submittalsSource.availability = 'unavailable';
+  }
 
   return {
     pieces,
