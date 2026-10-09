@@ -47,7 +47,7 @@ search path and scoped 60-second timeout, and revision retry is SECURITY INVOKER
 No account erasure was invoked and no customer rows were deleted by this release.
 
 The MFA and numbered-create migrations already in production were not replayed.
-Seven commercial/Drawing Control migrations remain separate release work.
+The commercial and Drawing Control migrations are recorded separately below.
 
 ## Frontend and function hold
 
@@ -63,7 +63,7 @@ PM attestation or resubmission. Implementation and authenticated concurrent
 acceptance are release work, not a reason to weaken the drift gate.
 
 The two commercial migrations and numbered-create staging prerequisite are
-being reviewed and rehearsed on staging. Provider settings, authenticated
+now applied as described below. Provider settings, authenticated
 viewport/business acceptance, security integration, and monetization acceptance
 must remain separately evidenced.
 
@@ -94,3 +94,34 @@ Both public domains and the retained Cloudflare Worker origin returned 200 with
 the same entry asset `index-D7mtDmja.js`. The separate Sites project currently
 has no custom-domain bindings. Historical Sites migration notes must not be
 treated as current domain routing or permission to repoint the domains.
+
+## Commercial production SQL — October 9
+
+At 07:38 UTC, production received the two additive reviewed-save RPC migrations
+in one transaction after the installed staging implementation passed all 29
+hosted acceptance assertions. The rollback fixture left zero synthetic users,
+organizations or projects. CI run `37897927536` independently passed the 118
+embedded SQL checks and 13 independent-session PostgreSQL cases, plus 8,216
+unit tests in 844 files, 76 browser foundation cases, all type/lint gates,
+the production build, bundle limits, secret scan and Edge typecheck.
+
+| Version | Full ledger payload SHA-256 |
+| --- | --- |
+| `20261007113400` | `8a4bee23c1d23c1308ef8b92d736a55ec43ffb0fb1a3fe0c05dffccae86ae613` |
+| `20261007120658` | `63c398ee01f119b747b4b6fe6b20ae721f2278d6b39e110640fe3fec4c6b46b8` |
+
+The apply checked both original payload hashes, required the exact existing
+numbered-create prerequisite, refused existing candidate stamps/functions,
+took the migration advisory lock and used eight-second lock/60-second statement
+limits. Embedded BEGIN/COMMIT wrappers were removed only from execution; full
+original SQL is stored in the ledger. Numbered-create was not replayed.
+
+At 07:38:27 UTC, both production function definitions matched staging exactly
+(`save_change_order_reviewed`: MD5 `f97f92f0c8d38308a71e4acb4f999a8d`;
+`save_sov_item_reviewed`: MD5 `15f2fff20a20119b7a23a0466d7757f9`). Both are
+SECURITY INVOKER with empty search paths and authenticated-only execution;
+anonymous and service-role execution are denied. No customer financial rows
+were modified by this release. Hosted browser review/save remains separate.
+
+The five Drawing Control migrations and the new exact-revision manifest still
+hold the frontend release. No frontend or Edge publication has occurred.
