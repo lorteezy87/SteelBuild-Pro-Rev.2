@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-09 | codex-revision-manifest-client | Atomic submittal frontend and evidence review | src/hooks/submittals/**; src/pages/submittals/**; src/api/client/entities.ts; submittal evidence components/helpers/tests | Scoped continuation of parent-approved immutable revision manifests; coordinate RPC contract with revision-manifest-db; preserve all prior claims. |
+
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
 | 2026-10-09 | codex-round-revision-manifest | Immutable submittal-round revision provenance | docs/superpowers/specs/2026-10-09-submittal-round-revision-manifest-design.md; docs/superpowers/plans/2026-10-09-submittal-round-revision-manifest.md; new manifest migration and dedicated SQL harness only (client paths require coordination with codex-drawing-control-overhaul) | Design and test a fail-closed exact-revision manifest for submitted shop-drawing rounds without modifying the five already-stamped Drawing Control migrations. |
