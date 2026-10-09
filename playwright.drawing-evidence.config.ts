@@ -1,10 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 import authenticatedConfig from './playwright.config';
+import { DRAWING_STATE_PATH } from './e2e/drawingEvidenceTransport';
 
 // Reuse real auth/project selection. This runner serves the reviewed build,
 // reads staging, and never provisions fixtures or authorizes project writes.
 export default defineConfig({
   ...authenticatedConfig,
+  globalSetup: './e2e/drawing-evidence-setup.ts',
   testMatch: ['drawing-revision-evidence.spec.ts'],
   fullyParallel: false,
   retries: 0,
@@ -14,6 +16,8 @@ export default defineConfig({
   use: {
     ...authenticatedConfig.use,
     baseURL: 'http://127.0.0.1:4173',
+    storageState: DRAWING_STATE_PATH,
+    serviceWorkers: 'block',
     trace: 'off',
     video: 'off',
     screenshot: 'only-on-failure',
