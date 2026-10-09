@@ -53,7 +53,9 @@ export interface BillingControlCenterProps {
   /** Pending invite count (counts against seat limit per the server gate). */
   pendingCount: number;
   /** Active project count in this workspace. */
-  projectCount: number;
+  projectCount: number | null;
+  /** Only workspace owners/admins can read the complete project total. */
+  projectCountIsWorkspaceTotal?: boolean;
   /**
    * The Billing plan UI — plan cards, portal button, checkout CTA — is
    * passed as children so it renders below the hero and KPIs completely
@@ -69,6 +71,7 @@ const TONE_ICONS = {
   Renewal: CalendarClock,
   "Seats Used": Users,
   Projects: FolderKanban,
+  "Projects you can access": FolderKanban,
 } as const;
 
 export default function BillingControlCenter(props: BillingControlCenterProps) {
@@ -81,6 +84,7 @@ export default function BillingControlCenter(props: BillingControlCenterProps) {
     memberCount,
     pendingCount,
     projectCount,
+    projectCountIsWorkspaceTotal,
     children,
   } = props;
 
@@ -96,8 +100,9 @@ export default function BillingControlCenter(props: BillingControlCenterProps) {
         memberCount,
         pendingCount,
         projectCount,
+        projectCountIsWorkspaceTotal,
       }),
-    [planKey, subscriptionStatus, currentPeriodEnd, stripeCustomerId, memberCount, pendingCount, projectCount],
+    [planKey, subscriptionStatus, currentPeriodEnd, stripeCustomerId, memberCount, pendingCount, projectCount, projectCountIsWorkspaceTotal],
   );
 
   const heroChips = [
