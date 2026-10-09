@@ -12,6 +12,13 @@ interface ReadOnlyProbe {
   dispose(): Promise<void>;
 }
 const pageProbes = new WeakMap<Page, { origin: string; allowAuthLogout: boolean; probe: ReadOnlyProbe }>();
+// Individually inspected read-only RPCs; names beginning with "get" are not
+// sufficient evidence. Keep this list explicit as application reads evolve.
+const readOnlyRpcPaths = new Set([
+  "/rest/v1/rpc/get_my_project_role",
+  "/rest/v1/rpc/get_submittal_revision_coverage",
+  "/rest/v1/rpc/get_submittal_revision_coverages",
+]);
 
 export const REGISTER_CONTRACTS = {
   drawings: { path: "/Drawings", headings: ["Detailing Control Center"], tables: ["drawings", "drawing_sets"], fixtureTable: "drawing_sets" },
@@ -102,14 +109,12 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
     const url = new URL(request.url());
     if (url.origin !== origin) return route.fallback();
     const read = ["GET", "HEAD", "OPTIONS"].includes(request.method());
-    // This inspected RPC only reads the current user's role. Other POST RPCs
-    // fail closed; a name beginning with "get" is not sufficient evidence.
-    const roleRead = request.method() === "POST" && url.pathname === "/rest/v1/rpc/get_my_project_role";
+    const rpcRead = request.method() === "POST" && readOnlyRpcPaths.has(url.pathname);
     const refresh = request.method() === "POST" && url.pathname === "/auth/v1/token"
       && url.searchParams.get("grant_type") === "refresh_token";
     const logout = options.allowAuthLogout === true && request.method() === "POST"
       && url.pathname === "/auth/v1/logout";
-    if (read || roleRead || refresh || logout) return route.fallback();
+    if (read || rpcRead || refresh || logout) return route.fallback();
     failures.push(`Blocked write during read-only acceptance: ${request.method()} ${url.pathname}`);
     return route.abort("blockedbyclient");
   };
