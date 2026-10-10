@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ChangeEvent,
   type RefCallback,
 } from "react";
@@ -17,6 +18,9 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { assertImportWorkspace, getSessionBulkCreateRecovery, type BulkCreateRecovery } from "@/lib/bulkCreateRecovery";
+import { getActiveOrgGeneration, subscribeActiveOrgChange } from "@/lib/activeOrg";
 import { IMPORT_TARGETS, stageImportText } from "@/lib/onboardingTemplates";
 import {
   buildJsonExport,
@@ -73,6 +77,12 @@ interface ImportMutationResult {
   rows: DataExchangeRecord[];
   skippedDuplicates: number;
   skippedCreates: number;
+  unresolved: number;
+  retryable: number;
+  scopeKey: string;
+  projectId: string;
+  entityKey: string;
+  targetLabel: string;
 }
 
 export interface DataExchangeController {
@@ -129,14 +139,7 @@ function downloadTextFile({
   type: string;
 }): void {
   const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename, title: "Data exchange export" });
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -152,6 +155,8 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export function useDataExchangeController(): DataExchangeController {
+  const orgGeneration = useSyncExternalStore(subscribeActiveOrgChange, getActiveOrgGeneration, getActiveOrgGeneration);
+  const openedGeneration = useRef(orgGeneration);
   const queryClient = useQueryClient();
   const projectId = useProjectId();
   const projectContext = useProjectContext();
@@ -173,6 +178,10 @@ export function useDataExchangeController(): DataExchangeController {
   const [importSourceName, setImportSourceName] = useState("Manual paste");
   const [importApproved, setImportApproved] = useState(false);
   const [fileBusy, setFileBusy] = useState(false);
+  const importRecovery = useRef<BulkCreateRecovery>(getSessionBulkCreateRecovery());
+  const scopeKey = JSON.stringify([orgGeneration, selectedProjectId, targetKey, importText, importSourceName]);
+  const currentScope = useRef(scopeKey);
+  currentScope.current = scopeKey;
 
   useEffect(() => {
     if (projectId && projectId !== selectedProjectId) setSelectedProjectId(projectId);
@@ -184,7 +193,11 @@ export function useDataExchangeController(): DataExchangeController {
 
   useEffect(() => {
     setImportApproved(false);
-  }, [selectedProjectId, targetKey]);
+  }, [selectedProjectId, targetKey, orgGeneration]);
+
+  useEffect(() => {
+    if (orgGeneration !== openedGeneration.current) toast.warning("Workspace changed. Reopen Data Exchange and review the current project before importing.");
+  }, [orgGeneration]);
 
   const selectedProject = useMemo(
     () => projectOptions.find((project) => project.id === selectedProjectId) || null,
@@ -233,6 +246,8 @@ export function useDataExchangeController(): DataExchangeController {
 
   const importMutation = useMutation<ImportMutationResult, Error>({
     mutationFn: async () => {
+      assertImportWorkspace(openedGeneration.current);
+      const scope = { scopeKey, projectId: selectedProjectId, entityKey: selectedTarget.entityKey, targetLabel: selectedTarget.label };
       assertImportReady({
         projectId: selectedProject?.id,
         entityAvailable: Boolean(selectedEntity),
@@ -249,35 +264,48 @@ export function useDataExchangeController(): DataExchangeController {
       });
 
       if (!recordsToCreate.length) {
-        return { rows: [], skippedDuplicates, skippedCreates: 0 };
+        return { ...scope, rows: [], skippedDuplicates, skippedCreates: 0, unresolved: 0, retryable: 0 };
       }
 
-      const { created, skipped } = await bulkCreateWithFallback(
+      const { created, skipped, unresolved, retryable } = await bulkCreateWithFallback(
         selectedEntity,
         recordsToCreate,
+        "data-exchange",
+        importRecovery.current,
       );
       return {
+        ...scope,
         rows: created as DataExchangeRecord[],
         skippedDuplicates,
         skippedCreates: skipped,
+        unresolved,
+        retryable,
       };
     },
-    onSuccess: ({ rows, skippedDuplicates, skippedCreates = 0 }) => {
+    onSuccess: ({ rows, skippedDuplicates, skippedCreates = 0, unresolved, retryable, ...scope }) => {
       queryClient.invalidateQueries({
         queryKey: dataExchangeQueryKeys.records(
-          selectedTarget.entityKey,
-          selectedProjectId,
+          scope.entityKey,
+          scope.projectId,
         ),
       });
       queryClient.invalidateQueries({
-        queryKey: dataExchangeQueryKeys.entity(selectedTarget.entityKey),
+        queryKey: dataExchangeQueryKeys.entity(scope.entityKey),
       });
+      if (currentScope.current !== scope.scopeKey) return;
       setImportApproved(false);
+      if (unresolved) {
+        const nextStep = retryable === unresolved
+          ? "Retry this same reviewed import to recover the original records."
+          : "Refresh and reconcile these rows before re-importing; their saves may have completed.";
+        toast.warning(`${rows.length} ${scope.targetLabel.toLowerCase()} confirmed saved; ${skippedCreates} failed; ${unresolved} unconfirmed. ${nextStep}`);
+        return;
+      }
       const summary = summarizeImportResult({
         importedCount: rows.length,
         skippedDuplicates,
         skippedCreates,
-        targetLabel: selectedTarget.label,
+        targetLabel: scope.targetLabel,
       });
       toast[summary.level](summary.message);
     },
@@ -288,6 +316,7 @@ export function useDataExchangeController(): DataExchangeController {
     || recordsQuery.isFetching
     || records.length === 0;
   const importDisabled = !selectedProject?.id
+    || orgGeneration !== openedGeneration.current
     || importMutation.isPending
     || recordsQuery.isFetching
     || stagedImport.validRecords.length === 0

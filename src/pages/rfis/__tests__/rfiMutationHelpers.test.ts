@@ -11,11 +11,19 @@ import {
 } from "../rfiMutationHelpers";
 
 describe("buildRfiCreatePayload", () => {
-  it("forces active project_id", () => {
-    expect(buildRfiCreatePayload({ title: "x", project_id: "other" }, "proj-1")).toEqual({
-      title: "x",
-      project_id: "proj-1",
-    });
+  it("rejects a different project instead of silently moving the record", () => {
+    expect(() => buildRfiCreatePayload({ title: "x", project_id: "other" }, "proj-1"))
+      .toThrow(/must match the active project/);
+  });
+
+  it("uses the selected project when creating from the portfolio", () => {
+    expect(buildRfiCreatePayload({ title: "x", project_id: "proj-2" }, null))
+      .toEqual({ title: "x", project_id: "proj-2" });
+  });
+
+  it("uses the active project when the form does not supply one", () => {
+    expect(buildRfiCreatePayload({ title: "x" }, "proj-1"))
+      .toEqual({ title: "x", project_id: "proj-1" });
   });
 
   it("throws without a project", () => {
@@ -60,7 +68,7 @@ describe("assignment flows", () => {
   it("creates with assignee under the active project", () => {
     expect(
       buildRfiCreateWithAssigneePayload(
-        { title: "Clarify weld", project_id: "other" },
+        { title: "Clarify weld", project_id: "proj-1" },
         "proj-1",
         "Detailer",
       ),

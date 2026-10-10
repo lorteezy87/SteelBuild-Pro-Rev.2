@@ -49,6 +49,7 @@ export interface DrawingRegisterWorkbenchProps {
     selected: ReadonlySet<string>;
     onToggleSelect: (id: string) => void;
     onToggleSelectAll: (ids: string[]) => void;
+    onMarkTitleblock?: (setId: string) => void;
   }) => ReactNode;
 }
 
@@ -100,6 +101,17 @@ export default function DrawingRegisterWorkbench({
   const hasSets =
     (data.drawingSetRecords?.length ?? 0) > 0 || (data.existingSetNames?.length ?? 0) > 0;
 
+  const openTitleblock = (setId: string) => {
+    const parent = data.drawingSetMap[setId];
+    if (!canEditDrawing || data.isLoading || data.queryError || !parent || parent.is_locked) return;
+    controller.openMarkTitleblock({
+      setId,
+      name: parent.set_name,
+      parent,
+      sheets: data.drawings.filter((drawing) => drawing.drawing_set_id === setId),
+    });
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* The register below reads its own query (drawing_register_view) and
@@ -141,8 +153,9 @@ export default function DrawingRegisterWorkbench({
           state.setShowModal(true);
         }}
         onOpenUploadSet={() => state.setUploadSetOpen(true)}
-        onOpenRevision={() => state.setRevisionOpen(true)}
+        onOpenRevision={() => { if (canEditDrawing) state.setRevisionOpen(true); }}
         onOpenLogImport={() => state.setLogImportOpen(true)}
+        onOpenIntake={() => navigate("/DocumentControl")}
         onBulkEdit={() => state.setBulkEditOpen(true)}
         onExportTransmittal={() => exportTransmittal(data.filtered, activeProject?.name ?? undefined)}
         onExportPkg={(kind) => state.setExportPkgKind(kind)}
@@ -151,6 +164,7 @@ export default function DrawingRegisterWorkbench({
 
       {children({
         selected: state.selected,
+        onMarkTitleblock: canEditDrawing && !data.isLoading && !data.queryError ? openTitleblock : undefined,
         onToggleSelect: controller.toggleSelect,
         // NOT controller.toggleSelectAll: that one selects the controller's own
         // `filtered` list, which this shell deliberately leaves unfiltered. The

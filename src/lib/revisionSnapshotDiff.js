@@ -247,6 +247,7 @@ async function fetchDeltas(comparisonId) {
 export async function findOrCreateComparison({ drawingId, fromRevisionId, toRevisionId }) {
   const matchPair = (q) =>
     q.eq("source", "revision")
+      .eq("is_deleted", false)
       .eq("drawing_id", drawingId)
       .eq("from_revision_id", fromRevisionId)
       .eq("to_revision_id", toRevisionId);
@@ -255,7 +256,18 @@ export async function findOrCreateComparison({ drawingId, fromRevisionId, toRevi
     supabase.from("drawing_revision_comparisons").select("*"),
   ).maybeSingle();
   if (error && error.code !== "PGRST116") throw error;
-  if (existing) return existing;
+  if (existing) {
+    if (existing.compare_status !== "error") return existing;
+    // A terminal error cannot be recorded again. Reopen only through the
+    // role-checked RPC; completed and archived reviews remain immutable.
+    const { data: retried, error: retryError } = await supabase.rpc("retry_revision_comparison", {
+      p_comparison_id: existing.id,
+    });
+    if (retryError) throw retryError;
+    const comparison = Array.isArray(retried) ? retried[0] : retried;
+    if (!comparison) throw new Error("The comparison could not be reopened. Try again.");
+    return comparison;
+  }
 
   // A direct insert is rejected by trg_a_enforce_revision_comparison_guards
   // ("Open a comparison through create_revision_comparison()", SQLSTATE 42501,
@@ -288,12 +300,47 @@ export async function loadComparisonWithDeltas({ drawingId, fromRevisionId, toRe
     .from("drawing_revision_comparisons")
     .select("*")
     .eq("source", "revision")
+    .eq("is_deleted", false)
     .eq("drawing_id", drawingId)
     .eq("from_revision_id", fromRevisionId)
     .eq("to_revision_id", toRevisionId)
     .maybeSingle();
   if (!comparison) return { comparison: null, deltas: [] };
   return { comparison, deltas: await fetchDeltas(comparison.id) };
+}
+
+/**
+ * Persist a human visual review once the caller has rendered both source pages.
+ * It deliberately does not call the LLM and will not replace a completed AI
+ * comparison, which is final under the database RPC contract.
+ */
+export async function recordVisualRevisionReview({ drawingId, fromRevisionId, toRevisionId }) {
+  if (!drawingId || !fromRevisionId || !toRevisionId) {
+    throw new Error("recordVisualRevisionReview: drawingId + fromRevisionId + toRevisionId are required.");
+  }
+  if (fromRevisionId === toRevisionId) {
+    throw new Error("Pick two different revisions to compare.");
+  }
+
+  const comparison = await findOrCreateComparison({ drawingId, fromRevisionId, toRevisionId });
+  if (comparison.compare_status === "complete") return comparison;
+
+  const { data, error } = await supabase.rpc("record_revision_comparison", {
+    p_comparison_id: comparison.id,
+    p_status: "complete",
+    p_summary: "Human visual comparison completed. This records review, not a finding that the revisions are unchanged.",
+    p_model: "visual-review",
+    p_deltas: [],
+    p_raw: { review_type: "visual" },
+  });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) || {
+    ...comparison,
+    compare_status: "complete",
+    ai_summary: "Human visual comparison completed. This records review, not a finding that the revisions are unchanged.",
+    model: "visual-review",
+    raw_ai_response: { review_type: "visual" },
+  };
 }
 
 /** Toggle the dismissed flag on one delta (keep/dismiss in the report UI). */

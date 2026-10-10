@@ -48,7 +48,10 @@ type ProjectRow = {
 };
 
 export function useRfiPageMutations(args: {
-  projectId: string | undefined;
+  projectId: string | null | undefined;
+  assertMutationScope?: (recordId?: string, targetProjectId?: string) => void;
+  isCurrentScope?: () => boolean;
+  queryKeys?: unknown[][];
   projects: ProjectRow[];
   projectMap: Record<string, string>;
   selectedRFI: RfiRow | null;
@@ -72,16 +75,21 @@ export function useRfiPageMutations(args: {
     setShowForm,
     setEditingRFI,
     editingRFI,
+    assertMutationScope,
+    isCurrentScope = () => true,
   } = args;
 
   const qc = useQueryClient();
-  const rfiQueryKeys = [["rfis", projectId || "portfolio"], ["rfis"]];
+  const rfiQueryKeys = args.queryKeys || [["rfis", projectId || "portfolio"], ["rfis"]];
   const [savingAttachments, setSavingAttachments] = useState(false);
   const saveInFlightRef = useRef(false);
 
   const createMut = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      entities.RFI.create(buildRfiCreatePayload(data, projectId)),
+    mutationFn: (data: Record<string, unknown>) => {
+      const payload = buildRfiCreatePayload(data, projectId);
+      assertMutationScope?.(undefined, payload.project_id);
+      return entities.RFI.create(payload);
+    },
     onSuccess: async (created) => {
       appendRecordToCaches(
         qc,
@@ -89,7 +97,7 @@ export function useRfiPageMutations(args: {
         created,
         // crudFeedback.js types include as `() => boolean`; runtime passes (record, key).
         ((record: { project_id?: string }, key: unknown[]) =>
-          !key[1] || record.project_id === key[1]) as unknown as () => boolean,
+          !key[1] || key[1] === "portfolio" || record.project_id === key[1]) as unknown as () => boolean,
       );
       await invalidateCrudQueries(qc, rfiQueryKeys);
       toast.success("RFI created");
@@ -98,11 +106,15 @@ export function useRfiPageMutations(args: {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      entities.RFI.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      assertMutationScope?.(id, typeof data.project_id === "string" ? data.project_id : undefined);
+      // Editing a record must never transfer it, including between projects in one workspace.
+      const { project_id: _projectId, ...patch } = data;
+      return entities.RFI.update(id, patch);
+    },
     onSuccess: async (updated: RfiRow) => {
       replaceRecordInCaches(qc, rfiQueryKeys, updated);
-      if (selectedRFI?.id === updated.id) setSelectedRFI(updated);
+      if (isCurrentScope() && selectedRFI?.id === updated.id) setSelectedRFI(updated);
       await invalidateCrudQueries(qc, rfiQueryKeys);
       toast.success("RFI updated");
     },
@@ -110,11 +122,13 @@ export function useRfiPageMutations(args: {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: string) => entities.RFI.delete(id),
+    mutationFn: (id: string) => { assertMutationScope?.(id); return entities.RFI.delete(id); },
     onSuccess: async (_: unknown, deletedId: string) => {
       removeRecordFromCaches(qc, rfiQueryKeys, deletedId);
-      if (selectedRFI?.id === deletedId) setSelectedRFI(null);
-      setDeleteTarget(null);
+      if (isCurrentScope()) {
+        if (selectedRFI?.id === deletedId) setSelectedRFI(null);
+        setDeleteTarget(null);
+      }
       await invalidateCrudQueries(qc, rfiQueryKeys);
       toast.success("RFI deleted");
     },
@@ -123,7 +137,11 @@ export function useRfiPageMutations(args: {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }: { ids: string[]; data: Record<string, unknown> }) => {
-      const results = await batchProcess(ids, (id: any) => entities.RFI.update(id, data));
+      const { project_id: _projectId, ...patch } = data;
+      const results = await batchProcess(ids, async (id: string) => {
+        assertMutationScope?.(id, typeof data.project_id === "string" ? data.project_id : undefined);
+        return entities.RFI.update(id, patch);
+      });
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }
@@ -131,7 +149,7 @@ export function useRfiPageMutations(args: {
     },
     onSuccess: async (results) => {
       const succeededIds = new Set(results.succeeded.map(({ item }: { item: string }) => item));
-      setSelectedIds((current) => new Set([...current].filter((id) => !succeededIds.has(id))));
+      if (isCurrentScope()) setSelectedIds((current) => new Set([...current].filter((id) => !succeededIds.has(id))));
       await invalidateCrudQueries(qc, rfiQueryKeys);
       const toastInfo = formatBulkRfiToast("updated", results.succeeded.length, results.failed.length);
       toast[toastInfo.level](toastInfo.message);
@@ -141,7 +159,10 @@ export function useRfiPageMutations(args: {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      const results = await batchProcess(ids, (id: any) => entities.RFI.delete(id));
+      const results = await batchProcess(ids, async (id: string) => {
+        assertMutationScope?.(id);
+        return entities.RFI.delete(id);
+      });
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
@@ -149,9 +170,11 @@ export function useRfiPageMutations(args: {
     },
     onSuccess: async (results) => {
       const deletedIds = new Set(results.succeeded.map(({ item }: { item: string }) => item));
-      setSelectedIds((current) => new Set([...current].filter((id) => !deletedIds.has(id))));
-      setShowBulkDelete(false);
-      if (selectedRFI && deletedIds.has(selectedRFI.id)) setSelectedRFI(null);
+      if (isCurrentScope()) {
+        setSelectedIds((current) => new Set([...current].filter((id) => !deletedIds.has(id))));
+        setShowBulkDelete(false);
+        if (selectedRFI && deletedIds.has(selectedRFI.id)) setSelectedRFI(null);
+      }
       await invalidateCrudQueries(qc, rfiQueryKeys);
       const toastInfo = formatBulkRfiToast("deleted", results.succeeded.length, results.failed.length);
       toast[toastInfo.level](toastInfo.message);
@@ -160,8 +183,9 @@ export function useRfiPageMutations(args: {
   });
 
   const notifyFieldMut = useMutation({
-    mutationFn: (r: RfiRow) =>
-      entities.Alert.create(
+    mutationFn: (r: RfiRow) => {
+      assertMutationScope?.(r.id, r.project_id || undefined);
+      return entities.Alert.create(
         buildRfiAlertPayload(
           {
             alert_type: "RFI_Field_Action",
@@ -174,7 +198,8 @@ export function useRfiPageMutations(args: {
           },
           r.project_id,
         ),
-      ),
+      );
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alerts"] });
       qc.invalidateQueries({ queryKey: ["alerts-nav"] });
@@ -185,6 +210,7 @@ export function useRfiPageMutations(args: {
 
   const releaseHoldsMut = useMutation({
     mutationFn: async (r: RfiRow) => {
+      assertMutationScope?.(r.id, r.project_id || undefined);
       const project = (r.project_id as string) || projectId;
       if (!project) throw new Error("No project for hold release");
       const marks = (r.metadata as any)?.piece_marks;
@@ -229,7 +255,10 @@ export function useRfiPageMutations(args: {
 
         for (const file of files) {
           try {
+            // A saved record may not yet be in the refreshed register; validate its project scope.
+            assertMutationScope?.(undefined, rfiRecord!.project_id || projectId || undefined);
             const uploaded = await integrations.Core.UploadFile({ file, workflow: "attachment" });
+            assertMutationScope?.(undefined, rfiRecord!.project_id || projectId || undefined);
             await entities.Document.create(
               buildRfiAttachmentDocumentPayload(
                 buildRfiAttachmentDocumentFields({
@@ -267,7 +296,7 @@ export function useRfiPageMutations(args: {
         setSavingAttachments(false);
       }
     },
-    [projects, projectId, qc],
+    [projects, projectId, qc, assertMutationScope],
   );
 
   const saveRfi = useCallback(
@@ -275,6 +304,7 @@ export function useRfiPageMutations(args: {
       if (saveInFlightRef.current) return;
       saveInFlightRef.current = true;
       try {
+        assertMutationScope?.(editingRFI?.id, (data.project_id as string) || projectId || undefined);
         if (editingRFI) {
           const updated = await updateMut.mutateAsync({
             id: editingRFI.id,
@@ -292,8 +322,8 @@ export function useRfiPageMutations(args: {
             pdfFiles,
           );
         } else {
-          const allocationProjectId = (data.project_id as string) || projectId;
-          if (!allocationProjectId) throw new Error("Select a project before creating an RFI.");
+          const scopedData = buildRfiCreatePayload(data, projectId);
+          const allocationProjectId = scopedData.project_id;
           const num =
             (data.rfi_number as string) ||
             (await getNextFormattedNumber({
@@ -305,17 +335,19 @@ export function useRfiPageMutations(args: {
             }));
           if (!num) throw new Error("RFI number allocation failed. The RFI was not saved.");
           const created = await createMut.mutateAsync({
-            ...data,
+            ...scopedData,
             rfi_number: num,
             project_name:
-              projects.find((p) => p.id === ((data.project_id as string) || projectId))?.name ||
+              projects.find((p) => p.id === allocationProjectId)?.name ||
               (data.project_name as string) ||
               "",
           });
           await uploadRfiPdfDocuments(created as RfiRow, pdfFiles);
         }
-        setShowForm(false);
-        setEditingRFI(null);
+        if (isCurrentScope()) {
+          setShowForm(false);
+          setEditingRFI(null);
+        }
       } catch (error) {
         toastCrudError(error, "Failed to save RFI");
       } finally {
@@ -331,6 +363,8 @@ export function useRfiPageMutations(args: {
       uploadRfiPdfDocuments,
       setShowForm,
       setEditingRFI,
+      assertMutationScope,
+      isCurrentScope,
     ],
   );
 

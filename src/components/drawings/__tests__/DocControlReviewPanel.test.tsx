@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { DocControlIntakePanel } from "../DocControlReviewPanel";
+import DocControlReviewPanel, { DocControlAttestationProvider, DocControlIntakePanel, useDocControlAttestations } from "../DocControlReviewPanel";
+import { attestFromHuman, buildIntakeRecords } from "@/lib/docControl";
 import type { UploadMatch } from "@/lib/docControl";
 
 const revised: UploadMatch = {
@@ -39,6 +40,28 @@ function expandCard(label = "S-101") {
 }
 
 describe("DocControlReviewPanel", () => {
+  it("links an extracted value to its exact local source PDF page", () => {
+    const records = buildIntakeRecords({ matches: [revised], scanned: false, projectId: "p1" });
+    render(<DocControlReviewPanel records={records} sourcePages={{ "S-101": 3 }} sourcePdfUrl="blob:local-review" />);
+    const link = screen.getByRole("link", { name: "View source PDF page 3" });
+    expect(link.getAttribute("href")).toBe("blob:local-review#page=3");
+  });
+  it("carries a reviewed seal into the upload comparison without resetting it", () => {
+    function ReviewedComparison() {
+      const state = useDocControlAttestations("N. Lortie", {
+        "S-101": { stamp: attestFromHuman("present", "N. Lortie") },
+      });
+      return <DocControlAttestationProvider value={state}>
+        <DocControlIntakePanel
+          reviewerName="N. Lortie"
+          intake={{ matches: [revised], scanned: false, projectId: "p1" }}
+        />
+      </DocControlAttestationProvider>;
+    }
+    render(<ReviewedComparison />);
+    expandCard();
+    expect(screen.getAllByText(/Confirmed on the sheet by N. Lortie/).length).toBeGreaterThan(0);
+  });
   it("renders nothing when the upload carries no incoming sheets", () => {
     const { container } = renderPanel({ matches: [] });
     expect(container).toBeEmptyDOMElement();

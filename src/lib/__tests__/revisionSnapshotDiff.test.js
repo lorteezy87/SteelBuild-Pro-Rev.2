@@ -13,6 +13,7 @@ import {
   buildDiffMessages,
   sortDeltasBySeverity,
   generateRevisionDiff,
+  recordVisualRevisionReview,
 } from "@/lib/revisionSnapshotDiff";
 
 // ── pure helpers ──────────────────────────────────────────────────────────
@@ -242,5 +243,55 @@ describe("generateRevisionDiff", () => {
     await expect(generateRevisionDiff({ drawingId: "dw1", fromRevisionId: "r1", toRevisionId: "r1" }))
       .rejects.toThrow(/different revisions/i);
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("recordVisualRevisionReview", () => {
+  beforeEach(() => {
+    env.supabase.from = null;
+    env.supabase.rpc = null;
+    env.supabase.functions.invoke = null;
+  });
+
+  it("records visual review without invoking the LLM", async () => {
+    const invoke = vi.fn();
+    const rpc = makeRpc();
+    wireSupabase({ comparisons: { maybeSingle: null }, deltas: {}, invoke, rpc });
+
+    await recordVisualRevisionReview({ drawingId: "d1", fromRevisionId: "r1", toRevisionId: "r2" });
+
+    expect(invoke).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "record_revision_comparison",
+      expect.objectContaining({
+        p_comparison_id: "c1", p_status: "complete", p_model: "visual-review",
+        p_summary: expect.stringContaining("not a finding that the revisions are unchanged"),
+        p_raw: { review_type: "visual" }, p_deltas: [],
+      }),
+    );
+  });
+
+  it("reopens a failed review before saving the visual review", async () => {
+    const rpc = makeRpc();
+    rpc.mockResolvedValueOnce({ data: { id: "c1", compare_status: "processing" }, error: null });
+    const builders = wireSupabase({
+      comparisons: { maybeSingle: { id: "c1", compare_status: "error" } },
+      deltas: {}, invoke: vi.fn(), rpc,
+    });
+    await recordVisualRevisionReview({ drawingId: "d1", fromRevisionId: "r1", toRevisionId: "r2" });
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["retry_revision_comparison", "record_revision_comparison"]);
+    expect(rpc).toHaveBeenNthCalledWith(1, "retry_revision_comparison", { p_comparison_id: "c1" });
+    expect(builders.drawing_revision_comparisons._calls.update).toEqual([]);
+  });
+
+  it("stops when retry authorization fails and never replaces a completed review", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: new Error("PM access required") });
+    wireSupabase({ comparisons: { maybeSingle: { id: "c1", compare_status: "error" } }, deltas: {}, invoke: vi.fn(), rpc });
+    await expect(recordVisualRevisionReview({ drawingId: "d1", fromRevisionId: "r1", toRevisionId: "r2" })).rejects.toThrow("PM access required");
+    expect(rpc).toHaveBeenCalledTimes(1);
+    rpc.mockClear();
+    wireSupabase({ comparisons: { maybeSingle: { id: "c1", compare_status: "complete" } }, deltas: {}, invoke: vi.fn(), rpc });
+    await expect(recordVisualRevisionReview({ drawingId: "d1", fromRevisionId: "r1", toRevisionId: "r2" })).resolves.toMatchObject({ compare_status: "complete" });
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { PieceImportBatch } from "@/lib/pieceControl/repository";
 import { PieceRegisterArchiveDialog } from "../PieceRegisterArchiveDialog";
@@ -126,7 +127,8 @@ describe("PieceRegisterArchiveDialog", () => {
 });
 
 describe("PieceRegisterImportView", () => {
-  it("preserves stage, review, apply, and post-apply callbacks", () => {
+  it("preserves stage, review, apply, and post-apply callbacks", async () => {
+    const user = userEvent.setup();
     const onStage = vi.fn();
     const setSelectedBatchId = vi.fn();
     const setApplyConfirmed = vi.fn();
@@ -242,5 +244,35 @@ describe("PieceRegisterImportView", () => {
       }),
     );
     expect(onAssignImport).toHaveBeenCalledTimes(1);
+
+    const originalInput = screen.getByLabelText("File") as HTMLInputElement;
+    const file = new File(["piece_mark\nA1"], "pieces.csv", { type: "text/csv" });
+    await user.upload(originalInput, file);
+    expect(originalInput.files?.[0]).toBe(file);
+    fireEvent.change(screen.getByLabelText("Source"), {
+      target: { value: "fabsuite_xml" },
+    });
+    expect(baseProps.setSourceType).toHaveBeenCalledWith("fabsuite_xml");
+    expect(baseProps.handleFile).toHaveBeenCalledWith(null);
+
+    rerender(<PieceRegisterImportView {...baseProps} sourceType="fabsuite_xml" />);
+    expect(screen.getByLabelText("File")).toHaveAttribute(
+      "accept",
+      ".xml,text/xml,application/xml",
+    );
+
+    rerender(<PieceRegisterImportView {...baseProps} sourceType="powerfab_xml" />);
+    expect(screen.getByLabelText("File")).toHaveAttribute(
+      "accept",
+      ".xml,text/xml,application/xml",
+    );
+    rerender(<PieceRegisterImportView {...baseProps} sourceType="csv" />);
+    const resetInput = screen.getByLabelText("File") as HTMLInputElement;
+    expect(resetInput).not.toBe(originalInput);
+    expect(resetInput.files).toHaveLength(0);
+    vi.mocked(baseProps.handleFile).mockClear();
+    await user.upload(resetInput, file);
+    expect(baseProps.handleFile).toHaveBeenCalledOnce();
+    expect(baseProps.handleFile).toHaveBeenCalledWith(file);
   });
 });

@@ -7,13 +7,12 @@
  * Do NOT inline the math here — import the helper.
  */
 
+import { todayLocalISO } from "@/lib/dateMath";
+import { computeRevisedBudget, resolveProjectSpend } from "@/services/costRollup";
 import {
   openRFICount,
   overdueRFICount,
   timelineElapsedPct,
-  budgetCommitted,
-  committedSpend,
-  actualSpend,
   revisedContractValue,
   daysRemaining,
   totalBilled,
@@ -233,7 +232,7 @@ export function buildDashboardSummary(input: {
     rfiEvidenceLoaded = true,
     scheduleEvidenceLoaded = true,
   } = input;
-  const effectiveToday = todayIso ?? new Date().toISOString().slice(0, 10);
+  const effectiveToday = todayIso ?? todayLocalISO();
 
   // ── Reuse canonical helpers (numbers match page-owned dashboard exactly) ───────
   const openRfis = openRFICount(rfis as Parameters<typeof openRFICount>[0]);
@@ -245,19 +244,15 @@ export function buildDashboardSummary(input: {
     ? null
     : clamp(Math.round(100 - Math.max(0, elapsedPct - schedulePct)), 0, 100);
 
-  const budget = budgetCommitted(codes as Parameters<typeof budgetCommitted>[0]);
-  const committed = committedSpend(
-    codes as Parameters<typeof committedSpend>[0],
-    expenses as Parameters<typeof committedSpend>[1],
+  const { revisedBudget: budget } = computeRevisedBudget(
+    codes as Parameters<typeof computeRevisedBudget>[0],
+    cos as Parameters<typeof computeRevisedBudget>[1],
   );
-  const actual = actualSpend(
-    codes as Parameters<typeof actualSpend>[0],
-    expenses as Parameters<typeof actualSpend>[1],
+  // Reconcile actual and committed exposure per cost code before aggregation.
+  const { costExposure } = resolveProjectSpend(
+    codes as Parameters<typeof resolveProjectSpend>[0],
+    expenses as Parameters<typeof resolveProjectSpend>[1],
   );
-  // Cost codes can carry actual_cost without committed_cost. Use the greater
-  // resolved exposure so real spend is never presented as "no costs posted"
-  // or as a misleading +100% budget variance.
-  const costExposure = Math.max(committed, actual);
   const hasPostedCosts = costExposure > 0;
   const costDelta = budget - costExposure;
   const costPct = budget > 0 ? (costDelta / budget) * 100 : 0;
@@ -344,7 +339,7 @@ export function buildDashboardSummary(input: {
         ? "Schedule unavailable"
         : scheduleSummary.overdue > 0
           ? `${scheduleSummary.overdue} overdue`
-          : `${scheduleSummary.activities} activities`,
+          : `${scheduleSummary.activities} ${scheduleSummary.activities === 1 ? "activity" : "activities"}`,
       tone: schedulePct !== null && scheduleSummary.overdue > 0 ? "danger" : "neutral",
     },
     {
@@ -360,7 +355,7 @@ export function buildDashboardSummary(input: {
     {
       label: "Pending Submittals",
       value: pendingSubmittals,
-      sublabel: `${submittalPipeline.total} active workflow rows`,
+      sublabel: `${submittalPipeline.total} active workflow row${submittalPipeline.total === 1 ? "" : "s"}`,
       tone: pendingSubmittals > 5 ? "warn" : pendingSubmittals > 0 ? "neutral" : "good",
     },
   ];
@@ -456,13 +451,13 @@ export function buildDashboardSummary(input: {
 
   const modules: ModuleTile[] = [
     { page: "RFIs", title: "RFIs", subtitle: "Questions & Responses", metric: `${openRfis} Open`, target: "rfis", photo: photoFor("RFIs") },
-    { page: "DrawingSubmittalHub", title: "Detailing", subtitle: "Drawings & Models", metric: `${drawingCount} Drawings`, target: "detailing", photo: photoFor("DrawingSubmittalHub") },
+    { page: "DrawingSubmittalHub", title: "Detailing", subtitle: "Drawings & Models", metric: `${drawingCount} Drawing${drawingCount === 1 ? "" : "s"}`, target: "detailing", photo: photoFor("DrawingSubmittalHub") },
     { page: "ScheduleHub", title: "Schedule", subtitle: "Project Timeline", metric: schedulePct === null ? "Schedule unavailable" : `${schedulePct}% Complete`, target: "schedule", tone: schedulePct !== null && schedulePct >= 80 ? "good" : undefined, photo: photoFor("ScheduleHub") },
-    { page: "FieldHub", title: "Field Hub", subtitle: "Daily Field Management", metric: `${fieldIssues} Issues`, target: "field", photo: photoFor("FieldHub") },
+    { page: "FieldHub", title: "Field Hub", subtitle: "Daily Field Management", metric: `${fieldIssues} Issue${fieldIssues === 1 ? "" : "s"}`, target: "field", photo: photoFor("FieldHub") },
     { page: "CostHub", title: "Budget Control", subtitle: "Costs & Commitments", metric: budget > 0 && hasPostedCosts ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : budget > 0 ? "Costs not posted" : "Budget TBD", target: "cost-hub", tone: budget > 0 && hasPostedCosts && costPct >= 0 ? "good" : undefined, photo: photoFor("CostHub") },
     { page: "ChangeOrders", title: "Change Orders", subtitle: "Scope & Contract Changes", metric: `${activeCos} Active`, target: "change-orders", photo: photoFor("ChangeOrders") },
-    { page: "Documents", title: "Documents", subtitle: "Project Documents", metric: `${drawingCount + submittals.length} Files`, target: "documents", photo: photoFor("Documents") },
-    { page: "ReportsHub", title: "Reports", subtitle: "Analytics & Insights", metric: `${recentActivity.length} Updates`, target: "reports", photo: photoFor("ReportsHub") },
+    { page: "Documents", title: "Documents", subtitle: "Project Documents", metric: `${drawingCount + submittals.length} File${drawingCount + submittals.length === 1 ? "" : "s"}`, target: "documents", photo: photoFor("Documents") },
+    { page: "ReportsHub", title: "Reports", subtitle: "Analytics & Insights", metric: `${recentActivity.length} Update${recentActivity.length === 1 ? "" : "s"}`, target: "reports", photo: photoFor("ReportsHub") },
   ];
 
   return {

@@ -3,24 +3,24 @@ import { sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 export const FAB_STAGES = [
   {
     id: "drawings_approved",
-    label: "Drawings Approved",
+    label: "Drawing Prep",
     short: "DWG",
     color: "var(--accent)",
-    description: "Released drawing packages exist and the work is ready to prep.",
+    description: "Package workflow stage; verify release checks before fabrication.",
   },
   {
     id: "material_on_hand",
-    label: "Material On Hand",
+    label: "Material Planning",
     short: "MATL",
     color: "var(--secondary)",
-    description: "VIF and load-list checks are ready for release planning.",
+    description: "VIF and load-list markers; release checks verify material receipt.",
   },
   {
     id: "shop_released",
-    label: "Released To Shop",
+    label: "Shop Release Stamp",
     short: "REL",
     color: "var(--status-warning)",
-    description: "Package has been issued to the shop for fabrication.",
+    description: "Package stage marker; verify the recorded fabrication release.",
   },
   {
     id: "in_fabrication",
@@ -53,7 +53,7 @@ export const FAB_STAGES = [
 ];
 
 export const STATUS_ORDER = ["Not Started", "In Progress", "Complete", "On Hold"];
-export const BOARD_LANES = ["Blocked", "Ready For Release", "Released", "In Shop", "Ready To Ship"];
+export const BOARD_LANES = ["Blocked", "Ready For Release", "Unverified", "Released", "In Shop", "Ready To Ship"];
 
 const STAGE_ORDER = FAB_STAGES.map((stage) => stage.id);
 const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
@@ -428,11 +428,13 @@ export function buildFabReleaseMetrics(workPackages = [], drawings = [], drawing
 
 export function fabReleaseLane(wp) {
   const signals = wp._signals || getFabReleaseSignals(wp);
-  if (signals.stage === "ready_to_ship") return "Ready To Ship";
-  if (signals.risk === "high") return "Blocked";
-  if (signals.readyForRelease) return "Ready For Release";
-  if (signals.inShop) return signals.stage === "shop_released" ? "Released" : "In Shop";
-  return "Ready For Release";
+  if (signals.releaseGateState === "blocked") return "Blocked";
+  if (signals.releaseGateState === "ready") return "Ready For Release";
+  if (signals.releaseGateState === "released") {
+    if (signals.stage === "ready_to_ship") return "Ready To Ship";
+    return signals.inShop && signals.stage !== "shop_released" ? "In Shop" : "Released";
+  }
+  return "Unverified";
 }
 
 export function sortFabPackagesForRelease(a, b) {

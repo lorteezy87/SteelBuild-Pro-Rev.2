@@ -26,6 +26,7 @@ vi.mock("@/pages/MfaChallenge", () => ({ default: () => <div>MFA_CHALLENGE</div>
 vi.mock("@/boot/AppRoutes", () => ({ default: () => <div>APP_ROUTES</div> }));
 vi.mock("@/pages/OrgOnboarding", () => ({ default: () => <div>ONBOARDING</div> }));
 vi.mock("@/components/shared/ProjectContext", () => ({ ProjectProvider: ({ children }) => <>{children}</> }));
+vi.mock("@/lib/field/OutboxContext", () => ({ OutboxProvider: ({ children }) => <>{children}</> }));
 
 import AuthenticatedApp from "@/boot/AuthenticatedApp";
 
@@ -39,6 +40,7 @@ const authed = {
   retryMfaStatus: vi.fn(),
   logout: vi.fn(),
   mfaStatusDegraded: false,
+  isCheckingMfa: false,
   mfaStatusMessage: null,
 };
 
@@ -99,6 +101,14 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     expect(screen.queryByText("ONBOARDING")).not.toBeInTheDocument();
   });
 
+  it("holds desktop handoff and application routes while MFA is being checked", () => {
+    window.history.pushState({}, "", "/DesktopConnect?state=abc");
+    authState = { ...authed, isCheckingMfa: true };
+    render(<AuthenticatedApp />);
+    expect(screen.getByText("LOADER")).toBeInTheDocument();
+    expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
+  });
+
   it("shows the loader while the org is resolving", () => {
     orgState = { isLoadingOrgs: true, hasOrg: false };
     render(<AuthenticatedApp />);
@@ -117,7 +127,7 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     expect(await screen.findByText("APP_ROUTES")).toBeInTheDocument();
   });
 
-  it("shows the set-new-password screen during password recovery, above every other state (H22)", async () => {
+  it("shows password recovery before org/project entry (H22)", async () => {
     // A recovery session is technically authenticated with a workspace; the gate
     // must still route straight to UpdatePassword, not into the app.
     authState = { ...authed, isPasswordRecovery: true };
@@ -143,11 +153,12 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
   });
 
-  it("password recovery outranks an MFA step-up (H22 > H23)", async () => {
+  it("requires the MFA step-up before changing a recovery password (AUTH-4)", async () => {
     authState = { ...authed, isPasswordRecovery: true, mfaRequired: true };
     render(<AuthenticatedApp />);
-    expect(await screen.findByText("UPDATE_PW")).toBeInTheDocument();
-    expect(screen.queryByText("MFA_CHALLENGE")).not.toBeInTheDocument();
+    expect(await screen.findByText("MFA_CHALLENGE")).toBeInTheDocument();
+    expect(screen.queryByText("UPDATE_PW")).not.toBeInTheDocument();
+    expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
   });
 
   it("fails open — renders the app when the org gate reports hasOrg despite an error", async () => {

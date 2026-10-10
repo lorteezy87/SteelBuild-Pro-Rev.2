@@ -31,11 +31,13 @@ const CHUNK = 500;
  * statement_timeout=8s, and model_elements carries 11 indexes, so a single
  * UPDATE over a whole project's roster (live rosters reach ~28k rows) cannot
  * finish inside the budget — it dies with "canceling statement due to statement
- * timeout". 1000 also matches PostgREST's db-max-rows, so the id page is one
- * round trip. Each page is its own statement, so the work is unbounded in total
- * but bounded per statement.
+ * timeout". The update sends every selected UUID through an `id=in.(...)` URL,
+ * so a 1000-row page also exceeds the gateway request-line limit and fails with
+ * a bare 400 before reaching PostgREST. Two hundred UUIDs keep that filter below
+ * 8 KB. Each page is its own statement, so the work is unbounded in total but
+ * bounded per statement and request URL.
  */
-const SOFT_DELETE_PAGE = 1000;
+const SOFT_DELETE_PAGE = 200;
 
 /**
  * Soft-delete every matching row, ONE PAGE PER STATEMENT.

@@ -25,6 +25,8 @@
  * unit-tested without a clock or a browser.
  */
 
+import { captureDayFromTimestamp } from "@/lib/field/progressSync";
+
 const STORAGE_KEY = "sbp:field:outbox:v1";
 
 /** Op type for an idempotent schedule-task progress write. */
@@ -93,28 +95,92 @@ export function saveQueue(queue, storage = localStorageAdapter()) {
   storage.write(JSON.stringify(Array.isArray(queue) ? queue : []));
 }
 
+/** Legacy ownerless captures stay persisted, but cannot be adopted on login. */
+export function belongsToOutboxOwner(op, owner) {
+  return Boolean(owner?.userId && owner?.orgId &&
+    op?.owner?.userId === owner.userId && op?.owner?.orgId === owner.orgId);
+}
+
+/**
+ * The day work first went underway in a coalesce chain, or null.
+ *
+ * A superseded progress op is about to be dropped. Its percentage is genuinely
+ * stale — the newer tap is the truth — but its capture day is not, because
+ * `deriveActualsPatch` stamps actual_start_date from the FIRST move off Not
+ * Started and actual_finish_date from the completion. Those are two different
+ * days whenever a crew starts on one shift and closes out on a later one, and
+ * over a multi-day outage both taps are in the queue at once.
+ *
+ * An op at 0% never began work, so it carries no start day to inherit.
+ */
+function inheritedStartDay(superseded) {
+  const prior = superseded?.payload;
+  if (!prior) return null;
+  if (prior.startCaptureDay) return prior.startCaptureDay;
+  if (!(Number(prior.pct) > 0)) return null;
+  // Legacy ops have no captureDay. Recover their local day before coalescing
+  // discards createdAt, using the same fallback as direct outbox replay.
+  return prior.captureDay || captureDayFromTimestamp(superseded.createdAt) || null;
+}
+
 /**
  * Add an op to the queue, coalescing by `coalesceKey`: any existing op with the
  * same key is dropped so only the latest value for a given target survives.
  * Returns a new array (pure).
+ *
+ * Progress ops carry one field ACROSS that drop — `startCaptureDay` — so the
+ * collapse keeps the latest percentage without also collapsing a multi-day
+ * activity into a same-day one. See `inheritedStartDay`.
  */
 export function enqueueOp(queue, op) {
-  const base = (Array.isArray(queue) ? queue : []).filter(
+  const arr = Array.isArray(queue) ? queue : [];
+  const superseded = op?.coalesceKey
+    ? arr.find((existing) => existing?.coalesceKey === op.coalesceKey)
+    : null;
+
+  const base = arr.filter(
     (existing) =>
       !(op?.coalesceKey && existing?.coalesceKey === op.coalesceKey) &&
       !(op?.id && existing?.id === op.id),
   );
-  base.push(op);
+
+  let next = op;
+  if (superseded && op?.type === OP_SCHEDULE_PROGRESS && !op.payload?.startCaptureDay) {
+    const inherited = inheritedStartDay(superseded);
+    if (inherited) next = { ...op, payload: { ...op.payload, startCaptureDay: inherited } };
+  }
+
+  base.push(next);
   return base;
 }
 
-/** Build an idempotent schedule-progress op (caller supplies `now`). */
-export function makeProgressOp(taskId, pct, now) {
+/**
+ * Build an idempotent schedule-progress op.
+ *
+ * captureDay is the user's LOCAL YYYY-MM-DD at the moment of capture. Keep it
+ * alongside createdAt because an epoch timestamp alone cannot recover the
+ * original local day if the device changes timezone before replay.
+ *
+ * startCaptureDay is the day work first went underway. It stays null on a
+ * freshly built op and is filled in by `enqueueOp` when this op supersedes an
+ * earlier one that had already started the task.
+ *
+ * The day params are annotated because `= null` alone infers the parameter as
+ * type `null`, which makes every real YYYY-MM-DD a strict-mode type error at
+ * the call site.
+ *
+ * @param {string} taskId
+ * @param {number} pct
+ * @param {number} now                       epoch ms
+ * @param {string | null} [captureDay]       local YYYY-MM-DD at the tap
+ * @param {string | null} [startCaptureDay]  local YYYY-MM-DD work began
+ */
+export function makeProgressOp(taskId, pct, now, captureDay = null, startCaptureDay = null) {
   return {
     id: `${OP_SCHEDULE_PROGRESS}:${taskId}:${now}`,
     type: OP_SCHEDULE_PROGRESS,
     coalesceKey: `${OP_SCHEDULE_PROGRESS}:${taskId}`,
-    payload: { id: taskId, pct },
+    payload: { id: taskId, pct, captureDay, startCaptureDay },
     createdAt: now,
   };
 }
@@ -184,21 +250,21 @@ export function isUniqueViolation(error) {
  * everything after it. Unknown op types are dropped (forward-compat). Returns
  * { remaining, synced, failed, error } — never throws.
  */
-export async function flushQueue(queue, handlers) {
+export async function flushQueue(queue, handlers, assertActive = () => {}, client = undefined) {
   const remaining = [...(Array.isArray(queue) ? queue : [])];
   let synced = 0;
 
   while (remaining.length > 0) {
     const op = remaining[0];
     const handler = handlers?.[op?.type];
-
-    if (typeof handler !== "function") {
-      remaining.shift(); // unknown/retired op type — discard, don't wedge the queue
-      continue;
-    }
-
     try {
-      await handler(op.payload, op);
+      assertActive();
+      if (typeof handler !== "function") {
+        remaining.shift(); // unknown/retired op type — discard, don't wedge the queue
+        continue;
+      }
+      await handler(op.payload, op, assertActive, client);
+      assertActive();
       remaining.shift();
       synced += 1;
     } catch (error) {

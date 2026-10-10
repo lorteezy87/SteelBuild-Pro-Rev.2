@@ -1,0 +1,11 @@
+{
+  "name": "steelbuild-account-deletion-verification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node verify.mjs && node verify-authorship.mjs && node verify-lock-order.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}

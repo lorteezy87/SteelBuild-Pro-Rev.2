@@ -13,7 +13,6 @@ import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { stageToSubmittalStatus } from "@/lib/submittalStageMapping";
 import {
   ensureSetLinked,
-  openLinkedSubmittalsForSet,
 } from "@/lib/submittalLinkGlue";
 import {
   STAGE_ORDER,
@@ -38,6 +37,7 @@ import {
   buildRenameSetState,
   buildSheetApprovalPatch,
   buildSubmittalNavigationSearch,
+  openShopDrawingSubmittalsForSet,
   formatBulkDeleteToast,
   formatBulkUpdateToast,
   formatRenameSetToast,
@@ -596,15 +596,20 @@ export function useDrawingsPageController({
   };
 
   const handleRevisionComplete = (payload?: {
+    complete?: boolean;
     setId?: string | null;
     setName?: string | null;
     revisionLabel?: string | null;
   }) => {
     void invalidate();
+    // The modal reports partial sheet/history writes so the operator can
+    // recover them in place; only a complete save may close the editor or
+    // offer to attach its revision to a submittal.
+    if (payload?.complete === false) return;
     setRevisionOpen(false);
     const setId = payload?.setId;
     if (!setId) return;
-    const candidates = openLinkedSubmittalsForSet(setId, submittals);
+    const candidates = openShopDrawingSubmittalsForSet(setId, submittals);
     if (candidates.length === 0) return;
     setAttachPrompt({
       setId,
@@ -625,9 +630,9 @@ export function useDrawingsPageController({
       const row = submittals.find((submittal) => submittal.id === submittalId);
       if (
         !row ||
-        !openLinkedSubmittalsForSet(state.attachPrompt.setId, [row]).length
+        !openShopDrawingSubmittalsForSet(state.attachPrompt.setId, [row]).length
       ) {
-        toast.error("That submittal is no longer open — refresh and try again.");
+        toast.error("That Shop Drawing submittal is no longer open — refresh and try again.");
         setAttachPrompt(null);
         await invalidate();
         return;
@@ -639,7 +644,7 @@ export function useDrawingsPageController({
       await entities.Submittal.update(submittalId, {
         drawing_set_ids: nextIds,
       });
-      toast.success("Revision kept linked to open submittal");
+      toast.success("Package link retained. Submit a new review round to capture the revised sheets; earlier review evidence is unchanged.");
       setAttachPrompt(null);
       await invalidate();
       await invalidateEntity(queryClient, "submittal", projectId);

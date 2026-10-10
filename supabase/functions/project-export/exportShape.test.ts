@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { buildProjectExport, buildExportAuditRecord, PROJECT_EXPORT_TABLES, fileManifest } from "./exportShape";
 
 describe("shared production export v2 compatibility", () => {
+  it("excludes mailbox credentials without mutating source rows or losing account metadata", () => {
+    const row = { id: "mailbox", email_address: "mailbox@example.invalid", access_token: "access-secret", refresh_token: "refresh-secret" };
+    const envelope = buildProjectExport({ project: { id: "project" }, exportedBy: "User", tableResults: [{ table: "email_accounts", rows: [row] }] });
+    expect(envelope.tables.email_accounts).toEqual([{ id: "mailbox", email_address: "mailbox@example.invalid" }]);
+    expect(JSON.stringify(envelope)).not.toContain("secret");
+    expect(envelope.row_counts.email_accounts).toBe(1);
+    expect(row.access_token).toBe("access-secret");
+  });
   it("retains canonical records and shared-app tables instead of reverting to the legacy manifest", () => {
     expect(PROJECT_EXPORT_TABLES).toEqual(expect.arrayContaining([
       "pieces", "piece_drawings", "piece_drawing_sets", "piece_events", "project_calendars",

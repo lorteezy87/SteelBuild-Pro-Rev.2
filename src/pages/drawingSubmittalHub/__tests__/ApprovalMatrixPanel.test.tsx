@@ -27,6 +27,7 @@ const DRAWINGS = [
 ];
 const SUBMITTALS: any[] = [{
   id: "sub-1",
+  submittal_type: "Shop Drawing",
   drawing_set_ids: ["s1"],
   status: "Under Review",
   ball_in_court: "EOR",
@@ -148,10 +149,23 @@ describe("ApprovalMatrixPanel — 2026 columns on Rev.2 logic", () => {
   });
 
   it("explains a sheet-derived stage correctly when the governing submittal is Void", () => {
-    mount({ submittals: [...SUBMITTALS, { id: "void-1", drawing_set_ids: ["s2"], status: "Void", submittal_number: "SUB-009" }] });
+    mount({ submittals: [...SUBMITTALS, { id: "void-1", submittal_type: "Shop Drawing", drawing_set_ids: ["s2"], status: "Void", submittal_number: "SUB-009" }] });
     const bolts = within(row("s2"));
     expect(bolts.getByRole("link", { name: "SUB-009" })).toBeInTheDocument();
     expect(bolts.getByText("from sheets").getAttribute("title")).toMatch(/governing submittal \(Void\) has no workflow stage/);
+  });
+
+  it("does not let a linked material or untyped submittal govern shop drawings", () => {
+    mount({ submittals: [
+      ...SUBMITTALS,
+      { id: "material-1", submittal_type: "Material", drawing_set_ids: ["s2"], status: "Released for Fabrication", submittal_number: "MAT-001" },
+      { id: "unknown-1", submittal_type: null, drawing_set_ids: ["s2"], status: "Approved", submittal_number: "SUB-UNKNOWN" },
+    ] });
+    const bolts = within(row("s2"));
+    expect(bolts.queryByRole("link", { name: "MAT-001" })).not.toBeInTheDocument();
+    expect(bolts.queryByRole("link", { name: "SUB-UNKNOWN" })).not.toBeInTheDocument();
+    expect(bolts.getByRole("link", { name: "Create submittal for Anchor Bolts" })).toBeInTheDocument();
+    expect(bolts.getByText("from sheets")).toHaveAttribute("title", "No submittal governs this set yet, so its sheets' stage is shown.");
   });
 
   it("doesn't expand the row when a cell link is followed", () => {

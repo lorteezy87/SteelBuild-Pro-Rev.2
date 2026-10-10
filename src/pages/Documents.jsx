@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { presentRemoteFile, presentRemoteFiles } from "@/lib/native/fileExport";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DocumentCard from "@/components/dms/DocumentCard";
 import DocumentFilters from "@/components/dms/DocumentFilters";
@@ -415,12 +416,11 @@ export default function Documents() {
     try {
       const url = await resolveFileUrl(doc.fileUrl || doc.file_url);
       if (!url) { toast.error("No file URL available"); return; }
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = doc.fileName || doc.file_name || "download";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      return await presentRemoteFile({
+        url,
+        filename: doc.fileName || doc.file_name || "download",
+        title: doc.displayName || doc.title || "Document",
+      });
     } catch (err) {
       toast.error(`Download failed: ${toUserErrorMessage(err, "Unknown error")}`);
     }
@@ -444,15 +444,36 @@ export default function Documents() {
 
   const handleBulkDownload = async () => {
     const docs = allDocuments.filter((d) => selectedIds.has(d.id));
-    toast.info(`Downloading ${docs.length} file(s)...`);
-    const { failed } = await batchProcess(docs, (doc) => handleDownloadDoc(doc), 3);
-    if (failed.length > 0) {
-      toast.warning(`${docs.length - failed.length} downloaded, ${failed.length} failed`);
+    if (docs.length === 0) return;
+    toast.info(`Preparing ${docs.length} file(s)...`);
+    const { succeeded, failed } = await batchProcess(docs, async (doc) => {
+      const url = await resolveFileUrl(doc.fileUrl || doc.file_url);
+      if (!url) throw new Error("No file URL available");
+      return {
+        url,
+        filename: doc.fileName || doc.file_name || "download",
+      };
+    }, 3);
+    if (succeeded.length === 0) {
+      toast.error(`Could not prepare ${failed.length} file(s).`);
+      return;
     }
+    const presentation = await presentRemoteFiles({
+      files: succeeded.map(({ value }) => value),
+      title: "Selected documents",
+      errorLabel: "selected documents",
+    });
+    if (presentation !== "downloaded" && presentation !== "shared") return;
+    if (failed.length > 0) {
+      toast.warning(`${succeeded.length} ${presentation}, ${failed.length} failed`);
+      return;
+    }
+    toast.success(`${succeeded.length} document(s) ${presentation}`);
   };
 
-  const handleExportCsv = () => {
-    exportDocsCsv(filteredDocs, activeProject?.name);
+  const handleExportCsv = async () => {
+    const presentation = await exportDocsCsv(filteredDocs, activeProject?.name);
+    if (presentation !== "downloaded" && presentation !== "shared") return;
     toast.success(`Exported ${filteredDocs.length} documents to CSV`);
   };
 
@@ -514,8 +535,12 @@ export default function Documents() {
       />
     );
 
+    // One row that scrolls sideways on a phone instead of running off the
+    // edge. The divider is an inset shadow, not a border, so the active tab's
+    // underline paints over it inside the scroll box (a -1px overlap onto a
+    // border would be clipped).
     const statusTabs = (
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)", marginBottom: 12, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 0, boxShadow: "inset 0 -1px 0 var(--border-default)", marginBottom: 12, flexShrink: 0, overflowX: "auto", overflowY: "hidden" }}>
         {STATUS_TABS.map((tab) => {
           const count = tab.key === "all"
             ? allDocuments.length
@@ -530,7 +555,7 @@ export default function Documents() {
                 color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
                 border: "none",
                 borderBottom: statusTab === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
-                marginBottom: -1,
+                flexShrink: 0,
                 fontFamily: "var(--font-mono)", fontSize: 9,
                 fontWeight: statusTab === tab.key ? 700 : 500,
                 letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",

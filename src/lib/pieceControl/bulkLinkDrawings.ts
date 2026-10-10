@@ -1,9 +1,9 @@
 /**
  * Bulk link many pieces to one drawing set via link_piece_drawing_set RPC.
  *
- * Default shop workflow is exclusive assignment (one primary set). Use
- * replacePiecesDrawingSet for reassignment; linkPiecesToDrawingSet remains
- * additive for intentional multi-set links.
+ * The current relationship UI intentionally supports multiple sets per piece.
+ * Use replacePiecesDrawingSet only for an explicit exclusive reassignment;
+ * linkPiecesToDrawingSet keeps the additive multi-set behavior.
  */
 
 export type LinkPieceDrawingSetFn = (
@@ -11,15 +11,10 @@ export type LinkPieceDrawingSetFn = (
   drawingSetId: string,
 ) => Promise<unknown>;
 
-export type UnlinkPieceDrawingSetFn = (
+export type ReplacePieceDrawingSetFn = (
   pieceId: string,
   drawingSetId: string,
 ) => Promise<unknown>;
-
-export type PieceDrawingSetLinkRef = {
-  piece_id: string;
-  drawing_set_id: string;
-};
 
 export async function linkPiecesToDrawingSet(
   pieceIds: string[],
@@ -43,16 +38,11 @@ export async function linkPiecesToDrawingSet(
   return { linked, errors };
 }
 
-/**
- * Assign drawing set exclusively: unlink every other set on the piece, then
- * link the target. Matches operator expectation when correcting a wrong set.
- */
+/** Assign one primary set per piece through one atomic server transaction. */
 export async function replacePiecesDrawingSet(
   pieceIds: string[],
   drawingSetId: string,
-  existingLinks: PieceDrawingSetLinkRef[],
-  linkPieceDrawingSet: LinkPieceDrawingSetFn,
-  unlinkPieceDrawingSet: UnlinkPieceDrawingSetFn,
+  replacePieceDrawingSet: ReplacePieceDrawingSetFn,
 ): Promise<{
   linked: number;
   unlinked: number;
@@ -65,15 +55,17 @@ export async function replacePiecesDrawingSet(
 
   for (const pieceId of uniqueIds) {
     try {
-      const others = existingLinks.filter(
-        (row) => row.piece_id === pieceId && row.drawing_set_id !== drawingSetId,
-      );
-      for (const row of others) {
-        await unlinkPieceDrawingSet(pieceId, row.drawing_set_id);
-        unlinked += 1;
+      const result = await replacePieceDrawingSet(pieceId, drawingSetId);
+      const record = result && typeof result === "object" && !Array.isArray(result)
+        ? result as Record<string, unknown>
+        : null;
+      if (!record || record.piece_id !== pieceId || record.drawing_set_id !== drawingSetId
+        || typeof record.unlinked_count !== "number" || !Number.isSafeInteger(record.unlinked_count)
+        || record.unlinked_count < 0) {
+        throw new Error("Drawing-set replacement returned incomplete evidence");
       }
-      await linkPieceDrawingSet(pieceId, drawingSetId);
       linked += 1;
+      unlinked += record.unlinked_count;
     } catch (error) {
       errors.push({
         pieceId,

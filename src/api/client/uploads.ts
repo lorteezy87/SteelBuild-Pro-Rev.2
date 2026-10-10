@@ -34,7 +34,7 @@ function isAlreadyExistsError(err: unknown): boolean {
  * file_url is a signed URL valid for 1 hour. For long-term storage,
  * persist `path` to the database and call getSignedUrl(path) on demand.
  */
-export const UploadFile = async ({ file, workflow }: UploadFileArgs): Promise<UploadFileResult> => {
+export const UploadFile = async ({ file, workflow, assertActive = () => {}, client = supabase }: UploadFileArgs): Promise<UploadFileResult> => {
   if (!file) throw new Error('No file provided');
   // Fail-closed content/size guard (#21). With a `workflow` this enforces the
   // tighter per-workflow allowlist; without one the `default` backstop still
@@ -123,9 +123,13 @@ export const UploadFile = async ({ file, workflow }: UploadFileArgs): Promise<Up
   // and re-rolling the path each time would instead leave an orphan behind.
   const data = await withTransientRetry(
     async (attempt) => {
-      const res = await supabase.storage
+      // A reconnect retry may outlive the outbox identity that supplied the
+      // blob. Check again after backoff before the singleton client reads auth.
+      assertActive();
+      const res = await client.storage
         .from('app-files')
         .upload(path, file, { contentType, upsert: false });
+      assertActive();
       if (res.error) {
         if (attempt > 1 && isAlreadyExistsError(res.error)) return { path };
         remapQuotaError(res.error);

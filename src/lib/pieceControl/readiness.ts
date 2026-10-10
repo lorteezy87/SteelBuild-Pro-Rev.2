@@ -64,8 +64,10 @@ export interface DrawingSetEvidence {
 }
 
 export interface SubmittalEvidence {
+  revision_coverage?: import('@/lib/submittalRevisionEvidence').RevisionCoverageSummary | null;
   id: string;
   status: string;
+  submittal_type?: string | null;
   ball_in_court?: string | null;
   drawing_set_ids?: string[] | null;
   current_round_id?: string | null;

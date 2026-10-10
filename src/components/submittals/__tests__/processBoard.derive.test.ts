@@ -67,6 +67,13 @@ afterEach(() => {
 });
 
 describe("buildBoardItems", () => {
+  it('keeps a status-only released Shop Drawing visible as an action instead of counting a release', () => {
+    vi.useFakeTimers(); vi.setSystemTime(PINNED_TODAY);
+    const items = buildBoardItems([], [{ ...unlinkedSubmittal, status: 'Released for Fabrication', submittal_type: 'Shop Drawing' }]);
+    expect(items[0]).toMatchObject({ revisionEvidenceReady: false, needsAction: true });
+    expect(items[0].due.overdue).toBe(true);
+    expect(summarizeBoard(items).released).toBe(0);
+  });
   it("maps a linked drawing-set package to its derived submittal stage", () => {
     const items = buildBoardItems([setPackage], [...setPackage.submittals, unlinkedSubmittal]);
     const pkg = items.find((i) => i.id === "set-id:set-1");

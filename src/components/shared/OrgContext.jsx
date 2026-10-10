@@ -10,7 +10,7 @@
  */
 
 import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/AuthContext";
 import { listMyMemberships } from "@/lib/org/repository";
 import { setActiveOrgId } from "@/lib/activeOrg";
@@ -20,6 +20,8 @@ const LS_KEY = "sbp:current-org";
 
 export function OrgProvider({ children }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [publishedScope, setPublishedScope] = useState(null);
   const {
     data: memberships = [],
     isLoading,
@@ -56,20 +58,29 @@ export function OrgProvider({ children }) {
   // Publish the active org id for non-React consumers — the file uploader
   // (api/supabaseClient UploadFile) scopes storage paths by it. Reuses this
   // known-good resolution instead of a separate (flaky) query in the uploader.
-  useEffect(() => { setActiveOrgId(currentOrg?.id ?? null); }, [currentOrg?.id]);
+  const scopeKey = JSON.stringify([user?.id ?? null, currentOrg?.id ?? null]);
+  const isSwitchingScope = publishedScope !== scopeKey;
+  useEffect(() => {
+    // OrgGate holds children on its loader until old workspace query data is
+    // removed. Keep membership queries so resolving the gate cannot reset itself.
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "my-orgs" });
+    setActiveOrgId(currentOrg?.id ?? null);
+    setPublishedScope(scopeKey);
+    return () => setActiveOrgId(null);
+  }, [queryClient, scopeKey, currentOrg?.id]);
 
   const value = useMemo(
     () => ({
       orgs,
       currentOrg,
       currentRole,
-      isLoadingOrgs: isLoading,
+      isLoadingOrgs: isLoading || isSwitchingScope,
       // Fail-open: a fetch error must not strand an existing user on onboarding.
       hasOrg: isError ? true : orgs.length > 0,
       setCurrentOrg,
       refetchOrgs: refetch,
     }),
-    [orgs, currentOrg, currentRole, isLoading, isError, setCurrentOrg, refetch],
+    [orgs, currentOrg, currentRole, isLoading, isSwitchingScope, isError, setCurrentOrg, refetch],
   );
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
@@ -79,4 +90,9 @@ export function useOrg() {
   const ctx = useContext(OrgContext);
   if (!ctx) throw new Error("useOrg must be used within an OrgProvider");
   return ctx;
+}
+
+/** The org context, or undefined outside an OrgProvider — for pages that also render standalone. */
+export function useOptionalOrg() {
+  return useContext(OrgContext);
 }

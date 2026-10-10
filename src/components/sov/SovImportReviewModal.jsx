@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import PhoenixModal from "@/components/shared/PhoenixModal";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "../shared/formatters";
 
@@ -17,7 +17,7 @@ import { formatCurrency } from "../shared/formatters";
  *  - onConfirm(validRecords): commits the valid rows
  *  - importing: boolean (disables/labels the confirm button while writing)
  */
-export default function SovImportReviewModal({ open, onClose, staged = [], onConfirm, importing = false }) {
+export default function SovImportReviewModal({ open, onClose, staged = [], onConfirm, importing = false, receipts = [], writesDisabled = false }) {
   const { valid, invalid, autoMapped, validRecords } = useMemo(() => {
     const v = staged.filter((s) => s.valid);
     return {
@@ -32,11 +32,18 @@ export default function SovImportReviewModal({ open, onClose, staged = [], onCon
     r.cost_code ? `${r.cost_code}${r.cost_code_name ? ` — ${r.cost_code_name}` : ""}` : "—";
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-[860px]">
-        <DialogHeader>
-          <DialogTitle>Review SOV import</DialogTitle>
-        </DialogHeader>
+    <PhoenixModal open={open} onClose={onClose} title="Review SOV import" maxWidth={860} footer={<>
+      <Button variant="ghost" onClick={onClose}>{importing ? "Stop after current row" : valid ? "Close" : "Done"}</Button>
+      <Button onClick={() => onConfirm(validRecords)} disabled={importing || writesDisabled || valid === 0}>
+        {importing ? "Importing…" : `${staged.some(row => row.importError) ? "Retry" : "Import"} ${valid} item${valid === 1 ? "" : "s"}`}
+      </Button>
+    </>}>
+      <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>Source line numbers are references. Official SOV numbers are assigned when each line is saved.</p>
+      <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>This session remembers saved and unconfirmed source lines when you reopen the file. Changed source lines require review in the project register. After reloading or changing accounts or workspaces, check that register before importing again.</p>
+      {receipts.length > 0 && <div role="status" style={{ color: "var(--status-success)", marginBottom: 12 }}>
+        {receipts.length} saved: {receipts.map(record => record.sov_id || `Line ${record.line_item_number}`).join(", ")}
+      </div>}
+      {writesDisabled && <p role="status">Refreshing project evidence. Wait before retrying the remaining rows.</p>}
 
         {/* Summary chips */}
         <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, letterSpacing: "0.04em" }}>
@@ -50,7 +57,7 @@ export default function SovImportReviewModal({ open, onClose, staged = [], onCon
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ position: "sticky", top: 0, background: "var(--bg-surface-secondary)", zIndex: 1 }}>
-                {["#", "Description", "Scheduled Value", "Cost Code", "Status"].map((h, i) => (
+                {["Source line", "Description", "Scheduled Value", "Cost Code", "Status"].map((h, i) => (
                   <th key={h} style={{
                     textAlign: i === 2 ? "right" : "left", padding: "8px 10px",
                     fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800,
@@ -63,14 +70,14 @@ export default function SovImportReviewModal({ open, onClose, staged = [], onCon
             <tbody>
               {staged.map((s, idx) => (
                 <tr key={idx} style={{ borderBottom: "1px solid var(--divider)", opacity: s.valid ? 1 : 0.55 }}>
-                  <td style={{ padding: "7px 10px", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{s.record.line_item_number}</td>
+                  <td style={{ padding: "7px 10px", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{s.sourceLineReference ?? (s.sourceRow ? `Row ${s.sourceRow}` : s.record.line_item_number)}</td>
                   <td style={{ padding: "7px 10px", color: "var(--text-primary)" }}>{s.record.description || <em style={{ color: "var(--text-muted)" }}>(blank)</em>}</td>
                   <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{formatCurrency(s.record.scheduled_value)}</td>
                   <td style={{ padding: "7px 10px", fontFamily: "var(--font-mono)", color: s.record.cost_code ? "var(--accent)" : "var(--text-muted)" }}>
                     {costLabel(s.record)}{s.autoMapped ? " *" : ""}
                   </td>
-                  <td style={{ padding: "7px 10px", fontSize: 11, color: s.valid ? "var(--status-success, #3FB950)" : "var(--danger)" }}>
-                    {s.valid ? "Ready" : s.reason}
+                  <td style={{ padding: "7px 10px", fontSize: 11, color: s.importError || !s.valid ? "var(--status-error)" : "var(--status-success)" }}>
+                    {s.importError || (s.valid ? "Ready" : s.reason)}
                   </td>
                 </tr>
               ))}
@@ -82,13 +89,6 @@ export default function SovImportReviewModal({ open, onClose, staged = [], onCon
           * = cost code auto-mapped from the description. Skipped rows are not imported.
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={importing}>Cancel</Button>
-          <Button onClick={() => onConfirm(validRecords)} disabled={importing || valid === 0}>
-            {importing ? "Importing…" : `Import ${valid} item${valid === 1 ? "" : "s"}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </PhoenixModal>
   );
 }

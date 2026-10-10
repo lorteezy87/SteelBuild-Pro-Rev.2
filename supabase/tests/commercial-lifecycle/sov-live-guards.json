@@ -1,0 +1,32 @@
+[
+  {
+    "kind": "constraint",
+    "name": "chk_sov_items_status",
+    "definition": "CHECK (((status IS NULL) OR (status = ANY (ARRAY['Draft'::text, 'Submitted'::text, 'Certified'::text, 'Paid'::text])))) NOT VALID",
+    "function_definition": null
+  },
+  {
+    "kind": "constraint",
+    "name": "chk_sov_items_values",
+    "definition": "CHECK (((COALESCE(scheduled_value, (0)::numeric) >= (0)::numeric) AND ((COALESCE(previous_percent_complete, (0)::numeric) >= (0)::numeric) AND (COALESCE(previous_percent_complete, (0)::numeric) <= (100)::numeric)) AND ((COALESCE(current_percent_complete, (0)::numeric) >= (0)::numeric) AND (COALESCE(current_percent_complete, (0)::numeric) <= (100)::numeric)) AND ((COALESCE(retainage_percent, (0)::numeric) >= (0)::numeric) AND (COALESCE(retainage_percent, (0)::numeric) <= (100)::numeric)))) NOT VALID",
+    "function_definition": null
+  },
+  {
+    "kind": "trigger",
+    "name": "trg_audit_log",
+    "definition": "CREATE TRIGGER trg_audit_log AFTER INSERT OR DELETE OR UPDATE ON public.sov_items FOR EACH ROW EXECUTE FUNCTION audit_log_trigger()",
+    "function_definition": "CREATE OR REPLACE FUNCTION public.audit_log_trigger()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_user_id UUID;\n  v_project UUID;\n  v_old JSONB;\n  v_new JSONB;\n  v_action TEXT;\nBEGIN\n  -- Try to get the current user; might be NULL for service-role operations.\n  BEGIN\n    v_user_id := auth.uid();\n  EXCEPTION WHEN OTHERS THEN\n    v_user_id := NULL;\n  END;\n\n  IF TG_OP = 'DELETE' THEN\n    v_action := 'DELETE';\n    v_old    := to_jsonb(OLD);\n    v_new    := NULL;\n    v_project := OLD.project_id;\n  ELSIF TG_OP = 'UPDATE' THEN\n    v_action := 'UPDATE';\n    v_old    := to_jsonb(OLD);\n    v_new    := to_jsonb(NEW);\n    v_project := NEW.project_id;\n  ELSE\n    v_action := 'INSERT';\n    v_old    := NULL;\n    v_new    := to_jsonb(NEW);\n    v_project := NEW.project_id;\n  END IF;\n\n  -- Existing audit rows are intentionally project-scoped and project_id is\n  -- NOT NULL. If the parent project no longer exists, there is no valid audit\n  -- parent to attach to; returning here keeps the user operation from failing.\n  IF v_project IS NULL OR NOT EXISTS (\n    SELECT 1\n    FROM public.projects p\n    WHERE p.id = v_project\n  ) THEN\n    IF TG_OP = 'DELETE' THEN\n      RETURN OLD;\n    END IF;\n    RETURN NEW;\n  END IF;\n\n  INSERT INTO public.pma_audit_logs (\n    project_id, entity_type, entity_id, action,\n    old_values, new_values, changed_by\n  ) VALUES (\n    v_project,\n    TG_TABLE_NAME,\n    CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END,\n    v_action,\n    v_old,\n    v_new,\n    v_user_id::TEXT\n  );\n\n  IF TG_OP = 'DELETE' THEN\n    RETURN OLD;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+    "kind": "trigger",
+    "name": "trg_sov_items_updated_at",
+    "definition": "CREATE TRIGGER trg_sov_items_updated_at BEFORE UPDATE ON public.sov_items FOR EACH ROW EXECUTE FUNCTION update_updated_at()",
+    "function_definition": "CREATE OR REPLACE FUNCTION public.update_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nbegin\n  new.updated_at = now();\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "kind": "trigger",
+    "name": "trg_updated_at",
+    "definition": "CREATE TRIGGER trg_updated_at BEFORE UPDATE ON public.sov_items FOR EACH ROW EXECUTE FUNCTION update_updated_at()",
+    "function_definition": "CREATE OR REPLACE FUNCTION public.update_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nbegin\n  new.updated_at = now();\n  return new;\nend;\n$function$\n"
+  }
+]

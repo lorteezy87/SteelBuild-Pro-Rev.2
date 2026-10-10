@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
+import { bumpRevision } from '@/lib/submittalRevision';
 
 /**
  * NewRoundModal — create a new submittal round.
@@ -53,6 +54,7 @@ export default function NewRoundModal({
   const openItems = Array.isArray(carryItems) ? carryItems : [];
 
   const [form, setForm] = useState({
+    revision: bumpRevision(submittal?.revision ?? null),
     submitted_date: todayISO(),
     ball_in_court: "EOR",
     submitted_by: previousRound?.submitted_by || submittal?.submitted_by || "",
@@ -69,6 +71,7 @@ export default function NewRoundModal({
       return;
     }
     const roundData = {
+      revision: form.revision,
       submittal_id: submittal?.id,
       round_number: nextRoundNum,
       submitted_date: form.submitted_date,
@@ -88,6 +91,7 @@ export default function NewRoundModal({
         <DialogHeader>
           <DialogTitle>New Submittal Round</DialogTitle>
         </DialogHeader>
+        <div style={{ marginBlock: 10 }}><Label htmlFor="round-revision">Revision being transmitted</Label><Input id="round-revision" value={form.revision} onChange={event => setField('revision', event.target.value)} /><p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Review the linked current PDFs before submitting. This round preserves their exact revisions.</p></div>
 
         {/* Submittal context header */}
         {submittal && (

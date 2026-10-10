@@ -1,3 +1,4 @@
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import { describe, it, expect } from "vitest";
 import {
   DRAFTING_STATES,
@@ -14,10 +15,10 @@ import {
 } from "@/lib/detailingPackageState";
 
 // Submittal fixtures (status, ball_in_court) → derived stage via submittalStageMapping:
-const SUB_OFA = { status: "Submitted", ball_in_court: "EOR" };          // → OFA
-const SUB_IFC = { status: "Approved", ball_in_court: "GC" };            // → IFC
-const SUB_RELEASED = { status: "Released for Fabrication" };            // → Released
-const SUB_VOID = { status: "Void" };                                   // → null (no signal)
+const SUB_OFA = { submittal_type: "Shop Drawing", status: "Submitted", ball_in_court: "EOR" };          // → OFA
+const SUB_IFC = { submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC" };            // → IFC
+const SUB_RELEASED = { submittal_type: "Shop Drawing", status: "Released for Fabrication" };            // → Released
+const SUB_VOID = { submittal_type: "Shop Drawing", status: "Void" };                                   // → null (no signal)
 
 describe("DETAILING_STATE_ORDER", () => {
   it("splices drafting before the submittal stages and release after", () => {
@@ -92,12 +93,12 @@ describe("isPackageSuperseded", () => {
 });
 
 describe("isPackageRR", () => {
-  const RR = { status: "Revise and Resubmit", submitted_date: "2026-06-13", round_number: 2 };
-  const RELEASED = { status: "Released for Fabrication", submitted_date: "2026-06-20", round_number: 3 };
+  const RR = { submittal_type: "Shop Drawing", status: "Revise and Resubmit", submitted_date: "2026-06-13", round_number: 2 };
+  const RELEASED = { submittal_type: "Shop Drawing", status: "Released for Fabrication", submitted_date: "2026-06-20", round_number: 3 };
 
   it("true when the governing (most-recent active) submittal is R&R or Rejected", () => {
     expect(isPackageRR([RR])).toBe(true);
-    expect(isPackageRR([{ status: "Rejected", submitted_date: "2026-06-13" }])).toBe(true);
+    expect(isPackageRR([{ submittal_type: "Shop Drawing", status: "Rejected", submitted_date: "2026-06-13" }])).toBe(true);
   });
 
   it("false once a newer round advances past R&R (the released round governs)", () => {
@@ -131,10 +132,10 @@ describe("compareDetailingStates", () => {
 // submittal and on the deprecated set_approval_status flag — so it reported
 // packages as released to fab that the shop never received.
 describe("isPackageReleasedForFab", () => {
-  it("counts the real release states", () => {
-    expect(isPackageReleasedForFab({}, [{ status: "Released for Fabrication" }], [])).toBe(true);
-    expect(isPackageReleasedForFab({ detailing_state: "Partially Released" }, [], [])).toBe(true);
-    expect(isPackageReleasedForFab({ detailing_state: "Released for Erection" }, [], [])).toBe(true);
+  it("requires exact evidence even when a release state is recorded", () => {
+    expect(isPackageReleasedForFab({}, [{ id: 'released', ...verifiedSubmittalEvidence('released'), submittal_type: "Shop Drawing", status: "Released for Fabrication" }], [])).toBe(true);
+    expect(isPackageReleasedForFab({ detailing_state: "Partially Released" }, [], [])).toBe(false);
+    expect(isPackageReleasedForFab({ detailing_state: "Released for Erection" }, [], [])).toBe(false);
   });
 
   it("does NOT count a Void submittal as released to fab", () => {

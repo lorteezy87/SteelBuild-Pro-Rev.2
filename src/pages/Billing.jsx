@@ -10,95 +10,48 @@
  * Stripe handlers and plan cards remain owned by Billing.jsx so behavior does not drift.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import React from "react";
 import { Check, CreditCard, ExternalLink, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useOrg } from "@/components/shared/OrgContext";
 import { usePlan } from "@/hooks/usePlan";
 import { PLANS } from "@/lib/billing/plans";
-import { startCheckout, openBillingPortal } from "@/lib/billing/billingService";
+import { getWorkspaceProjectCount, getWorkspaceMemberCount, getWorkspacePendingInvitationCount } from "@/lib/billing/billingService";
 import { isNativePlatform } from "@/lib/native/platform";
 import BillingControlCenter from "./billing/BillingControlCenter";
-import { listOrgMembers, listInvitations } from "@/lib/org/repository";
-import { entities } from "@/api/supabaseClient";
+import { useBillingActions } from "./billing/useBillingActions";
 
 export default function Billing() {
   const { currentOrg, currentRole, refetchOrgs } = useOrg();
   const { plan, planKey, status, isActive } = usePlan();
-  const [busy, setBusy] = useState(null);
   const canManage = currentRole === "owner" || currentRole === "admin";
   const native = isNativePlatform();
   const orgId = currentOrg?.id;
 
-  // Returning from Checkout — the webhook flips the plan async, so refetch.
-  useEffect(() => {
-    let s = null;
-    try { s = new URLSearchParams(window.location.search).get("status"); } catch { /* ignore */ }
-    if (s === "success") {
-      toast.success("Subscription active — thank you!");
-      const t = setTimeout(() => refetchOrgs(), 1500);
-      try { window.history.replaceState({}, "", "/Billing"); } catch { /* ignore */ }
-      return () => clearTimeout(t);
-    }
-    if (s === "cancel") {
-      toast.message("Checkout canceled");
-      try { window.history.replaceState({}, "", "/Billing"); } catch { /* ignore */ }
-    }
-    return undefined;
-  }, [refetchOrgs]);
+  const { busy, upgrade, manage } = useBillingActions({ orgId, canManage, native, refetchOrgs });
 
-  const upgrade = async (key) => {
-    if (!currentOrg?.id || busy) return;
-    setBusy(key);
-    try {
-      const url = await startCheckout(key, currentOrg.id);
-      if (url) window.location.href = url;
-      else throw new Error("No checkout URL returned");
-    } catch (err) {
-      toast.error(err?.message || "Couldn't start checkout — is billing configured?");
-      setBusy(null);
-    }
-  };
-
-  const manage = async () => {
-    if (!currentOrg?.id || busy) return;
-    setBusy("portal");
-    try {
-      const url = await openBillingPortal(currentOrg.id);
-      if (url) window.location.href = url;
-      else throw new Error("No portal URL");
-    } catch (err) {
-      toast.error(err?.message || "Couldn't open the billing portal");
-      setBusy(null);
-    }
-  };
-
-  const { data: orgMembers = [] } = useQuery({
-    queryKey: ["org-members", orgId],
-    queryFn: () => listOrgMembers(orgId),
+  const memberUsage = useQuery({
+    queryKey: ["org-members", orgId, "billing-count", currentRole],
+    queryFn: () => getWorkspaceMemberCount(orgId),
     enabled: !!orgId,
     staleTime: 60_000,
   });
-  const { data: orgInvites = [] } = useQuery({
-    queryKey: ["org-invites", orgId],
-    queryFn: () => listInvitations(orgId),
-    enabled: !!orgId,
+  const invitationUsage = useQuery({
+    queryKey: ["org-invites", orgId, "billing-count", currentRole],
+    queryFn: () => getWorkspacePendingInvitationCount(orgId),
+    enabled: !!orgId && canManage,
     staleTime: 60_000,
   });
-  const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => entities.Project.list(),
+  const projectUsage = useQuery({
+    queryKey: ["projects", orgId, "billing-count", currentRole],
+    queryFn: () => getWorkspaceProjectCount(orgId),
     enabled: !!orgId,
     staleTime: 5 * 60_000,
   });
 
-  const memberCount = orgMembers.length;
-  const pendingCount = useMemo(
-    () => orgInvites.filter((i) => i.status === "pending").length,
-    [orgInvites],
-  );
-  const projectCount = projects.length;
+  const memberCount = memberUsage.isError ? null : memberUsage.data ?? null;
+  const pendingCount = !canManage || invitationUsage.isError ? null : invitationUsage.data ?? null;
+  const projectCount = projectUsage.isError ? null : projectUsage.data ?? null;
 
   // BillingControlCenter is canonical.
   // Stripe handlers and plan cards remain owned by Billing.jsx.
@@ -118,7 +71,7 @@ export default function Billing() {
           )}
         </div>
         {canManage && currentOrg?.stripe_customer_id && !native && (
-          <button className="sbd-btn sbd-btn-ghost" onClick={manage} disabled={busy === "portal"}>
+          <button className="sbd-btn sbd-btn-ghost" onClick={manage} disabled={!!busy}>
             <CreditCard size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />{busy === "portal" ? "Opening…" : "Manage billing"} <ExternalLink size={12} style={{ verticalAlign: "-1px", marginLeft: 4 }} />
           </button>
         )}
@@ -131,12 +84,13 @@ export default function Billing() {
       )}
 
       {/* Plan cards + checkout — hidden in the native (sign-in-only) build; the
-          App Store app doesn't sell subscriptions, they're managed on the web. */}
+          App Store app doesn't sell subscriptions, they're managed on the web.
+          The native note doesn't say where plans are sold either: sending iOS
+          users to the website to change their subscription is a call to action
+          to buy outside the app (App Store guideline 3.1.1). */}
       {native ? (
         <div className="sbd-card" style={{ padding: 16, color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.55 }}>
-          Your subscription is managed on the web. Sign in at{" "}
-          <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>steelbuild-pro.com</span>{" "}
-          to view plans or change your subscription.
+          Plan and billing changes aren&apos;t available in the iOS app.
         </div>
       ) : (
       <>
@@ -169,7 +123,7 @@ export default function Billing() {
               {current ? (
                 <button className="sbd-btn sbd-btn-ghost" disabled style={{ justifyContent: "center" }}>Current plan</button>
               ) : p.purchasable && canManage ? (
-                <button className={p.highlight ? "sbd-btn sbd-btn-primary" : "sbd-btn sbd-btn-ghost"} style={{ justifyContent: "center" }} disabled={busy === p.key} onClick={() => upgrade(p.key)}>
+                <button className={p.highlight ? "sbd-btn sbd-btn-primary" : "sbd-btn sbd-btn-ghost"} style={{ justifyContent: "center" }} disabled={!!busy} onClick={() => upgrade(p.key)}>
                   {busy === p.key ? "Starting…" : planKey === "free" ? `Choose ${p.name}` : `Switch to ${p.name}`}
                 </button>
               ) : !p.purchasable ? (
@@ -199,7 +153,9 @@ export default function Billing() {
       stripeCustomerId={currentOrg?.stripe_customer_id ?? null}
       memberCount={memberCount}
       pendingCount={pendingCount}
+      seatCountIsWorkspaceTotal={canManage}
       projectCount={projectCount}
+      projectCountIsWorkspaceTotal={canManage}
     >
       {planContent}
     </BillingControlCenter>

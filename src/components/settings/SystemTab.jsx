@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useOrg } from '@/components/shared/OrgContext';
 import { exportWorkspace, downloadWorkspaceExport, fetchWorkspaceProjects } from '@/lib/workspaceExport';
@@ -13,6 +14,8 @@ const sectionStyle = {
   background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
   borderRadius: 8, padding: '18px 16px', marginBottom: 20,
 };
+
+const legalLinkStyle = { color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' };
 
 const ActionBtn = ({ onClick, disabled, color, children }) => (
   <button onClick={onClick} disabled={disabled} style={{ padding: '8px 14px', background: `var(--${color}-muted)`, border: `1px solid var(--${color}-border)`, borderRadius: 6, color: `var(--${color})`, fontWeight: 600, fontSize: 11, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: 'var(--font-body)' }}>
@@ -55,7 +58,8 @@ export default function SystemTab({ user }) {
         onProgress: (done, total, name) =>
           setExportMsg(name ? `Exporting ${Math.min(done + 1, total)} of ${total}: ${name}…` : 'Packaging backup…'),
       });
-      downloadWorkspaceExport(bundle);
+      const presentation = await downloadWorkspaceExport(bundle);
+      if (presentation !== 'downloaded' && presentation !== 'shared') return;
       const skipped = bundle.failures.length;
       toast.success(
         `Exported ${bundle.project_count} project${bundle.project_count === 1 ? '' : 's'} · ` +
@@ -141,11 +145,15 @@ export default function SystemTab({ user }) {
         ))}
       </div>
 
-      {/* Support */}
+      {/* Support. The privacy policy must be reachable inside the iOS app
+          (App Store guideline 5.1.1); these are router links, since the native
+          shell drops target="_blank" navigations. */}
       <div style={sectionStyle}>
         <label style={labelStyle}>Support & Legal</label>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          Contact your SteelBuild Pro administrator for privacy, terms, or support inquiries.
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', fontSize: 11, lineHeight: 1.6 }}>
+          <Link to="/privacy" style={legalLinkStyle}>Privacy Policy</Link>
+          <Link to="/terms" style={legalLinkStyle}>Terms of Service</Link>
+          <a href="mailto:support@steelbuild-pro.com" style={legalLinkStyle}>support@steelbuild-pro.com</a>
         </div>
       </div>
     </div>

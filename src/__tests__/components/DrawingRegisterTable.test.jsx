@@ -67,7 +67,7 @@ const SETS = [
       { id: "s2", stage: "Released", revision_number: "1" },
       { id: "s3", stage: "Released", revision_number: "2" },
     ],
-    submittals: [{ round_number: 2, status: "Released for Fabrication", required_date: "2025-01-01" }],
+    submittals: [{ id: "sub-1", submittal_type: "Shop Drawing", drawing_set_ids: ["1"], round_number: 2, status: "Released for Fabrication", required_date: "2025-01-01" }],
   },
   {
     key: "id:2", setId: "2", name: "Anchor Bolts - OFA",
@@ -76,7 +76,7 @@ const SETS = [
       { id: "a1", stage: "IFA", revision_number: "0" },
       { id: "a2", stage: "IFA", revision_number: "0" },
     ],
-    submittals: [{ round_number: 1, status: "Issued for Approval", required_date: "2020-01-01" }],
+    submittals: [{ id: "sub-2", submittal_type: "Shop Drawing", drawing_set_ids: ["2"], round_number: 1, status: "Issued for Approval", required_date: "2020-01-01" }],
   },
 ];
 
@@ -106,20 +106,22 @@ describe("DrawingRegisterTable (Drawing Register)", () => {
     expect(screen.getByText("Anchor Bolts - OFA")).toBeInTheDocument();
   });
 
-  it("shows operational-state chips + released counts per set", () => {
+  it("shows operational-state chips and legacy release flags per set", () => {
     renderTable();
-    // Status cell now renders an OperationalStateChip (the coalesced operational
-    // state) instead of the raw latest-submittal status string.
-    // Set 1 "Main Steel - IFC": submittal "Released for Fabrication" → "Released"
-    // state. ("Released" also appears as the column header, hence getAllByText.)
-    expect(screen.getAllByText("Released").length).toBeGreaterThanOrEqual(2);
+    // Set 1 "Main Steel - IFC": the typed, set-linked shop submittal yields the
+    // workflow state "Released". The server gate still determines fab clearance.
+    expect(screen.getByText("Released")).toBeInTheDocument();
+    expect(screen.getByText("Released").parentElement).toHaveAttribute(
+      "title", "Workflow status only. Verify the drawing-set and work-package fabrication release gates.",
+    );
     // Set 2 "Anchor Bolts - OFA": "Issued for Approval" is not a recognized
     // submittal status, so no submittal governs and it falls back to the
     // sheet-derived stage "IFA".
     expect(screen.getByText("IFA")).toBeInTheDocument();
-    // Released count stays a display-only "n/total" badge.
-    expect(screen.getByText("3/3")).toBeInTheDocument(); // Main Steel fully released
-    expect(screen.getByText("0/2")).toBeInTheDocument(); // Anchor Bolts none released
+    // These counts are legacy sheet flags, not verified fabrication clearance.
+    expect(screen.getByRole("columnheader", { name: "Legacy flags" })).toBeInTheDocument();
+    expect(screen.getByText("3/3")).toBeInTheDocument();
+    expect(screen.getByText("0/2")).toBeInTheDocument();
   });
 
   it("surfaces the management toolbar for an editor", () => {

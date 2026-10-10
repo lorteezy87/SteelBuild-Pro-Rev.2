@@ -1,6 +1,8 @@
 import type { ComponentType } from "react";
+import type { CanonicalReleaseGate } from "@/lib/pieceControl/releaseRepository";
 
 export type RiskLevel = "high" | "medium" | "clear";
+export type ReleaseGateState = "ready" | "blocked" | "released" | "unverified";
 export type ViewId = "flow" | "board" | "register" | "hours";
 
 export interface FabStage {
@@ -65,6 +67,10 @@ export interface FabSignals {
   needsRelease: boolean;
   inShop: boolean;
   readyForRelease: boolean;
+  /** A package score is context, never fabrication-release authority. */
+  advisoryReadyForRelease?: boolean;
+  releaseGateState?: ReleaseGateState;
+  releaseGate?: CanonicalReleaseGate | null;
   drawing: DrawingContext;
   flags: FabFlag[];
   risk: RiskLevel;

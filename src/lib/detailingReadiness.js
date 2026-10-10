@@ -39,7 +39,7 @@ const ERECTION_RELEASED_IDX = ORDER_INDEX("Released for Erection");
  *
  * These used to be merged into one Set and intersected with a set of UUIDs, so a
  * sheet-linked open RFI could never match: a package with an unanswered RFI
- * against it still reported `rfiBlocked: false` and `fabricationReady: true`,
+ * against it still reported `rfiBlocked: false` and a clear shop-stage marker,
  * while the Drawing Health Score on the same screen deducted for that same RFI.
  * Keep the two id spaces separate and match each against its own open set.
  */
@@ -117,8 +117,8 @@ export function computeDetailingReadiness({
   // unaffected. Deriving both signals from `sheets` alone — which by then holds
   // only live sheets — made them permanently false. The legacy single-array
   // form is still honoured for callers that pass everything in `sheets`.
-  const liveSheets = (sheets || []).filter((s) => s && !s.is_deleted);
-  const supersededFromCaller = (supersededSheets || []).filter((s) => s && !s.is_deleted);
+  const liveSheets = (sheets || []).filter((s) => s && !s.is_deleted && !s.deleted_at);
+  const supersededFromCaller = (supersededSheets || []).filter((s) => s && !s.is_deleted && !s.deleted_at);
   const supersededInSheets = liveSheets.filter((s) => s.is_superseded === true);
   const supersededCount = supersededFromCaller.length + supersededInSheets.length;
   const notSupersededCount = liveSheets.filter((s) => s.is_superseded !== true).length;
@@ -139,8 +139,11 @@ export function computeDetailingReadiness({
   const area = workPackage?.area || pkg?.area_sequence || null;
   const prioritySequence = !!sequenceNumber;
 
-  const fabricationReady = stateIdx >= RELEASED_IDX && !rfiBlocked && !revisionImpacted;
-  const erectionReady = stateIdx >= ERECTION_RELEASED_IDX && !rfiBlocked && !revisionImpacted;
+  // These are workflow-stage markers only. This read model has no complete
+  // drawing-set, material, hold, or current-revision evidence and therefore
+  // cannot authorize fabrication or erection. The server gate owns release.
+  const shopStageMarked = stateIdx >= RELEASED_IDX;
+  const fieldStageMarked = stateIdx >= ERECTION_RELEASED_IDX;
 
   return {
     effectiveState,
@@ -153,37 +156,35 @@ export function computeDetailingReadiness({
     prioritySequence,
     sequenceNumber,
     area,
-    fabricationReady,
-    erectionReady,
+    shopStageMarked,
+    fieldStageMarked,
     fullySuperseded,
   };
 }
 
-// Detailing is COMPLETE at "Released" (released for fabrication). The two
-// states after it — Partially Released / Released for Erection — are erection
-// progress, not detailing progress, so dividing by the full order length made
-// "Detailing %" top out at 83% (10/12) for a fully released package and read
-// "Seq 3 — Detailing 83%" next to "Fab 4/4".
+// The workflow path reaches its detailing terminal stage at "Released". The
+// states after it describe field progression. This stage-position percentage
+// is not measured work completion or authorization to release fabrication.
 const DETAILING_COMPLETE_IDX = ORDER_INDEX("Released");
 
 /**
- * Sequence-aware readiness rollup: group packages by erection sequence and
- * summarize Detailing % / Fab Ready / Erection Ready / At Risk. This is the
+ * Sequence-aware workflow rollup: group packages by erection sequence and
+ * summarize Detailing % / shop and field stage markers / At Risk. This is the
  * sequence-driven view ("what fabricates/erects first") that lets the schedule
  * pull detailing — design doc §7. Packages with no linked sequence fall into
  * an "Unsequenced" bucket (sorted last).
  *
  * @param {Array<{ sequenceNumber?: string|null, effectiveState?: string,
- *   fabricationReady?: boolean, erectionReady?: boolean, atRisk?: boolean }>} entries
+ *   shopStageMarked?: boolean, fieldStageMarked?: boolean, atRisk?: boolean }>} entries
  * @returns {Array<{ sequence: string, packageCount: number, detailingPct: number,
- *   fabReadyCount: number, erectionReadyCount: number, atRiskCount: number }>}
+ *   shopStageCount: number, fieldStageCount: number, atRiskCount: number }>}
  */
 export function computeSequenceReadiness(entries) {
   const groups = new Map();
   for (const e of entries || []) {
     const seq = e?.sequenceNumber || "Unsequenced";
     if (!groups.has(seq)) {
-      groups.set(seq, { sequence: seq, packageCount: 0, _progressSum: 0, fabReadyCount: 0, erectionReadyCount: 0, atRiskCount: 0 });
+      groups.set(seq, { sequence: seq, packageCount: 0, _progressSum: 0, shopStageCount: 0, fieldStageCount: 0, atRiskCount: 0 });
     }
     const g = groups.get(seq);
     g.packageCount += 1;
@@ -192,8 +193,8 @@ export function computeSequenceReadiness(entries) {
     g._progressSum += DETAILING_COMPLETE_IDX > 0
       ? Math.min(1, Math.max(0, idx) / DETAILING_COMPLETE_IDX)
       : 0;
-    if (e?.fabricationReady) g.fabReadyCount += 1;
-    if (e?.erectionReady) g.erectionReadyCount += 1;
+    if (e?.shopStageMarked) g.shopStageCount += 1;
+    if (e?.fieldStageMarked) g.fieldStageCount += 1;
     if (e?.atRisk) g.atRiskCount += 1;
   }
   return Array.from(groups.values())
@@ -201,8 +202,8 @@ export function computeSequenceReadiness(entries) {
       sequence: g.sequence,
       packageCount: g.packageCount,
       detailingPct: g.packageCount ? Math.round((g._progressSum / g.packageCount) * 100) : 0,
-      fabReadyCount: g.fabReadyCount,
-      erectionReadyCount: g.erectionReadyCount,
+      shopStageCount: g.shopStageCount,
+      fieldStageCount: g.fieldStageCount,
       atRiskCount: g.atRiskCount,
     }))
     .sort((a, b) => {

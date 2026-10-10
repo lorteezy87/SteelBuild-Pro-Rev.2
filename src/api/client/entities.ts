@@ -8,6 +8,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { getActiveOrgGeneration } from '@/lib/activeOrg';
 import {
   createProjectRecordSchema,
   softDeleteProjectArgsSchema,
@@ -16,6 +17,7 @@ import {
   parseDependencies as parseScheduleDependencies,
   serializeDependencies as serializeScheduleDependencies,
 } from '@/services/scheduleCascade';
+import { reconcileStatusPercent } from '@/lib/schedule/taskStatus';
 import { SupabaseOperationError } from './errors';
 import {
   addAliases,
@@ -24,87 +26,34 @@ import {
   normalizeJsonbArray,
 } from './fieldMapping';
 import { createEntityClient } from './entityClient';
-import type { Insert, RowWithAliases, TableName, Update } from './supabaseTypes';
+import { withChangeOrderLifecycle } from './changeOrderLifecycle';
+import { withReviewedSovSaves } from './sovLifecycle';
+import { withSubmittalLifecycle } from './submittalLifecycle';
+import { createNumberedRecord } from './numberedCreate';
+import type { NumberedKind } from './numberedCreate';
+import type { EntityRequestOptions, Insert, RowWithAliases, Update } from './supabaseTypes';
 import type { Json } from '@/types/supabase';
 
-/**
- * Atomic-creation wrapper for a table whose INSERT is guarded.
- *
- * Several tables mint an official record number inside the transaction that
- * inserts the row, and a BEFORE INSERT trigger rejects any direct write with
- * "Use create_x() — numbers are minted there". The guard tests a
- * transaction-local `steelbuild.*_rpc` GUC that only the RPC sets, so a
- * PostgREST client can never satisfy it: createEntityClient's generic create
- * fails with 42501 every time. Registering a table's RPC here is what makes
- * creation work at all.
- *
- * `derived` names the columns the RPC mints or looks up itself. Sending them is
- * at best ignored and at worst a duplicate number, so they never leave here.
- *
- * `carried` names columns the RPC's INSERT does not cover but a form does
- * collect. They are written immediately after, because the guards only gate
- * INSERT. That is a second round trip rather than one transaction — the row
- * exists either way, and losing what someone typed is the worse failure. It
- * deliberately excludes every approval / receipt / void stamp: those are gated
- * on the UPDATE path too ("Approval / SOV stamps are written only by the RPCs",
- * "RECEIVE_VIA_RPC"), and carrying them would trade a silent drop for a hard
- * error on an otherwise good save.
- */
-interface AtomicCreateConfig {
-  readonly rpc: 'create_change_order' | 'create_change_request' | 'create_delivery';
-  readonly derived: readonly string[];
-  readonly carried: readonly string[];
-}
-
-function atomicCreateClient<T extends TableName>(tableName: T, config: AtomicCreateConfig) {
+/** Numbering, collected fields and retry identity are committed together. */
+function atomicCreateClient<T extends NumberedKind>(tableName: T) {
   const base = createEntityClient(tableName);
-
-  const create = async (record: Insert<T>): Promise<RowWithAliases<T>> => {
-    const payload = cleanRecord(record as Record<string, unknown>);
-    const projectId = payload.project_id;
-    if (typeof projectId !== 'string' || projectId === '') {
-      throw new Error(`project_id is required to create a ${String(tableName)} record`);
-    }
-    // Passed as its own argument, never inside the payload.
-    delete payload.project_id;
-    for (const column of config.derived) delete payload[column];
-
-    const carried: Record<string, unknown> = {};
-    for (const column of config.carried) {
-      if (column in payload) carried[column] = payload[column];
-    }
-
-    const { data, error } = await supabase.rpc(config.rpc, {
-      p_project_id: projectId,
-      p_payload: payload as Json,
-    });
-    if (error) throw new SupabaseOperationError(tableName as string, 'create', error);
-
-    const created = addAliases<RowWithAliases<T>>(data as RowWithAliases<T>, tableName as string);
-    if (Object.keys(carried).length === 0) return created;
-    return base.update((created as { id: string }).id, carried as Update<T>);
-  };
-
+  const create = (record: Insert<T>, options?: EntityRequestOptions) =>
+    createNumberedRecord(tableName, record as Record<string, unknown>, options);
   return {
-    ...base,
-    create,
-    // One RPC call per row, in order. Each draws the next number from the
-    // sequence, so parallel calls would scramble official numbers against the
-    // order the caller listed them in. Not one transaction: a row that fails
-    // leaves the rows before it committed, so say so rather than letting an
-    // importer report a clean failure over a half-finished batch.
+    ...base, create,
     bulkCreate: async (records: Insert<T>[]): Promise<Array<RowWithAliases<T>>> => {
+      const generation = getActiveOrgGeneration();
       const created: Array<RowWithAliases<T>> = [];
       for (const record of records) {
         try {
+          if (generation !== getActiveOrgGeneration()) throw Object.assign(new Error('Workspace changed. Review this import again before continuing.'), { outcomeUnknown: false });
           created.push(await create(record));
-        } catch (cause) {
-          const reason = cause instanceof Error ? cause.message : String(cause);
-          throw new Error(
-            `${created.length} of ${records.length} ${String(tableName)} records were created; ` +
-              `row ${created.length + 1} failed: ${reason}`,
+        }
+        catch (cause) {
+          throw Object.assign(new Error(
+            `${created.length} of ${records.length} ${tableName} records were created; row ${created.length + 1} failed: ${cause instanceof Error ? cause.message : String(cause)}`,
             { cause },
-          );
+          ), { created: [...created], failedIndex: created.length });
         }
       }
       return created;
@@ -183,20 +132,8 @@ export const entities = {
   },
   // CO numbers are contractual identifiers minted by create_change_order();
   // trg_enforce_change_order_guards rejects a direct insert outright.
-  ChangeOrder:           atomicCreateClient('change_orders', {
-    rpc: 'create_change_order',
-    derived: ['project_name', 'co_number', 'sov_line_number', 'submitted_by'],
-    // Approval / SOV / void stamps are excluded on purpose: the guard writes
-    // them only through the RPCs and rejects them on UPDATE too.
-    carried: ['attachments'],
-  }),
-  ChangeRequest:         atomicCreateClient('change_requests', {
-    rpc: 'create_change_request',
-    // change_order_id is set by create_change_order() when a CO is raised from
-    // this CR — the client must not pre-empt that link.
-    derived: ['project_name', 'cr_number', 'change_order_id'],
-    carried: [],
-  }),
+  ChangeOrder:           withChangeOrderLifecycle(atomicCreateClient('change_orders')),
+  ChangeRequest:         atomicCreateClient('change_requests'),
   // ── Drawing-centered execution (MVP Slice 0) ────────────────────
   // Three tables that turn the Drawing Viewer into a coordination hub:
   // every rectangular zone on a sheet revision can link to RFIs, work
@@ -241,9 +178,6 @@ export const entities = {
     // friendlier UX (a slider drag to 100% silently flips status to Complete)
     // and avoids round-trip 400 errors. Existing bad rows are NOT auto-fixed.
     const base = createEntityClient('schedule_tasks');
-    const STATUS_VALUES = new Set([
-      'Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold', 'Cancelled',
-    ]);
     const normalizeFields = (fields: Record<string, unknown> = {}): Record<string, unknown> => {
       const out: Record<string, unknown> = { ...fields };
       const hasStatus = Object.prototype.hasOwnProperty.call(out, 'status');
@@ -259,36 +193,52 @@ export const entities = {
         }
       }
 
-      if (hasPct) {
-        const n = Number(out.percent_complete);
-        if (Number.isFinite(n)) out.percent_complete = Math.max(0, Math.min(100, n));
-      }
-      if (hasStatus && !STATUS_VALUES.has(out.status as string)) {
-        // Unrecognised status — leave it alone, server CHECK will reject.
+      // A NULL percent means UNKNOWN, not zero, and the CHECK accepts null
+      // beside any status. reconcileStatusPercent returns null on purpose when
+      // a finished task reopens: the transition says the task is no longer
+      // done but not how much of it remains. Everything below therefore treats
+      // a null percent as "not supplied a number", because Number(null) is 0
+      // and Number.isFinite(0) is true -- clamping without this guard turned
+      // that deliberate unknown into "0% done", which printed 0% and dropped
+      // the task into the stalled filter one click after it showed 100%.
+      const pctIsKnown = hasPct
+        && out.percent_complete !== null
+        && out.percent_complete !== undefined
+        && Number.isFinite(Number(out.percent_complete));
+
+      if (pctIsKnown) {
+        out.percent_complete = Math.max(0, Math.min(100, Number(out.percent_complete)));
       }
 
-      // Reconciliation rules — explicit caller intent wins; we only fill
-      // gaps where the caller set ONE side of the pair without the other.
-      if (hasStatus && !hasPct) {
+      // Reconciliation rules — explicit caller intent wins; we only fill gaps
+      // where the caller set ONE side of the pair without the other.
+      //
+      // This layer is a safety net for every caller, including importers, and
+      // it does NOT know the stored row. So it fills only the two definitional
+      // gaps that are true regardless of what is stored, and otherwise leaves
+      // the column alone; the canonical status/percent answer needs the stored
+      // percent and belongs to withReconciledPercent in the mutation path.
+      if (hasStatus && !pctIsKnown) {
         if (out.status === 'Complete')    out.percent_complete = 100;
         if (out.status === 'Not Started') out.percent_complete = 0;
-        // 'In Progress' / 'Delayed' / 'On Hold' don't pin a value — keep DB current
-      } else if (hasPct && !hasStatus) {
-        const pct = out.percent_complete as number;
+        // 'In Progress' / 'Delayed' / 'On Hold' pin no value. Leave the column
+        // as supplied — including an explicit null, which is the reopen case.
+      } else if (pctIsKnown && !hasStatus) {
+        // Progress → status, the slider's friendly behaviour. Guarded on
+        // pctIsKnown because an unknown percent implies no status at all:
+        // this branch once read null as 0 and silently marked the task
+        // 'Not Started', changing a column the caller never mentioned.
+        const pct = Number(out.percent_complete);
         if (pct >= 100)      out.status = 'Complete';
         else if (pct > 0)    out.status = 'In Progress';
         else                 out.status = 'Not Started';
-      } else if (hasStatus && hasPct) {
-        // Both supplied — coerce contradictions into the canonical pair so
-        // bad inputs land cleanly instead of failing the CHECK constraint.
-        const pct = out.percent_complete as number;
-        if (out.status === 'Complete' && pct < 100) {
-          out.percent_complete = 100;
-        } else if (out.status === 'Not Started' && pct > 0) {
-          out.percent_complete = 0;
-        } else if (out.status === 'In Progress' && pct >= 100) {
-          out.percent_complete = 99;
-        }
+      } else if (hasStatus && pctIsKnown) {
+        // Both supplied and contradictory — defer to the one reconciler rather
+        // than a second opinion. It previously wrote 99 for In Progress at
+        // 100, which taskStatus.ts names as a lie: 99% asserts the task is
+        // nearly finished when the truth is that progress is unknown.
+        const reconciled = reconcileStatusPercent(out.status, out.percent_complete);
+        if (reconciled !== undefined) out.percent_complete = reconciled;
       }
 
       // Cross-module link arrays (migration 055). Each is an optional
@@ -361,10 +311,10 @@ export const entities = {
       list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
       filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
       get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
-      create:     (record: Insert<'schedule_tasks'>) =>
-        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'schedule_tasks'>),
-      update:     (id: string, updates: Update<'schedule_tasks'>) =>
-        base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'schedule_tasks'>),
+      create:     (record: Insert<'schedule_tasks'>, options?: EntityRequestOptions) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'schedule_tasks'>, options),
+      update:     (id: string, updates: Update<'schedule_tasks'>, options?: EntityRequestOptions) =>
+        base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'schedule_tasks'>, options),
       bulkCreate: (records: Insert<'schedule_tasks'>[]) =>
         base.bulkCreate(
           (records || []).map((r) => normalizeFields(r as Record<string, unknown>) as Insert<'schedule_tasks'>)
@@ -385,7 +335,7 @@ export const entities = {
   // without one still gets weekend-aware scheduling.
   ProjectCalendar:       createEntityClient('project_calendars'),
   ScheduleBaselineTask:  createEntityClient('schedule_baseline_tasks'),
-  Submittal:             createEntityClient('submittals'),
+  Submittal:             withSubmittalLifecycle(createEntityClient('submittals')),
   SubmittalRound:        createEntityClient('submittal_rounds'),
   // Phase 4 submittal-logic: per-drawing-type (Shop/Erection/Part) received +
   // released tracking, gated by the `submittal_drawing_types` flag at the UI.
@@ -428,29 +378,18 @@ export const entities = {
       bulkCreate: async (
         records: Insert<'expenses'>[],
       ): Promise<Array<RowWithAliases<'expenses'>>> => {
+        const generation = getActiveOrgGeneration();
         const created: Array<RowWithAliases<'expenses'>> = [];
-        for (const record of records) created.push(await create(record));
+        for (const record of records) {
+          if (generation !== getActiveOrgGeneration()) throw new Error('Workspace changed. Review this import again before continuing.');
+          created.push(await create(record));
+        }
         return created;
       },
     };
   })(),
-  // create_delivery() mints the number AND inserts the nested `items` array
-  // into delivery_items, deriving pieces / weight_tons from it, so the payload
-  // must keep `items` intact.
-  Delivery:              atomicCreateClient('deliveries', {
-    rpc: 'create_delivery',
-    derived: ['project_name', 'delivery_number', 'pieces', 'weight_tons'],
-    // Procurement planning fields the form collects that the RPC's INSERT does
-    // not cover. received_* / status are left out: the guard routes receipt
-    // through receive_delivery() so linked piece lots advance with it.
-    carried: [
-      'actual_date',
-      'is_long_lead',
-      'lead_time_weeks',
-      'order_placed_date',
-      'procurement_category',
-    ],
-  }),
+  // The transaction preserves nested delivery items and derives pieces/tonnage.
+  Delivery:              atomicCreateClient('deliveries'),
   WorkPackage:           createEntityClient('work_packages'),
   // 062: per-project budget vs actual hours (Estimating Kickoff scope items).
   BudgetHourItem:        createEntityClient('budget_hour_items'),
@@ -459,106 +398,7 @@ export const entities = {
   // generated column on the row — callers can sort/filter it without
   // re-deriving the probability * impact band in three places.
   Risk:                  createEntityClient('risks'),
-  // SOV line numbers are official project records, so the database mints them
-  // inside the same transaction that inserts the row: create_sov_item() takes
-  // the number from get_next_sequence_number(), and a BEFORE INSERT guard on
-  // sov_items rejects any direct table insert with
-  // "Use create_sov_item() - SOV line numbers are minted there".
-  // createEntityClient's generic create writes the table directly, so it can
-  // never be used here.
-  //
-  // The RPC takes the project id as its OWN argument, separate from the row
-  // payload. It derives project_name, line_item_number and sort_order itself,
-  // and rejects a cost code or work package belonging to another project.
-  SOVItem:               (() => {
-    const base = createEntityClient('sov_items');
-    // Real sov_items columns that create_sov_item() does not write. The
-    // pay-application fields SOVFormModal collects are all in here, so
-    // without a follow-up write a PM's Application #, period dates and
-    // submitted / paid dates disappear the moment they hit Save.
-    const RPC_IGNORED_COLUMNS = [
-      'application_number',
-      'period_from',
-      'period_to',
-      'submitted_date',
-      'payment_received_date',
-      'change_order_id',
-    ] as const;
-    const splitRecord = (
-      record: Insert<'sov_items'>,
-    ): { projectId: string; payload: Json; carried: Record<string, unknown> } => {
-      const payload = cleanRecord(record as Record<string, unknown>);
-      const projectId = payload.project_id;
-      if (typeof projectId !== 'string' || projectId === '') {
-        throw new Error('project_id is required to create a SOV item');
-      }
-      // Passed as its own argument, not inside the payload.
-      delete payload.project_id;
-      // Minted server-side. A client-supplied number is at best ignored and at
-      // worst a duplicate, so it never leaves here.
-      delete payload.line_item_number;
-      delete payload.sov_id;
-      const carried: Record<string, unknown> = {};
-      for (const column of RPC_IGNORED_COLUMNS) {
-        if (column in payload) carried[column] = payload[column];
-      }
-      return { projectId, payload: payload as Json, carried };
-    };
-    const create = async (
-      record: Insert<'sov_items'>,
-    ): Promise<RowWithAliases<'sov_items'>> => {
-      const { projectId, payload, carried } = splitRecord(record);
-      const { data, error } = await supabase.rpc('create_sov_item', {
-        p_project_id: projectId,
-        p_payload: payload,
-      });
-      if (error) throw new SupabaseOperationError('sov_items', 'create', error);
-      const created = addAliases<RowWithAliases<'sov_items'>>(
-        data as RowWithAliases<'sov_items'>,
-        'sov_items',
-      );
-      if (Object.keys(carried).length === 0) return created;
-      // The guard only blocks INSERT, so the columns the RPC skipped are
-      // written straight after. Two round trips rather than one transaction —
-      // the row exists either way, and losing what the PM typed is the worse
-      // failure. Fold these into create_sov_item() to make it atomic.
-      return base.update(
-        (created as { id: string }).id,
-        carried as Update<'sov_items'>,
-      );
-    };
-
-    return {
-      ...base,
-      create,
-      // One RPC call per row, in order. There is no bulk overload, and each
-      // call draws the next number from the sequence, so issuing them in
-      // parallel would scramble line numbers against the order the caller
-      // listed them in.
-      //
-      // That means this is NOT one transaction: a row that fails leaves the
-      // rows before it committed. Say so in the error rather than letting the
-      // caller report a clean failure over a half-finished import.
-      bulkCreate: async (
-        records: Insert<'sov_items'>[],
-      ): Promise<Array<RowWithAliases<'sov_items'>>> => {
-        const created: Array<RowWithAliases<'sov_items'>> = [];
-        for (const record of records) {
-          try {
-            created.push(await create(record));
-          } catch (cause) {
-            const reason = cause instanceof Error ? cause.message : String(cause);
-            throw new Error(
-              `${created.length} of ${records.length} SOV line items were created; ` +
-                `row ${created.length + 1} failed: ${reason}`,
-              { cause },
-            );
-          }
-        }
-        return created;
-      },
-    };
-  })(),
+  SOVItem:               withReviewedSovSaves(atomicCreateClient('sov_items')),
   Vendor:                createEntityClient('vendors'),
   Contact:               createEntityClient('contacts'),
   DailyLog:              (() => {
@@ -604,8 +444,8 @@ export const entities = {
       list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
       filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
       get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
-      create:     (record: Insert<'daily_logs'>) =>
-        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'daily_logs'>),
+      create:     (record: Insert<'daily_logs'>, options?: EntityRequestOptions) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'daily_logs'>, options),
       update:     (id: string, updates: Update<'daily_logs'>) =>
         base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'daily_logs'>),
       bulkCreate: (records: Insert<'daily_logs'>[]) =>
@@ -648,8 +488,8 @@ export const entities = {
       list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
       filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
       get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
-      create:     (record: Insert<'punchlist_items'>) =>
-        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'punchlist_items'>),
+      create:     (record: Insert<'punchlist_items'>, options?: EntityRequestOptions) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'punchlist_items'>, options),
       update:     (id: string, updates: Update<'punchlist_items'>) =>
         base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'punchlist_items'>),
       bulkCreate: (records: Insert<'punchlist_items'>[]) =>

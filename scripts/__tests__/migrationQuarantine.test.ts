@@ -130,12 +130,12 @@ describe('the real quarantine', () => {
     (manifest.local.migrationOverrides ?? []).map((e: { version: string }) => [e.version, e]),
   );
 
-  // Both files would regress production if a runner reached them: one replaces
-  // the live expense guards with a weaker create-only guard, the other deletes
-  // live blockers from the P0 fab-release gate.
-  const QUARANTINED = ['20260727232000', '20260913084700'];
+  // These files are unsafe for runner replay: one weakens expense guards,
+  // one deletes fab-release blockers, and the reviewed revision RPC lacks
+  // a complete round-to-revision manifest and transactional zone carry-forward.
+  const QUARANTINED = ['20260727232000', '20260913084700', '20261008032840'];
 
-  it('holds exactly the two migrations that must never run', () => {
+  it('holds exactly the migrations that must never run', () => {
     expect(local.quarantined).toEqual(QUARANTINED);
   });
 

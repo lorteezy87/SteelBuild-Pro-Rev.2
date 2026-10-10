@@ -25,9 +25,99 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261009125901",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - durable org-scoped checkout intent and service-only reservation/customer/session RPCs. Requires reviewed exact SQL, installed-schema staging rollback, independent PostgreSQL concurrency acceptance and verified manual ledger stamp before deploying dependent checkout handler. No frozen exemption. See docs/superpowers/specs/2026-10-09-durable-checkout-design.md and docs/audits/DURABLE_CHECKOUT_RELEASE_2026-10-09.md."
+      },
+      {
+        "version": "20261009140000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - project plan capacity guard. Serializes active project admission at the organization parent, closes direct INSERT and concurrent RPC bypasses, rechecks authenticated membership after waits, and refuses restore lock inversion with a retryable error. No quota exemption for service/maintenance writes and no new paid-module policy. Requires exact source review, real PostgreSQL concurrency and installed-schema staging rollback before manual application and matching ledger stamp. See docs/audits/PROJECT_PLAN_LIMITS_2026-10-09.md."
+      },
+      {
+        "version": "20261008071019",
+        "lifecycle": "required",
+        "evidence": "APPLIED staging and production 2026-10-09 13:09 UTC. Exact ledger payload SHA-256 3dfc1339eb999c33b5bad396d439958c8a6e6820071a612e33e686db9d5bbe44; matching function definitions and service-only grants verified. All 20 installed staging acceptance checks passed under rollback. Service-role-only snapshot/apply RPCs couple organization billing state, revision check and unique receipt. Retain required classification so a missing stamp still blocks publication. Matching handler and durable checkout/provider acceptance remain pending. See docs/audits/ATOMIC_BILLING_RELEASE_2026-10-09.md and docs/audits/PRODUCTION_RELEASE_2026-10-08.md."
+      },
+      {
+        "version": "20261008032524",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local membership-revocation candidate. Requires current workspace membership in all three explicit project-role resolvers, including callers that bypass ordinary project RLS; preserves role precedence, execution grants and current archived-project administration. Isolated SQL regressions cover removed viewer/field/PM/admin/owner roles and refused archival. Requires exact reviewed staging application and matching ledger payload before release. Keep visible in missingMigrations until applied and stamped. See supabase/tests/membership-revocation/README.md and docs/audits/MEMBERSHIP_EMAIL_CLOSEOUT_RELEASE_2026-10-09.md."
+      },
+      {
+        "version": "20261009070300",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Immutable shop-drawing round revision evidence and atomic PM workflow. Exact multi-set revision roster, source/page snapshot, explicit legacy attestation, project-consistent foreign keys, MFA and fail-closed release coverage. Requires dedicated SQL and independent PostgreSQL concurrency acceptance plus hosted staging rehearsal before manual exact-file application and ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/SUBMITTAL_REVISION_EVIDENCE_2026-10-09.md."
+      },
+      {
+        "version": "20261008013546",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control governing-submittal gate candidate. Aligns evaluate_fab_release_set with exact drawing-set IDs, live recognized rounds, submitted-date ordering and fail-closed BIC stage mapping. Local SQL return-value tests pass; exact reviewed staging authentication, hold/RFI and release validation are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261008021100",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control lot-split set-link inheritance candidate. Copies the parent's exact piece_drawing_sets links only to child lots returned by split_piece_lot_impl in the same atomic split, preserves authorization and failure journal, and refuses stale cross-project links. Does not backfill historical children. Local SQL return-value tests pass; exact reviewed staged split and release-gate acceptance are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261008022100",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control piece/set link serialization candidate. Locks the target piece in existing link and unlink RPCs before validation or mutation, rejects explicit containers even after all children are archived, and adds an atomic replace_piece_drawing_set RPC for exclusive assignment with project and role checks plus per-link audit events. Local PGlite SQL tests pass; two-session staged race, authenticated RLS and release-gate acceptance are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261008023000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control exact GC issuance to shop drawing-set impact links. Adds project-locked foreign keys, project-scoped read RLS, PM-only audited atomic replacement, and a guard against declaring no steel impact while affected sets remain linked. This relation is advisory impact context only, never approval or fabrication release. Local PGlite tests pass; review transactional parent-index lock duration, hosted RLS and authenticated edit/read flows on staging before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261008032840",
+        "lifecycle": "intentionally-frozen",
+        "evidence": "LOCAL CANDIDATE ONLY - Reviewed shop drawing revision RPC is deliberately unapplied and unwired. QUARANTINED at supabase/migrations_quarantine/20261008032840_transactional_reviewed_shop_drawing_revision.sql outside the executable migrations directory. It rejects existing approved Shop Drawing sets and active drawing zones because current submittal rounds have no immutable exact-revision manifest and zone carry-forward is not yet transactional. Do not stamp or deploy this file until those prerequisites, legacy reconciliation, hosted concurrency/RLS checks, and a new explicit owner release are complete. See docs/audits/DRAWING_REVISION_ATOMIC_CANDIDATE_2026-10-08.md; SHA-256 4a34d5dedea0566b661ce38e97884b3fca9e250b92927d7842bd575993b16d8c."
+      },
+      {
+        "version": "20261008041759",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Drawing Control package/release-log gate alignment candidate. Requires every active sibling in a normal drawing-set release and rechecks the complete set gate inside fab_release_log insertion; only an explicit audited PM override may release a subset or blocked set. The public package RPC now includes set blockers and the piece helper uses set ok, not governing stage alone. Local PGlite tests pass; exact reviewed staging authentication, concurrency, override and full release validation are required before manual application and matching ledger stamp. Keep visible in missingMigrations until applied. See docs/audits/DRAWING_CONTROL_RELEASE_CANDIDATE_2026-10-07.md."
+      },
+      {
+        "version": "20261007113400",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local reviewed change-order save candidate. Binds metadata and lifecycle effects to the reviewed timestamp, status and amount in one transaction so competing edits cannot approve an unreviewed amount. Requires reviewed staged application and financial lifecycle acceptance before frontend release. Keep visible in missingMigrations until its exact committed SQL is applied and stamped. See supabase/tests/commercial-lifecycle/README.md."
+      },
+      {
+        "version": "20261007120658",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - local reviewed SOV save candidate. Rejects stale SOV drafts after an approved change-order adjustment or another editor save; preserves project authorization, MFA, financial guards, audit and timestamp triggers. Requires reviewed staged application and concurrent financial acceptance before frontend release. Keep visible in missingMigrations until its exact committed SQL is applied and stamped. See supabase/tests/commercial-lifecycle/README.md and supabase/tests/commercial-postgres/README.md."
+      },
+      {
+        "version": "20261007090057",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix for the relation-lock/parent-row deadlock confirmed during staging account-erasure overlap validation. Acquires the existing erasure chain's potential trigger-toggle relation set before row locks using atomic NOWAIT attempts, rollback of partial locks, and an eight-second acquisition budget; preserves fresh ownership/membership checks, grants and the 60-second RPC timeout. This deliberately broadens each call's global write-lock set. The exact payload passed staged HTTP overlap validation under the staging-only approval; production still requires separate reviewed manual application/stamping. Keep visible in missingMigrations until its exact committed payload is applied."
+      },
+      {
+        "version": "20261007084117",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - unapplied forward fix discovered by staging account-deletion validation. Permits only FK-driven author-to-NULL cleanup through immutable revision reports and frozen T&M ticket guards after the Auth parent is deleted; preserves report contents, financial totals and events, normal edit restrictions, and all trigger enablement. The exact payload passed staged real-FK and rollback validation under the staging-only approval; production still requires separate reviewed manual application/stamping. Keep this required migration visible in missingMigrations until its exact committed payload is applied."
+      },
+      {
+        "version": "20260927160000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - not yet in the ledger. Replaces the 27 NO ACTION foreign keys to auth.users that make account deletion fail (\"Database error deleting user\"): ON DELETE SET NULL on 16 authorship columns; foreign key dropped, uuid kept, on 11 audit and sign-off columns (owner decision 2026-09-27). Aborts if a targeted column still blocks. Adds erase_my_sole_member_workspaces(text), locking parent organizations before its sole-member snapshot and declaring a 60s timeout hoisted by PostgREST 14 before the RPC statement, for the account-delete Edge Function. Production ledger absence and PostgREST 14.5 were rechecked 2026-10-05; staged HTTP timeout and concurrency verification remain deployment prerequisites: apply this before deploying the function version that calls it. Once applied and recorded as 20260927160000, move the version into the LEDGER literal in scripts/__tests__/migrationOverrides.test.ts and drop this override."
+      },
+      {
+        "version": "20260927150000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - not yet in the ledger. project_row_counts has refused every end user on archived projects since 20260914010000, and hard_delete_project runs it only on archived ones, so erasing a project, or any workspace with projects (hard_delete_organization, the account-delete Edge Function), fails with 'Not authorized to read this project'. Now also admits user_has_project_role_at_least(project, 'admin') only with current workspace membership, so stale user_projects rows cannot restore census access. Production ledger absence rechecked 2026-10-05; this remains required and the drift gate must report it missing until applied. Apply before 20260927160000. Once applied and recorded as 20260927150000, move the version into the LEDGER literal in scripts/__tests__/migrationOverrides.test.ts and drop this override."
+      },
+      {
         "version": "20260921083000",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - security repair that forces create_change_request submissions to server-controlled Submitted status and JWT requester identity, preventing project viewers from forging PM workflow decisions during INSERT."
+      },
+      {
+        "version": "20260921080604",
+        "lifecycle": "required",
+        "evidence": "Launch-security candidate. Verified in a rolled-back staging transaction with authenticated role checks; not yet applied to production. Preserve the normal drift gate until the reviewed SQL is explicitly approved, applied and stamped with matching payload."
       },
       {
         "version": "20260921054458",
@@ -228,6 +318,16 @@
         "version": "20260919120000",
         "lifecycle": "intentionally-frozen",
         "evidence": "Applied out of band and current, on the owner's explicit 2026-09-19 instruction to build Rev.2's GC Documents register on the sibling SteelBuild-Pro-2026 app's gc_drawing_sets/gc_drawings tables (created by 20260909033138_m3_6_gc_drawings_register.sql, declared 2026-owned above). That instruction is the CLAUDE.md \"Sibling app\" say-so; the migration header records it too. ONLY the additive half of the file was executed against kjrwqagyeswwoxpjkcko: gc_drawing_sets gained doc_type/doc_number/received_date/steel_impact/impact_notes and gc_drawings gained is_superseded/superseded_by_id, plus gc_drawing_sets_doc_type_check, gc_drawing_sets_steel_impact_check, gc_drawings_superseded_by_id_fkey, gc_drawings_superseded_by_not_self (all four convalidated=true) and four indexes. Every column is defaulted or nullable, so the sibling app's writes are unaffected; verified before/after that all 4 live sets kept their sheet_count (2/20/9/0, each equal to their live sheet count) and category, that all 31 sheets survived with is_superseded=false, and that the new columns defaulted to doc_type='gc_drawing' / steel_impact='unknown'. The file's leading adopt block (CREATE TABLE IF NOT EXISTS for both tables, their indexes, trigger bindings, RLS policies and grants) was deliberately NOT executed: it exists so a fresh supabase db reset has tables this repo holds no DDL for, and against production every statement is a verified no-op except the DROP POLICY/CREATE POLICY pairs, which were left alone rather than briefly dropping live policies on a shared database - their text was transcribed from pg_policies on 2026-09-19 and matches what is live. Frozen rather than required because it will never be stamped under this version; ledger holds no row for it."
+      },
+      {
+        "version": "20260922015713",
+        "lifecycle": "required",
+        "evidence": "Prepared in PR #465: piece_events primary-key and redundant-index hardening. Pending the reviewed backend release and matching ledger stamp; no production application is claimed. Remains required, so the drift gate must report it missing until authorized application is verified."
+      },
+      {
+        "version": "20261005100745",
+        "lifecycle": "required",
+        "evidence": "Prepared in PR #465: PM-authorized retry_revision_comparison RPC. Pending the reviewed backend release and matching ledger stamp; no production application is claimed. Remains required, so the drift gate must report it missing until authorized application is verified."
       }
     ]
   },
@@ -501,14 +601,26 @@
       "owner": "shared-production/kjrwqagyeswwoxpjkcko",
       "lifecycle": "required",
       "evidence": "Authenticated production ledger source archived at supabase/migrations_external/20260910044641_m30_scope_items.sql, SHA-256 942871f2a0f9c04659c54d25d418eac57f4cb639505865c9779c4830d8eb29c5. Four function bodies, six columns, constraints/indexes/triggers and RLS/grants match production. Original author/repository commit unproven; see migrations_external/provenance.json. Already applied; do not rerun its data backfill"
+    },
+    {
+      "version": "20260927004958",
+      "owner": "shared-production/kjrwqagyeswwoxpjkcko",
+      "lifecycle": "required",
+      "evidence": "Authenticated production ledger SQL recovered 2026-10-05 at supabase/migrations_external/20260927004958_blueline_pwa_backend.sql; SHA-256 743bb7064dc844d26eeb130a2c10b2c9353746323ade1a90c66dc6d4a266878b. See migrations_external/blueline-provenance.json for exact bytes and server hashes. Original repository/author/commit unproven. Already applied Blueline backend/storage configuration; archive is not deployment input. Preserve live records, files and migration history."
+    },
+    {
+      "version": "20260927005727",
+      "owner": "shared-production/kjrwqagyeswwoxpjkcko",
+      "lifecycle": "required",
+      "evidence": "Authenticated production ledger SQL recovered 2026-10-05 at supabase/migrations_external/20260927005727_blueline_storage_limit.sql; SHA-256 0ceb1a0b25e66c5a24d8aec1a39645a6e4785277e1f8c13895f94ed05690ed61. See migrations_external/blueline-provenance.json for exact bytes and server hashes. Original repository/author/commit unproven. Already applied Blueline backend/storage configuration; archive is not deployment input. Preserve live records, files and migration history."
     }
   ],
   "functions": [
     {
       "slug": "sheets-api",
       "owner": "lorteezy87/steelbuild-sheets-web",
-      "lifecycle": "required",
-      "evidence": "supabase/migrations/20260912023827_revoke_trigger_fn_execute_and_sheets_grants.sql documents the external source-of-truth repository and legitimate service-role caller"
+      "lifecycle": "deprecated",
+      "evidence": "Owner confirmed intentional retirement on 2026-09-21 after live inventory verified removal; see docs/runbooks/supabase-production-ownership.md#sheets-api-retirement. Historical owner and grants remain recorded in supabase/migrations/20260912023827_revoke_trigger_fn_execute_and_sheets_grants.sql"
     },
     {
       "slug": "schedule-assistant",

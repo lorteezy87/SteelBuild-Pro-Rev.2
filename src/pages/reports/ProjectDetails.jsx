@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import {
   isRfiOpen,
   isCoPending,
@@ -383,14 +384,13 @@ export default function ProjectDetails() {
       )
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `project_details_${project.project_number || project.id}_${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void presentGeneratedFile({
+      blob,
+      filename: `project_details_${project.project_number || project.id}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`,
+      title: "Project details",
+    });
   };
 
   return (

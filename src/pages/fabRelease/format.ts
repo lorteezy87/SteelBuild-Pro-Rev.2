@@ -12,6 +12,10 @@ export const VIEW_OPTIONS: FilterOption[] = [
 
 export const RISK_FILTERS: FilterOption[] = [
   { id: "all", label: "All Risk" },
+  { id: "release-ready", label: "Release verified" },
+  { id: "release-blocked", label: "Release blocked" },
+  { id: "release-released", label: "Release recorded" },
+  { id: "release-unverified", label: "Not verified" },
   { id: "high", label: "Exceptions" },
   { id: "medium", label: "Warnings" },
   { id: "clear", label: "Clear" },
@@ -25,6 +29,7 @@ export const STAGE_FILTERS: FilterOption[] = [
 export const BOARD_TONE: Record<string, string> = {
   Blocked: "var(--status-error)",
   "Ready For Release": "var(--status-success)",
+  Unverified: "var(--text-muted)",
   Released: "var(--status-warning)",
   "In Shop": "var(--phase-fab)",
   "Ready To Ship": "var(--phase-delivery)",

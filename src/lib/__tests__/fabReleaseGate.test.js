@@ -1,3 +1,4 @@
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import { describe, expect, it } from "vitest";
 import { findBlockingRfis, computeFabReleaseGate, linkedRfiNumbers, isUnresolvedCurrentRevision } from "../fabReleaseGate";
 
@@ -7,10 +8,13 @@ const sheet = (id, linkedCsv, extra = {}) => ({
   id,
   sheet_number: id,
   linked_rfi_ids: linkedCsv,
+  drawing_set_id: "set-1",
   stage: "Released",
   ...extra,
 });
 const rfi = (number, status, extra = {}) => ({ id: `id-${number}`, rfi_number: number, status, ...extra });
+const shopApproval = { id: "shop-1", ...verifiedSubmittalEvidence("shop-1"), submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] };
+const shopGate = (args) => computeFabReleaseGate({ submittals: [shopApproval], ...args });
 
 describe("linkedRfiNumbers", () => {
   it("parses a CSV string and tolerates an array / empty", () => {
@@ -23,13 +27,13 @@ describe("linkedRfiNumbers", () => {
 
 describe("computeFabReleaseGate", () => {
   it("is not blocked when no sheet links any RFI", () => {
-    const g = computeFabReleaseGate({ drawings: [sheet("S1", ""), sheet("S2", null)], rfis: [rfi("RFI-001", "Open")] });
+    const g = shopGate({ drawings: [sheet("S1", ""), sheet("S2", null)], rfis: [rfi("RFI-001", "Open")] });
     expect(g.blocked).toBe(false);
     expect(g.affectedSheets).toEqual([]);
   });
 
   it("blocks when a linked RFI is open, reporting the RFI + affected sheet", () => {
-    const g = computeFabReleaseGate({
+    const g = shopGate({
       drawings: [sheet("S1", "RFI-001"), sheet("S2", "RFI-002")],
       rfis: [rfi("RFI-001", "Open"), rfi("RFI-002", "Closed")],
     });
@@ -40,12 +44,12 @@ describe("computeFabReleaseGate", () => {
   });
 
   it("normalizes numbers — 'RFI #001' on a sheet matches 'RFI-001' RFI", () => {
-    const g = computeFabReleaseGate({ drawings: [sheet("S1", "RFI #001")], rfis: [rfi("RFI-001", "Open")] });
+    const g = shopGate({ drawings: [sheet("S1", "RFI #001")], rfis: [rfi("RFI-001", "Open")] });
     expect(g.blocked).toBe(true);
   });
 
   it("does NOT block when the only linked RFIs are closed (Answered/Closed/Void)", () => {
-    const g = computeFabReleaseGate({
+    const g = shopGate({
       drawings: [sheet("S1", "RFI-001, RFI-002, RFI-003")],
       rfis: [rfi("RFI-001", "Answered"), rfi("RFI-002", "Closed"), rfi("RFI-003", "Void")],
     });
@@ -53,7 +57,7 @@ describe("computeFabReleaseGate", () => {
   });
 
   it("treats 'Under Review' / unknown statuses as open (fails safe)", () => {
-    const g = computeFabReleaseGate({
+    const g = shopGate({
       drawings: [sheet("S1", "RFI-001, RFI-002")],
       rfis: [rfi("RFI-001", "Under Review"), rfi("RFI-002", "Something New")],
     });
@@ -62,12 +66,12 @@ describe("computeFabReleaseGate", () => {
   });
 
   it("ignores soft-deleted RFIs", () => {
-    const g = computeFabReleaseGate({ drawings: [sheet("S1", "RFI-001")], rfis: [rfi("RFI-001", "Open", { is_deleted: true })] });
+    const g = shopGate({ drawings: [sheet("S1", "RFI-001")], rfis: [rfi("RFI-001", "Open", { is_deleted: true })] });
     expect(g.blocked).toBe(false);
   });
 
   it("dedupes an RFI linked from multiple sheets, but lists all affected sheets", () => {
-    const g = computeFabReleaseGate({
+    const g = shopGate({
       drawings: [sheet("S1", "RFI-001"), sheet("S2", "RFI-001")],
       rfis: [rfi("RFI-001", "Open")],
     });
@@ -99,18 +103,18 @@ describe("computeFabReleaseGate — readiness checks beyond RFIs", () => {
   });
 
   it("does NOT block an IFC/Released, non-superseded, RFI-free package", () => {
-    const g = computeFabReleaseGate({
-      drawings: [{ id: "S1", stage: "Released" }, { id: "S2", stage: "IFC" }],
+    const g = shopGate({
+      drawings: [{ id: "S1", drawing_set_id: "set-1", stage: "Released" }, { id: "S2", drawing_set_id: "set-1", stage: "IFC" }],
     });
     expect(g.blocked).toBe(false);
     expect(g.reasons).toEqual([]);
   });
 
   it("blocks bare Approved / OFS sheets as not IFC ready (Slice 8)", () => {
-    const g = computeFabReleaseGate({
+    const g = shopGate({
       drawings: [
-        { id: "S1", stage: "Released" },
-        { id: "S2", stage: "OFS", set_approval_status: "approved" },
+        { id: "S1", drawing_set_id: "set-1", stage: "Released" },
+        { id: "S2", drawing_set_id: "set-2", stage: "OFS", set_approval_status: "approved" },
       ],
     });
     expect(g.blocked).toBe(true);
@@ -120,11 +124,11 @@ describe("computeFabReleaseGate — readiness checks beyond RFIs", () => {
 
   it("requireSignoffs blocks IFC/Released sheets without a fab sign-off", () => {
     const drawings = [
-      { id: "A", stage: "Released" }, // approved, no sign-off → blocks
-      { id: "B", stage: "Released" }, // approved, has sign-off → ok
+      { id: "A", drawing_set_id: "set-1", stage: "Released" }, // approved, no sign-off → blocks
+      { id: "B", drawing_set_id: "set-1", stage: "Released" }, // approved, has sign-off → ok
     ];
     const signoffs = [{ drawing_id: "B", stamp_type: "approved_for_fabrication" }];
-    const g = computeFabReleaseGate({ drawings, signoffs, requireSignoffs: true });
+    const g = shopGate({ drawings, signoffs, requireSignoffs: true });
     const missing = g.reasons.find((r) => r.kind === "missing_signoffs");
     expect(missing).toBeTruthy();
     expect(missing.sheets.map((s) => s.id)).toEqual(["A"]);
@@ -136,9 +140,9 @@ describe("computeFabReleaseGate — readiness checks beyond RFIs", () => {
   });
 
   it("surfaces multiple blocking reasons together", () => {
-    const g = computeFabReleaseGate({
+    const g = shopGate({
       drawings: [
-        { id: "S1", stage: "Released", linked_rfi_ids: "RFI-001" },
+        { id: "S1", drawing_set_id: "set-1", stage: "Released", linked_rfi_ids: "RFI-001" },
         { id: "S2", stage: "Rejected" },
         { id: "S3", stage: "Released", is_superseded: true },
       ],

@@ -100,11 +100,6 @@
   color: var(--text-primary);
 }
 
-.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-brand__mark {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-nav__item {
   color: var(--text-secondary);
 }
@@ -243,6 +238,23 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   background: transparent;
 }
 
+/* Phones (the shell's phone band, <=767px) get one side gutter, not two.
+   A Control Center inside (a *-cc root or .sbp-command-page) and a hub
+   shell's tab strip and child page each bring their own, which stacked on
+   this wrapper's to 38-44px. Otherwise the wrapper's gutter drops to 16px;
+   that rule has the base rule's weight, so a page's own padding still wins. */
+@media (max-width: 767px) {
+  .sb-dashboard-reference-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .sb-dashboard-reference-page:has([class$="-cc"], .sbp-command-page, > .hub-tabstrip) {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
 .dashboard-reference-shell .sb-dashboard-topbar {
   background: color-mix(in srgb, var(--bg-surface) 96%, transparent) !important;
   border-bottom: 1px solid var(--border-default) !important;
@@ -284,6 +296,35 @@ html.steelbuild-dark .sb-dashboard-shell-content,
 .sb-dashboard-topbar__icon:hover,
 .sb-dashboard-topbar__user:hover {
   background: var(--hover-bg);
+}
+
+/* The project switcher and utility actions share the width left by the
+   sidebar. Use one search affordance at a time so tablet widths do not clip
+   the alerts, contrast, or account controls behind the shell overflow. */
+@media (min-width: 1361px) {
+  .dashboard-reference-shell .sb-dashboard-topbar__icon {
+    display: none;
+  }
+}
+
+@media (max-width: 1360px) {
+  .dashboard-reference-shell .sb-dashboard-topbar .topbar-search-button.is-dashboard-search {
+    display: none !important; /* The component's desktop display is inline. */
+  }
+
+  .dashboard-reference-shell .sb-dashboard-topbar__actions {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .dashboard-reference-shell .sbp-project-context {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
+  .dashboard-reference-shell .sbp-project-context__identity {
+    flex: 1 1 0;
+  }
 }
 
 .sb-dashboard-topbar__user {
@@ -341,17 +382,9 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   white-space: nowrap;
 }
 
-.sb-dashboard-reference-brand__mark {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
+.sb-dashboard-reference-brand > img {
+  max-width: 100%;
   flex-shrink: 0;
-  border: 2px solid var(--accent);
-  border-radius: 9px;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 800;
 }
 
 .sb-dashboard-reference-sidebar.is-collapsed .sb-dashboard-reference-brand {
@@ -359,7 +392,6 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   padding: 0;
 }
 
-.sb-dashboard-reference-sidebar.is-collapsed .sb-dashboard-reference-brand > span:last-child,
 .sb-dashboard-reference-sidebar.is-collapsed .sb-dashboard-reference-nav__item span,
 .sb-dashboard-reference-sidebar.is-collapsed .sb-dashboard-reference-copyright {
   display: none;
@@ -388,7 +420,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   color: var(--text-muted);
   cursor: pointer;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 10px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -422,7 +454,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
 
 .sb-dashboard-reference-nav__item {
   width: 100%;
-  min-height: 32px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -430,12 +462,12 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   padding: 0 12px;
   border: 0;
   border-left: 3px solid transparent;
-  border-radius: 7px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 12px;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-align: left;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;

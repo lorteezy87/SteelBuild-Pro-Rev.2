@@ -12,8 +12,8 @@
  *   1. unmapped         — element resolves to no detailing package
  *   2. rfi_blocked      — the package itself is RFI-blocked
  *   3. behind_schedule  — the package's backward schedule is at risk
- *   4. erection_ready   — package erection-ready (terminal good state)
- *   5. fab_ready        — package fabrication-ready
+ *   4. erection_ready   — field workflow stage marked; key retained for viewer compatibility
+ *   5. fab_ready        — shop workflow stage marked; key retained for viewer compatibility
  *   6. in_review        — package is in the submittal cycle (IFA…Released band)
  *   7. in_detailing     — drafting band (Not Started…Ready to Submit)
  */
@@ -35,8 +35,8 @@ export const ELEMENT_STATUS_META: Record<ElementStatusKey, { label: string; colo
   unmapped:        { label: "Unmapped",        color: "#64748b" },
   rfi_blocked:     { label: "RFI Hold",        color: "#ef4444" },
   behind_schedule: { label: "Behind Schedule", color: "#f97316" },
-  erection_ready:  { label: "Erection Ready",  color: "#16a34a" },
-  fab_ready:       { label: "Fab Ready",       color: "#22c55e" },
+  erection_ready:  { label: "Field stage marked", color: "#64748b" },
+  fab_ready:       { label: "Shop stage marked",  color: "#64748b" },
   in_review:       { label: "In Review",       color: "#3b82f6" },
   in_detailing:    { label: "In Detailing",    color: "#eab308" },
 };
@@ -54,8 +54,8 @@ export interface ModelElementLike {
 /** The slice of computeDetailingReadiness output this engine consumes. */
 export interface PackageReadinessLike {
   effectiveState?: string | null;
-  fabricationReady?: boolean;
-  erectionReady?: boolean;
+  shopStageMarked?: boolean;
+  fieldStageMarked?: boolean;
   rfiBlocked?: boolean;
   /** The hub's at-risk flag for the package (derived from scheduleRisk). */
   atRisk?: boolean;
@@ -87,8 +87,8 @@ export function resolveElementStatus(
   if (!readiness) return "unmapped";
   if (readiness.rfiBlocked) return "rfi_blocked";
   if (readiness.atRisk) return "behind_schedule";
-  if (readiness.erectionReady) return "erection_ready";
-  if (readiness.fabricationReady) return "fab_ready";
+  if (readiness.fieldStageMarked) return "erection_ready";
+  if (readiness.shopStageMarked) return "fab_ready";
   const stateIdx = DETAILING_STATE_ORDER.indexOf(String(readiness.effectiveState ?? ""));
   return stateIdx >= IFA_IDX ? "in_review" : "in_detailing";
 }

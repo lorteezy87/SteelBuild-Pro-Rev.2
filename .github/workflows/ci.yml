@@ -7,7 +7,8 @@
 #                request to any branch, so contributors get green/red feedback
 #                before merge.
 #   - deploy-cloudflare: THE production deploy — `wrangler deploy` to the
-#                Cloudflare Worker. GATED on `ci` and ONLY on a push to main, so
+#                Cloudflare Worker. GATED on `ci`, secret scan, Edge typecheck
+#                production drift and commercial PostgreSQL acceptance, and ONLY on a push to main, so
 #                a red lint/typecheck/test/build cannot reach
 #                steelbuild-pro.com. That gate only holds while this is the SOLE
 #                publisher, so Cloudflare's own Workers Builds git integration
@@ -45,11 +46,12 @@
 #   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
 #   - SAST — still queued; needs an owner decision on tooling
 #     (see ENTERPRISE_READINESS_AUDIT.md L13).
-#   - Lighthouse / a11y / bundle-size budgets (queued for later).
+#   - Lighthouse / automated a11y auditing (queued for later).
 #
-# NOTE ON ENFORCEMENT: none of these gates bind until branch protection on
-# `main` requires them. Until then a direct push deploys ungated and the
-# "a red CI cannot reach steelbuild-pro.com" claim above is aspirational.
+# NOTE ON ENFORCEMENT: deploy dependencies block a failed build from publishing.
+# Branch protection must ALSO require these checks to prevent unchecked merges
+# or direct changes to the workflow itself. Repository credentials still need
+# migration into restricted environments; YAML alone does not isolate secrets.
 # See TECH_DEBT.md B41-P1-005.
 
 name: CI
@@ -84,6 +86,97 @@ permissions:
   contents: read
 
 jobs:
+  commercial-postgres:
+    name: Commercial SQL + concurrent PostgreSQL acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Disposable synthetic database; no Supabase credentials or hosted writes.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: steelbuild_commercial_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: commercial-fixture-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d steelbuild_commercial_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            supabase/tests/commercial-create/package-lock.json
+            supabase/tests/commercial-lifecycle/package-lock.json
+            supabase/tests/commercial-postgres/package-lock.json
+            supabase/tests/submittal-revision-evidence/package-lock.json
+      - name: Verify transactional create and reviewed lifecycle boundaries
+        run: |
+          npm ci --prefix supabase/tests/commercial-create --ignore-scripts
+          npm test --prefix supabase/tests/commercial-create
+          npm ci --prefix supabase/tests/commercial-lifecycle --ignore-scripts
+          npm test --prefix supabase/tests/commercial-lifecycle
+      - name: Verify independent concurrent PostgreSQL sessions
+        env:
+          COMMERCIAL_POSTGRES_TEST: "1"
+          COMMERCIAL_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_commercial_test
+        run: |
+          npm ci --prefix supabase/tests/commercial-postgres --ignore-scripts
+          npm test --prefix supabase/tests/commercial-postgres
+      - name: Verify immutable drawing-round evidence and concurrent workflow
+        env:
+          PGPASSWORD: commercial-fixture-only
+          ROUND_EVIDENCE_POSTGRES_TEST: "1"
+          ROUND_EVIDENCE_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_round_evidence_test
+        run: |
+          createdb -h 127.0.0.1 -p 5432 -U postgres steelbuild_round_evidence_test
+          npm ci --prefix supabase/tests/submittal-revision-evidence --ignore-scripts
+          npm test --prefix supabase/tests/submittal-revision-evidence
+          npm run test:postgres --prefix supabase/tests/submittal-revision-evidence
+
+      - name: Verify independent concurrent Stripe billing sessions
+        env:
+          BILLING_POSTGRES_TEST: "1"
+          BILLING_POSTGRES_CREATE_DB: "1"
+          BILLING_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_billing_test
+        run: |
+          npm ci --prefix supabase/tests/stripe-billing --ignore-scripts
+          npm run test:postgres --prefix supabase/tests/stripe-billing
+
+      - name: Verify project plan limits and concurrent admissions
+        env:
+          PROJECT_LIMIT_POSTGRES_TEST: "1"
+          PROJECT_LIMIT_POSTGRES_CREATE_DB: "1"
+          PROJECT_LIMIT_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_project_limits_test
+        run: |
+          npm ci --prefix supabase/tests/project-plan-limits --ignore-scripts
+          npm test --prefix supabase/tests/project-plan-limits
+          npm run test:postgres --prefix supabase/tests/project-plan-limits
+
+  edge-typecheck:
+    name: Release Edge Function typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.6'
+      - name: Check every repository Edge Function entrypoint
+        run: >-
+          deno check --node-modules-dir=none --no-config --no-lock
+          supabase/functions/*/index.ts
+
   ci:
     name: Lint + Typecheck + Test + Build
     runs-on: ubuntu-latest
@@ -101,6 +194,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -122,6 +217,8 @@ jobs:
         # .js/.jsx additions vs origin/main (existing JS may remain until
         # intentionally converted with real types).
         run: npm run check:no-new-js
+        env:
+          NO_NEW_JS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
       - name: Typecheck (TypeScript)
         # Blocking: guards Supabase table names, hook contracts,
@@ -167,10 +264,42 @@ jobs:
       - name: Verify shell recovery (desktop and mobile, no backend)
         run: npm run test:e2e:foundation
 
+      - name: Preserve browser acceptance evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-acceptance-evidence
+          path: test-results/foundation/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Verify database helper search paths
         run: |
           npm ci --prefix supabase/tests/function-search-path --ignore-scripts
           npm test --prefix supabase/tests/function-search-path
+
+      - name: Verify account deletion authorization
+        run: |
+          npm ci --prefix supabase/tests/account-deletion --ignore-scripts
+          npm test --prefix supabase/tests/account-deletion
+
+      - name: Verify workspace membership revocation
+        # This stays inside the required ci job so publishers cannot ignore a
+        # failed revocation regression. Uses synthetic in-memory SQL only.
+        run: |
+          npm ci --prefix supabase/tests/membership-revocation --ignore-scripts
+          npm test --prefix supabase/tests/membership-revocation
+
+      - name: Verify enrolled MFA database boundaries
+        run: |
+          npm ci --prefix supabase/tests/server-mfa --ignore-scripts
+          npm test --prefix supabase/tests/server-mfa
+
+      - name: Verify atomic Stripe billing and replay boundaries
+        # Required ci gate; isolated SQL fixtures use no provider credentials.
+        run: |
+          npm ci --prefix supabase/tests/stripe-billing --ignore-scripts
+          npm test --prefix supabase/tests/stripe-billing
 
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
@@ -186,6 +315,9 @@ jobs:
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Verify production bundle budgets
+        run: npm run perf:bundle
 
   # ── Dependency audit ────────────────────────────────────────────────────
   # `npm audit` over PRODUCTION dependencies, via scripts/audit-gate.mjs.
@@ -223,6 +355,7 @@ jobs:
       - name: Audit all dependencies (high+, including build and native tooling)
         if: ${{ !cancelled() }}
         run: npm audit --audit-level=high
+
 
   # ── Secret scanning (enforced) ──────────────────────────────────────────────
   # Closes the "no secret scanning" gap this file used to list under "What does
@@ -266,7 +399,7 @@ jobs:
           fetch-depth: 0
 
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -336,7 +469,7 @@ jobs:
   # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers (production)
-    needs: ci
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -419,52 +552,12 @@ jobs:
         run: npx wrangler deploy
 
       - name: Post-deploy health check
-        # Probes the CUSTOM DOMAIN, and takes it from this file rather than
-        # from a repo variable. Both halves of that are the fix.
-        #
-        # This step used to read `vars.CLOUDFLARE_BASE_URL`, gated on it being
-        # non-empty. The variable WAS set — to the workers.dev URL, per step 3
-        # of docs/runbooks/cloudflare-migration.md ("verify off-domain before
-        # touching DNS"). Step 7.4 of that same runbook then says to repoint it
-        # at https://steelbuild-pro.com once the cutover lands. Nobody did.
-        #
-        # So the check kept passing against
-        # https://steelbuild-pro-rev-2.n-lortz1987.workers.dev/ — a URL no
-        # customer uses. `wrangler deploy` binds all three hostnames (the
-        # deploy log lists workers.dev, steelbuild-pro.com and www), and
-        # workers.dev answers straight from the Worker. It stays 200 through a
-        # missing custom-domain binding, a wrong route, or DNS pointed
-        # somewhere else entirely — every way the live site can go dark while
-        # the Worker itself is perfectly healthy.
-        #
-        # A repo variable is invisible in review: nothing in a diff shows what
-        # it holds, which is how it sat on a stale value through the whole
-        # cutover and a run of green deploys. What production is health-checked
-        # against belongs in the file, where changing it needs a PR. For a
-        # future cutover, edit the line below — that is a feature, not friction.
-        #
-        # Red here means "deployed but not serving" — a signal, not a
-        # rollback; the version is already promoted by the time this runs.
-        env:
-          BASE: https://steelbuild-pro.com
-        run: |
-          set -e
-          echo "probing $BASE"
-          for i in 1 2 3 4 5 6; do
-            # `|| code="000"` is load-bearing. An HTTP error status leaves curl
-            # exit 0, but a TRANSPORT failure (DNS, TLS, refused, timeout) does
-            # not — and under `set -e` a bare assignment from a failed command
-            # substitution exits the shell right here, before the loop can log
-            # an attempt, sleep, retry, or reach the ::error:: below. The six
-            # attempts would be fiction and one DNS blip would fail a deploy
-            # that is actually fine. Putting the assignment in an || list is
-            # what errexit exempts. 000 is curl's own "no HTTP response" value,
-            # so "attempt 1: HTTP 000" reads correctly.
-            code=$(curl -sL -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "$BASE") || code="000"
-            if [ "$code" = "200" ]; then echo "cloudflare healthy ($code) at $BASE"; exit 0; fi
-            echo "attempt $i: HTTP $code"; sleep 10
-          done
-          echo "::error::Cloudflare health check failed after deploy: $BASE never returned 200"; exit 1
+        # Both public hostnames must serve this job's exact Vite entry asset.
+        # HTTP 200 alone missed the 2026-10-08 outage: another hosting provider
+        # answered with an app bundle built without Supabase configuration.
+        # Red here means "deployed but not serving"; the Worker is already
+        # published, so this is an alert rather than an automatic rollback.
+        run: node scripts/check-production-domains.ts
 
   # ── PR preview → Cloudflare version preview URL ──────────────────────────
   # Gives back the per-PR preview URLs that Cloudflare's Workers Builds git
@@ -482,7 +575,7 @@ jobs:
   # public/_headers marks them noindex, and Cloudflare Access is the real fix.
   preview-cloudflare:
     name: Cloudflare preview (PR)
-    needs: ci
+    needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
     # Same-repo PRs only. Secrets are not exposed to forked-PR workflows, so a
     # fork would trip the config check below instead of building something
     # broken; skipping outright is clearer.
@@ -556,7 +649,7 @@ jobs:
   # Staging has its own Worker and Supabase branch. Never inherit prod env.
   deploy-staging-cloudflare:
     name: Deploy to Cloudflare Workers (staging)
-    needs: ci
+    needs: [ci, secret-scan, edge-typecheck, commercial-postgres]
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -773,6 +866,9 @@ jobs:
         run: npm run test:e2e
         env:
           E2E_BASE_URL: https://steelbuild-pro.com
+          E2E_PROJECT_ID: ${{ vars.E2E_PROJECT_ID }}
+          E2E_DRAWING_FIXTURE_TEXT: ${{ vars.E2E_DRAWING_FIXTURE_TEXT }}
+          E2E_SUBMITTAL_FIXTURE_TEXT: ${{ vars.E2E_SUBMITTAL_FIXTURE_TEXT }}
           # Sign-in: global-setup (browser session) + the API fixtures. The
           # passwords are secrets; the anon key is browser-public but stored as a
           # secret for one consistent place.

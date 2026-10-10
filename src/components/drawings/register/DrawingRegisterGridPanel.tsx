@@ -25,7 +25,6 @@ import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevisi
 import { useMyDrawingWatches, useToggleDrawingWatch } from "@/hooks/useDrawingWatch";
 import { usePermissions } from "@/services/permissions";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
-import { ensureCurrentRevision } from "@/lib/drawingHub/revisions";
 import { batchProcess } from "@/utils/batchProcess";
 import { createPageUrl } from "@/utils";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
@@ -34,7 +33,9 @@ import type { PillTone } from "@/components/command";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import type { SavedRevisionSummary } from "@/lib/revisionSummaryRepo";
 import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
-import { registerRowToDrawing, rowsNeedingProvisioning } from "./registerProvision";
+import { provisionRegisterRevision, rowsNeedingProvisioning } from "./registerProvision";
+import { TitleblockActionButton } from "./TitleblockActionButton";
+import { SheetContextPanel } from "./SheetContextPanel";
 import {
   buildRegisterDisplayRows,
   createDrawingRegisterIndex,
@@ -48,7 +49,7 @@ import {
 interface RevisionUploadModalProps {
   open: boolean;
   onClose: () => void;
-  onComplete: () => void;
+  onComplete: (result: { complete: boolean }) => void;
   activeProject: { id?: string | null; name?: string | null } | null | undefined;
   preSelectedSet: DrawingSet;
   drawingSets: unknown[];
@@ -66,6 +67,7 @@ export interface DrawingRegisterGridPanelProps {
   summariesBySet?: Map<string, SavedRevisionSummary>;
   onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
   onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
+  onMarkTitleblock?: (setId: string) => void;
   /**
    * Sheet selection, owned by the workbench above this panel so the Bulk edit
    * action can act on it. Omitted (the standalone case) hides the column
@@ -163,6 +165,7 @@ export function DrawingRegisterGridPanel({
   summariesBySet = EMPTY_SUMMARIES,
   onRevisionUploaded,
   onOpenSummary,
+  onMarkTitleblock,
   selected,
   onToggleSelect,
   onToggleSelectAll,
@@ -185,6 +188,9 @@ export function DrawingRegisterGridPanel({
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   /** Flat clean table by default (Doc Control look). Group headers optional. */
   const [groupBySet, setGroupBySet] = useState(false);
+  /** Inspection is independent of the bulk-edit checkbox selection. */
+  const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
+  const contextPanelRef = useRef<HTMLElement>(null);
   const { can } = usePermissions();
   const canEdit = can("edit", "drawing");
   const canRelease = can("approve", "drawing");
@@ -213,13 +219,11 @@ export function DrawingRegisterGridPanel({
   };
 
   const provisionRevision = async (row: DrawingRegisterRow) => {
-    const drawing = registerRowToDrawing(row);
-    if (!drawing) { toast.error("This sheet is missing its project — can't set up tracking."); return; }
     setProvisioning((prev) => new Set(prev).add(row.drawing_id));
     try {
-      await ensureCurrentRevision({ drawing, userId: user?.id || null });
+      await provisionRegisterRevision({ row, projectId, userId: user?.id || null });
       await invalidateRegister();
-      toast.success(`${row.sheet_number ?? "Sheet"} is now releasable.`);
+      toast.success(`${row.sheet_number ?? "Sheet"} now has a tracked revision.`);
     } catch (e) {
       toast.error("Couldn't set up tracking: " + ((e as Error)?.message || "unknown"));
     } finally {
@@ -235,16 +239,14 @@ export function DrawingRegisterGridPanel({
     if (untracked.length === 0 || bulkProvisioning) return;
     setBulkProvisioning(true);
     try {
-      const { failed } = await batchProcess(untracked, (row: DrawingRegisterRow) => {
-        const drawing = registerRowToDrawing(row);
-        if (!drawing) return Promise.reject(new Error("missing project"));
-        return ensureCurrentRevision({ drawing, userId: user?.id || null });
-      });
+      const { failed } = await batchProcess(untracked, (row: DrawingRegisterRow) =>
+        provisionRegisterRevision({ row, projectId, userId: user?.id || null }));
       await invalidateRegister();
       if (failed.length === 0) {
-        toast.success(`Set up release tracking for ${untracked.length} sheet${untracked.length === 1 ? "" : "s"}.`);
+        toast.success(`Set up revision tracking for ${untracked.length} sheet${untracked.length === 1 ? "" : "s"}.`);
       } else {
-        toast.error(`${untracked.length - failed.length}/${untracked.length} set up; ${failed.length} failed.`);
+        const first = failed[0];
+        toast.error(`${untracked.length - failed.length}/${untracked.length} set up; ${failed.length} failed. ${first.item.sheet_number || "Sheet"}: ${first.error}`);
       }
     } finally {
       setBulkProvisioning(false);
@@ -258,6 +260,10 @@ export function DrawingRegisterGridPanel({
   const rows = useMemo(
     () => filterIndexedRegisterRows(registerIndex, query, statusFilter, setFilter),
     [registerIndex, query, statusFilter, setFilter],
+  );
+  const activeEntry = useMemo(
+    () => rows.find((entry) => entry.row.drawing_id === activeSheetId) ?? rows[0] ?? null,
+    [rows, activeSheetId],
   );
   const displayRows = useMemo(
     () => buildRegisterDisplayRows(rows, groupBySet, collapsed),
@@ -292,6 +298,17 @@ export function DrawingRegisterGridPanel({
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
+    });
+  };
+
+  const inspectSheet = (drawingId: string) => {
+    setActiveSheetId(drawingId);
+    // The context card stacks below the register at this CSS breakpoint. Move
+    // the reader to the selected evidence after React commits the new sheet.
+    if (!window.matchMedia?.("(max-width: 1100px)").matches) return;
+    window.requestAnimationFrame(() => {
+      contextPanelRef.current?.focus({ preventScroll: true });
+      contextPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
 
@@ -332,13 +349,25 @@ export function DrawingRegisterGridPanel({
           </button>
         </RegisterCell>
         <RegisterCell virtual={virtual} style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
-          <Link
-            to={href}
-            style={{ color: "var(--cmd-accent, var(--accent))", textDecoration: "none" }}
-            title="Open in drawing viewer"
-          >
-            {r.sheet_number || "—"}
-          </Link>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <Link
+              to={href}
+              style={{ color: "var(--cmd-accent, var(--accent))", textDecoration: "none" }}
+              title="Open in drawing viewer"
+            >
+              {r.sheet_number || "—"}
+            </Link>
+            <button
+              type="button"
+              onClick={() => inspectSheet(r.drawing_id)}
+              aria-label={`Inspect sheet ${r.sheet_number || r.drawing_id}`}
+              aria-pressed={activeEntry?.row.drawing_id === r.drawing_id}
+              title="Show sheet context"
+              style={{ display: "inline-flex", alignItems: "center", padding: 2, border: "none", background: "transparent", color: activeEntry?.row.drawing_id === r.drawing_id ? "var(--cmd-gold)" : "var(--cmd-text-muted)", cursor: "pointer" }}
+            >
+              <ChevronRight size={14} aria-hidden="true" />
+            </button>
+          </div>
         </RegisterCell>
         <RegisterCell virtual={virtual} style={{ color: "var(--cmd-text)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</RegisterCell>
         <RegisterCell virtual={virtual} style={{ color: "var(--cmd-text-muted)" }}>{r.discipline || "—"}</RegisterCell>
@@ -355,6 +384,15 @@ export function DrawingRegisterGridPanel({
           </div>
           {showRevisionActions && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+              {canEdit && pkg.parent && onMarkTitleblock && (
+                <TitleblockActionButton
+                  setId={pkg.parent.id}
+                  setName={pkg.name}
+                  locked={!!pkg.parent.is_locked}
+                  onMarkTitleblock={onMarkTitleblock}
+                  style={{ padding: "2px 6px", fontSize: 9 }}
+                />
+              )}
               {savedSummary && onOpenSummary && (
                 <button
                   type="button"
@@ -416,10 +454,10 @@ export function DrawingRegisterGridPanel({
                   if (v) release(r, v);
                   e.target.value = "";
                 }}
-                title="Release current revision"
+                title="Set current revision distribution"
                 style={{ fontSize: 11 }}
               >
-                <option value="">Release…</option>
+                <option value="">Set distribution…</option>
                 {RELEASE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
@@ -430,11 +468,11 @@ export function DrawingRegisterGridPanel({
                 className="cmd-btn cmd-btn--ghost"
                 disabled={provisioning.has(r.drawing_id)}
                 onClick={() => provisionRevision(r)}
-                title="This sheet has no tracked revision yet. Set up release tracking to create its current revision so it can be released."
+                title="This sheet has no tracked revision yet. Set up revision tracking before recording its distribution."
                 style={{ fontSize: 11, whiteSpace: "nowrap" }}
               >
                 {provisioning.has(r.drawing_id) && <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />}
-                {provisioning.has(r.drawing_id) ? "Setting up…" : "Set up release tracking"}
+                {provisioning.has(r.drawing_id) ? "Setting up…" : "Set up revision tracking"}
               </button>
             )}
           </RegisterCell>
@@ -463,7 +501,7 @@ export function DrawingRegisterGridPanel({
         <div>
           <h3 style={{ margin: 0, color: "var(--cmd-text)", fontSize: 16, fontWeight: 700 }}>Drawing Register</h3>
           <p style={{ margin: "4px 0 0", color: "var(--cmd-text-muted)", fontSize: 12 }}>
-            Current revision, release status, impacts, and reviews per sheet. Click a sheet to open the viewer.
+            Current revision, distribution, impacts, and reviews per sheet. Inspect a sheet for approval and hold evidence.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -534,7 +572,7 @@ export function DrawingRegisterGridPanel({
               className="cmd-btn cmd-btn--ghost"
               disabled={bulkProvisioning}
               onClick={() => provisionAll(untrackedRows)}
-              title="Provision a tracked current revision for every visible sheet that doesn't have one yet, so they become releasable."
+              title="Provision a tracked current revision for every visible sheet that doesn't have one yet, so distribution can be recorded."
             >
               {bulkProvisioning && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
               Set up tracking for all ({untrackedRows.length})
@@ -543,24 +581,25 @@ export function DrawingRegisterGridPanel({
         </div>
       </div>
 
-      {rows.length === 0 ? (
-        <div className="cmd-table-wrap">
-          <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--cmd-text-muted)", fontSize: 13 }}>
-            {data.length === 0 ? "No drawings in the register yet." : "No sheets match the filter."}
-          </div>
-        </div>
-      ) : (
-        rows.length > DRAWING_REGISTER_VIRTUALIZE_THRESHOLD ? (
-          <VirtualRegisterRows
-            rows={displayRows}
-            canRelease={canRelease}
-            selectable={selectable}
-            onToggleGroup={toggleGroup}
-            renderSheetCells={renderSheetCells}
-          />
-        ) : (
-        <div className="cmd-table-wrap">
-          <table className="cmd-table">
+      <div className="drawing-register-workbench">
+        <div>
+          {rows.length === 0 ? (
+            <div className="cmd-table-wrap">
+              <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--cmd-text-muted)", fontSize: 13 }}>
+                {data.length === 0 ? "No drawings in the register yet." : "No sheets match the filter."}
+              </div>
+            </div>
+          ) : rows.length > DRAWING_REGISTER_VIRTUALIZE_THRESHOLD ? (
+            <VirtualRegisterRows
+              rows={displayRows}
+              canRelease={canRelease}
+              selectable={selectable}
+              onToggleGroup={toggleGroup}
+              renderSheetCells={renderSheetCells}
+            />
+          ) : (
+            <div className="cmd-table-wrap">
+              <table className="cmd-table">
             <thead>
               <tr>
                 {selectable && (
@@ -583,12 +622,12 @@ export function DrawingRegisterGridPanel({
                 <th>Disc.</th>
                 <th>Set</th>
                 <th>Rev</th>
-                <th>Status</th>
+                <th>Distribution</th>
                 <th style={{ textAlign: "center" }}>Impacts</th>
                 <th style={{ textAlign: "center" }}>Reviews</th>
                 <th>Last activity</th>
                 <th style={{ width: 56 }}>View</th>
-                {canRelease && <th>Release</th>}
+                {canRelease && <th>Set distribution</th>}
               </tr>
             </thead>
             <tbody>
@@ -602,24 +641,29 @@ export function DrawingRegisterGridPanel({
                   colCount={colCount}
                 />
               ) : (
-                <tr key={displayRow.entry.row.drawing_id}>
+                <tr key={displayRow.entry.row.drawing_id} style={{ background: activeEntry?.row.drawing_id === displayRow.entry.row.drawing_id ? "var(--cmd-row-hover)" : undefined }}>
                   {renderSheetCells(displayRow.entry, false)}
                 </tr>
               ))}
             </tbody>
-          </table>
+              </table>
+            </div>
+          )}
         </div>
-        )
-      )}
+        <SheetContextPanel entry={activeEntry} projectId={projectId} panelRef={contextPanelRef} />
+      </div>
       {canEdit && revisionPackage?.parent && (
         <Suspense fallback={<p role="status" style={{ color: "var(--cmd-text-muted)", fontSize: 12 }}>Loading revision upload…</p>}>
           <RevisionUploadModal
             open
             onClose={() => setRevisionPackage(null)}
-            onComplete={() => {
+            onComplete={(result) => {
+              // A partial write is real data, so refresh the register, but keep
+              // the modal and its recovery details open for the operator.
+              void invalidateRegister();
+              if (result?.complete !== true) return;
               const pkgKey = revisionPackage.key;
               setRevisionPackage(null);
-              void invalidateRegister();
               void onRevisionUploaded?.(pkgKey);
             }}
             activeProject={activeProject}
@@ -668,12 +712,12 @@ function VirtualRegisterRows({
     { label: "Disc." },
     { label: "Set" },
     { label: "Rev" },
-    { label: "Status" },
+    { label: "Distribution" },
     { label: "Impacts", align: "center" },
     { label: "Reviews", align: "center" },
     { label: "Last activity" },
     { label: "View", align: "center" },
-    ...(canRelease ? [{ label: "Release" }] : []),
+    ...(canRelease ? [{ label: "Set distribution" }] : []),
   ];
   const gridTemplateColumns = registerGridColumns(canRelease, selectable);
 

@@ -1,7 +1,7 @@
 /**
  * Constraints.jsx — Constraint Log page shell.
  *
- * Owns: React-Query wiring (constraints, work packages, projects),
+ * Owns: complete project evidence,
  * create/update/delete mutations, the filter/derived-data useMemo
  * blocks, and composition of the feature-folder components.
  *
@@ -10,7 +10,7 @@
  * src/pages/constraints/.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -19,10 +19,9 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 
 import { useProjectId } from "@/hooks/useProjectId";
 import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
-import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useOrg } from "@/components/shared/OrgContext";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { Button } from "@/components/design-system";
 import { isOverdue } from "./constraints/utils";
 import KpiStrip from "./constraints/KpiStrip";
@@ -46,8 +45,11 @@ import { ACTION_ITEM_CLOSED_STATUSES } from "@/lib/entityPredicates";
 const isClosedConstraint = (c) => ACTION_ITEM_CLOSED_STATUSES.has(c?.status ?? "");
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { buildConstraintPrefillFromRfi } from "./constraints/rfiConstraintHandoff";
+import { assertConstraintEvidence, constraintEvidenceKey, loadConstraintEvidence } from "./constraints/evidence";
 
 const EMPTY_ENGINE_SOURCES = {
+  items: [],
+  workPackages: [],
   rfis: [],
   submittals: [],
   deliveries: [],
@@ -57,16 +59,33 @@ const EMPTY_ENGINE_SOURCES = {
 };
 
 export default function Constraints() {
-  const qc = useQueryClient();
   const projectId = useProjectId();
-  const { activeProject } = useProjectContext();
+  const { currentOrg, isLoadingOrgs } = useOrg();
+  const orgId = currentOrg?.id;
+  const scope = useMemo(() => ({ projectId, orgId, isLoadingOrgs }), [projectId, orgId, isLoadingOrgs]);
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  return <ProjectConstraints key={`${orgId}:${projectId}:${isLoadingOrgs}`} {...scope} scope={scope} currentScope={currentScope} />;
+}
+
+function ProjectConstraints({ projectId, orgId, isLoadingOrgs, scope, currentScope }) {
+  const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [view, setView] = useState("list");
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [prefill, setPrefill] = useState(null);
+  const [formScope, setFormScope] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const currentProject = useRef(projectId);
+  currentProject.current = projectId;
+  const currentForm = useRef(null);
+  const currentDelete = useRef(null);
+  const nextFormKey = useRef(0);
+  const pendingWrites = useRef(new Set());
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("open");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -75,122 +94,123 @@ export default function Constraints() {
   const [expandedId, setExpandedId] = useState(null);
 
   useResetOnProjectChange(projectId, () => {
-    setShowForm(false);
-    setEditing(null);
-    setPrefill(null);
-    setDeleteTarget(null);
+    closeForm();
+    closeDelete();
     setExpandedId(null);
   });
 
   // -- Data ----------------------------------------------------------------------
-  const {
-    data: items = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["constraints", projectId],
-    queryFn: () =>
-      projectId
-        ? entities.ActionItem.filter({ project_id: projectId, category: "CONSTRAINT" })
-        : entities.ActionItem.filter({ category: "CONSTRAINT" }),
-    enabled: true,
+  const evidenceQuery = useQuery({
+    queryKey: constraintEvidenceKey(projectId, orgId),
+    queryFn: () => loadConstraintEvidence(projectId, orgId),
+    enabled: Boolean(projectId && orgId && !isLoadingOrgs),
+    staleTime: 30 * 1000,
   });
+  const evidence = evidenceQuery.data?.projectId === projectId && evidenceQuery.data?.orgId === orgId ? evidenceQuery.data : null;
+  const items = evidence?.items ?? EMPTY_ENGINE_SOURCES.items;
+  const wps = evidence?.workPackages ?? EMPTY_ENGINE_SOURCES.workPackages;
+  const engineSources = evidence ?? EMPTY_ENGINE_SOURCES;
+  const canWrite = Boolean(evidence && evidenceQuery.status === "success" && evidenceQuery.fetchStatus === "idle" && !qc.getQueryState(constraintEvidenceKey(projectId, orgId))?.isInvalidated);
 
-  const { data: rfis = [] } = useQuery({
-    queryKey: ["rfis", projectId],
-    queryFn: () =>
-      projectId ? entities.RFI.filter({ project_id: projectId }, "-created_at") : [],
-    enabled: !!projectId,
-    staleTime: 60 * 1000,
-  });
+  function closeForm(scope = currentForm.current) {
+    if (currentForm.current !== scope) return;
+    currentForm.current = null;
+    setFormScope(null);
+  }
+
+  function openForm(constraint = null, prefill = null) {
+    if (!canWrite || currentProject.current !== projectId || constraint?._generated) return;
+    const scope = { projectId, constraint, prefill, key: ++nextFormKey.current };
+    currentForm.current = scope;
+    setFormScope(scope);
+  }
+
+  function closeDelete(scope = currentDelete.current) {
+    if (currentDelete.current !== scope) return;
+    currentDelete.current = null;
+    setDeleteTarget(null);
+  }
+
+  function openDelete(constraint) {
+    if (!canWrite || currentProject.current !== projectId || constraint._generated) return;
+    const scope = { projectId, constraint };
+    currentDelete.current = scope;
+    setDeleteTarget(scope);
+  }
 
   // RFI → constraint handoff: ?fromRfi=<id> opens create form prefilled from the RFI.
   useEffect(() => {
     const fromRfi = searchParams.get("fromRfi");
-    if (!fromRfi || !rfis.length) return;
-    const rfi = rfis.find((r) => r.id === fromRfi);
+    if (!fromRfi || !canWrite || !evidence) return;
+    const rfi = evidence.rfis.find((r) => r.id === fromRfi);
     if (rfi) {
-      setPrefill(buildConstraintPrefillFromRfi(rfi, projectId));
-      setEditing(null);
-      setShowForm(true);
+      const scope = { projectId, constraint: null, prefill: buildConstraintPrefillFromRfi(rfi, projectId), key: ++nextFormKey.current };
+      currentForm.current = scope;
+      setFormScope(scope);
+    } else {
+      toast.error("RFI not found in the selected project. No constraint draft was created.");
     }
     const next = new URLSearchParams(searchParams);
     next.delete("fromRfi");
     setSearchParams(next, { replace: true });
-  }, [searchParams, rfis, projectId, setSearchParams]);
-
-  const { data: wps = [] } = useQuery({
-    queryKey: ["work-packages", projectId],
-    queryFn: () =>
-      projectId
-        ? entities.WorkPackage.filter({ project_id: projectId })
-        : entities.WorkPackage.list(),
-    enabled: true,
-  });
-
-  const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => entities.Project.list(),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: engineSources = EMPTY_ENGINE_SOURCES } = useQuery({
-    queryKey: ["constraint-engine-sources", projectId],
-    queryFn: async () => {
-      if (!projectId) return EMPTY_ENGINE_SOURCES;
-      const read = (entity, order) =>
-        order
-          ? entity.filter({ project_id: projectId }, order).catch(() => [])
-          : entity.filter({ project_id: projectId }).catch(() => []);
-      const [rfis, submittals, deliveries, scheduleTasks, drawings, inspections] = await Promise.all([
-        read(entities.RFI, "-submitted_date"),
-        read(entities.Submittal, "-submitted_date"),
-        read(entities.Delivery, "-scheduled_date"),
-        read(entities.ScheduleTask, "start_date"),
-        read(entities.Drawing),
-        read(entities.Inspection, "-inspection_date"),
-      ]);
-      return { rfis, submittals, deliveries, scheduleTasks, drawings, inspections };
-    },
-    enabled: Boolean(projectId),
-    staleTime: 30 * 1000,
-  });
+  }, [searchParams, canWrite, evidence, projectId, setSearchParams]);
 
   // -- Mutations ----------------------------------------------------------------------
+  async function writeConstraint(variables, operation) {
+    if (!mounted.current || currentScope.current !== scope || !variables.projectId || currentProject.current !== variables.projectId
+      || (variables.formScope && currentForm.current !== variables.formScope)
+      || (variables.deleteScope && currentDelete.current !== variables.deleteScope)) {
+      throw new Error("This constraint draft belongs to a previous project or dialog. Reopen it before saving.");
+    }
+    const complete = assertConstraintEvidence(qc, variables.projectId, orgId);
+    if (variables.id && !complete.items.some(row => row.id === variables.id && row.category === "CONSTRAINT")) {
+      throw new Error("Only a manual constraint in the selected project can be changed. Clear generated blockers at their source.");
+    }
+    if (variables.data?.work_package_id && !complete.workPackages.some(wp => wp.id === variables.data.work_package_id)) {
+      throw new Error("The selected work package is no longer available in this project.");
+    }
+    const pendingKey = variables.id ? `${variables.projectId}:${variables.id}` : variables.formScope;
+    if (pendingWrites.current.has(pendingKey)) throw new Error("This constraint is already saving.");
+    pendingWrites.current.add(pendingKey);
+    try {
+      return await operation();
+    } finally {
+      pendingWrites.current.delete(pendingKey);
+    }
+  }
+
+  function operationIsCurrent(variables) {
+    return mounted.current && currentScope.current === scope && currentProject.current === variables.projectId
+      && (!variables.formScope || currentForm.current === variables.formScope)
+      && (!variables.deleteScope || currentDelete.current === variables.deleteScope);
+  }
+
+  function onSaved(variables, message) {
+    void qc.invalidateQueries({ queryKey: ["constraints", variables.projectId] });
+    if (!operationIsCurrent(variables)) return;
+    if (variables.formScope) closeForm(variables.formScope);
+    if (variables.deleteScope) closeDelete(variables.deleteScope);
+    toast.success(message);
+  }
+
+  function onWriteError(error, variables) {
+    if (operationIsCurrent(variables)) toast.error(toUserErrorMessage(error, "Constraint could not be saved"));
+  }
+
   const createMut = useMutation({
-    mutationFn: (data) => entities.ActionItem.create(withProjectId(data, projectId)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["constraints"] });
-      toast.success("Constraint logged");
-      setShowForm(false);
-      setEditing(null);
-      setPrefill(null);
-    },
-    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
+    mutationFn: variables => writeConstraint(variables, () => entities.ActionItem.create(withProjectId({ ...variables.data, category: "CONSTRAINT" }, variables.projectId))),
+    onSuccess: (_result, variables) => onSaved(variables, "Constraint logged"),
+    onError: onWriteError,
   });
-
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => entities.ActionItem.update(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["constraints"] });
-      toast.success("Constraint updated");
-      setShowForm(false);
-      setEditing(null);
-      setPrefill(null);
-    },
-    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
+    mutationFn: variables => writeConstraint(variables, () => entities.ActionItem.update(variables.id, withProjectId(variables.data, variables.projectId))),
+    onSuccess: (_result, variables) => onSaved(variables, "Constraint updated"),
+    onError: onWriteError,
   });
-
   const deleteMut = useMutation({
-    mutationFn: (id) => entities.ActionItem.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["constraints"] });
-      setDeleteTarget(null);
-      toast.success("Constraint deleted");
-    },
-    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
+    mutationFn: variables => writeConstraint(variables, () => entities.ActionItem.delete(variables.id)),
+    onSuccess: (_result, variables) => onSaved(variables, "Constraint deleted"),
+    onError: onWriteError,
   });
 
   // -- Derived data ----------------------------------------------------------------------
@@ -284,24 +304,24 @@ export default function Constraints() {
   // -- Handlers ----------------------------------------------------------------------
 
   const handleSave = (data) => {
-    if (editing?.id) {
-      updateMut.mutate({ id: editing.id, data });
+    if (!formScope) return;
+    const variables = { data, projectId: formScope.projectId, formScope };
+    if (formScope.constraint?.id) {
+      updateMut.mutate({ ...variables, id: formScope.constraint.id });
     } else {
-      createMut.mutate({
-        ...data,
-        category: "CONSTRAINT",
-        project_id: projectId || data.project_id || "",
-      });
+      createMut.mutate(variables);
     }
   };
-
-  const closeForm = () => {
-    setShowForm(false);
-    setEditing(null);
-    setPrefill(null);
-  };
+  const formBusy = [createMut, updateMut].some(mutation => mutation.isPending && mutation.variables?.formScope === formScope);
+  const deleteBusy = deleteMut.isPending && deleteMut.variables?.deleteScope === deleteTarget;
+  const quickUpdate = (id, data) => updateMut.mutate({ id, data, projectId });
 
   // -- No-project early return ----------------------------------------------------------------------
+  if (!orgId || isLoadingOrgs) {
+    return <div className="sb-dashboard-reference-page" role="status" aria-label="Constraint evidence" style={{ padding: 24 }}>
+      {isLoadingOrgs ? "Loading workspace access before evaluating blockers." : "Select a workspace to review constraints."}
+    </div>;
+  }
   if (!projectId) {
     return (
       <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
@@ -326,17 +346,18 @@ export default function Constraints() {
     );
   }
 
-  if (isLoading) {
+  if (!evidence && !evidenceQuery.isError) {
     return (
-      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page" role="status" aria-label="Constraint evidence" style={{ padding: 24 }}>
+        <p>Loading complete project evidence before evaluating blockers.</p>
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
   }
 
-  if (isError) {
+  if (!evidence && evidenceQuery.isError) {
     return (
-      <div className="sb-dashboard-reference-page" style={{
+      <div className="sb-dashboard-reference-page" role="alert" aria-label="Constraint evidence" style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -345,12 +366,12 @@ export default function Constraints() {
         gap: 16,
       }}>
         <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-          Couldn’t load constraints
+          Couldn’t verify constraint evidence
         </p>
         <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+          {toUserErrorMessage(evidenceQuery.error, "Something went wrong. Try again.")}
         </p>
-        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+        <Button variant="outline" onClick={() => evidenceQuery.refetch()}>Retry</Button>
       </div>
     );
   }
@@ -359,7 +380,7 @@ export default function Constraints() {
   return (
     <div className="sb-dashboard-reference-page">
     <OperationsPageShell
-      eyebrow={activeProject?.name || projects.find((p) => p.id === projectId)?.name || "All Projects"}
+      eyebrow={evidence.project.name || "Selected Project"}
       title="Constraint Log"
       subtitle="Track upstream blockers, due dates, priority, mitigation, and the work packages they affect before field execution is held up."
       meta={[
@@ -402,7 +423,8 @@ export default function Constraints() {
           </div>
           <OpsActionButton
             variant="primary"
-            onClick={() => { setEditing(null); setPrefill(null); setShowForm(true); }}
+            disabled={!canWrite}
+            onClick={() => openForm()}
             icon={<Plus size={13} />}
           >
             Log Constraint
@@ -410,6 +432,13 @@ export default function Constraints() {
         </>
       )}
     >
+      {!canWrite && (
+        <div role={evidenceQuery.isError ? "alert" : "status"} aria-label="Constraint evidence" style={{ border: "1px solid var(--warning-border)", background: "var(--warning-muted)", color: "var(--text-primary)", padding: 16, marginBottom: 16 }}>
+          <p style={{ margin: 0 }}>Showing the last complete project evidence. Changes are paused until all sources are verified.</p>
+          {evidenceQuery.isError && <p>{toUserErrorMessage(evidenceQuery.error, "A project source could not be read.")}</p>}
+          {evidenceQuery.isError && <Button variant="outline" onClick={() => evidenceQuery.refetch()}>Retry</Button>}
+        </div>
+      )}
       <OpsFilterPanel>
         <div style={{ position: "relative", flex: "1 1 240px", maxWidth: 340 }}>
           <Search size={12} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
@@ -447,8 +476,7 @@ export default function Constraints() {
 
       <SequenceFilter items={allConstraints} value={seqFilter} onChange={setSeqFilter} />
 
-      <ListTruncationNotice count={items.length} label="constraints" />
-
+      <fieldset disabled={!canWrite} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       {filtered.length === 0 ? (
         <EmptyState hasOpen={filterStatus === "open"} />
       ) : view === "list" ? (
@@ -457,37 +485,43 @@ export default function Constraints() {
           wps={wps}
           expandedId={expandedId}
           setExpandedId={setExpandedId}
-          onQuickUpdate={(id, data) => updateMut.mutate({ id, data })}
-          onEdit={(c) => { setEditing(c); setShowForm(true); }}
-          onDelete={(c) => setDeleteTarget(c)}
+          onQuickUpdate={quickUpdate}
+          onEdit={openForm}
+          onDelete={openDelete}
         />
       ) : (
         <BoardView
           items={filtered}
           wps={wps}
-          onQuickUpdate={(id, data) => updateMut.mutate({ id, data })}
-          onEdit={(c) => { setEditing(c); setShowForm(true); }}
-          onDelete={(c) => setDeleteTarget(c)}
+          onQuickUpdate={quickUpdate}
+          onEdit={openForm}
+          onDelete={openDelete}
         />
       )}
+      </fieldset>
 
-      {(showForm || editing) && (
+      {formScope?.projectId === projectId && (
         <ConstraintFormModal
+          key={formScope.key}
           projectId={projectId}
-          constraint={editing}
-          prefill={prefill}
+          constraint={formScope.constraint}
+          prefill={formScope.prefill}
           wps={wps}
-          onClose={closeForm}
+          disabled={!canWrite || formBusy}
+          onClose={() => closeForm(formScope)}
           onSave={handleSave}
         />
       )}
 
       <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget?.id)}
+        open={Boolean(deleteTarget?.projectId === projectId && deleteTarget)}
+        onClose={() => closeDelete(deleteTarget)}
+        onConfirm={() => deleteMut.mutateAsync({ id: deleteTarget.constraint.id, projectId: deleteTarget.projectId, deleteScope: deleteTarget })}
+        busy={deleteBusy}
         title="Delete Constraint"
-        description={`Delete "${deleteTarget?.title || ""}"? This cannot be undone.`}
+        description={canWrite
+          ? `Delete "${deleteTarget?.constraint.title || ""}"? This cannot be undone.`
+          : "Project evidence is incomplete or refreshing. Close this dialog and retry after the evidence is verified."}
       />
     </OperationsPageShell>
     </div>

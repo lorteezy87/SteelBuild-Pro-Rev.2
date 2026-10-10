@@ -502,14 +502,20 @@ export const registerShellStyle: CSSProperties = {
   overflowY: "hidden",
 };
 
+// The header and every package row have the same 13 cells. Sharing the track
+// definition keeps evidence aligned inside the register's horizontal scroller.
+const registerGridTemplate = "26px 78px minmax(190px, 1.45fr) 88px 78px 82px 126px 108px 108px 112px 108px 108px 58px";
+
 export const registerHeaderStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "26px 78px minmax(190px, 1.45fr) 88px 78px 82px 126px 108px 108px 112px 108px 108px 58px",
+  gridTemplateColumns: registerGridTemplate,
   gap: 10,
   alignItems: "center",
-  minWidth: 1320,
+  minWidth: 1420,
+  boxSizing: "border-box",
   padding: "9px 12px",
   borderBottom: "1px solid var(--divider)",
+  borderLeft: "3px solid transparent",
   background: "var(--bg-surface-low)",
   ...mono,
   fontSize: 8,
@@ -523,10 +529,11 @@ export const registerRowStyle = (risk): CSSProperties => {
   const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--divider)";
   return {
     display: "grid",
-    gridTemplateColumns: "26px 86px minmax(220px, 1.4fr) 110px 116px 104px 132px 92px 70px 58px",
+    gridTemplateColumns: registerGridTemplate,
     gap: 10,
     alignItems: "center",
-    minWidth: 1000,
+    minWidth: 1420,
+    boxSizing: "border-box",
     padding: "10px 12px",
     borderBottom: "1px solid var(--divider)",
     borderLeft: `3px solid ${tone}`,
@@ -546,12 +553,22 @@ export const RESPONSIVE_CSS = `
   .wp-content-grid {
     grid-template-columns: 1fr !important;
   }
+  /* Two phase columns where two 260px columns fit, one where they don't. The
+     300px exceptions rail stays beside the list up to 760px (the rule above
+     targets the body's pre-rename class), which leaves the list ~400px at iPad
+     portrait widths: a fixed repeat(2, minmax(260px, 1fr)) overflowed it. */
   .wp-phase-flow {
-    grid-template-columns: repeat(2, minmax(260px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)) !important;
   }
 }
 
 @media (max-width: 760px) {
+  /* Phones: the 300px exceptions rail stacks above the list instead of
+     squeezing it to a ~40px column. (.wp-content-grid above predates the
+     body's rename to .wp-cc__body and no longer matches it.) */
+  .wp-cc__body {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
   .wp-hero {
     grid-template-columns: 1fr !important;
   }

@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 import {
   buildRedeemResponse,
   createHandoff,
@@ -45,6 +46,8 @@ async function handleCreate(request: Request, body: Record<string, unknown>): Pr
   if (userError || !userData.user) {
     throw new RequestError(401, "Authenticated SteelBuild session required");
   }
+  const mfaDenial = mfaDenialForVerifiedUser(userData.user, authHeader, request);
+  if (mfaDenial) return mfaDenial;
 
   const created = await createHandoff({
     userId: userData.user.id,

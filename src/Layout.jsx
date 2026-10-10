@@ -29,6 +29,7 @@ import { useDensityRestore } from "./components/nav/useDensityRestore";
 import { useFocusMainOnRouteChange } from "./components/nav/useFocusMainOnRouteChange";
 import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRoute";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
+import WorkspaceSelector from "./components/nav/WorkspaceSelector";
 
 import { useProjectContext } from "./components/shared/ProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
@@ -241,7 +242,12 @@ export default function Layout({ children, currentPageName }) {
                   project={ctxActiveProject}
                   showProjectNumber={userPrefs.show_project_numbers}
                   showIdentity={false}
-                  projectSwitcher={<ProjectPillDropdown align="left" variant="dashboard" />}
+                  projectSwitcher={
+                    <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, minWidth: 0 }}>
+                      <WorkspaceSelector />
+                      <ProjectPillDropdown align="left" variant="dashboard" />
+                    </span>
+                  }
                   controls={dashboardControls}
                 />
               </nav>
@@ -289,10 +295,11 @@ export default function Layout({ children, currentPageName }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 {isPhone && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((open) => !open)} />}
                 {isPhone && (
-                  <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-                    <BrandLogo variant="full" height={30} title="SteelBuild Pro" style={{ display: "block" }} />
-                  </div>
+                  <button type="button" aria-label="Go to dashboard" style={{ display: "flex", alignItems: "center", padding: 0, border: 0, background: "none", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
+                    <BrandLogo variant="full" height={46} title="SteelBuild Pro" />
+                  </button>
                 )}
+                {!isPhone && <WorkspaceSelector />}
                 {!isPhone && <ProjectPillDropdown align="left" />}
                 {!isPhone && (
                   <span
@@ -310,7 +317,9 @@ export default function Layout({ children, currentPageName }) {
                 )}
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              {/* Keep phone utility controls compact; workspace and project
+                  selection share their own row immediately below. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: isPhone ? 1 : 0, minWidth: 0 }}>
                 <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isPhone} />
                 {!isPhone && <DensityToggle />}
                 {!isPhone && <ThemeToggleButton />}
@@ -322,9 +331,15 @@ export default function Layout({ children, currentPageName }) {
                   onViewAll={() => handleNavigate("AlertsCenter")}
                 />
                 {!isPhone && <UserSignOutBlock user={user} onLogout={logout} />}
-                {isPhone && <ProjectPillDropdown compact />}
               </div>
             </nav>
+
+            {isPhone && (
+              <div role="group" aria-label="Workspace and project" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, padding: "6px 10px", background: "var(--bg-sidebar)", borderBottom: "1px solid var(--border-default)", position: "relative", zIndex: 100 }}>
+                <WorkspaceSelector compact />
+                <ProjectPillDropdown compact />
+              </div>
+            )}
 
             <div className="app-body" style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
               {!isPhone && (
@@ -346,6 +361,7 @@ export default function Layout({ children, currentPageName }) {
                   tabIndex={-1}
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     overflowY: "auto",
                     padding: 0,
                     background: "var(--bg-base)",

@@ -6,9 +6,13 @@
 
 /* ── Shell ───────────────────────────────────────────────────── */
 .sbd-calc-shell {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 16px;
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
@@ -173,8 +177,75 @@
 }
 
 /* ── Shell body ─────────────────────────────────────────────── */
-.sbd-calc-shell__body {
+.sbd-calc-shell > .sbd-calc-shell__body.sbd-card {
   padding: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+/* Standalone tool routes need their own width container when the app sidebar
+   reduces the page width without crossing a viewport media breakpoint. */
+.crane-pick-page,
+.weight-calc-page,
+.converter-page {
+  container-type: inline-size;
+}
+
+/* The device body already provides the page gutter. Tool pages still carry
+   their standalone-route padding, which otherwise gets added a second time. */
+.sbd-calc-shell__body > .sb-dashboard-reference-page {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  padding: clamp(0px, 1vw, 12px) !important;
+}
+
+.sbd-calc-shell__body > .sb-dashboard-reference-page > div:first-child {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.crane-pick-grid > *,
+.weight-calc-grid > *,
+.sbd-calc-layout > * {
+  min-width: 0;
+}
+
+.crane-pick-field-grid > *,
+.ground-bearing-field-grid > *,
+.converter-fraction-inputs > *,
+.converter-unit-selectors > * {
+  min-width: 0;
+}
+
+.crane-pick-grid :is(input, select, textarea),
+.ground-bearing-field-grid :is(input, select),
+.converter-page :is(input, select) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.converter-custom-fraction-row input {
+  flex: 1 1 0;
+  width: 0 !important;
+}
+
+.crane-pick-viewport {
+  max-width: 100%;
+}
+
+@container (max-width: 300px) {
+  .sbd-calc-keypad--4 {
+    gap: 4px !important;
+  }
+
+  .sbd-calc-keypad--5 {
+    grid-template-columns: repeat(3, minmax(44px, 1fr)) !important;
+  }
 }
 
 /* ── Key — inner elements ────────────────────────────────────── */
@@ -293,4 +364,128 @@
   color: var(--text-primary);
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* The app sidebar can leave less room than the viewport width suggests.
+   Query the actual calculator body, not the device, to decide when to stack. */
+@container (max-width: 980px) {
+  .crane-pick-grid,
+  .weight-calc-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .crane-pick-grid > div {
+    position: static !important;
+  }
+}
+
+@container (max-width: 720px) {
+  .sbd-calc-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@container (max-width: 380px) {
+  .crane-pick-field-grid,
+  .ground-bearing-field-grid,
+  .converter-unit-selectors {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .converter-fraction-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .converter-fraction-inputs > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .converter-unit-selectors > :nth-child(2) {
+    justify-self: center;
+  }
+}
+
+/* The individual calculator routes also render outside the device shell. */
+@media (max-width: 820px) {
+  .crane-pick-grid,
+  .weight-calc-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .crane-pick-grid > div {
+    position: static !important;
+  }
+}
+
+/* ── Phones (<=767px, the app shell's phone band) ───────────── */
+@media (max-width: 767px) {
+  .sbd-calc-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .sbd-calc-shell {
+    padding: 10px;
+  }
+
+  .sbd-calc-shell > .sbd-calc-shell__body.sbd-card {
+    padding: 10px;
+  }
+
+  .sbd-calc-shell__body > .sb-dashboard-reference-page {
+    padding: 0 !important;
+  }
+
+  .sbd-calc-tool-rail__btn {
+    flex: 1 1 auto;
+    padding-inline: 10px;
+  }
+
+  .crane-pick-viewport {
+    height: clamp(220px, 42dvh, 360px) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .crane-pick-field-grid--three,
+  .ground-bearing-field-grid--three {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Mobile WebViews without container queries still need the converter stack. */
+  .converter-fraction-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .converter-fraction-inputs > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .converter-unit-selectors {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .converter-unit-selectors > :nth-child(2) {
+    justify-self: center;
+  }
+}
+
+@media (max-width: 380px) {
+  .crane-pick-field-grid,
+  .ground-bearing-field-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .sbd-calc-keypad--4 {
+    gap: 4px !important;
+  }
+
+  .sbd-calc-keypad--5 {
+    grid-template-columns: repeat(3, minmax(44px, 1fr)) !important;
+  }
+}
+
+@media (max-height: 640px) {
+  .crane-pick-grid > div {
+    position: static !important;
+  }
 }

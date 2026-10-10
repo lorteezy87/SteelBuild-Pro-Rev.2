@@ -7,12 +7,14 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { isFabComplete as isFabCompleteForDelivery } from "@/pages/deliveries/utils";
+import { useNumberedCreateDraft } from "@/hooks/useNumberedCreateDraft";
 
 export default function DeliveryFormModal({ projectId, onClose, delivery = null }) {
   const qc = useQueryClient();
   const { fieldErrors, runValidation, clearField } = useFormValidation("delivery");
   const trapRef = useFocusTrap(true);
   const isEdit = !!delivery;
+  const createDraft = useNumberedCreateDraft(projectId, !isEdit, "delivery-register");
 
   const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"];
 
@@ -97,10 +99,11 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   }, [formData.project_id, projects]);
 
   const mutation = useMutation({
-    mutationFn: (data) =>
-      isEdit
-        ? entities.Delivery.update(delivery.id, data)
-        : entities.Delivery.create(withProjectId(data, projectId)),
+    mutationFn: (data) => {
+      if (isEdit) return entities.Delivery.update(delivery.id, data);
+      const { received_by: _receiptAuthority, ...planning } = data;
+      return createDraft.save(withProjectId(planning, projectId), entities.Delivery.create);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deliveries"] });
       toast.success(isEdit ? "Delivery updated" : "Delivery created");
@@ -111,6 +114,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
         `${isEdit ? "Update" : "Create"} failed: ${toUserErrorMessage(err)}`,
       ),
   });
+  const close = () => { if (!mutation.isPending) onClose(); };
 
   const set = (k, v) => setFormData((p) => ({ ...p, [k]: v }));
 
@@ -122,6 +126,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     isFabCompleteForDelivery({ work_package_id: formData.work_package_id }, workPackages);
 
   const handleSubmit = () => {
+    if (createDraft.recoveryPending) { mutation.mutate({ project_id: projectId }); return; }
     if (!runValidation(formData)) {
       toast.error("Please fix the highlighted fields.");
       return;
@@ -191,7 +196,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
         zIndex: 1000,
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) close();
       }}
     >
       <div
@@ -210,6 +215,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
           overflow: "hidden",
         }}
       >
+        {createDraft.recoveryPending && <p role="status" style={{ padding: "0 24px" }}>The save may have completed. Retry to recover the original details; changes entered afterward will not be applied. Check the register before starting another delivery.</p>}
         {/* Header */}
         <div
           style={{
@@ -274,7 +280,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+        <fieldset disabled={mutation.isPending || createDraft.recoveryPending} style={{ flex: 1, overflowY: "auto", padding: "16px 24px", margin: 0, border: 0, minWidth: 0 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <SectionLabel>Delivery Info</SectionLabel>
             <div>
@@ -538,7 +544,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               placeholder="Delivery notes, issues, exceptions"
             />
           </div>
-        </div>
+        </fieldset>
 
         {/* Footer */}
         <div
@@ -553,7 +559,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
         >
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             style={{
               background: "var(--bg-surface)",
               border: "1px solid var(--border-default)",
@@ -589,7 +595,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               opacity: mutation.isPending ? 0.6 : 1,
             }}
           >
-            {mutation.isPending ? (isEdit ? "Saving..." : "Creating...") : isEdit ? "Save Changes" : "Create Delivery"}
+            {mutation.isPending ? (isEdit ? "Saving..." : "Creating...") : createDraft.recoveryPending ? "Recover saved delivery" : isEdit ? "Save Changes" : "Create Delivery"}
           </button>
         </div>
       </div>

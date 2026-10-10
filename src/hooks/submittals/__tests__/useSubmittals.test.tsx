@@ -9,8 +9,8 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  submittalFilter: vi.fn(),
-  roundFilter: vi.fn(),
+  submittalFilterAll: vi.fn(),
+  roundFilterAll: vi.fn(),
   submittalCreate: vi.fn(),
   submittalUpdate: vi.fn(),
   submittalDelete: vi.fn(),
@@ -24,13 +24,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
     Submittal: {
-      filter: mocks.submittalFilter,
+      filterAll: mocks.submittalFilterAll,
       create: mocks.submittalCreate,
       update: mocks.submittalUpdate,
       delete: mocks.submittalDelete,
     },
     SubmittalRound: {
-      filter: mocks.roundFilter,
+      filterAll: mocks.roundFilterAll,
       create: mocks.roundCreate,
       update: mocks.roundUpdate,
       delete: mocks.roundDelete,
@@ -81,7 +81,7 @@ function renderSubmittals(projectId: string | null = "project-1") {
 describe("useSubmittals facade", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.submittalFilter.mockResolvedValue([
+    mocks.submittalFilterAll.mockResolvedValue([
       {
         id: "sub-1",
         project_id: "project-1",
@@ -89,7 +89,7 @@ describe("useSubmittals facade", () => {
         drawing_set_ids: ["set-1"],
       },
     ]);
-    mocks.roundFilter.mockResolvedValue([
+    mocks.roundFilterAll.mockResolvedValue([
       {
         id: "round-1",
         project_id: "project-1",
@@ -110,15 +110,13 @@ describe("useSubmittals facade", () => {
     const hook = renderSubmittals();
     await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
 
-    expect(mocks.submittalFilter).toHaveBeenCalledWith(
+    expect(mocks.submittalFilterAll).toHaveBeenCalledWith(
       { project_id: "project-1" },
       "-submitted_date",
-      2000,
     );
-    expect(mocks.roundFilter).toHaveBeenCalledWith(
+    expect(mocks.roundFilterAll).toHaveBeenCalledWith(
       { project_id: "project-1" },
       "-round_number",
-      2000,
     );
     expect(hook.result.current.roundsBySubmittal["sub-1"]).toHaveLength(1);
     expect(hook.result.current.kpis.pending).toBe(1);
@@ -181,7 +179,40 @@ describe("useSubmittals facade", () => {
 
     expect(hook.result.current.submittals).toEqual([]);
     expect(hook.result.current.rounds).toEqual([]);
-    expect(mocks.submittalFilter).not.toHaveBeenCalled();
-    expect(mocks.roundFilter).not.toHaveBeenCalled();
+    expect(mocks.submittalFilterAll).not.toHaveBeenCalled();
+    expect(mocks.roundFilterAll).not.toHaveBeenCalled();
+  });
+
+  it("derives counts and round history from more than one hosted page", async () => {
+    mocks.submittalFilterAll.mockResolvedValue(Array.from({ length: 1002 }, (_, index) => ({
+      id: `sub-${index}`,
+      project_id: "project-1",
+      status: index === 1001 ? "Revise and Resubmit" : "Submitted",
+      drawing_set_ids: ["set-1"],
+    })));
+    mocks.roundFilterAll.mockResolvedValue(Array.from({ length: 1002 }, (_, index) => ({
+      id: `round-${index}`,
+      project_id: "project-1",
+      submittal_id: index === 1001 ? "sub-1001" : "sub-0",
+      round_number: index + 1,
+    })));
+
+    const hook = renderSubmittals();
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+
+    expect(hook.result.current.error).toBeNull();
+    expect(hook.result.current.kpis).toMatchObject({ total: 1002, pending: 1001, rejected: 1 });
+    expect(hook.result.current.byDrawingSet["set-1"].total).toBe(1002);
+    expect(hook.result.current.roundsBySubmittal["sub-1001"]).toHaveLength(1);
+  });
+
+  it("reports unknown evidence when the round read cannot be completed", async () => {
+    mocks.roundFilterAll.mockRejectedValue(new Error("Later round page failed"));
+
+    const hook = renderSubmittals();
+    await waitFor(() => expect(hook.result.current.error).toBeTruthy());
+
+    expect(hook.result.current.error?.message).toBe("Later round page failed");
+    expect(hook.result.current.rounds).toEqual([]);
   });
 });

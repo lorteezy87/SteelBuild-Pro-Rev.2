@@ -23,7 +23,7 @@ import {
   calcLaborBurn,
 } from "@/utils/projectKpis";
 import { calculateMarginRisk } from "@/services/marginRiskEngine";
-import { computeCostCodeTotals } from "@/services/costRollup";
+import { deriveScorecardBudget, marginPercentAtExposure } from "./financialScorecardDerive";
 import ReportShell from "./ReportShell";
 import { mono, body, CARD, LABEL, HEALTH_COLORS } from "./constants";
 import {
@@ -200,22 +200,17 @@ export default function FinancialScorecard() {
   const kpis = useMemo(() => {
     if (!project) return null;
 
-    const validExpenses = expenses.filter((e) => e.payment_status !== "Voided");
     const cv = calcContractValue(project, changeOrders);
     const evm = calcEVM(workPackages);
     const wp = calcWpProgress(workPackages);
     const labor = calcLaborBurn(workPackages);
 
-    // Budget
-    const totalBudget = computeCostCodeTotals(costCodes).budget;
-    const committed = validExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const paid = validExpenses
-      .filter((e) => e.payment_status === "Paid")
-      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const budgetUsedPct = cv.revised > 0 ? (committed / cv.revised) * 100 : null;
-    const costVariance = totalBudget > 0 ? totalBudget - committed : null;
-    const costVariancePct = totalBudget > 0 ? ((totalBudget - committed) / totalBudget) * 100 : null;
-    const committedVsBudget = totalBudget > 0 ? committed / totalBudget : null;
+    // Canonical cost-code overrides, expense fallbacks, and approved CO budget.
+    const budget = deriveScorecardBudget(costCodes, expenses, changeOrders);
+    const {
+      totalBudget, committed, costExposure, paid, budgetUsedPct, costVariance,
+      costVariancePct, committedVsBudget,
+    } = budget;
 
     // Billing
     const certLines = latestCertifiedPerLineItem(sovItems);
@@ -254,7 +249,7 @@ export default function FinancialScorecard() {
       : null;
 
     // Profitability
-    const marginPct = cv.revised > 0 ? ((cv.revised - committed) / cv.revised) * 100 : null;
+    const marginPct = marginPercentAtExposure(cv.revised, costExposure);
     const projectedMargin = cv.revised > 0 && evm.eac > 0
       ? ((cv.revised - evm.eac) / cv.revised) * 100
       : marginPct;
@@ -290,7 +285,11 @@ export default function FinancialScorecard() {
       costVariancePct,
       committedVsBudget,
       totalBudget,
+      unallocatedExtras: budget.unallocatedExtras,
+      unmappedCount: budget.unmappedCount,
+      unmappedCommitted: budget.unmappedCommitted,
       committed,
+      costExposure,
       paid,
       // Revenue
       billingRatio,
@@ -368,7 +367,7 @@ export default function FinancialScorecard() {
 
   if (!kpis) {
     return (
-      <ReportShell title="Financial Scorecard" subtitle="Loading...">
+      <ReportShell title="Financial Scorecard" subtitle="Loading..." shareProjectId={projectId}>
         <div style={{ ...CARD, textAlign: "center", padding: 60 }}>
           <div style={{ ...body, fontSize: 14, color: "var(--text-muted)" }}>Loading project data...</div>
         </div>
@@ -383,6 +382,7 @@ export default function FinancialScorecard() {
     <ReportShell
       title="Financial Scorecard"
       subtitle={`${projectNumber} — ${projectName}`}
+      shareProjectId={projectId}
       onExportCSV={() => {
         const rows = [
           { kpi: "CPI", value: kpis.cpi?.toFixed(2) || "N/A", target: ">= 0.95" },
@@ -476,7 +476,7 @@ export default function FinancialScorecard() {
           label="Schedule Performance Index (SPI)"
           value={kpis.spi != null ? kpis.spi.toFixed(2) : "—"}
           {...(kpis.spi != null ? grade(kpis.spi, { green: [0.95, 999], amber: [0.85, 0.9499] }) : { health: "neutral", gradeLabel: "No Data" })}
-          description={kpis.spi != null ? (kpis.spi >= 1 ? "Ahead of planned value" : "Behind planned value baseline") : "Uses BAC as PV proxy"}
+          description={kpis.spi != null ? (kpis.spi >= 1 ? "Ahead of planned value" : "Behind planned value baseline") : "Planned-value baseline unavailable"}
           benchmark=">= 1.00"
         />
         <KpiCard
@@ -505,13 +505,19 @@ export default function FinancialScorecard() {
 
       {/* ── Budget Section ── */}
       <SectionTitle>Budget Performance</SectionTitle>
+      {(kpis.unallocatedExtras !== 0 || kpis.unmappedCount > 0) && (
+        <div role="status" style={{ ...body, fontSize: 12, color: "var(--status-warning)" }}>
+          {kpis.unallocatedExtras !== 0 && <p>{formatCurrency(kpis.unallocatedExtras)} in approved change orders is not allocated to cost codes and is excluded from the revised budget.</p>}
+          {kpis.unmappedCount > 0 && <p>{kpis.unmappedCount} unmapped expense(s), totaling {formatCurrency(kpis.unmappedCommitted)}, are included in committed costs.</p>}
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
         <KpiCard
           label="Budget Utilization"
           value={kpis.budgetUsedPct != null ? kpis.budgetUsedPct.toFixed(0) : "—"}
           unit="%"
           {...(kpis.budgetUsedPct != null ? gradeInverse(kpis.budgetUsedPct, { green: 85, amber: 95 }) : { health: "neutral", gradeLabel: "No Data" })}
-          description={`${formatCurrency(kpis.committed)} committed of ${formatCurrency(kpis.revised)} contract`}
+          description={`${formatCurrency(kpis.costExposure)} actual or committed exposure of ${formatCurrency(kpis.totalBudget)} revised budget`}
           benchmark="<= 85%"
         />
         <KpiCard
@@ -522,7 +528,7 @@ export default function FinancialScorecard() {
             : { health: "neutral", gradeLabel: "No Data" })}
           description={kpis.costVariance != null
             ? (kpis.costVariance >= 0 ? "Under budget" : "Over budget")
-            : "Budget minus committed costs"}
+            : "Revised budget minus actual or committed exposure"}
           benchmark="Positive (under budget)"
         />
         <KpiCard
@@ -586,8 +592,8 @@ export default function FinancialScorecard() {
             ? grade(kpis.marginPct, { green: [15, 999], amber: [5, 14.99] })
             : { health: "neutral", gradeLabel: "No Data" })}
           description={kpis.marginPct != null
-            ? `${formatCurrency(kpis.revised - kpis.committed)} gross profit`
-            : "Revenue minus committed costs"}
+            ? `${formatCurrency(kpis.revised - kpis.costExposure)} after current cost exposure`
+            : "Revenue minus actual or committed exposure"}
           benchmark=">= 15%"
         />
         <KpiCard
@@ -597,7 +603,7 @@ export default function FinancialScorecard() {
           {...(kpis.projectedMargin != null
             ? grade(kpis.projectedMargin, { green: [15, 999], amber: [5, 14.99] })
             : { health: "neutral", gradeLabel: "No Data" })}
-          description={kpis.eac > 0 ? `Based on EAC of ${formatCurrency(kpis.eac)}` : "Based on current committed costs"}
+          description={kpis.eac > 0 ? `Based on EAC of ${formatCurrency(kpis.eac)}` : "Based on current actual or committed exposure"}
           benchmark=">= 15%"
         />
         <KpiCard

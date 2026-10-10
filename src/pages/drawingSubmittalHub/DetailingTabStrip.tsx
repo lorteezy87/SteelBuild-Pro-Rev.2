@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, KeyboardEvent } from "react";
+import { ChevronDown } from "lucide-react";
 
 export interface DetailingTabDef {
   key: string;
@@ -9,6 +10,8 @@ export interface DetailingTabDef {
 
 interface DetailingTabStripProps {
   tabs: DetailingTabDef[];
+  /** Leave omitted for legacy callers that display every tab. */
+  primaryKeys?: readonly string[];
   activeTab: string;
   onTab: (key: string) => void;
   tabCounts: Record<string, number>;
@@ -37,20 +40,32 @@ export function revealScrollLeft(
  */
 export function DetailingTabStrip({
   tabs,
+  primaryKeys,
   activeTab,
   onTab,
   tabCounts,
   alertTabs,
 }: DetailingTabStripProps) {
   const stripRef = useRef<HTMLDivElement>(null);
+  const toolsTriggerRef = useRef<HTMLButtonElement>(null);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
+  const focusToolOnOpen = useRef<"first" | "last" | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const primaryTabs = primaryKeys
+    ? tabs.filter((tab) => primaryKeys.includes(tab.key))
+    : tabs;
+  const secondaryTabs = primaryKeys
+    ? tabs.filter((tab) => !primaryKeys.includes(tab.key))
+    : [];
+  const activeSecondary = secondaryTabs.find((tab) => tab.key === activeTab);
   const isListed = (key: string | null | undefined): key is string =>
-    Boolean(key) && tabs.some((tab) => tab.key === key);
+    Boolean(key) && primaryTabs.some((tab) => tab.key === key);
   const tabbableKey = isListed(focusKey)
     ? focusKey
     : isListed(activeTab)
       ? activeTab
-      : tabs[0]?.key;
+      : primaryTabs[0]?.key;
 
   useEffect(() => {
     const reveal = () => {
@@ -71,8 +86,16 @@ export function DetailingTabStrip({
     return () => window.cancelAnimationFrame(frame);
   }, [activeTab]);
 
+  useEffect(() => {
+    if (!toolsOpen || !focusToolOnOpen.current) return;
+    const items = toolsMenuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+    const target = focusToolOnOpen.current === "last" ? items?.[items.length - 1] : items?.[0];
+    focusToolOnOpen.current = null;
+    target?.focus();
+  }, [toolsOpen]);
+
   const focusTab = (index: number) => {
-    const target = tabs[index];
+    const target = primaryTabs[index];
     if (!target) return;
     setFocusKey(target.key);
     stripRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus();
@@ -80,7 +103,7 @@ export function DetailingTabStrip({
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
-    const last = tabs.length - 1;
+    const last = primaryTabs.length - 1;
     let target: number;
     switch (event.key) {
       case "ArrowRight":
@@ -103,18 +126,19 @@ export function DetailingTabStrip({
   };
 
   return (
+    <div className="detailing-cc__nav">
     <div
       ref={stripRef}
       className="detailing-cc__tabs"
       role="tablist"
-      aria-label="Detailing Control Center tabs"
+      aria-label="Drawing Control work areas"
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setFocusKey(null);
         }
       }}
     >
-      {tabs.map((tab, index) => {
+      {primaryTabs.map((tab, index) => {
         const isActive = tab.key === activeTab;
         const TabIcon = tab.icon;
         const count = tabCounts[tab.key] ?? 0;
@@ -150,6 +174,79 @@ export function DetailingTabStrip({
           </button>
         );
       })}
+    </div>
+    {secondaryTabs.length > 0 && (
+      <div
+        className="detailing-cc__tools"
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setToolsOpen(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && toolsOpen) {
+            event.preventDefault();
+            setToolsOpen(false);
+            toolsTriggerRef.current?.focus();
+            return;
+          }
+          if (!toolsOpen && event.target === toolsTriggerRef.current && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+            event.preventDefault();
+            focusToolOnOpen.current = event.key === "ArrowUp" ? "last" : "first";
+            setToolsOpen(true);
+            return;
+          }
+          if (!toolsOpen || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+          const items = Array.from(toolsMenuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+          const index = items.indexOf(event.target as HTMLButtonElement);
+          if (index < 0 || items.length === 0) return;
+          event.preventDefault();
+          const next = event.key === "Home" ? 0
+            : event.key === "End" ? items.length - 1
+              : event.key === "ArrowDown" ? (index + 1) % items.length
+                : (index - 1 + items.length) % items.length;
+          items[next]?.focus();
+        }}
+      >
+        <button
+          ref={toolsTriggerRef}
+          type="button"
+          className={`detailing-cc__tools-trigger${activeSecondary ? " is-active" : ""}`}
+          aria-label={activeSecondary ? `More tools: ${activeSecondary.label}` : "More tools"}
+          aria-haspopup="menu"
+          aria-expanded={toolsOpen}
+          onClick={(event) => {
+            if (!toolsOpen && event.detail === 0) focusToolOnOpen.current = "first";
+            setToolsOpen((open) => !open);
+          }}
+        >
+          <span>{activeSecondary ? activeSecondary.label : "More tools"}</span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </button>
+        {toolsOpen && (
+          <div ref={toolsMenuRef} className="detailing-cc__tools-menu" role="menu" aria-label="Drawing control tools">
+            {secondaryTabs.map((tab) => {
+              const ToolIcon = tab.icon;
+              const count = tabCounts[tab.key] ?? 0;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="menuitem"
+                  aria-current={activeTab === tab.key ? "page" : undefined}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    onTab(tab.key);
+                  }}
+                >
+                  <ToolIcon size={14} aria-hidden="true" />
+                  <span>{tab.label}</span>
+                  {count > 0 && <span className="detailing-cc__tools-count">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    )}
     </div>
   );
 }

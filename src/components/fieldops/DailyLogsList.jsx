@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useId } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { formatLocalDate } from "@/utils/dates";
@@ -26,8 +26,22 @@ const sectionLabelStyle = {
   marginBottom: "6px",
 };
 
-export default function DailyLogsList({ logs = [] }) {
+const rowActionStyle = {
+  minHeight: 44,
+  padding: "8px 14px",
+  border: "1px solid var(--border-default)",
+  borderRadius: "var(--radius-button, 8px)",
+  background: "var(--bg-surface-low)",
+  color: "var(--text-secondary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+export default function DailyLogsList({ logs = [], onEdit = null, onDelete = null }) {
   const [expandedId, setExpandedId] = useState(null);
+  const listId = useId();
 
   // Fetch action_items + rfis from any project that appears in the logs so we
   // can label related-id chips with human-readable names.  Cheap: 1 hit per
@@ -113,18 +127,21 @@ export default function DailyLogsList({ logs = [] }) {
         const rfiIds = asArray(log.related_rfi_ids);
         const photoCount = photos.length;
         const linkCount = aiIds.length + rfiIds.length;
+        const dateLabel = formatLocalDate(log.date, "en-US", {
+          weekday: "short", month: "short", day: "numeric", year: "numeric",
+        });
+        const recordLabel = `${dateLabel}, ${log.crew_name || "Unnamed crew"}`;
+        const detailsId = `${listId}-${log.id}`;
 
         return (
         <div
           key={log.id}
           className="sbd-card sbd-card-hover"
-          onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
           style={{
             background: "var(--bg-surface)",
             border: "1px solid var(--border-default)",
             borderRadius: "12px",
             padding: "16px",
-            cursor: "pointer",
             transition: "border-color 0.15s, background 0.15s",
           }}
           onMouseEnter={(e) => {
@@ -137,30 +154,39 @@ export default function DailyLogsList({ logs = [] }) {
           }}
         >
           {/* Header */}
-          <div
+          <button
+            type="button"
+            aria-label={`Daily log for ${recordLabel}`}
+            aria-expanded={expandedId === log.id}
+            aria-controls={detailsId}
+            onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: expandedId === log.id ? "12px" : 0,
+              gap: 16,
+              width: "100%",
+              minHeight: 44,
+              padding: 0,
+              border: 0,
+              background: "transparent",
+              fontFamily: "var(--font-body)",
+              textAlign: "left",
+              cursor: "pointer",
             }}
           >
-            <div>
-              <div
+            <span style={{ minWidth: 0 }}>
+              <span
                 style={{
+                  display: "block",
                   fontSize: "13px",
                   fontWeight: 600,
                   color: "var(--text-primary)",
                 }}
               >
-                {formatLocalDate(log.date, "en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </div>
-              <div
+                {dateLabel}
+              </span>
+              <span
                 style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: "10px",
@@ -181,12 +207,13 @@ export default function DailyLogsList({ logs = [] }) {
                 {linkCount > 0 && (
                   <span style={{ color: "var(--status-info)" }}>· {linkCount} link{linkCount === 1 ? "" : "s"}</span>
                 )}
-              </div>
-            </div>
+              </span>
+            </span>
 
-            <div style={{ textAlign: "right" }}>
-              <div
+            <span style={{ textAlign: "right", flexShrink: 0 }}>
+              <span
                 style={{
+                  display: "block",
                   fontFamily: "var(--font-mono)",
                   fontSize: "10px",
                   color: log.delay_hours > 0 ? "var(--status-error)" : "var(--status-success)",
@@ -195,10 +222,11 @@ export default function DailyLogsList({ logs = [] }) {
                 }}
               >
                 {log.delay_hours > 0 ? `${log.delay_hours}h delays` : "No delays"}
-              </div>
+              </span>
               {log.safety_incidents > 0 && (
-                <div
+                <span
                   style={{
+                    display: "block",
                     fontFamily: "var(--font-mono)",
                     fontSize: "9px",
                     color: "var(--status-error)",
@@ -206,18 +234,35 @@ export default function DailyLogsList({ logs = [] }) {
                   }}
                 >
                   ⚠ {log.safety_incidents} incident{log.safety_incidents !== 1 ? "s" : ""}
-                </div>
+                </span>
+              )}
+            </span>
+          </button>
+
+          {(onEdit || onDelete) && (
+            <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+              {onEdit && (
+                <button type="button" aria-label={`Edit daily log for ${recordLabel}`} onClick={() => onEdit(log)} style={rowActionStyle}>
+                  Edit log
+                </button>
+              )}
+              {onDelete && (
+                <button type="button" aria-label={`Delete daily log for ${recordLabel}`} onClick={() => onDelete(log)} style={{ ...rowActionStyle, color: "var(--status-error)" }}>
+                  Delete log
+                </button>
               )}
             </div>
-          </div>
+          )}
 
           {/* Expanded Content */}
           {expandedId === log.id && (
             <div
+              id={detailsId}
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
                 gap: "16px",
+                marginTop: "12px",
                 paddingTop: "12px",
                 borderTop: "1px solid var(--divider)",
               }}

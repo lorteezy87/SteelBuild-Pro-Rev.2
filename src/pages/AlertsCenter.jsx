@@ -64,8 +64,9 @@ export default function AlertsCenter() {
 
   const alertTypes = useMemo(() => [...new Set(alerts.map(a => a.alert_type).filter(Boolean))], [alerts]);
 
-  const btnActive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--accent-muted)", color: "var(--accent-light)" };
-  const btnInactive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--bg-surface-low)", color: "var(--text-muted)" };
+  const filterButtonBase = { padding: "8px 12px", minHeight: 36, maxWidth: "100%", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 10, letterSpacing: "0.08em", cursor: "pointer", border: "none", whiteSpace: "normal", overflowWrap: "anywhere" };
+  const btnActive = { ...filterButtonBase, fontWeight: 700, background: "var(--accent-muted)", color: "var(--accent-light)" };
+  const btnInactive = { ...filterButtonBase, fontWeight: 600, background: "var(--bg-surface-low)", color: "var(--text-muted)" };
 
   return (
     <div className="sb-dashboard-reference-page">
@@ -74,7 +75,7 @@ export default function AlertsCenter() {
         title="Alerts & Notifications"
         count={filtered.length}
         unit=" · ACTIVE"
-        subtitle={`${unreadCount} unread · cross-entity scanner · RFI / Drawing / CO / Delivery / WP triggers`}
+        subtitle={`${unreadCount} unread · rule-driven alerts for deliveries, submittals, and RFIs`}
       >
         <button
           onClick={markAllRead}
@@ -114,13 +115,13 @@ export default function AlertsCenter() {
       {/* Filters */}
       <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
         {["all", "Critical", "High", "Medium", "Low"].map(s => (
-          <button key={s} onClick={() => setSeverityFilter(s)} style={severityFilter === s ? btnActive : btnInactive}>
+          <button key={s} type="button" aria-pressed={severityFilter === s} onClick={() => setSeverityFilter(s)} style={severityFilter === s ? btnActive : btnInactive}>
             {s === "all" ? "ALL" : s.toUpperCase()}
           </button>
         ))}
         <div style={{ width: 1, background: "var(--bg-surface-high)", margin: "0 4px" }} />
         {["all", ...alertTypes].map(t => (
-          <button key={t} onClick={() => setTypeFilter(t)} style={typeFilter === t ? btnActive : btnInactive}>
+          <button key={t} type="button" aria-pressed={typeFilter === t} onClick={() => setTypeFilter(t)} style={typeFilter === t ? btnActive : btnInactive}>
             {t === "all" ? "ALL TYPES" : t}
           </button>
         ))}
@@ -146,7 +147,7 @@ export default function AlertsCenter() {
           <Bell style={{ width: 36, height: 36, color: "var(--text-muted)", margin: "0 auto 12px" }} />
           <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)", fontWeight: 500, marginBottom: 4 }}>No active alerts</p>
           <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>
-            Alerts appear when module workflows detect overdue RFIs, deliveries, and similar conditions. Cross-module scan is not deployed.
+            Project Refresh checks overdue deliveries and submittals. In portfolio view, Refresh reloads the alert feed.
           </p>
         </div>
       ) : (
@@ -155,9 +156,9 @@ export default function AlertsCenter() {
             const sev = SEVERITY_BG[alert.severity] || SEVERITY_BG.Low;
             return (
               <div key={alert.id} style={{ background: sev.bg, border: "none", borderLeft: `3px solid ${sev.border}`, borderRadius: "var(--radius-card)", overflow: "hidden", opacity: alert.is_read ? 0.60 : 1, transition: "opacity 0.2s" }}>
-                <div style={{ padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
                   <AlertTriangle style={{ width: 15, height: 15, marginTop: 2, flexShrink: 0, color: sev.border }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ flex: "1 1 280px", minWidth: 0, overflowWrap: "anywhere" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
                       <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{alert.title}</span>
                       <StatusBadge status={alert.severity} />
@@ -165,17 +166,17 @@ export default function AlertsCenter() {
                       {!alert.is_read && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
                     </div>
                     <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>{alert.description || alert.message}</p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap", minWidth: 0 }}>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatDate(alert.created_at || alert.created_date)}</span>
-                      {alert.project_name && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)" }}>· {alert.project_name}</span>}
+                      {alert.project_name && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", overflowWrap: "anywhere", minWidth: 0 }}>· {alert.project_name}</span>}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: "100%", marginLeft: "auto" }}>
                     {resolveAlertPath(alert) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs"
+                        className="min-h-9 text-xs"
                         onClick={() => {
                           markRead(alert);
                           navigate(resolveAlertPath(alert));
@@ -185,9 +186,9 @@ export default function AlertsCenter() {
                       </Button>
                     )}
                     {!alert.is_read && (
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => markRead(alert)}>Mark Read</Button>
+                      <Button size="sm" variant="ghost" className="min-h-9 text-xs" onClick={() => markRead(alert)}>Mark Read</Button>
                     )}
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" style={{ color: "rgba(200,210,230,0.7)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
+                    <Button size="sm" variant="ghost" className="min-h-9 text-xs" style={{ color: "var(--text-secondary)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
                   </div>
                 </div>
               </div>

@@ -24,6 +24,12 @@ import { resolveFileUrl } from "@/api/supabaseClient";
 import { computeFabReleaseGate, linkedRfiNumbers } from "@/lib/fabReleaseGate";
 import { recordFabRelease, FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
 import {
+  currentRevisionSignoffs,
+  loadFabApprovalEvidence,
+  loadFabGateRfis,
+  toFabManifestSignoffs,
+} from "@/lib/exports/fabReleaseEvidence";
+import {
   isApprovedForFab,
   isClaimable,
   groupBySet,
@@ -31,8 +37,8 @@ import {
   buildClaimsManifestCsv,
   buildReadme,
   suggestPackageName,
-  downloadTextFile,
 } from "@/lib/exports/fabRelease";
+import { presentGeneratedFiles } from "@/lib/native/fileExport";
 
 /**
  * Group key for a sheet: the FK set id, else the id of the drawing_sets row
@@ -45,62 +51,56 @@ export function resolveDrawingSetKey(drawing, drawingSets = []) {
   const name = String(drawing.drawing_set_name || "").trim().toLowerCase();
   if (!name) return null;
   const match = (drawingSets || []).find(
-    (set) => set && !set.is_deleted && String(set.set_name || "").trim().toLowerCase() === name,
+    (set) => set && !set.is_deleted && !set.deleted_at && String(set.set_name || "").trim().toLowerCase() === name,
   );
   return match?.id || drawing.drawing_set_name || null;
 }
 
-/** Slice 8 — submittal + signoff evidence for IFC/Released readiness. */
-function useFabApprovalEvidence(open, projectId, drawings) {
-  const [evidence, setEvidence] = useState({
-    submittals: [],
-    drawingSignoffs: [],
-    drawingRevisions: [],
-  });
+const EMPTY_EVIDENCE = Object.freeze({
+  key: "",
+  status: "loading",
+  submittals: [],
+  drawingSignoffs: [],
+  drawingRevisions: [],
+  rfis: [],
+  error: null,
+});
+
+/** A package cannot infer approval or absence of blockers from a failed read. */
+function useFabApprovalEvidence(open, gated, projectId, drawings) {
+  const drawingIdsKey = (drawings || []).map((drawing) => drawing?.id).filter(Boolean).sort().join(",");
+  const rfiLinksKey = (drawings || []).flatMap(linkedRfiNumbers).sort().join(",");
+  const needsRfis = rfiLinksKey.length > 0;
+  const key = `${projectId || ""}|${drawingIdsKey}|${rfiLinksKey}`;
+  const [reload, setReload] = useState(0);
+  const [state, setState] = useState(EMPTY_EVIDENCE);
 
   useEffect(() => {
-    if (!open || !projectId) {
-      setEvidence({ submittals: [], drawingSignoffs: [], drawingRevisions: [] });
-      return;
-    }
+    if (!open || !gated || !projectId) return;
     let cancelled = false;
+    setState({ ...EMPTY_EVIDENCE, key });
     (async () => {
       try {
-        const drawingIds = (drawings || []).map((d) => d?.id).filter(Boolean);
-        const [subs, signoffs, revisions] = await Promise.all([
-          supabase
-            .from("submittals")
-            .select("id, status, ball_in_court, drawing_set_ids, submitted_date, updated_at, round_number, is_deleted, deleted_at")
-            .eq("project_id", projectId)
-            .eq("is_deleted", false),
-          drawingIds.length
-            ? supabase
-                .from("drawing_signoffs")
-                .select("drawing_id, drawing_revision_id, stamp_type, is_voided")
-                .in("drawing_id", drawingIds)
-                .eq("is_voided", false)
-            : Promise.resolve({ data: [], error: null }),
-          drawingIds.length
-            ? supabase
-                .from("drawing_revisions")
-                .select("id, drawing_id, is_current, archived_at")
-                .in("drawing_id", drawingIds)
-            : Promise.resolve({ data: [], error: null }),
+        const [approval, rfis] = await Promise.all([
+          loadFabApprovalEvidence(projectId, drawingIdsKey ? drawingIdsKey.split(",") : [])
+            .catch((error) => { throw new Error("Approval evidence unavailable. Retry before exporting.", { cause: error }); }),
+          needsRfis
+            ? loadFabGateRfis(projectId)
+                .catch((error) => { throw new Error("RFI evidence unavailable. Retry before exporting.", { cause: error }); })
+            : Promise.resolve([]),
         ]);
-        if (cancelled) return;
-        setEvidence({
-          submittals: subs.data || [],
-          drawingSignoffs: signoffs.data || [],
-          drawingRevisions: revisions.data || [],
-        });
-      } catch (err) {
-        console.warn("[ExportFabReleaseModal] approval evidence fetch failed:", err);
+        if (!cancelled) setState({ ...approval, rfis, key, status: "ready", error: null });
+      } catch (error) {
+        console.warn("[ExportFabReleaseModal] package evidence fetch failed:", error);
+        if (!cancelled) setState({ ...EMPTY_EVIDENCE, key, status: "error", error: error?.message || "Package evidence unavailable." });
       }
     })();
     return () => { cancelled = true; };
-  }, [open, projectId, drawings]);
+  }, [open, gated, projectId, drawingIdsKey, rfiLinksKey, needsRfis, key, reload]);
 
-  return evidence;
+  if (!gated) return [EMPTY_EVIDENCE, () => setReload((value) => value + 1)];
+  if (!projectId) return [{ ...EMPTY_EVIDENCE, status: "error", error: "No active project." }, () => setReload((value) => value + 1)];
+  return [state.key === key ? state : EMPTY_EVIDENCE, () => setReload((value) => value + 1)];
 }
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
@@ -157,15 +157,18 @@ export default function ExportFabReleaseModal({
 }) {
   const cfg = KIND_CONFIG[kind] || KIND_CONFIG.fab_release;
   const [busy, setBusy] = useState(false);
-  const approvalEvidence = useFabApprovalEvidence(open, project?.id, drawings);
+  const gated = kind !== "claims";
+  const [approvalEvidence, retryEvidence] = useFabApprovalEvidence(open, gated, project?.id, drawings);
+  const evidenceReady = !gated || approvalEvidence.status === "ready";
 
   // For fab_release / turnover the filter is identical (IFC/Released).
   // For claims we include everything not soft-deleted.
   const filteredDrawings = useMemo(() => {
     const list = drawings || [];
     if (kind === "claims") return list.filter(isClaimable);
-    return list.filter((d) => isApprovedForFab(d, approvalEvidence));
-  }, [drawings, kind, approvalEvidence]);
+    if (!evidenceReady) return [];
+    return list.filter((d) => isApprovedForFab(d, { ...approvalEvidence, drawingSets }));
+  }, [drawings, drawingSets, kind, approvalEvidence, evidenceReady]);
 
   const groups = useMemo(() => groupBySet(filteredDrawings), [filteredDrawings]);
 
@@ -179,7 +182,7 @@ export default function ExportFabReleaseModal({
     const setKey = (d) => resolveDrawingSetKey(d, drawingSets);
     const releasedSets = new Set(filteredDrawings.map(setKey).filter(Boolean));
     if (releasedSets.size === 0) return filteredDrawings;
-    return (drawings || []).filter((d) => d && !d.is_deleted && releasedSets.has(setKey(d)));
+    return (drawings || []).filter((d) => d && !d.is_deleted && !d.deleted_at && releasedSets.has(setKey(d)));
   }, [drawings, drawingSets, filteredDrawings, kind]);
   // Identity of the package membership — the override resets only when the
   // modal opens or the set of sheets in the package actually changes, not on
@@ -195,9 +198,6 @@ export default function ExportFabReleaseModal({
   // deterministic gate; a PM can override with an explicit acknowledgement.
   // (Gate applies to fab_release / turnover; claims packages bundle everything
   // by design, so they're never gated.)
-  const gated = kind !== "claims";
-  const [linkedRfis, setLinkedRfis] = useState([]);
-  const [gateSignoffs, setGateSignoffs] = useState([]);
   const [override, setOverride] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
 
@@ -207,70 +207,38 @@ export default function ExportFabReleaseModal({
     setOverrideReason("");
   }, [open, packageKey]);
 
-  useEffect(() => {
-    if (!open) return;
-    setLinkedRfis([]);
-    setGateSignoffs([]);
-    if (!gated || !project?.id) return;
-    let cancelled = false;
-    (async () => {
-      // RFIs — linked_rfi_ids is a CSV of RFI *numbers*, so we can't query by id;
-      // fetch the project's (non-deleted) RFIs and let the gate match by number.
-      if (packageDrawings.some((d) => linkedRfiNumbers(d).length > 0)) {
-        try {
-          const { data, error } = await supabase
-            .from("rfis")
-            .select("id, rfi_number, title, status, is_deleted, ball_in_court")
-            .eq("project_id", project.id)
-            .eq("is_deleted", false);
-          if (!cancelled && !error) setLinkedRfis(data || []);
-        } catch (err) {
-          console.warn("[ExportFabReleaseModal] RFI fetch for fab gate failed:", err);
-        }
-      }
-      // Sign-offs — only when the project requires them for release.
-      if (requireSignoffs) {
-        try {
-          const ids = packageDrawings.map((d) => d.id).filter(Boolean);
-          if (ids.length) {
-            const { data, error } = await supabase
-              .from("drawing_signoffs")
-              .select("drawing_id, stamp_type, status, is_voided")
-              .in("drawing_id", ids)
-              .eq("is_voided", false);
-            if (!cancelled && !error) setGateSignoffs(data || []);
-          }
-        } catch (err) {
-          console.warn("[ExportFabReleaseModal] sign-off fetch for fab gate failed:", err);
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [open, gated, project?.id, packageDrawings, requireSignoffs]);
+  const currentSignoffs = useMemo(
+    () => evidenceReady && gated ? currentRevisionSignoffs(approvalEvidence) : [],
+    [approvalEvidence, evidenceReady, gated],
+  );
 
   const gate = useMemo(
     () => (gated
       ? computeFabReleaseGate({
           drawings: packageDrawings,
-          rfis: linkedRfis,
-          signoffs: gateSignoffs,
+          rfis: approvalEvidence.rfis,
+          signoffs: currentSignoffs,
           requireSignoffs,
           submittals: approvalEvidence.submittals,
           drawingRevisions: approvalEvidence.drawingRevisions,
         })
       : { blocked: false, reasons: [], blockingRfis: [], affectedSheets: [], blockingCount: 0 }),
-    [gated, packageDrawings, linkedRfis, gateSignoffs, requireSignoffs, approvalEvidence],
+    [gated, packageDrawings, currentSignoffs, requireSignoffs, approvalEvidence],
   );
   // Override now requires a written reason (the server records it and refuses an
   // empty-reason override). The button stays locked until the reason is filled.
   const overrideReady = override && overrideReason.trim().length > 0;
-  const exportLocked = gate.blocked && !overrideReady;
+  const exportLocked = !evidenceReady || (gate.blocked && !overrideReady);
 
   if (!open) return null;
 
   const handleExport = async () => {
     if (!project?.id) {
       toast.error("No active project.");
+      return;
+    }
+    if (!evidenceReady) {
+      toast.error(approvalEvidence.error || "Package evidence is still loading. Retry before exporting.");
       return;
     }
     if (filteredDrawings.length === 0 && kind !== "claims") {
@@ -337,24 +305,10 @@ export default function ExportFabReleaseModal({
         }
       }
 
-      // ── Sign-offs (only meaningful for fab_release / turnover) ────────
-      let signoffs = [];
-      if (kind !== "claims" && filteredDrawings.length > 0) {
-        try {
-          const ids = filteredDrawings.map((d) => d.id).filter(Boolean);
-          if (ids.length) {
-            const { data, error } = await supabase
-              .from("drawing_signoffs")
-              .select("drawing_id, signed_by, signed_at, status")
-              .in("drawing_id", ids)
-              .eq("is_voided", false);
-            if (error) console.warn("[ExportFabReleaseModal] signoffs fetch failed:", error);
-            else signoffs = data || [];
-          }
-        } catch (err) {
-          console.warn("[ExportFabReleaseModal] signoffs fetch threw:", err);
-        }
-      }
+      // The same complete, current-revision sign-offs validated for the gate
+      // also feed the manifest; never issue an optional second read after the
+      // authoritative server release has already been recorded.
+      const signoffs = gated ? toFabManifestSignoffs(currentSignoffs) : [];
 
       // ── For claims, also pull RFIs / COs / photos for the project ────
       let claimsExtras = { rfis: [], changeOrders: [], photos: [] };
@@ -422,15 +376,27 @@ export default function ExportFabReleaseModal({
         zipped: false,
       });
 
-      downloadTextFile(manifestCsv, `${stem}_manifest.csv`, "text/csv;charset=utf-8");
-      downloadTextFile(readme, `${stem}_README.md`, "text/markdown;charset=utf-8");
+      const files = [
+        {
+          blob: new Blob([manifestCsv], { type: "text/csv;charset=utf-8" }),
+          filename: `${stem}_manifest.csv`,
+        },
+        {
+          blob: new Blob([readme], { type: "text/markdown;charset=utf-8" }),
+          filename: `${stem}_README.md`,
+        },
+      ];
       if (urlLines.length > 0) {
-        downloadTextFile(
-          ["set_name | sheet_number | title | file_url", ...urlLines].join("\n"),
-          `${stem}_URLS.txt`,
-          "text/plain;charset=utf-8"
-        );
+        files.push({
+          blob: new Blob(
+            [["set_name | sheet_number | title | file_url", ...urlLines].join("\n")],
+            { type: "text/plain;charset=utf-8" },
+          ),
+          filename: `${stem}_URLS.txt`,
+        });
       }
+      const presentation = await presentGeneratedFiles({ title: cfg.title, files });
+      if (presentation !== "downloaded" && presentation !== "shared") return;
 
       // (The release + any override are recorded server-side via recordFabRelease
       // above — the old best-effort fab_release_overrides insert is superseded.)
@@ -482,7 +448,9 @@ export default function ExportFabReleaseModal({
           <div style={{ fontSize: 13, color: "var(--text-primary)", marginBottom: 8 }}>{cfg.filterLabel}</div>
           <span style={labelStyle}>Drawings matched</span>
           <div style={{ ...mono, fontSize: 18, color: "var(--accent)", fontWeight: 700 }}>
-            {filteredDrawings.length}
+            {gated && !evidenceReady
+              ? approvalEvidence.status === "error" ? "Unavailable" : "Checking approval evidence…"
+              : filteredDrawings.length}
           </div>
           {groups.length > 0 && (
             <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
@@ -491,7 +459,20 @@ export default function ExportFabReleaseModal({
           )}
         </div>
 
-        {gated && gate.blocked && (
+        {gated && approvalEvidence.status === "error" && (
+          <div role="alert" style={{
+            background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
+            border: "1px solid var(--status-error)", borderRadius: 2,
+            padding: "12px 14px", marginBottom: 14, color: "var(--text-primary)", fontSize: 11,
+          }}>
+            {approvalEvidence.error}
+            <button onClick={retryEvidence} style={{ ...btnBase, marginLeft: 12, background: "var(--bg-page)", color: "var(--text-primary)" }}>
+              Retry evidence
+            </button>
+          </div>
+        )}
+
+        {gated && evidenceReady && gate.blocked && (
           <div style={{
             background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
             border: "1px solid var(--status-error)",
@@ -572,7 +553,9 @@ export default function ExportFabReleaseModal({
           <button
             onClick={handleExport}
             disabled={busy || (kind !== "claims" && filteredDrawings.length === 0) || exportLocked}
-            title={exportLocked ? "Resolve the blocking issues or check the PM override to release" : undefined}
+            title={!evidenceReady
+              ? "Complete approval, revision, sign-off, and RFI reads before exporting"
+              : exportLocked ? "Resolve the blocking issues or check the PM override to release" : undefined}
             style={{
               ...btnBase,
               background: exportLocked ? "var(--bg-page)" : "rgba(200,155,32,0.2)",
@@ -582,7 +565,9 @@ export default function ExportFabReleaseModal({
               cursor: exportLocked ? "not-allowed" : "pointer",
             }}
           >
-            {busy ? "Exporting…" : exportLocked ? "Not ready for fab" : "Export Package"}
+            {busy ? "Exporting…" : !evidenceReady
+              ? approvalEvidence.status === "error" ? "Evidence unavailable" : "Checking evidence…"
+              : exportLocked ? "Not ready for fab" : "Export Package"}
           </button>
         </div>
       </div>

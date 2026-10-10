@@ -301,13 +301,13 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
               </span>
             </div>
 
-            {/* Task panel */}
-            <div style={{
+            {/* Task panel (on phones it scrolls sideways; see responsive.css) */}
+            <div className="sched-task-list-panel" style={{
               background: "var(--bg-surface)", border: "1px solid var(--border-default)",
               borderRadius: "var(--radius-card)", overflow: "hidden", marginBottom: 4,
             }}>
               {/* Column headers */}
-              <div style={{
+              <div className="sched-task-list-row" style={{
                 padding: "10px 16px", borderBottom: "1px solid var(--divider)",
                 display: "grid", gridTemplateColumns: GRID, gap: 12,
                 background: "var(--bg-surface-secondary)",
@@ -325,6 +325,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                 return (
                   <div
                     key={getScheduleTaskRowKey(task, index, group.phase)}
+                    className="sched-task-list-row"
                     onClick={(e) => startEdit(task, e)}
                     style={{
                       padding: "9px 16px",

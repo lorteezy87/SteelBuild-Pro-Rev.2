@@ -30,10 +30,21 @@ vi.mock('@/components/shared/useAppSecurity', () => ({ useAppSecurity: () => ({ 
 // closed at all times until "New revision" is clicked — a mock that ignored
 // `open` put two of these in the tree and made every query for it ambiguous.
 vi.mock('@/components/drawings/RevisionUploadModal', () => ({
-  default: ({ open, onComplete }: { open?: boolean; onComplete: () => void }) =>
+  default: ({ open, onComplete }: { open?: boolean; onComplete: (result?: { complete: boolean }) => void }) =>
     open === false ? null : (
-      <button type="button" onClick={onComplete}>Finish revision upload</button>
+      <><button type="button" onClick={() => onComplete({ complete: false })}>Partial revision upload</button>
+        <button type="button" onClick={() => onComplete({ complete: true })}>Finish revision upload</button></>
     ),
+}));
+vi.mock('@/components/drawings/TitleblockMarkerModal', () => ({
+  default: ({ set, onClose }: {
+    set: { id: string; project_id: string; file_url: string; titleblock_title_rect: unknown };
+    onClose: () => void;
+  }) => <div role="dialog" aria-label="Titleblock marker" data-set-id={set.id}
+    data-project-id={set.project_id} data-file={set.file_url}
+    data-title-rect={JSON.stringify(set.titleblock_title_rect)}>
+    <button type="button" onClick={onClose}>Close marker</button>
+  </div>,
 }));
 
 const HUB = '/DrawingSubmittalHub?hub_tab=drawings';
@@ -59,15 +70,28 @@ function mount({
   onOpenSummary = vi.fn<(summary: unknown) => void>(),
   onRevisionUploaded = vi.fn<(pkgKey: string) => void>(),
   entries = [HUB],
+  locked = false,
+  packages,
 }: {
   onOpenSummary?: OpenSummary;
   onRevisionUploaded?: RevisionUploaded;
   entries?: string[];
+  locked?: boolean;
+  packages?: Array<Record<string, any>>;
 } = {}) {
-  render(<MemoryRouter initialEntries={entries}><QueryClientProvider client={new QueryClient()}>
-    <DrawingRegisterPanel projectId="p1" setPackages={[{
-      key: 'set-1', setId: 'set-1', name: 'Main steel', parent: { id: 'set-1' },
-      sheets: [{ id: 'dwg-1' }], supersededSheets: [], submittals: [],
+  const parent = { id: 'set-1', project_id: 'p1', set_name: 'Main steel', is_locked: locked,
+    file_url: 'p1/main-steel.pdf', titleblock_title_rect: { x: 0.7, y: 0.8, width: 0.2, height: 0.1 } };
+  const sheet = { id: 'dwg-1', project_id: 'p1', drawing_set_id: 'set-1',
+    drawing_set_name: 'Main steel', sheet_number: 'S101', title: 'Framing', file_url: parent.file_url };
+  const client = new QueryClient();
+  client.setQueryData(['drawing_sets', 'p1'], [parent]);
+  client.setQueryData(['drawings', 'p1'], [sheet]);
+  client.setQueryData(['rfis', 'p1'], []);
+  client.setQueryData(['submittals', 'p1'], []);
+  render(<MemoryRouter initialEntries={entries}><QueryClientProvider client={client}>
+    <DrawingRegisterPanel projectId="p1" setPackages={packages as any ?? [{
+      key: 'set-1', setId: 'set-1', name: 'Main steel', parent,
+      sheets: [sheet], supersededSheets: [], submittals: [],
     }]} activeProject={{ id: 'p1', name: 'Project One' }}
       drawingSets={[{ id: 'set-1', set_name: 'Main steel' }]}
       summariesBySet={new Map([['set-1', { summary, sheets_changed: 3 } as any]])}
@@ -88,6 +112,17 @@ describe('Drawing register revision workflow discoverability', () => {
     await userEvent.click(await screen.findByRole('button', { name: /revised · 3/i }));
     expect(onOpenSummary).toHaveBeenCalledWith(summary);
     expect(screen.getByRole('button', { name: 'New Rev' })).toBeEnabled();
+  });
+  it('keeps the set revision modal open on partial save and closes only after a full save', async () => {
+    const onRevisionUploaded = vi.fn<(pkgKey: string) => void>();
+    mount({ entries: [`${HUB}&hub_view=sets`], onRevisionUploaded });
+    await userEvent.click(await screen.findByRole('button', { name: 'New Rev' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Partial revision upload' }));
+    expect(screen.getByRole('button', { name: 'Finish revision upload' })).toBeInTheDocument();
+    expect(onRevisionUploaded).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Finish revision upload' }));
+    expect(screen.queryByRole('button', { name: 'Finish revision upload' })).not.toBeInTheDocument();
+    expect(onRevisionUploaded).toHaveBeenCalledWith('set-1');
   });
   it('lets viewers read saved summaries without offering revision writes', async () => {
     canEdit = false;
@@ -137,6 +172,43 @@ describe('Drawing register views (?hub_view=)', () => {
     mount({ entries: [`${HUB}&hub_view=sets`] });
     expect(await screen.findByRole('button', { name: /revised · 3/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Sets & revisions' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('focuses only the exact linked set in this project and can return to the register', async () => {
+    const other = { id: 'set-2', project_id: 'p1', set_name: 'Miscellaneous', is_locked: false };
+    mount({
+      entries: [`${HUB}&hub_view=sets&set=set-1`],
+      packages: [
+        { key: 'set-1', setId: 'set-1', name: 'Main steel', parent: { id: 'set-1', project_id: 'p1', set_name: 'Main steel' }, sheets: [], submittals: [] },
+        { key: 'set-2', setId: 'set-2', name: 'Miscellaneous', parent: other, sheets: [], submittals: [] },
+      ],
+    });
+    expect(await screen.findByText(/Focused on Main steel/i)).toBeInTheDocument();
+    expect(screen.queryByText('Miscellaneous')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Show all sets' }));
+    expect(screen.getByTestId('search').textContent).toBe('?hub_tab=drawings&hub_view=sets');
+    expect(await screen.findByText('Miscellaneous')).toBeInTheDocument();
+  });
+
+  it('fails closed when a linked set is missing, outside this project, or ambiguous', async () => {
+    const foreign = { id: 'set-1', project_id: 'p2', set_name: 'Foreign set' };
+    mount({
+      entries: [`${HUB}&hub_view=sets&set=set-1`],
+      packages: [{ key: 'set-1', setId: 'set-1', name: 'Foreign set', parent: foreign, sheets: [], submittals: [] }],
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(/linked set.*active project/i);
+    expect(screen.queryByText('Foreign set')).not.toBeInTheDocument();
+  });
+
+  it('rejects repeated set IDs and clears the focus when leaving Sets & revisions', async () => {
+    const user = userEvent.setup();
+    mount({ entries: [`${HUB}&hub_view=sets&set=set-1&set=set-2`] });
+    expect(await screen.findByRole('alert')).toHaveTextContent(/linked set.*active project/i);
+    expect(screen.queryByText('Main steel')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Sheets' }));
+    expect(screen.getByTestId('search').textContent).toBe('?hub_tab=drawings');
+    await user.click(screen.getByRole('button', { name: 'Sets & revisions' }));
+    expect(await screen.findByText('Main steel')).toBeInTheDocument();
   });
 
   it("opens the Review Queue from ?hub_view=reviews, for the panel's project", async () => {
@@ -200,20 +272,49 @@ describe('Drawing register workbench — the retired "full editor"', () => {
     reviewCalls.length = 0;
   });
 
-  it('offers the editing actions on the register, with no link off to /Drawings', () => {
+  it('offers the editing actions on the register, with no link off to /Drawings', async () => {
     mount();
-    for (const name of [/Upload set/i, /New revision/i, /Add sheet/i, /Import log/i, /Fab release/i]) {
+    for (const name of [/Upload set/i, /New revision/i]) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    await userEvent.click(screen.getByRole('button', { name: 'More drawing actions' }));
+    for (const name of [/Add sheet/i, /Import detailer log/i, /Fab release packet/i]) {
+      expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
     }
     // The whole point: nothing sends the user to a second register any more.
     expect(screen.queryByRole('link', { name: /full editor/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/full editor/i)).not.toBeInTheDocument();
   });
 
+  it.each(['sheets', 'sets'])('opens the existing titleblock marker directly from the %s register', async (view) => {
+    mount({ entries: [`${HUB}&hub_view=${view}`] });
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark Titleblock for Main steel' }));
+    const marker = screen.getByRole('dialog', { name: 'Titleblock marker' });
+    expect(marker).toHaveAttribute('data-set-id', 'set-1');
+    expect(marker).toHaveAttribute('data-project-id', 'p1');
+    expect(marker).toHaveAttribute('data-file', 'p1/main-steel.pdf');
+    expect(JSON.parse(marker.getAttribute('data-title-rect')!)).toEqual({ x: 0.7, y: 0.8, width: 0.2, height: 0.1 });
+    expect(screen.queryByText('Upload Drawing Set')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Close marker' }));
+    expect(screen.queryByRole('dialog', { name: 'Titleblock marker' })).not.toBeInTheDocument();
+  });
+
+  it.each(['sheets', 'sets'])('keeps titleblock writes disabled for locked sets in the %s register', async (view) => {
+    mount({ entries: [`${HUB}&hub_view=${view}`], locked: true });
+    expect(await screen.findByRole('button', { name: 'Mark Titleblock for Main steel' })).toBeDisabled();
+  });
+
+  it.each(['sheets', 'sets'])('does not offer titleblock writes to viewers in the %s register', async (view) => {
+    canEdit = false;
+    mount({ entries: [`${HUB}&hub_view=${view}`] });
+    expect(await screen.findByRole('button', { name: /revised · 3/i })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Mark Titleblock/i })).not.toBeInTheDocument();
+  });
+
   it('keeps Bulk edit inert until sheets are actually selected', async () => {
     mount();
-    const bulk = screen.getByRole('button', { name: /Bulk edit/i });
-    expect(bulk).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'More drawing actions' }));
+    expect(screen.getByRole('menuitem', { name: /Bulk edit · select sheets first/i })).toBeDisabled();
 
     await userEvent.click(screen.getByRole('checkbox', { name: /Select sheet S101/i }));
     expect(screen.getByRole('button', { name: /Bulk edit \(1\)/i })).toBeEnabled();
@@ -235,7 +336,7 @@ describe('Drawing register workbench — the retired "full editor"', () => {
 
     // Clear, then filter down to one and select-all again.
     await userEvent.click(screen.getByRole('checkbox', { name: /Select all visible sheets/i }));
-    expect(screen.getByRole('button', { name: /Bulk edit/i })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Bulk edit/i })).not.toBeInTheDocument();
 
     await userEvent.type(
       screen.getByPlaceholderText(/Filter sheet, title, discipline, set/i),

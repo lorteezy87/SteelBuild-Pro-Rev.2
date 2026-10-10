@@ -1,4 +1,5 @@
 import { formatLocalDate } from "@/utils/dates";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 /**
  * Pure helpers for the Work Packages page — date formatting, CSV
  * export. No React, no network.
@@ -41,10 +42,9 @@ export const exportWorkPackagesCSV = (rows) => {
   );
   const csv = [headers.join(","), ...body].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `work-packages-${new Date().toISOString().split("T")[0]}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `work-packages-${new Date().toISOString().split("T")[0]}.csv`,
+    title: "Work packages export",
+  });
 };

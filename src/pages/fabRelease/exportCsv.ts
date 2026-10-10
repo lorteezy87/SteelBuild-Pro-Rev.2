@@ -1,9 +1,13 @@
 import { getWorkPackageDisplayName } from "./analytics";
 import { drawingPackageLabel, num, stageMeta } from "./format";
 import type { EnrichedWorkPackage } from "./types";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 function escapeCsv(value: unknown): string {
-  const text = String(value ?? "");
+  const raw = String(value ?? "");
+  // Spreadsheet applications execute leading =, +, -, and @ as formulas.
+  // A leading apostrophe preserves the displayed value as literal text.
+  const text = /^[\s\uFEFF]*[=+\-@]/.test(raw) ? `'${raw}` : raw;
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
@@ -15,12 +19,14 @@ export function exportFabReleaseCSV(rows: EnrichedWorkPackage[], fileName = "fab
     "Status",
     "Tons",
     "Progress",
-    "Readiness",
-    "Risk",
+    "Release Verification",
+    "Release Blockers",
+    "Advisory Planning Score",
+    "Advisory Risk",
     "Crew",
-    "Released Date",
-    "Drawing Packages",
-    "Flags",
+    "WP Release Stamp",
+    "WP Drawing Packages (Advisory)",
+    "Advisory Risk Markers",
   ];
   const lines = [
     headers.join(","),
@@ -31,6 +37,10 @@ export function exportFabReleaseCSV(rows: EnrichedWorkPackage[], fileName = "fab
       wp._signals.status,
       num(wp.tonnage).toFixed(1),
       wp._signals.progress,
+      wp._signals.releaseGateState === "ready" ? "Release verified"
+        : wp._signals.releaseGateState === "blocked" ? "Release blocked"
+          : wp._signals.releaseGateState === "released" ? "Release recorded" : "Not verified",
+      wp._signals.releaseGate?.blockers?.join("; ") || "",
       wp._signals.readinessScore,
       wp._signals.risk,
       wp.crew,
@@ -40,12 +50,5 @@ export function exportFabReleaseCSV(rows: EnrichedWorkPackage[], fileName = "fab
     ].map(escapeCsv).join(",")),
   ];
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({ blob, filename: fileName, title: "Fab release export" });
 }

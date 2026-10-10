@@ -16,13 +16,15 @@
  * @param op    the photo-create op ({ payload: { blobKey, meta } })
  * @param deps  { getBlob, uploadFile, createPhoto, deleteBlob, isUniqueViolation }
  */
-export async function replayPhotoCreate(op, deps) {
+export async function replayPhotoCreate(op, deps, assertActive = () => {}) {
   const { getBlob, uploadFile, createPhoto, deleteBlob, isUniqueViolation } = deps;
   const blobKey = op?.payload?.blobKey;
   const meta = op?.payload?.meta || {};
   if (!blobKey) return; // malformed op — nothing to do (flushQueue drops it as synced)
 
+  assertActive();
   const stored = await getBlob(blobKey);
+  assertActive();
   if (!stored || !stored.blob) {
     // The blob is gone — a prior attempt already uploaded+created it (and we
     // crashed before removing the op), or it was reconciled. Nothing to replay.
@@ -32,7 +34,8 @@ export async function replayPhotoCreate(op, deps) {
   const file = reconstructFile(stored.blob, stored.meta);
 
   // Upload first. If this throws (still offline), the op + blob stay queued.
-  const uploaded = await uploadFile({ file });
+  const uploaded = await uploadFile({ file, assertActive });
+  assertActive();
   const fileUrl = uploaded?.file_url || uploaded?.path;
 
   try {
@@ -43,6 +46,7 @@ export async function replayPhotoCreate(op, deps) {
     if (!isUniqueViolation(err)) throw err;
   }
 
+  assertActive();
   await deleteBlob(blobKey); // success or dedup -> drop the blob
 }
 

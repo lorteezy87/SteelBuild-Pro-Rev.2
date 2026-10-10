@@ -10,10 +10,10 @@
  *   `npm audit --omit=dev --audit-level=high` exited 0 while three real
  *   production advisories sat one step below the bar at moderate. The gate was
  *   green precisely because the issues that mattered were the wrong severity.
- *   Lowering the threshold alone is not the fix either — react-router's two
- *   moderates have no patched 6.x release, so a bare moderate gate would pin
- *   this job red until an unrelated major upgrade shipped, and a permanently
- *   red job is a job nobody reads.
+ *   When an advisory has no safe immediate upgrade, a bare moderate gate can
+ *   pin this job red until the required migration ships, and a permanently
+ *   red job is a job nobody reads. Time-bounded exceptions belong in the
+ *   allowlist.
  *
  * A threshold hides everything below it, silently and forever. An allowlist
  * names each exception, in the diff, with a reason and a review date — and
@@ -22,7 +22,8 @@
  *
  * Waive sparingly, and prefer removing an entry to extending its review date.
  */
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 export const SEVERITY_ORDER = ["info", "low", "moderate", "high", "critical"];
 export const THRESHOLD = "moderate";
@@ -32,33 +33,7 @@ export const THRESHOLD = "moderate";
  * and a reviewBy date. An entry that no longer matches any advisory fails the
  * build (see classifyAudit) so waivers get deleted rather than accumulating.
  */
-export const ALLOWLIST = new Map([
-  [
-    "GHSA-wrjc-x8rr-h8h6",
-    {
-      package: "react-router",
-      reason:
-        "Open redirect via backslash in <Link>/useNavigate. No patched 6.x " +
-        "exists (vulnerable range 6.0.0 - 7.17.0, first fix 7.18.3), so " +
-        "clearing it means a 6 -> 7 breaking major. No exploitation path " +
-        "today: the app has no user-controlled navigation target — every " +
-        "`next` is built with new URLSearchParams(searchParams), not a " +
-        "redirect destination, and there is no ?next=-style post-login hop.",
-      reviewBy: "2026-12-31",
-    },
-  ],
-  [
-    "GHSA-337j-9hxr-rhxg",
-    {
-      package: "react-router",
-      reason:
-        "Arbitrary constructor injection via deserializeErrors() during SSR " +
-        "hydration. Rev 2 is a Vite SPA and does not server-render, so the " +
-        "code path is not present. Clears with the same 6 -> 7 upgrade.",
-      reviewBy: "2026-12-31",
-    },
-  ],
-]);
+export const ALLOWLIST = new Map();
 
 export function meetsThreshold(severity, threshold = THRESHOLD) {
   const s = SEVERITY_ORDER.indexOf(severity);
@@ -117,9 +92,12 @@ export function runAudit() {
   // this script decides what counts, not npm's threshold flag.
   try {
     return JSON.parse(
-      execFileSync("npm", ["audit", "--omit=dev", "--json"], {
+      // npm is a .cmd launcher on Windows and needs a shell. Keep the command
+      // literal: no arguments or paths from callers are interpolated here.
+      execSync("npm audit --omit=dev --json", {
         encoding: "utf8",
         maxBuffer: 32 * 1024 * 1024,
+        windowsHide: true,
       }),
     );
   } catch (err) {
@@ -162,4 +140,4 @@ function main() {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

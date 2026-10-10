@@ -7,6 +7,7 @@ import {
   filterDrawingsBySet,
 } from "../drawingsUtils";
 import { buildTriage } from "@/pages/drawingSubmittalHub/format";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 
 const PAST = "2020-01-01";
 const FUTURE = "2999-01-01";
@@ -55,7 +56,7 @@ describe("computeStatsFromSubmittals overdue authority", () => {
     const stats = computeStatsFromSubmittals(
       [{ id: "d-1", drawing_set_id: "set-1", due_date: PAST, stage: "OFA" }],
       drawingSets,
-      [{ id: "sub-1", drawing_set_ids: ["set-1"], status: "Under Review", required_date: FUTURE }],
+      [{ id: "sub-1", submittal_type: "Shop Drawing", drawing_set_ids: ["set-1"], status: "Under Review", required_date: FUTURE }],
     );
     expect(stats.overdue).toBe(0);
   });
@@ -64,16 +65,29 @@ describe("computeStatsFromSubmittals overdue authority", () => {
     const stats = computeStatsFromSubmittals(
       [{ id: "d-1", drawing_set_id: "set-1", due_date: FUTURE, stage: "OFA" }],
       drawingSets,
-      [{ id: "sub-1", drawing_set_ids: ["set-1"], status: "Under Review", required_date: PAST }],
+      [{ id: "sub-1", submittal_type: "Shop Drawing", drawing_set_ids: ["set-1"], status: "Under Review", required_date: PAST }],
     );
     expect(stats.overdue).toBe(1);
+  });
+
+  it("does not use Product Data due dates or deleted set and sheet rows as drawing authority", () => {
+    const stats = computeStatsFromSubmittals(
+      [
+        { id: "live", drawing_set_id: "set-1", due_date: FUTURE, stage: "OFA" },
+        { id: "removed", drawing_set_id: "set-1", due_date: PAST, stage: "OFA", deleted_at: "2026-10-07T00:00:00Z" },
+        { id: "gone-set-sheet", drawing_set_id: "set-2", due_date: PAST, stage: "OFA" },
+      ],
+      [...drawingSets, { id: "set-2", set_name: "Deleted", deleted_at: "2026-10-07T00:00:00Z" }],
+      [{ id: "product", submittal_type: "Product Data", drawing_set_ids: ["set-1"], status: "Under Review", required_date: PAST }],
+    );
+    expect(stats.overdue).toBe(0);
   });
 
   it("never counts a released package overdue", () => {
     const stats = computeStatsFromSubmittals(
       [{ id: "d-1", drawing_set_id: "set-1", due_date: PAST, stage: "OFA" }],
       drawingSets,
-      [{ id: "sub-1", drawing_set_ids: ["set-1"], status: "Released for Fabrication", required_date: PAST }],
+      [{ id: "sub-1", submittal_type: "Shop Drawing", drawing_set_ids: ["set-1"], status: "Released for Fabrication", required_date: PAST, ...verifiedSubmittalEvidence('sub-1') }],
     );
     expect(stats.overdue).toBe(0);
   });
@@ -91,7 +105,7 @@ describe("computeStatsFromSubmittals overdue authority", () => {
   });
 
   it("matches the Hub's overdue drawing-set count while keeping unlinked submittals separate", () => {
-    const linked = { id: "sub-1", drawing_set_ids: ["set-1"], status: "Under Review", required_date: PAST };
+    const linked = { id: "sub-1", submittal_type: "Shop Drawing", drawing_set_ids: ["set-1"], status: "Under Review", required_date: PAST };
     const unlinked = { id: "sub-2", drawing_set_ids: [], status: "Under Review", required_date: PAST };
     const sheets = [{ id: "d-1", drawing_set_id: "set-1", due_date: FUTURE, stage: "OFA" }];
     const setPackage = {

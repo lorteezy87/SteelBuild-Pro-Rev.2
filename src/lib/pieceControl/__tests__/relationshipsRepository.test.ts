@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setActiveOrgId } from '@/lib/activeOrg';
 
 const fromMock = vi.fn();
+const rpcMock = vi.fn();
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
   },
 }));
 
@@ -27,6 +30,7 @@ function chainFor(result: { data: unknown; error: unknown }) {
 
 describe("fetchPieceRelationshipSnapshot", () => {
   beforeEach(() => {
+    setActiveOrgId('org');
     vi.clearAllMocks();
     vi.mocked(fetchPieceRegister).mockResolvedValue([
       {
@@ -51,6 +55,12 @@ describe("fetchPieceRelationshipSnapshot", () => {
         deleted_at: null,
       },
     ]);
+  });
+
+  it('rejects a workspace change during the initial raw reads', async () => {
+    fromMock.mockImplementation(() => { setActiveOrgId('other-org'); return chainFor({ data: [], error: null }); });
+    await expect(fetchPieceRelationshipSnapshot('project-1')).rejects.toThrow(/Workspace changed/);
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("soft-fails optional tables so a missing dispositions table still loads core rows", async () => {
@@ -127,6 +137,7 @@ describe("fetchPieceRelationshipSnapshot", () => {
     expect(workPackagesSelect).not.toMatch(/\bdescription\b/);
     expect(sawDeletedFilter).toBe(true);
     expect(optionalSelects.get("drawings")).toContain("linked_rfi_ids");
+    expect(optionalSelects.get("submittals")).toContain("submittal_type");
     expect(optionalSelects.get("drawing_revisions")).toContain("issued_at");
     expect(optionalSelects.get("drawing_revisions")).toContain("received_at");
     expect(snapshot.sourceAvailability).toEqual({
@@ -153,5 +164,19 @@ describe("fetchPieceRelationshipSnapshot", () => {
     await expect(fetchPieceRelationshipSnapshot("project-1")).rejects.toThrow(
       /\[work_packages\]/i,
     );
+  });
+  it('keeps piece assignment available but marks approvals unavailable when exact revision evidence cannot load', async () => {
+    fromMock.mockImplementation((table: string) => chainFor({ data: table === 'submittals'
+      ? [{ id: 's', submittal_type: 'Shop Drawing', status: 'Released for Fabrication', current_round_id: 'round', updated_at: '2026-10-09T00:00:00Z' }]
+      : [], error: null }));
+    rpcMock.mockResolvedValue({ data: null, error: { message: 'Evidence unavailable' } });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const snapshot = await fetchPieceRelationshipSnapshot('project-1');
+      expect(rpcMock).toHaveBeenCalledWith('get_submittal_revision_coverages', { p_submittal_ids: ['s'] });
+      expect(snapshot.pieces).toHaveLength(1);
+      expect(snapshot.submittals).toEqual([]);
+      expect(snapshot.sourceAvailability.approvals).toBe('unavailable');
+    } finally { warn.mockRestore(); }
   });
 });

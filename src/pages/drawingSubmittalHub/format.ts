@@ -1,4 +1,4 @@
-import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
+import { ClipboardList, FileInput, FileStack, Gauge, GitCompareArrows, Layers3, ShieldAlert, Send, ListChecks, Workflow } from "lucide-react";
 import { BALL_IN_COURT_PARTIES } from "@/lib/ballInCourt";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
@@ -7,7 +7,7 @@ import { needsUnlinkedSubmittalHint, openLinkedSubmittalsForSet } from "@/lib/su
 import { computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
-import { pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
+import { isUsableShopDrawingSubmittal, pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { hasUnansweredApproverNotes } from "@/lib/approverNotes";
 import type {
   ApprovalMatrixRow,
@@ -39,16 +39,18 @@ export const info = "var(--cmd-info)";
 export const review = "var(--cmd-review)";
 
 export const TABS = [
-  { key: "overview", label: "Control Board", icon: Gauge },
+  { key: "overview", label: "Action Queue", icon: Gauge },
+  { key: "drawings", label: "Shop Drawings", icon: FileStack },
+  { key: "gc", label: "GC Issuances", icon: FileInput },
+  { key: "submittals", label: "Approvals", icon: ClipboardList },
   { key: "process", label: "Process Board", icon: Layers3 },
-  { key: "drawings", label: "Drawing Register", icon: FileStack },
-  { key: "submittals", label: "Submittal Register", icon: ClipboardList },
   { key: "transmittals", label: "Transmittals", icon: Send },
   { key: "matrix", label: "Approval Matrix", icon: Workflow },
   { key: "revimpact", label: "Revision Impact", icon: GitCompareArrows },
   { key: "holds", label: "Holds & Blockers", icon: ShieldAlert },
   { key: "validation", label: "Validation", icon: ListChecks },
 ];
+export const PRIMARY_TAB_KEYS = ["overview", "drawings", "gc", "submittals"] as const;
 
 // ── Status colors for matrix ───────────────────────────────────────────────
 // semantic submittal workflow hues — allowlisted for status identity in matrix chips.
@@ -206,14 +208,17 @@ export function getDrawingDueDate(drawing: Drawing | null | undefined): string |
   return drawing?.due_date || drawing?.required_date || drawing?.target_date || null;
 }
 
-/** One due-date authority for every drawing-package surface. A usable linked
- * submittal governs; only packages without one fall back to the earliest sheet
+/** One due-date authority for every drawing-package surface. Only an explicit
+ * set-ID-linked, usable submittal governs. Name-only legacy matches are
+ * historical context; packages without an exact link use the earliest sheet
  * date. Closed packages can retain historical dates without appearing late. */
 export function resolveDrawingPackageDue(pkg: SetPackage, useWorkdays = false) {
   const governingSubmittal = pickMostRecentSubmittal(
     (pkg.submittals || []).filter((submittal) =>
-      !submittal.is_deleted
-      && submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) !== null,
+      Boolean(pkg.setId)
+      && Array.isArray(submittal.drawing_set_ids)
+      && submittal.drawing_set_ids.includes(pkg.setId!)
+      && isUsableShopDrawingSubmittal(submittal),
     ),
   );
   const closed = isClosedPackage(pkg);
@@ -373,15 +378,17 @@ export function isClosedPackage(pkg: SetPackage | null | undefined): boolean {
   const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
 
   // (1) Explicit manual release states — always terminal.
-  if (detailingState === "Partially Released" || detailingState === "Released for Erection") return true;
+  if (detailingState === "Partially Released" || detailingState === "Released for Erection") return isPackageReleasedForFab(pkg.parent, pkg.submittals, pkg.sheets);
   // (2) "Released" is terminal only when a submittal drove it (RFF), not when it
   //     came from the deprecated sheet-stage majority fallback.
-  if (detailingState === "Released" && governs) return true;
+  if (detailingState === "Released" && governs) return isPackageReleasedForFab(pkg.parent, pkg.submittals, pkg.sheets);
 
   if (!governs) {
     // (3) Dead/Void-only set: no usable submittal governs, but a terminal-status
     //     submittal (Void) is present → closed.
-    const latest = (pkg.submittals || []).slice().sort((a, b) => (b.round_number || 0) - (a.round_number || 0))[0] || null;
+    const latest = (pkg.submittals || [])
+      .filter((submittal) => submittal.submittal_type === "Shop Drawing" && !submittal.is_deleted && !submittal.deleted_at)
+      .slice().sort((a, b) => (b.round_number || 0) - (a.round_number || 0))[0] || null;
     if (latest && isClosedSubmittal(latest)) return true;
     // (4) Deprecated legacy columns — strict: the SET flag, or EVERY sheet closed.
     if (pkg.parent?.set_approval_status === "approved") return true;
@@ -410,7 +417,7 @@ export function rollupDrawingStage(sheets: Drawing[]): string {
 
 export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[], submittals: Submittal[]): SetPackage[] {
   const parentsById = new Map<string, DrawingSet>(
-    (drawingSets || []).filter((set) => !set?.is_deleted).map((set): [string, DrawingSet] => [set.id as string, set])
+    (drawingSets || []).filter((set) => !set?.is_deleted && !set?.deleted_at).map((set): [string, DrawingSet] => [set.id as string, set])
   );
   const parentNameGroups = new Map<string, DrawingSet[]>();
   for (const parent of parentsById.values()) {
@@ -420,8 +427,8 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
     group.push(parent);
     parentNameGroups.set(name, group);
   }
-  // A name-only legacy link is safe only when exactly one active parent owns
-  // that name. Ambiguous names remain unlinked instead of merging IDs.
+  // A name-only legacy match is shown as historical context only when exactly
+  // one active parent owns that name. It never enters the governing links.
   const parentsByName = new Map<string, DrawingSet>(
     Array.from(parentNameGroups.entries())
       .filter(([, parents]) => parents.length === 1)
@@ -441,6 +448,8 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
         sheets: [],
         supersededSheets: [],
         submittals: [],
+        relatedSubmittals: [],
+        historicalSubmittals: [],
       };
       packages.set(key, pkg);
     }
@@ -452,7 +461,7 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
   }
 
   for (const drawing of drawings || []) {
-    if (!drawing || drawing.is_deleted) continue;
+    if (!drawing || drawing.is_deleted || drawing.deleted_at) continue;
     const parent = drawing.drawing_set_id ? parentsById.get(drawing.drawing_set_id) : null;
     const pkg = ensurePackage({
       setId: drawing.drawing_set_id || null,
@@ -463,26 +472,30 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
     // dropping them entirely made computeDetailingReadiness's revisionImpacted
     // and fullySuperseded structurally unreachable (it only ever saw live
     // sheets), so the "Rev impacted" chip could not render and the
-    // `&& !revisionImpacted` term in fabricationReady was a no-op.
+    // the revision-impact signal in the local workflow read model was a no-op.
     if (drawing.is_superseded) pkg.supersededSheets.push(drawing);
     else pkg.sheets.push(drawing);
   }
 
   for (const submittal of submittals || []) {
-    if (!submittal || submittal.is_deleted) continue;
+    if (!submittal || submittal.is_deleted || submittal.deleted_at) continue;
     const ids = Array.isArray(submittal.drawing_set_ids) ? submittal.drawing_set_ids.filter(Boolean) : [];
     if (ids.length) {
       ids.forEach((setId) => {
         const parent = parentsById.get(setId);
-        if (parent) ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).submittals.push(submittal);
+        if (parent) {
+          const pkg = ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent });
+          if (submittal.submittal_type === "Shop Drawing") pkg.submittals.push(submittal);
+          else pkg.relatedSubmittals!.push(submittal);
+        }
       });
       continue;
     }
     if (submittal.drawing_set_name) {
       const parent = parentsByName.get(submittal.drawing_set_name.trim().toLowerCase()) || null;
-      // No unique active parent means this is an actionable unlinked
-      // Submittal, not a synthetic package that could imply the wrong owner.
-      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).submittals.push(submittal);
+      // No unique active parent means there is no historical set context.
+      // Either way, the record remains an actionable unlinked submittal.
+      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name || undefined, parent }).historicalSubmittals!.push(submittal);
     }
   }
 
@@ -614,20 +627,19 @@ export function buildSequenceReadiness(readinessByKey: Map<string, any>) {
   const entries = Array.from(readinessByKey.values()).map((r: any) => ({
     sequenceNumber: r.sequenceNumber,
     effectiveState: r.effectiveState,
-    fabricationReady: r.fabricationReady,
-    erectionReady: r.erectionReady,
+    shopStageMarked: r.shopStageMarked,
+    fieldStageMarked: r.fieldStageMarked,
     atRisk: r.scheduleRisk?.atRisk,
   }));
   return computeSequenceReadiness(entries);
 }
 
-/** Top-line drawing KPIs: total sets/sheets, released, in-review, overdue. */
+/** Top-line drawing KPIs: total sets/sheets, workflow release marks, in-review, overdue. */
 export function buildDrawingKpis(drawings: any[], setPackages: SetPackage[]) {
-  const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
-  // Released-for-FAB, not closed-for-triage. isClosedPackage also fires on a
-  // Void submittal, on the deprecated set_approval_status === "approved" flag,
-  // and on "Partially Released" — so the green "Released / sets to fab" tile was
-  // counting packages the shop never received.
+  const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted && !d.deleted_at);
+  // This is an operational workflow marker, NOT server-verified fabrication
+  // clearance. Legacy sheet stages and manual release states can produce it
+  // even when the drawing-set gate still blocks. Keep the KPI neutral.
   const released = setPackages.filter((pkg) =>
     isPackageReleasedForFab(pkg.parent, pkg.submittals, pkg.sheets)
   ).length;
@@ -661,8 +673,15 @@ export function buildTriage(
   setPackages: SetPackage[],
   readinessByKey: Map<string, any>,
   useWorkdays = false,
+  holdEvidence: {
+    holdsStatus: "ready" | "loading" | "error";
+    holds: readonly { drawing_id: string; is_active: boolean }[];
+  } | null = null,
 ): TriageModel {
-    const activeSubmittals = submittals.filter((s) => !s.is_deleted) as any[];
+    const activeSubmittals = submittals.filter((s) => !s.is_deleted && !s.deleted_at) as any[];
+    const activeHoldSheetIds = holdEvidence?.holdsStatus === "ready"
+      ? new Set(holdEvidence.holds.filter((hold) => hold.is_active).map((hold) => hold.drawing_id))
+      : null;
 
     const setItems: TriageItem[] = setPackages.map((pkg) => {
       const {
@@ -701,6 +720,21 @@ export function buildTriage(
         openLinkedCount,
       });
       const firstSheet = pkg.sheets[0] || null;
+      // The SQL gate checks every non-deleted sheet in the set, including a
+      // superseded one; its own superseded blocker is separate.
+      const releaseSheets = [...pkg.sheets, ...(pkg.supersededSheets ?? [])];
+      const releaseEvidence = {
+        sheetCount: releaseSheets.length,
+        supersededSheetCount: pkg.supersededSheets?.length ?? 0,
+        missingPdfCount: releaseSheets.filter((sheet) => !String(sheet.file_url ?? "").trim()).length,
+        relatedSubmittalCount: pkg.relatedSubmittals?.length ?? 0,
+        activeHoldCount: activeHoldSheetIds
+          ? releaseSheets.filter((sheet) => sheet.id && activeHoldSheetIds.has(sheet.id)).length
+          : null,
+        governingStage: governingSubmittal
+          ? submittalStatusToStage(governingSubmittal.status, governingSubmittal.ball_in_court, governingSubmittal.approved_date)
+          : null,
+      };
       // Submittals carry all three owner fields; `drawings` carries only
       // `reviewer` — it has no ball_in_court or assigned_to column, so those two
       // sheet fallbacks were dead expressions that could never resolve.
@@ -731,6 +765,7 @@ export function buildTriage(
         _needsUnlinkedHint: needsUnlinkedHint,
         _detailingStateRaw: pkg.parent?.detailing_state ?? null,
         _readiness: readinessByKey.get(pkg.key) || null,
+        _releaseEvidence: releaseEvidence,
         // Entity references for inline editing
         _submittalId: governingSubmittal?.id || null,
         _drawingSetId: pkg.setId || null,
@@ -743,7 +778,7 @@ export function buildTriage(
     });
 
     const linkedSubmittalIds = new Set(
-      setPackages.flatMap((pkg) => pkg.submittals.map((submittal) => submittal.id).filter(Boolean))
+      setPackages.flatMap((pkg) => [...pkg.submittals, ...(pkg.relatedSubmittals ?? [])].map((submittal) => submittal.id).filter(Boolean))
     );
     const unlinkedSubmittalItems: TriageItem[] = activeSubmittals
       .filter((submittal) => !linkedSubmittalIds.has(submittal.id))
@@ -758,7 +793,9 @@ export function buildTriage(
         id: `submittal-${submittal.id}`,
         kind: "Unlinked Submittal",
         title,
-        group: "No drawing set name linked",
+        group: Array.isArray(submittal.drawing_set_ids) && submittal.drawing_set_ids.some(Boolean)
+          ? "No active drawing set link"
+          : "No drawing set ID linked",
         status: submittal.status || "Draft",
         owner: submittal.ball_in_court || submittal.assigned_to || submittal.reviewer || "Unassigned",
         dueDate,
@@ -848,9 +885,8 @@ const OPERATIONAL_STATE_COLORS: Record<string, string> = {
  * register used to hand-roll this as a regex chain whose first alternative
  * tested for "Released for Fabrication" and "Approved" — SUBMITTAL statuses,
  * which `effectiveDetailingState` never returns. Those two alternatives could
- * not match anything, and "Released" — the terminal workflow state, the one
- * that means the shop has it — matched no alternative at all and fell through
- * to the same neutral grey as "Not Started", beside a green Released column.
+ * not match anything. Release-looking workflow labels stay neutral here:
+ * the separate server gate decides whether fabrication is actually clear.
  *
  * Exhaustive by construction: every state maps here explicitly, and a test
  * walks DETAILING_STATE_ORDER so a state added later cannot quietly inherit
@@ -858,11 +894,11 @@ const OPERATIONAL_STATE_COLORS: Record<string, string> = {
  */
 export function registerStatusTone(state: string | null | undefined): "done" | "review" | "danger" | "open" | "neutral" {
   switch (String(state ?? "")) {
-    // At or past release: the shop has the package.
+    // These operational markers do not verify the drawing-set/fab release gate.
     case "Released":
     case "Partially Released":
     case "Released for Erection":
-      return "done";
+      return "neutral";
     // Out for / under review by others.
     case "Internal Review":
     case "OFA":
@@ -950,7 +986,7 @@ export function buildApprovalMatrixRows(
   useWorkdays = false,
 ): ApprovalMatrixRow[] {
    
-  const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted);
+  const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted && !s.deleted_at && s.submittal_type === "Shop Drawing");
    
   const setSubmittalMap: Record<string, Submittal[]> = {};
   for (const sub of activeSubmittals) {
@@ -961,7 +997,7 @@ export function buildApprovalMatrixRows(
     }
   }
   return (drawingSets || [])
-    .filter((s: any) => !s.is_deleted)
+    .filter((s: any) => !s.is_deleted && !s.deleted_at)
     .map((set: any) => {
       const linked = setSubmittalMap[set.id] || [];
       // Governing submittal: prefer one that maps to a real workflow stage, and

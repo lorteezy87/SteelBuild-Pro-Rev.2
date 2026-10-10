@@ -11,7 +11,8 @@ import { toast } from 'sonner';
  * Guarded three ways: (1) the `account_deletion` feature flag (OFF by default —
  * enable per-owner or globally only when ready), (2) org OWNER only, (3) a
  * type-the-name confirmation. Calls the `account-delete` edge function, which
- * erases DB rows, Storage objects, and orphaned auth users, then signs out.
+ * erases workspace DB rows and Storage objects, then signs out. Every member's
+ * account identity remains; deleting an account is a separate self-service action.
  */
 export default function DangerZone() {
   const enabled = useFlag('account_deletion');
@@ -58,7 +59,7 @@ export default function DangerZone() {
           Permanently erases <strong>{orgName}</strong> — every project, drawing, submittal, RFI,
           financial record, uploaded file, and team membership. This <strong>cannot be undone</strong>
           and is not recoverable from backups after the retention window. Export your data first if you
-          need a copy.
+          need a copy. Everyone keeps their account and can still sign in.
         </p>
         <button
           onClick={() => { setOpen(true); setConfirmText(''); }}

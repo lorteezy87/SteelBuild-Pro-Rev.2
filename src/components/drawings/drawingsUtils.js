@@ -11,6 +11,7 @@ import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 import { compareDrawingSetPackages, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
 import { resolveDrawingPackageDue } from "@/pages/drawingSubmittalHub/format";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 
 /**
  * Decide whether a stage transition is legal.
@@ -155,12 +156,11 @@ export function exportTransmittal(drawings, projectName) {
     .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${projectName || "project"}_transmittal_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void presentGeneratedFile({
+    blob,
+    filename: `${projectName || "project"}_transmittal_${new Date().toISOString().slice(0, 10)}.csv`,
+    title: "Drawing transmittal",
+  });
 }
 
 /**
@@ -228,6 +228,7 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
   const sheetsBySetId = new Map();
   const sheetsBySetName = new Map();
   for (const d of drawings) {
+    if (!d || d.is_deleted || d.deleted_at) continue;
     if (d?.drawing_set_id) {
       if (!sheetsBySetId.has(d.drawing_set_id)) sheetsBySetId.set(d.drawing_set_id, []);
       sheetsBySetId.get(d.drawing_set_id).push(d);
@@ -244,7 +245,7 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
   // multiple sets — fan out).
   const submittalsBySetId = new Map();
   for (const s of submittals || []) {
-    if (!s || s.is_deleted) continue;
+    if (!s || s.is_deleted || s.deleted_at || s.submittal_type !== "Shop Drawing") continue;
     const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
     for (const id of ids) {
       if (!id) continue;
@@ -258,16 +259,16 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
   const packages = [];
   const seenIds = new Set();
   for (const ds of drawingSetRecords || []) {
-    if (!ds?.id) continue;
+    if (!ds?.id || ds.is_deleted || ds.deleted_at) continue;
     seenIds.add(ds.id);
     const sheetsHere = sheetsBySetId.get(ds.id) || sheetsBySetName.get(ds.set_name?.trim()) || [];
     const subsHere = submittalsBySetId.get(ds.id) || [];
-    packages.push({ id: ds.id, name: ds.set_name, parent: ds, sheets: sheetsHere, submittals: subsHere });
+    packages.push({ id: ds.id, setId: ds.id, name: ds.set_name, parent: ds, sheets: sheetsHere, submittals: subsHere });
   }
   // Legacy sheets without a parent FK — group by name.
   for (const [name, sheets] of sheetsBySetName.entries()) {
     if (sheets.some((s) => s.drawing_set_id && seenIds.has(s.drawing_set_id))) continue;
-    packages.push({ id: null, name, parent: null, sheets, submittals: [] });
+    packages.push({ id: null, setId: null, name, parent: null, sheets, submittals: [] });
   }
 
   let released = 0;
@@ -280,7 +281,7 @@ export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], sub
     else if (isStageInReview(stage)) inReview++;
     const activeDuePackage = {
       ...pkg,
-      sheets: pkg.sheets.filter((drawing) => !drawing?.is_deleted && !drawing?.is_superseded),
+      sheets: pkg.sheets.filter((drawing) => !drawing?.is_deleted && !drawing?.deleted_at && !drawing?.is_superseded),
     };
     if (resolveDrawingPackageDue(activeDuePackage, useWorkdays).due.overdue) overdue++;
     if (pkg.sheets.some((d) => d.priority_flag)) priority++;

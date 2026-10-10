@@ -11,6 +11,7 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { PHASES } from "@/utils/phases";
 import {
   downloadScheduleCsvTemplate,
   readScheduleCsvFile,
@@ -54,6 +55,7 @@ export default function ScheduleCsvImportModal({
   const [skippedBlankRows, setSkippedBlankRows] = useState(0);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [createdCount, setCreatedCount] = useState(0);
+  const [skippedCount, setSkippedCount] = useState(0);
   const [err, setErr] = useState<string | null>(null);
 
   if (!open) return null;
@@ -66,6 +68,7 @@ export default function ScheduleCsvImportModal({
     setSkippedBlankRows(0);
     setExcluded(new Set());
     setCreatedCount(0);
+    setSkippedCount(0);
     setErr(null);
   };
 
@@ -130,11 +133,15 @@ export default function ScheduleCsvImportModal({
         tasks: kept,
         projectId,
         qc,
+        source: { kind: "csv", fileName: file?.name || "" },
         generateMissingWbs: true,
         existingTasks,
       });
       setCreatedCount(result.created);
-      toast.success(`Imported ${result.created} task${result.created === 1 ? "" : "s"} from ${file?.name || "CSV"}`);
+      setSkippedCount(result.skipped);
+      toast.success(result.created > 0
+        ? `Imported ${result.created} task${result.created === 1 ? "" : "s"} from ${file?.name || "CSV"}${result.skipped ? `; ${result.skipped} already present` : ""}`
+        : `No new tasks in ${file?.name || "CSV"}; ${result.skipped} already present`);
       onImported?.(result.created);
       setStep("done");
       setTimeout(() => {
@@ -147,7 +154,11 @@ export default function ScheduleCsvImportModal({
     }
   };
 
-  const keptCount = tasks.filter((t) => !excluded.has(t.uid)).length;
+  const keptTasks = tasks.filter((t) => !excluded.has(t.uid));
+  const keptCount = keptTasks.length;
+  const activityIds = keptTasks.map((task) => task.sourceUid?.trim()).filter(Boolean);
+  const identityReady = activityIds.length === keptCount && new Set(activityIds).size === keptCount;
+  const linksReady = keptTasks.every((task) => task.unresolvedPredecessors.length === 0);
 
   return (
     <>
@@ -313,6 +324,12 @@ export default function ScheduleCsvImportModal({
                 {skippedBlankRows ? ` · ${skippedBlankRows} blank row${skippedBlankRows === 1 ? "" : "s"} skipped` : ""}
                 . Uncheck a row to exclude it.
               </div>
+              {!identityReady && <div role="alert" style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginBottom: 8 }}>
+                Every included row needs a unique Activity ID. Correct the CSV or exclude the affected rows before importing.
+              </div>}
+              {!linksReady && <div role="alert" style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginBottom: 8 }}>
+                Some included predecessor references could not be matched. Correct the CSV or exclude those rows before importing.
+              </div>}
               <div style={{ overflowX: "auto", border: "1px solid var(--border-default)", borderRadius: 4 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", ...mono, fontSize: 11 }}>
                   <thead>
@@ -352,7 +369,7 @@ export default function ScheduleCsvImportModal({
                             {t.isSummary ? <strong>{t.name}</strong> : t.name}
                             {t.milestone ? " · milestone" : ""}
                           </td>
-                          <td style={{ padding: "6px 10px" }}>{t.phaseHint || "—"}</td>
+                          <td style={{ padding: "6px 10px" }}>{t.phaseHint && PHASES.includes(t.phaseHint) ? t.phaseHint : "Unassigned"}</td>
                           <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}>{t.start || "TBD"}</td>
                           <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}>{t.finish || "TBD"}</td>
                           <td style={{ padding: "6px 10px" }}>{t.durationDays ?? "—"}</td>
@@ -381,7 +398,9 @@ export default function ScheduleCsvImportModal({
             <div style={{ textAlign: "center", padding: "48px 20px" }}>
               <CheckCircle2 size={28} color="var(--status-success)" />
               <div style={{ ...display, fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginTop: 10 }}>
-                Imported {createdCount} task{createdCount === 1 ? "" : "s"}
+                {createdCount > 0
+                  ? `Imported ${createdCount} task${createdCount === 1 ? "" : "s"}`
+                  : `${skippedCount} task${skippedCount === 1 ? " is" : "s are"} already on this schedule`}
               </div>
             </div>
           )}
@@ -409,7 +428,7 @@ export default function ScheduleCsvImportModal({
               <button
                 type="button"
                 className="cmd-btn cmd-btn--primary"
-                disabled={keptCount === 0}
+                disabled={keptCount === 0 || !identityReady || !linksReady}
                 onClick={() => { void runCommit(); }}
               >
                 Import {keptCount} task{keptCount === 1 ? "" : "s"}

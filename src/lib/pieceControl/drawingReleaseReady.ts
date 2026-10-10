@@ -1,11 +1,13 @@
 /**
  * drawingReleaseReady.ts — governing-drawing release readiness (Slice 6).
  *
- * Fabrication release is allowed when the governing drawing's workflow is
- * IFC or Released — not bare Approved/AAN (those can still be OFS/BFA) and
- * never R&R. Pure helpers shared by piece readiness + Piece Impact.
+ * IFC or Released is necessary for the drawing-stage check, but insufficient
+ * for fabrication release: the server gate also evaluates holds, RFIs, PDFs,
+ * material and the full work-package scope. Pure helpers shared by piece
+ * readiness and Piece Impact.
  */
 import {
+  isUsableShopDrawingSubmittal,
   pickMostRecentSubmittal,
   submittalStatusToStage,
 } from "@/lib/submittalStageMapping";
@@ -14,9 +16,9 @@ import {
   type CommentDispositionLike,
 } from "@/lib/commentDispositionGate";
 import { computeSubmittalRiskAging } from "@/lib/submittalRiskAging";
+import { submittalRevisionEvidenceBlockReason } from '@/lib/submittalRevisionEvidence';
 import type {
   DrawingRevisionEvidence,
-  DrawingSignoffEvidence,
   ReadinessDrawing,
   ReadinessEvidence,
   SubmittalEvidence,
@@ -81,43 +83,15 @@ function linkedSubmittals(
     (submittal) =>
       !submittal.is_deleted &&
       !submittal.deleted_at &&
+      isUsableShopDrawingSubmittal(submittal) &&
       (submittal.drawing_set_ids ?? []).includes(drawing.drawing_set_id!),
   );
 }
 
-function hasFabSignoff(
-  drawing: ReadinessDrawing,
-  evidence: ReadinessEvidence,
-): boolean {
-  const currentRevisionIds = new Set(
-    (evidence.drawingRevisions ?? [])
-      .filter(
-        (revision) =>
-          revision.drawing_id === drawing.id &&
-          revision.is_current &&
-          !revision.archived_at,
-      )
-      .map((revision) => revision.id),
-  );
-  return (evidence.drawingSignoffs ?? []).some((signoff: DrawingSignoffEvidence) => {
-    if (signoff.drawing_id !== drawing.id || signoff.is_voided) return false;
-    const stamp = String(signoff.stamp_type ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/[\s-]+/g, "_");
-    if (stamp !== "approved_for_fabrication") return false;
-    if (currentRevisionIds.size === 0) return true;
-    return (
-      !signoff.drawing_revision_id ||
-      currentRevisionIds.has(signoff.drawing_revision_id)
-    );
-  });
-}
-
 /**
  * Derive the governing workflow stage for a drawing from its most-recent
- * linked submittal (status + BIC). Falls back to drawings.stage when no
- * submittal signal exists.
+ * linked submittal (status + BIC). Falls back to drawings.stage for display
+ * context only; a legacy sheet stage cannot authorize fabrication release.
  */
 export function deriveGoverningWorkflowStage(
   drawing: ReadinessDrawing,
@@ -138,11 +112,9 @@ export function deriveGoverningWorkflowStage(
 }
 
 /**
- * True when a governing drawing is release-ready for piece/WP fabrication.
- * Ready sources (any one):
- *   - most-recent linked submittal derives to IFC or Released
- *   - drawings.stage is IFC or Released (legacy sheet enum)
- *   - current-revision fab signoff (`approved_for_fabrication`)
+ * Client-side readiness signal for piece/WP context. Only a governing
+ * submittal at IFC or Released can be ready. The server fab-release gate
+ * remains the authority for holds, RFIs, missing files and package release.
  */
 export function isGoverningDrawingReleaseReady(
   drawing: ReadinessDrawing,
@@ -156,21 +128,33 @@ export function isGoverningDrawingReleaseReady(
       governingSubmittalId: null,
     };
   }
+  if (drawing.drawing_set_id && evidence.drawingSets) {
+    const set = evidence.drawingSets.find((candidate) => candidate.id === drawing.drawing_set_id);
+    if (!set || set.is_deleted || set.deleted_at) {
+      return {
+        ready: false,
+        stage: null,
+        reason: "Governing drawing set is missing or deleted.",
+        governingSubmittalId: null,
+      };
+    }
+  }
 
   const { stage, submittal } = deriveGoverningWorkflowStage(drawing, evidence);
+  if (!submittal) {
+    return {
+      ready: false,
+      stage,
+      reason: "No governing submittal for this drawing set. Sheet stage and revision signoffs are reference only.",
+      governingSubmittalId: null,
+    };
+  }
   if (stage && RELEASE_READY_STAGES.has(stage)) {
+    const evidenceBlock = submittalRevisionEvidenceBlockReason(submittal);
+    if (evidenceBlock) return { ready: false, stage, reason: evidenceBlock, governingSubmittalId: submittal.id };
     return {
       ready: true,
       stage,
-      reason: null,
-      governingSubmittalId: submittal?.id ?? null,
-    };
-  }
-
-  if (hasFabSignoff(drawing, evidence)) {
-    return {
-      ready: true,
-      stage: stage ?? "IFC",
       reason: null,
       governingSubmittalId: submittal?.id ?? null,
     };
@@ -293,7 +277,13 @@ export function buildPieceImpact(input: BuildPieceImpactInput): PieceImpactModel
       tone: "warn",
     });
   }
-  if (!ready.ready && ready.stage !== "R&R" && ready.stage !== "OFS") {
+  if (!ready.ready && !ready.governingSubmittalId) {
+    flags.push({
+      key: "non_ifc_governing",
+      label: "No governing submittal — sheet stage is reference only",
+      tone: "warn",
+    });
+  } else if (!ready.ready && ready.stage !== "R&R" && ready.stage !== "OFS") {
     flags.push({
       key: "non_ifc_governing",
       label: `Governing stage ${ready.stage || "unknown"} — not IFC`,

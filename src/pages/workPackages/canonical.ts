@@ -9,6 +9,8 @@
  * fabricated. These helpers are pure: no React, no network.
  */
 import { isPieceDrivenWorkPackageProgress } from "@/lib/pieceControl/wpProgressMapping";
+import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
+import type { ExpandableDrawing, PieceDrawingSetLink, PieceDrawingSheetLink } from "@/lib/pieceControl/pieceDrawingLinks";
 
 export type CanonicalPhase = "Detailing" | "Fabrication" | "Delivery" | "Erection";
 
@@ -21,6 +23,71 @@ export interface CanonicalPieceRow {
   on_hold?: boolean | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
+}
+
+export interface PieceDrawingScope {
+  drawingIds: string[];
+  /** Leaf lots without a link plus linked sets with no active sheets. */
+  missingLinkCount: number;
+}
+
+/**
+ * Match the Fab Release scope for each piece-driven package. A manually linked
+ * work-package sheet cannot clear a blocked lot linked to another set.
+ */
+export function indexPieceDrawingScopeByWorkPackage(
+  pieces: CanonicalPieceRow[],
+  pieceDrawingSets: PieceDrawingSetLink[],
+  pieceDrawings: PieceDrawingSheetLink[],
+  drawings: ExpandableDrawing[],
+): Map<string, PieceDrawingScope> {
+  const activeSheetsBySet = new Map<string, string[]>();
+  for (const sheet of drawings) {
+    if (!sheet.drawing_set_id || sheet.is_deleted || sheet.deleted_at || sheet.is_superseded) continue;
+    const sheetIds = activeSheetsBySet.get(sheet.drawing_set_id) ?? [];
+    sheetIds.push(sheet.id);
+    activeSheetsBySet.set(sheet.drawing_set_id, sheetIds);
+  }
+
+  const setIdsByPiece = new Map<string, Set<string>>();
+  for (const link of pieceDrawingSets) {
+    const setIds = setIdsByPiece.get(link.piece_id) ?? new Set<string>();
+    setIds.add(link.drawing_set_id);
+    setIdsByPiece.set(link.piece_id, setIds);
+  }
+  const sheetIdsByPiece = new Map<string, Set<string>>();
+  for (const link of pieceDrawings) {
+    const sheetIds = sheetIdsByPiece.get(link.piece_id) ?? new Set<string>();
+    sheetIds.add(link.drawing_id);
+    sheetIdsByPiece.set(link.piece_id, sheetIds);
+  }
+
+  const scoped = new Map<string, { drawingIds: Set<string>; missingLinkCount: number }>();
+  const actionable = selectActionableLeafPieces(pieces.map((piece) => ({
+    ...piece,
+    parent_piece_id: piece.parent_piece_id ?? null,
+    is_container: !!piece.is_container,
+    is_deleted: !!piece.is_deleted,
+    deleted_at: piece.deleted_at ?? null,
+  })));
+  for (const piece of actionable) {
+    if (!piece.work_package_id) continue;
+    const scope = scoped.get(piece.work_package_id) ?? { drawingIds: new Set<string>(), missingLinkCount: 0 };
+    const setIds = setIdsByPiece.get(piece.id);
+    const sheetIds = sheetIdsByPiece.get(piece.id);
+    if (!setIds?.size && !sheetIds?.size) scope.missingLinkCount += 1;
+    for (const setId of setIds ?? []) {
+      const activeSheets = activeSheetsBySet.get(setId);
+      if (!activeSheets?.length) scope.missingLinkCount += 1;
+      else for (const sheetId of activeSheets) scope.drawingIds.add(sheetId);
+    }
+    for (const sheetId of sheetIds ?? []) scope.drawingIds.add(sheetId);
+    scoped.set(piece.work_package_id, scope);
+  }
+  return new Map([...scoped].map(([wpId, scope]) => [wpId, {
+    drawingIds: [...scope.drawingIds],
+    missingLinkCount: scope.missingLinkCount,
+  }]));
 }
 
 export interface PieceCounts {

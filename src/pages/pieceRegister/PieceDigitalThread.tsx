@@ -89,7 +89,12 @@ export function PieceDigitalThread({
   };
 
   return (
-    <aside className="piece-digital-thread" aria-label="Piece digital thread">
+    <aside
+      className="piece-digital-thread"
+      role="dialog"
+      aria-modal="false"
+      aria-label={`Piece digital thread: ${thread.identity.markAndLot}`}
+    >
       <header className="piece-digital-thread__header">
         <div>
           <span>Piece digital thread</span>

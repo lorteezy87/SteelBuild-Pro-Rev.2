@@ -3,25 +3,24 @@ import { OPEN_STATUSES, TERMINAL_STATUSES } from "./constants";
 import type { Submittal, SubmittalRound } from "./types";
 
 export const SUBMITTAL_QUERY_STALE_TIME = 60_000;
-export const SUBMITTAL_QUERY_LIMIT = 2000;
 
 export function fetchSubmittals(
   projectId: string | null | undefined,
 ): Promise<Submittal[]> {
-  return entities.Submittal.filter(
+  // These rows drive Drawing Control counts and approval evidence. filterAll
+  // rejects rather than returning a partial result when a later page fails.
+  return entities.Submittal.filterAll(
     { project_id: projectId },
     "-submitted_date",
-    SUBMITTAL_QUERY_LIMIT,
   );
 }
 
 export function fetchSubmittalRounds(
   projectId: string | null | undefined,
 ): Promise<SubmittalRound[]> {
-  return entities.SubmittalRound.filter(
+  return entities.SubmittalRound.filterAll(
     { project_id: projectId },
     "-round_number",
-    SUBMITTAL_QUERY_LIMIT,
   );
 }
 

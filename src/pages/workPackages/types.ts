@@ -86,7 +86,7 @@ export interface WorkPackageMetrics {
   fieldReady: WorkPackage[];
   onHold: WorkPackage[];
   drawingGaps: WorkPackage[];
-  readyForFab: WorkPackage[];
+  drawingStageClear: WorkPackage[];
   overdue?: WorkPackage[];
   released?: WorkPackage[];
   exceptionReleases?: WorkPackage[];

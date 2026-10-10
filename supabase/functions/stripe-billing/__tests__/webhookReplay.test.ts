@@ -54,18 +54,15 @@ describe("checkout.session.completed -> checkoutOrgUpdate", () => {
     });
   });
 
-  it("lets explicit metadata.plan win over the price-derived plan", () => {
+  it("uses the configured price rather than a metadata plan", () => {
     const sub = { status: "active", items: { data: [{ price: { id: "price_pro_123" } }] } };
     const res = checkoutOrgUpdate({ metadata: { org_id: "org_1", plan: "business" }, subscription: "sub_1" }, sub, cfg);
-    expect(res?.update.plan).toBe("business");
+    expect(res?.update.plan).toBe("pro");
   });
 
-  it("falls back to client_reference_id for the org id, defaults plan=pro, status=active, period=null when no sub", () => {
+  it("never grants a plan for a checkout without a retrieved subscription", () => {
     const res = checkoutOrgUpdate({ client_reference_id: "org_ref" }, null, cfg);
-    expect(res?.orgId).toBe("org_ref");
-    expect(res?.update.plan).toBe("pro");
-    expect(res?.update.subscription_status).toBe("active");
-    expect(res?.update.current_period_end).toBeNull();
+    expect(res).toBeNull();
   });
 
   it("returns null (no-op) when no org id is resolvable", () => {
@@ -105,15 +102,30 @@ describe("customer.subscription.* -> subscriptionOrgUpdate", () => {
     });
   });
 
-  it("updated with an unknown price falls back to metadata.plan, else undefined", () => {
+  it("fails closed for an unknown price even with paid metadata", () => {
     const withMeta = subscriptionOrgUpdate(
       { id: "s", status: "active", metadata: { plan: "pro" }, items: { data: [{ price: { id: "price_x" } }] } },
       cfg,
       { deleted: false },
     );
-    expect(withMeta.plan).toBe("pro");
+    expect(withMeta.plan).toBe("free");
 
     const noMeta = subscriptionOrgUpdate({ id: "s", status: "active", items: { data: [] } }, cfg, { deleted: false });
-    expect(noMeta.plan).toBeUndefined();
+    expect(noMeta.plan).toBe("free");
+  });
+
+  it.each(["canceled", "unpaid", "incomplete_expired", "incomplete", "paused", "unexpected"])("does not grant paid entitlement for %s even after delayed checkout", (status) => {
+    const sub = { id: "sub_1", status, items: { data: [{ price: { id: cfg.pricePro } }] } };
+    const session = { metadata: { org_id: "org_1", plan: "business" }, subscription: "sub_1" };
+    expect(subscriptionOrgUpdate(sub, cfg, { deleted: false }).plan).toBe("free");
+    expect(checkoutOrgUpdate(session, sub, cfg)?.update.plan).toBe("free");
+  });
+
+  it.each(["active", "trialing", "past_due"])("retains the established %s entitlement policy", (status) => {
+    expect(subscriptionOrgUpdate({ id: "sub_1", status, items: { data: [{ price: { id: cfg.pricePro } }] } }, cfg, { deleted: false }).plan).toBe("pro");
+  });
+
+  it("does not choose between duplicated configured price IDs", () => {
+    expect(priceToPlan("same", { ...cfg, pricePro: "same", priceBusiness: "same" })).toBeNull();
   });
 });

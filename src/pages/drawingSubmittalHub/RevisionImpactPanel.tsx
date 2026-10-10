@@ -30,16 +30,19 @@ const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>
 
 // CSS-grid column template shared by the virtualized header + rows so they align.
 const GRID_COLS =
-  "minmax(180px, 2fr) minmax(56px, 0.6fr) minmax(120px, 1fr) minmax(160px, 1.8fr) minmax(96px, 0.9fr) minmax(88px, 0.7fr) minmax(72px, 0.7fr) minmax(96px, 0.9fr)";
+  "minmax(150px, 1.5fr) minmax(52px, 0.45fr) minmax(92px, 0.75fr) minmax(170px, 1.55fr) minmax(130px, 1.1fr) minmax(84px, 0.65fr) minmax(150px, 1.2fr) minmax(78px, 0.6fr)";
+// Eight evidence columns need 906px at their track minima. Keep a little
+// breathing room for labels, then scroll the whole virtual board on phones.
+const VIRTUAL_BOARD_MIN_WIDTH = 960;
 
 const COLUMNS: { label: string; align?: "right"; title?: string }[] = [
   { label: "Changed Sheet" },
   { label: "Rev" },
   { label: "Downstream" },
+  { label: "Revision control", title: "Evidence is advisory in this board; server-side fabrication release gates remain authoritative." },
   { label: "Linked Work Package" },
   { label: "RFIs (open/all)", align: "right" },
-  { label: "Fab Blocked?" },
-  { label: "Pieces ≈", align: "right", title: "Pieces tied to this set — exact when the roster links pieces to the set, otherwise estimated via the linked work-package sequence. '—' when the model roster isn't loaded, or neither link resolves." },
+  { label: "Model mapping", title: "Exact means the model roster links pieces to the drawing set; sequence estimate is a labelled fallback. Unknown never means zero pieces." },
   { label: "" },
 ];
 
@@ -48,8 +51,29 @@ const COLUMNS: { label: string; align?: "right"; title?: string }[] = [
  * Shared by BOTH the <table> and the virtualized grid so the columns can never
  * drift apart in the canonical revision-impact panel.
  */
-function rowCells(r: any, onCompareRevision?: (drawingId: string) => void, rosterLoaded = false) {
+function controlPresentation(r: any) {
+  const control = r.revisionControl ?? {
+    status: "review_required",
+    reasons: [{ code: "EVIDENCE_NOT_COMPUTED", message: "Revision evidence has not been computed.", severity: "review_required" }],
+  };
+  const label = control.status === "clear" ? "Clear" : control.status === "blocked" ? "Blocked" : "Review required";
+  const tone = (control.status === "clear" ? "good" : control.status === "blocked" ? "danger" : "review") as "good" | "danger" | "review";
+  return { control, label, tone };
+}
+
+function modelScopePresentation(r: any, rosterState: RosterState) {
+  const scope = r.modelScope ?? r.revisionControl?.model;
+  if (scope?.state === "exact") return `Exact · ${scope.affectedPieces ?? 0} pieces`;
+  if (scope?.state === "sequence_estimate") return `Sequence estimate · ${scope.affectedPieces ?? 0} pieces`;
+  if (scope?.state === "not_loaded" || rosterState === "not_loaded") return "Unknown · model roster not loaded";
+  if (rosterState === "load_error") return "Unknown · model roster could not load";
+  return "Unknown · model scope unresolved";
+}
+
+function rowCells(r: any, onCompareRevision?: (drawingId: string) => void, rosterState: RosterState = "not_loaded") {
   const dm = downstreamFor(r.severity);
+  const { control, label: controlLabel, tone: controlTone } = controlPresentation(r);
+  const firstReason = control.reasons?.[0];
   return [
     // Changed Sheet (sheet number + set-name subline)
     <span key="sheet" style={{ minWidth: 0, overflow: "hidden" }}>
@@ -60,6 +84,12 @@ function rowCells(r: any, onCompareRevision?: (drawingId: string) => void, roste
     <span key="rev" style={{ color: "var(--cmd-text-muted)" }}>{r.revisionCode}</span>,
     // Downstream — the "Unknown" state carries why, so it can't read as an all-clear.
     <span key="down" title={dm.title}><Pill tone={dm.tone}>{dm.label}</Pill></span>,
+    // Revision control — this is evidence only; it must never read as an
+    // authorization to release fabrication.
+    <span key="control" title={firstReason?.message} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, minWidth: 0 }}>
+      <Pill tone={controlTone}>{controlLabel}</Pill>
+      {firstReason && <span style={{ fontSize: 9, color: "var(--cmd-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{firstReason.code}</span>}
+    </span>,
     // Linked Work Package
     <span key="wp" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, color: r.wpNames?.length ? "var(--cmd-text)" : "var(--cmd-text-muted)" }}>
       {r.wpNames?.length ? r.wpNames.join(", ") : "—"}
@@ -70,22 +100,12 @@ function rowCells(r: any, onCompareRevision?: (drawingId: string) => void, roste
         {r.openRfiCount}<span style={{ color: "var(--cmd-text-muted)" }}> / {r.rfiCount}</span>
       </span>
     ) : <span key="rfi" style={{ color: "var(--cmd-text-muted)" }}>—</span>,
-    // Fab Blocked?
-    <Pill key="fab" tone={r.fabBlocked ? "danger" : "neutral"}>{r.fabBlocked ? "Yes" : "No"}</Pill>,
-    // Pieces ≈ — a "—" here has two very different causes, and saying which is
-    // the difference between "nothing is affected" and "we didn't look".
+    // Model mapping — unloaded, failed and unresolved scopes are all explicit.
     <span
-      key="pcs"
-      style={{ color: r.affectedPieces != null ? "var(--cmd-text)" : "var(--cmd-text-muted)" }}
-      title={
-        r.affectedPieces != null
-          ? undefined
-          : rosterLoaded
-            ? "No piece resolves to this set — neither the roster's set link nor a linked work-package sequence matches."
-            : "Model roster not loaded, so pieces were not counted. Load it from the Control Board's 3D model mapping card."
-      }
+      key="mapping"
+      style={{ color: r.modelScope?.affectedPieces != null ? "var(--cmd-text)" : "var(--cmd-text-muted)", fontSize: 11 }}
     >
-      {r.affectedPieces != null ? r.affectedPieces : "—"}
+      {modelScopePresentation(r, rosterState)}
     </span>,
     // Compare action
     (onCompareRevision && r.drawingId) ? (
@@ -117,7 +137,9 @@ function rowKey(r: any): string {
 
 // ── Virtualized branch (>100 rows) ──────────────────────────────────────────
 
-function VirtualBoard({ rows, onCompareRevision, rosterLoaded = false }: { rows: any[]; onCompareRevision?: (drawingId: string) => void; rosterLoaded?: boolean }) {
+export type RosterState = "not_loaded" | "loaded" | "load_error";
+
+function VirtualBoard({ rows, onCompareRevision, rosterState = "not_loaded" }: { rows: any[]; onCompareRevision?: (drawingId: string) => void; rosterState?: RosterState }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -127,19 +149,25 @@ function VirtualBoard({ rows, onCompareRevision, rosterLoaded = false }: { rows:
   });
 
   return (
-    <div className="cmd-table-wrap" style={{ overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: GRID_COLS, borderBottom: "1px solid var(--cmd-border)", borderLeft: "3px solid transparent" }}>
+    <div
+      className="cmd-table-wrap"
+      role="region"
+      aria-label="Revision impact columns"
+      tabIndex={0}
+      style={{ minWidth: 0, maxWidth: "100%", overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch" }}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: GRID_COLS, minWidth: VIRTUAL_BOARD_MIN_WIDTH, overflowY: "auto", scrollbarGutter: "stable", borderBottom: "1px solid var(--cmd-border)", borderLeft: "3px solid transparent" }}>
         {COLUMNS.map((c, i) => (
           <div key={i} style={{ padding: "10px 14px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--cmd-text-muted)", display: "flex", alignItems: "center", justifyContent: c.align === "right" ? "flex-end" : "flex-start", minWidth: 0 }}>
             {c.title ? <span title={c.title}>{c.label}</span> : c.label}
           </div>
         ))}
       </div>
-      <div ref={parentRef} style={{ maxHeight: 600, overflowY: "auto" }}>
+      <div ref={parentRef} style={{ maxHeight: 600, minWidth: VIRTUAL_BOARD_MIN_WIDTH, overflowY: "auto", scrollbarGutter: "stable" }}>
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const r = rows[virtualRow.index];
-            const cells = rowCells(r, onCompareRevision, rosterLoaded);
+            const cells = rowCells(r, onCompareRevision, rosterState);
             return (
               <div
                 key={rowKey(r)}
@@ -169,7 +197,16 @@ function VirtualBoard({ rows, onCompareRevision, rosterLoaded = false }: { rows:
 
 // ── Board ─────────────────────────────────────────────────────────────────
 
-export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLoading, rosterLoaded = false }: { rows?: any[]; onCompareRevision?: (drawingId: string) => void; isLoading?: boolean; rosterLoaded?: boolean }) {
+export default function RevisionImpactPanel({
+  rows = [], onCompareRevision, isLoading, rosterState = "not_loaded", onLoadMappingEvidence, rosterLoadedAt,
+}: {
+  rows?: any[];
+  onCompareRevision?: (drawingId: string) => void;
+  isLoading?: boolean;
+  rosterState?: RosterState;
+  onLoadMappingEvidence?: () => void;
+  rosterLoadedAt?: string | null;
+}) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => filterRevisionImpactRows(rows, search), [rows, search]);
   const virtualize = shouldVirtualizeRevisionImpact(filtered.length);
@@ -177,11 +214,24 @@ export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLo
   if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <section className="detailing-cc" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <section className="detailing-cc" style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <GitCompareArrows size={15} color="var(--cmd-gold)" />
         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--cmd-text)" }}>Revision Impact</span>
         <span style={{ fontSize: 11, color: "var(--cmd-text-muted)" }}>{rows.length} changed sheet{rows.length === 1 ? "" : "s"}</span>
+        {rosterState === "not_loaded" && onLoadMappingEvidence && (
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onLoadMappingEvidence}>
+            Load mapping evidence
+          </button>
+        )}
+        {rosterState === "load_error" && onLoadMappingEvidence && (
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onLoadMappingEvidence}>
+            Retry mapping evidence
+          </button>
+        )}
+        {rosterState === "loaded" && rosterLoadedAt && (
+          <span style={{ fontSize: 9, color: "var(--cmd-text-muted)" }}>Model roster loaded {rosterLoadedAt}</span>
+        )}
       </div>
 
       <FilterBar
@@ -191,7 +241,7 @@ export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLo
       />
 
       {virtualize ? (
-        <VirtualBoard rows={filtered} onCompareRevision={onCompareRevision} rosterLoaded={rosterLoaded} />
+        <VirtualBoard rows={filtered} onCompareRevision={onCompareRevision} rosterState={rosterState} />
       ) : (
         <div className="cmd-table-wrap">
           <table className="cmd-table">
@@ -212,7 +262,7 @@ export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLo
                   </td>
                 </tr>
               ) : filtered.map((r) => {
-                const cells = rowCells(r, onCompareRevision, rosterLoaded);
+                const cells = rowCells(r, onCompareRevision, rosterState);
                 return (
                   <tr key={rowKey(r)} style={{ borderLeft: severityRail(r.severity) }}>
                     {cells.map((cell, i) => (
@@ -227,7 +277,7 @@ export default function RevisionImpactPanel({ rows = [], onCompareRevision, isLo
       )}
 
       <div style={{ fontSize: 9, color: "var(--cmd-text-muted)", lineHeight: 1.5 }}>
-        Downstream severity: <span style={{ color: "var(--cmd-danger-text)" }}>in field</span> &gt; <span style={{ color: "var(--cmd-warn-text)" }}>delivered</span> &gt; <span style={{ color: "var(--cmd-review-text)" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
+        Revision control is advisory evidence only; the server release gate remains authoritative. Model mapping: exact set links are preferred, sequence estimates are labelled, and unknown never means zero affected pieces.
       </div>
     </section>
   );

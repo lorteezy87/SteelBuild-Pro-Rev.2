@@ -40,7 +40,7 @@ const HISTORIC_KEYS = [
 ];
 // Keys retired into an alias. Doc Control: owner decision, 2026-09-11.
 const RETIRED_KEYS = ["doccontrol"];
-const LIVE_KEYS = HISTORIC_KEYS.filter((key) => !RETIRED_KEYS.includes(key));
+const LIVE_KEYS = [...HISTORIC_KEYS.filter((key) => !RETIRED_KEYS.includes(key)), "gc"];
 
 // A stand-in alias table, so the alias path is tested apart from the shipped
 // one. `matrix` shadows a live key: an alias must win over a same-named key,
@@ -53,6 +53,10 @@ const ALIASES: HubTabAliases = {
 };
 
 describe("hub route and tab keys", () => {
+  it("gives GC issuances their own drawing-control destination", () => {
+    expect(parseHubTab("gc").tab).toBe("gc");
+    expect(TABS.find((tab) => tab.key === "gc")?.label).toBe("GC Issuances");
+  });
   it("points at the registered hub page", () => {
     expect(HUB_PATH).toBe("/DrawingSubmittalHub");
     expect(HUB_PATH).toBe(createPageUrl("DrawingSubmittalHub"));
@@ -97,6 +101,7 @@ describe("hub route and tab keys", () => {
       "prefilledBallInCourt",
       "transmittal",
       "hub_view",
+      "set",
       "matrix_filter",
     ]);
     expect([...HUB_NAV_DROPPED_PARAMS]).toEqual(["projectId", "project"]);
@@ -168,7 +173,7 @@ describe("nextTabSearch", () => {
   });
 
   it("clears the sub-view and the matrix filter even when switching into the matrix", () => {
-    expect(nextTabSearch("?hub_tab=drawings&hub_view=sets&matrix_filter=hold", "matrix").toString()).toBe("hub_tab=matrix");
+    expect(nextTabSearch("?hub_tab=drawings&hub_view=sets&set=set-1&matrix_filter=hold", "matrix").toString()).toBe("hub_tab=matrix");
   });
 
   it("clears the sub-view when moving between two tabs that have them", () => {

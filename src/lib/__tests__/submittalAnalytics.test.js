@@ -18,7 +18,7 @@ import {
   computeP50P90,
   computeAgingReport,
   computeLastActivityMs,
-  computeFabReady,
+  computeShopSubmittalReleaseMarker,
   TERMINAL_STATUSES,
 } from "../submittalAnalytics.js";
 
@@ -332,9 +332,9 @@ describe("computeAgingReport", () => {
   });
 });
 
-describe("computeFabReady", () => {
+describe("computeShopSubmittalReleaseMarker", () => {
   it("returns zeros when there are no active drawings", () => {
-    expect(computeFabReady([], [])).toEqual({ numerator: 0, denominator: 0, percent: 0 });
+    expect(computeShopSubmittalReleaseMarker([], [])).toEqual({ numerator: 0, denominator: 0, percent: 0 });
   });
   it("excludes superseded / deleted / void from denominator", () => {
     const drawings = [
@@ -344,86 +344,96 @@ describe("computeFabReady", () => {
       { id: "d4", stage: "Rejected" },
       { id: "d5", stage: "Released", is_deleted: true },
     ];
-    const out = computeFabReady(drawings, []);
+    const out = computeShopSubmittalReleaseMarker(drawings, []);
     expect(out.denominator).toBe(1);
   });
-  it("counts a drawing as fab-ready when its latest submittal is Released for Fabrication", () => {
+  it("counts only an exactly set-linked Shop Drawing release marker", () => {
     const drawings = [
-      { id: "d1", stage: "Released" },
-      { id: "d2", stage: "BFA" },
+      { id: "d1", stage: "Released", drawing_set_id: "setA" },
+      { id: "d2", stage: "BFA", drawing_set_id: "setB" },
     ];
     const submittals = [
-      { id: "s1", drawing_id: "d1", round_number: 1, status: "Approved",                    submitted_date: day(20) },
-      { id: "s2", drawing_id: "d1", round_number: 2, status: "Released for Fabrication",   submitted_date: day(2)  },
-      { id: "s3", drawing_id: "d2", round_number: 1, status: "Under Review",                submitted_date: day(5)  },
+      { id: "s1", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 1, status: "Approved", submitted_date: day(20) },
+      { id: "s2", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 2, status: "Released for Fabrication", submitted_date: day(2) },
+      { id: "s3", submittal_type: "Shop Drawing", drawing_set_ids: ["setB"], round_number: 1, status: "Under Review", submitted_date: day(5) },
     ];
-    const out = computeFabReady(drawings, submittals);
+    const out = computeShopSubmittalReleaseMarker(drawings, submittals);
     expect(out.numerator).toBe(1);
     expect(out.denominator).toBe(2);
     expect(out.percent).toBe(50);
   });
-  it("uses drawing_set_ids fallback when no direct drawing_id link exists", () => {
+  it("counts every active sheet in an exactly linked set", () => {
     const drawings = [
       { id: "d1", stage: "BFA", drawing_set_id: "setA" },
       { id: "d2", stage: "BFA", drawing_set_id: "setA" },
     ];
     const submittals = [
-      { id: "s1", drawing_set_ids: ["setA"], status: "Released for Fabrication", round_number: 1, submitted_date: day(1) },
+      { id: "s1", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], status: "Released for Fabrication", round_number: 1, submitted_date: day(1) },
     ];
-    const out = computeFabReady(drawings, submittals);
+    const out = computeShopSubmittalReleaseMarker(drawings, submittals);
     expect(out.numerator).toBe(2);
     expect(out.denominator).toBe(2);
     expect(out.percent).toBe(100);
   });
   it("uses round_number then submitted_date to pick latest", () => {
-    const drawings = [{ id: "d1", stage: "BFA" }];
+    const drawings = [{ id: "d1", stage: "BFA", drawing_set_id: "setA" }];
     const submittals = [
-      { id: "s1", drawing_id: "d1", round_number: 2, status: "Released for Fabrication", submitted_date: day(10) },
-      { id: "s2", drawing_id: "d1", round_number: 3, status: "Revise and Resubmit",      submitted_date: day(2)  },
+      { id: "s1", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 2, status: "Released for Fabrication", submitted_date: day(10) },
+      { id: "s2", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 3, status: "Revise and Resubmit", submitted_date: day(2) },
     ];
-    const out = computeFabReady(drawings, submittals);
-    // Latest is round 3 (Revise and Resubmit), so NOT fab-ready.
+    const out = computeShopSubmittalReleaseMarker(drawings, submittals);
+    // Latest Shop Drawing is round 3, so the workflow marker is not counted.
     expect(out.numerator).toBe(0);
   });
   it("ignores Void submittals when picking latest", () => {
-    const drawings = [{ id: "d1", stage: "BFA" }];
+    const drawings = [{ id: "d1", stage: "BFA", drawing_set_id: "setA" }];
     const submittals = [
-      { id: "s1", drawing_id: "d1", round_number: 1, status: "Released for Fabrication", submitted_date: day(20) },
-      { id: "s2", drawing_id: "d1", round_number: 2, status: "Void",                     submitted_date: day(1)  },
+      { id: "s1", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 1, status: "Released for Fabrication", submitted_date: day(20) },
+      { id: "s2", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 2, status: "Void", submitted_date: day(1) },
     ];
-    const out = computeFabReady(drawings, submittals);
+    const out = computeShopSubmittalReleaseMarker(drawings, submittals);
     // Void is ignored; latest non-void is Released for Fabrication.
     expect(out.numerator).toBe(1);
   });
   it("ignores soft-deleted submittals", () => {
-    const drawings = [{ id: "d1", stage: "BFA" }];
+    const drawings = [{ id: "d1", stage: "BFA", drawing_set_id: "setA" }];
     const submittals = [
-      { id: "s1", drawing_id: "d1", round_number: 1, status: "Released for Fabrication", submitted_date: day(5), is_deleted: true },
+      { id: "s1", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 1, status: "Released for Fabrication", submitted_date: day(5), is_deleted: true },
     ];
-    const out = computeFabReady(drawings, submittals);
+    const out = computeShopSubmittalReleaseMarker(drawings, submittals);
     expect(out.numerator).toBe(0);
   });
-  it("handles drawings array via drawing_ids", () => {
+  it("does not count legacy sheet-only links as a governing set release", () => {
     const drawings = [
       { id: "d1", stage: "BFA" },
       { id: "d2", stage: "BFA" },
     ];
     const submittals = [
-      { id: "s1", drawing_ids: ["d1", "d2"], round_number: 1, status: "Released for Fabrication", submitted_date: day(1) },
+      { id: "s1", submittal_type: "Shop Drawing", drawing_ids: ["d1", "d2"], round_number: 1, status: "Released for Fabrication", submitted_date: day(1) },
     ];
-    const out = computeFabReady(drawings, submittals);
-    expect(out.numerator).toBe(2);
+    const out = computeShopSubmittalReleaseMarker(drawings, submittals);
+    expect(out.numerator).toBe(0);
+  });
+  it("does not let Product Data release mark an exactly linked Shop Drawing set", () => {
+    const out = computeShopSubmittalReleaseMarker(
+      [{ id: "d1", stage: "BFA", drawing_set_id: "setA" }],
+      [
+        { id: "product", submittal_type: "Product Data", drawing_set_ids: ["setA"], round_number: 5, status: "Released for Fabrication" },
+        { id: "shop", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 1, status: "Under Review" },
+      ],
+    );
+    expect(out.numerator).toBe(0);
   });
   it("rounds percent to one decimal", () => {
     const drawings = [
-      { id: "d1", stage: "BFA" },
-      { id: "d2", stage: "BFA" },
-      { id: "d3", stage: "BFA" },
+      { id: "d1", stage: "BFA", drawing_set_id: "setA" },
+      { id: "d2", stage: "BFA", drawing_set_id: "setB" },
+      { id: "d3", stage: "BFA", drawing_set_id: "setC" },
     ];
     const submittals = [
-      { id: "s1", drawing_id: "d1", round_number: 1, status: "Released for Fabrication", submitted_date: day(1) },
+      { id: "s1", submittal_type: "Shop Drawing", drawing_set_ids: ["setA"], round_number: 1, status: "Released for Fabrication", submitted_date: day(1) },
     ];
-    const out = computeFabReady(drawings, submittals);
+    const out = computeShopSubmittalReleaseMarker(drawings, submittals);
     expect(out.percent).toBeCloseTo(33.3, 1);
   });
 });

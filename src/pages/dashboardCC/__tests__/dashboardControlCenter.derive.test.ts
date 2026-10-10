@@ -2,7 +2,7 @@
  * Tests for buildDashboardSummary — pure derive layer for the Dashboard CC.
  * Mirrors the RFI derive test pattern: no React, no network, no mocks.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { todayLocalISO } from "@/lib/dateMath";
 import { buildDashboardSummary } from "../dashboardControlCenter.derive";
 
@@ -316,5 +316,63 @@ describe("buildDashboardSummary", () => {
     const targets = s.modules.map((m) => m.target).filter(Boolean);
     const shared = targets.filter((t, i) => targets.indexOf(t) !== i);
     expect(shared).toEqual([]);
+  });
+});
+
+describe("local calendar health evidence", () => {
+  it("does not treat the local due date as yesterday after UTC midnight", () => {
+    // CI pins TZ=UTC, so explicitly disagree with UTC via local date getters.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-07T03:30:00Z"));
+    const year = vi.spyOn(Date.prototype, "getFullYear").mockReturnValue(2026);
+    const month = vi.spyOn(Date.prototype, "getMonth").mockReturnValue(9);
+    const day = vi.spyOn(Date.prototype, "getDate").mockReturnValue(6);
+    try {
+      const summary = buildDashboardSummary({
+        project: { id: "p1", health_status: "On Track" },
+        rfis: [{ id: "r1", project_id: "p1", status: "Open", date_required: "2026-10-06" }],
+        scheduleTasks: [],
+      });
+      expect(summary.operationalHealth.label).toBe("On Track");
+      expect(summary.operationalHealth.reasons).not.toContain("1 overdue RFI");
+    } finally {
+      year.mockRestore(); month.mockRestore(); day.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("executive revised cost budget", () => {
+  it("includes approved allocated changes and excludes unapproved changes", () => {
+    const summary = buildDashboardSummary({
+      project: { id: "p1", health_status: "On Track" },
+      codes: [{ id: "c1", budget_amount: 1000, committed_cost: 1200 }],
+      cos: [
+        { cost_code_id: "c1", status: "Approved", co_amount: 500 },
+        { cost_code_id: "c1", status: "Submitted", co_amount: 2000 },
+      ],
+    });
+    expect(summary.kpis.find(kpi => kpi.label === "Cost Health")).toMatchObject({ value: "+20.0%", tone: "good" });
+  });
+
+  it("includes approved deductive changes and actual-only exposure", () => {
+    const summary = buildDashboardSummary({
+      project: { id: "p1", health_status: "On Track" },
+      codes: [{ id: "c1", budget_amount: 1000, actual_cost: 1000 }],
+      cos: [{ cost_code_id: "c1", status: "Approved", co_amount: -200 }],
+    });
+    expect(summary.kpis.find(kpi => kpi.label === "Cost Health")).toMatchObject({ value: "-25.0%", tone: "danger" });
+  });
+});
+
+it("does not hide shop actual costs behind unrelated field commitments", () => {
+  const summary = buildDashboardSummary({
+    codes: [
+      { id: "shop", budget_amount: 750, actual_cost: 900, committed_cost: 0 },
+      { id: "field", budget_amount: 750, actual_cost: 0, committed_cost: 900 },
+    ],
+  });
+  expect(summary.kpis.find(kpi => kpi.label === "Cost Health")).toMatchObject({
+    value: "-20.0%", tone: "danger", sublabel: "Over Budget",
   });
 });

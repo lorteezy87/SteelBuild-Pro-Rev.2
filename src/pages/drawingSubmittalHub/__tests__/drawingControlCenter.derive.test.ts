@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { adaptControlBoardFocus, buildControlBoardModel, buildProductionReadinessQueue } from "../drawingControlCenter.derive";
+import { adaptControlBoardFocus, buildControlBoardModel, buildProductionReadinessQueue, nextActionForTriageItem } from "../drawingControlCenter.derive";
+import { buildSetPackages, buildTriage } from "../format";
 import type { TriageItem, TriageModel } from "../types";
 
 /** Fixture factory for a complete triage item from typed partial overrides. */
@@ -49,6 +50,14 @@ function makeTriage(over: Partial<TriageModel> = {}): TriageModel {
 }
 
 describe("buildControlBoardModel", () => {
+  it("names the actionable blocker without treating missing readiness as a release clearance", () => {
+    expect(nextActionForTriageItem(item({ _readiness: { rfiBlocked: true } }))).toBe("Resolve linked RFI");
+    expect(nextActionForTriageItem(item({ isRR: true }))).toBe("Resolve returned comments");
+    expect(nextActionForTriageItem(item({ _needsUnlinkedHint: true }))).toBe("Create or relink submittal");
+    expect(nextActionForTriageItem(item({ dueDate: null }))).toBe("Set due date");
+    expect(nextActionForTriageItem(item({ _readiness: null }))).toBe("Open record and review evidence");
+  });
+
   it("selects the focus item by urgency (overdue first)", () => {
     const model = buildControlBoardModel(makeTriage());
     expect(model.focusItem?.id).toBe("a");
@@ -171,6 +180,84 @@ describe("buildControlBoardModel", () => {
 
 
 describe("buildProductionReadinessQueue", () => {
+  function queueForPackage({
+    sheetFileUrl = "drawings/S101.pdf",
+    submittal = { id: "approved", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"], submittal_type: "Shop Drawing" },
+    holdsStatus = "ready" as "ready" | "loading" | "error",
+    holds = [] as Array<{ drawing_id: string; is_active: boolean }>,
+  } = {}) {
+    const packages = buildSetPackages(
+      [{ id: "sheet-1", drawing_set_id: "set-1", file_url: sheetFileUrl }] as any,
+      [{ id: "set-1", set_name: "Main Steel" }] as any,
+      [submittal] as any,
+    );
+    const readiness = new Map([[packages[0].key, { shopStageMarked: true }]]);
+    const triage = buildTriage([submittal] as any, packages, readiness, false, { holdsStatus, holds });
+    return buildProductionReadinessQueue(triage);
+  }
+
+  it("shows an active sheet hold as a blocker even when local readiness says ready", () => {
+    const [row] = queueForPackage({ holds: [{ drawing_id: "sheet-1", is_active: true }] });
+    expect(row.blocker).toContain("Active drawing hold");
+    expect(row.blocker).not.toBe("Clear");
+    expect(row).not.toHaveProperty("ready");
+  });
+
+  it("shows a missing drawing PDF as a blocker even when local readiness says ready", () => {
+    const [row] = queueForPackage({ sheetFileUrl: "" });
+    expect(row.blocker).toContain("PDF missing");
+    expect(row).not.toHaveProperty("ready");
+  });
+
+  it("treats unavailable hold evidence as unknown, never as zero active holds", () => {
+    const [row] = queueForPackage({ holdsStatus: "loading" });
+    expect(row.blocker).toContain("Hold evidence unavailable");
+    expect(row).not.toHaveProperty("ready");
+  });
+
+  it("requires a server gate check even when the known client evidence has no blockers", () => {
+    const [row] = queueForPackage();
+    expect(row.blocker).toContain("Server fab-release check required");
+    expect(row).not.toHaveProperty("ready");
+  });
+
+  it("keeps a workflow-closed set in review when no server release verdict is present", () => {
+    const closedSet = item({
+      id: "closed-set",
+      closed: true,
+      _drawingSetId: "set-1",
+      _readiness: { shopStageMarked: true },
+      _releaseEvidence: {
+        sheetCount: 1,
+        supersededSheetCount: 0,
+        missingPdfCount: 0,
+        activeHoldCount: 0,
+        governingStage: "Released",
+      },
+    });
+    const [row] = buildProductionReadinessQueue(makeTriage({ setItems: [closedSet] }));
+    expect(row.id).toBe("closed-set");
+    expect(row.blocker).toBe("Server fab-release check required");
+  });
+
+  it("does not let a name-only legacy approval govern a set", () => {
+    const [row] = queueForPackage({ submittal: {
+      id: "legacy", status: "Approved", ball_in_court: "GC", drawing_set_ids: [], drawing_set_name: "Main Steel",
+    } as any });
+    expect(row.blocker).toContain("No set-ID-linked governing submittal");
+    expect(row).not.toHaveProperty("ready");
+  });
+
+  it.each(["Product Data", null])("directs a linked %s record toward Shop Drawing classification or creation", (submittalType) => {
+    const [row] = queueForPackage({ submittal: {
+      id: "related", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"],
+      submittal_type: submittalType,
+    } as any });
+    expect(row.blocker).toContain("No governing Shop Drawing submittal");
+    expect(nextActionForTriageItem(row.item)).toBe("Verify linked submittal type or create/link Shop Drawing");
+    expect(row).not.toHaveProperty("ready");
+  });
+
   it("uses persisted readiness evidence and keeps missing schedule evidence unknown", () => {
     const triage = makeTriage({
       setItems: [
@@ -187,7 +274,7 @@ describe("buildProductionReadinessQueue", () => {
             revisionImpacted: false,
             materialImpacted: false,
             longLeadImpact: false,
-            fabricationReady: false,
+            shopStageMarked: false,
           },
         }),
         item({
@@ -201,7 +288,7 @@ describe("buildProductionReadinessQueue", () => {
             revisionImpacted: false,
             materialImpacted: false,
             longLeadImpact: false,
-            fabricationReady: false,
+            shopStageMarked: false,
           },
         }),
       ],
@@ -238,7 +325,7 @@ describe("buildProductionReadinessQueue", () => {
             revisionImpacted: true,
             materialImpacted: true,
             longLeadImpact: true,
-            fabricationReady: false,
+            shopStageMarked: false,
           },
         }),
       ],
@@ -248,6 +335,6 @@ describe("buildProductionReadinessQueue", () => {
     expect(row.blocker).toContain("Revision");
     expect(row.blocker).toContain("Material");
     expect(row.blocker).toContain("Long lead");
-    expect(row.ready).toBe(false);
+    expect(row).not.toHaveProperty("ready");
   });
 });

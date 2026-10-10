@@ -1,0 +1,7 @@
+{
+  "name": "steelbuild-commercial-create-verification",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node verify.mjs && node verify-erasure.mjs" },
+  "devDependencies": { "@electric-sql/pglite": "0.5.8" }
+}

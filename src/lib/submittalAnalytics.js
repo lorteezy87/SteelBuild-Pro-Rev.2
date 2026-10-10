@@ -299,12 +299,14 @@ export function computeAgingReport(submittals, {
   return rows;
 }
 
-// ── fab-ready % KPI ────────────────────────────────────────────────
+// ── Shop Drawing submittal release marker ──────────────────────────
 
 /**
- * Compute the "fabrication-ready" KPI:
- *   numerator   = drawings whose latest associated submittal status is
- *                 "Released for Fabrication"
+ * Count active sheets whose drawing set has a latest, explicit Shop Drawing
+ * submittal marked "Released for Fabrication". This is a workflow marker,
+ * never a fabrication-release verdict: the server gate also checks revisions,
+ * holds, sheet files, material, and other project evidence.
+ *   numerator   = sheets in sets with that submittal workflow marker
  *   denominator = active drawings (exclude voided / rejected, exclude
  *                 superseded / soft-deleted)
  *
@@ -312,23 +314,20 @@ export function computeAgingReport(submittals, {
  * rounded to one decimal. Denominator-zero returns
  * { numerator: 0, denominator: 0, percent: 0 }.
  *
- * The link between submittal and drawing is via either:
- *   - submittal.drawing_id (single)              — primary
- *   - submittal.drawing_ids (array)              — multi-link
- *   - submittal.drawing_set_ids (array of sets)  — fallback (any
- *     drawing whose drawing_set_id matches gets credit)
+ * Only exact drawing_set_ids links can govern. Legacy direct-sheet or
+ * name-only associations remain context and cannot boost this marker.
  *
- * Voided submittals never count toward fab-ready.
+ * Voided submittals never govern.
  * "Latest" is by round_number desc, then submitted_date desc.
  */
-export function computeFabReady(drawings, submittals) {
+export function computeShopSubmittalReleaseMarker(drawings, submittals) {
   drawings   = Array.isArray(drawings)   ? drawings   : [];
   submittals = Array.isArray(submittals) ? submittals : [];
 
   // Pre-filter active drawings for the denominator.
   const activeDrawings = drawings.filter((d) => {
     if (!d) return false;
-    if (d.is_deleted || d.is_superseded) return false;
+    if (d.is_deleted || d.deleted_at || d.is_superseded) return false;
     // Exclude voided / rejected drawings — they're not "active".
     if (d.stage === "Void" || d.stage === "Rejected") return false;
     return true;
@@ -338,9 +337,7 @@ export function computeFabReady(drawings, submittals) {
     return { numerator: 0, denominator: 0, percent: 0 };
   }
 
-  // Index latest submittal per drawing id and per set id.
-  // Skip voided submittals entirely.
-  const latestByDrawing = new Map();
+  // Only active, exact set-linked Shop Drawing records may mark this stage.
   const latestBySet     = new Map();
 
   const isNewer = (candidate, current) => {
@@ -354,15 +351,11 @@ export function computeFabReady(drawings, submittals) {
   };
 
   for (const sub of submittals) {
-    if (!sub || sub.is_deleted) continue;
+    if (!sub || sub.is_deleted || sub.deleted_at || sub.submittal_type !== "Shop Drawing") continue;
     if (sub.status === "Void") continue;
-    const ids = collectDrawingIds(sub);
-    for (const did of ids) {
-      const cur = latestByDrawing.get(did);
-      if (isNewer(sub, cur)) latestByDrawing.set(did, sub);
-    }
     const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
     for (const sid of setIds) {
+      if (!sid) continue;
       const cur = latestBySet.get(sid);
       if (isNewer(sub, cur)) latestBySet.set(sid, sub);
     }
@@ -370,7 +363,7 @@ export function computeFabReady(drawings, submittals) {
 
   let numerator = 0;
   for (const d of activeDrawings) {
-    const sub = latestByDrawing.get(d.id) || latestBySet.get(d.drawing_set_id);
+    const sub = d.drawing_set_id ? latestBySet.get(d.drawing_set_id) : null;
     if (sub && sub.status === "Released for Fabrication") numerator++;
   }
 
@@ -378,14 +371,4 @@ export function computeFabReady(drawings, submittals) {
   const percent = denominator === 0 ? 0
     : Math.round((numerator / denominator) * 1000) / 10;
   return { numerator, denominator, percent };
-}
-
-/** Collect candidate drawing ids referenced by a submittal. */
-function collectDrawingIds(sub) {
-  const out = new Set();
-  if (sub.drawing_id) out.add(sub.drawing_id);
-  if (Array.isArray(sub.drawing_ids)) {
-    for (const id of sub.drawing_ids) if (id) out.add(id);
-  }
-  return out;
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { computePhaseWbs, generateWBS, sanitizeScheduleTaskUpdatePayload } from "../wbs";
-import { normalizeSchedulePhase } from "../schedulePageHelpers";
+import { defaultScheduleView, normalizeSchedulePhase } from "../schedulePageHelpers";
 import { derivePhaseFromHierarchy, deriveMppDependencies, deriveParentUids, inferTaskType, parseMsProjectXml } from "../mppImport";
 import type { ParsedMppTask, ScheduleTask } from "../types";
 
@@ -34,6 +34,32 @@ describe("normalizeSchedulePhase", () => {
     expect(normalizeSchedulePhase("Detailing")).toBe("Detailing");
     expect(normalizeSchedulePhase(null)).toBe("all");
     expect(normalizeSchedulePhase("not-a-phase")).toBe("all");
+  });
+});
+
+describe("defaultScheduleView", () => {
+  it("opens phones (the shell's phone band, up to 767px) on the Task List", () => {
+    expect(defaultScheduleView(360)).toBe("list");
+    expect(defaultScheduleView(393)).toBe("list");
+    expect(defaultScheduleView(767)).toBe("list");
+  });
+
+  it("keeps the Gantt from the tablet band up", () => {
+    expect(defaultScheduleView(768)).toBe("gantt");
+    expect(defaultScheduleView(1024)).toBe("gantt");
+    expect(defaultScheduleView(1440)).toBe("gantt");
+  });
+
+  it("reads the window width when called with no argument", () => {
+    const original = window.innerWidth;
+    try {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 393 });
+      expect(defaultScheduleView()).toBe("list");
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+      expect(defaultScheduleView()).toBe("gantt");
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: original });
+    }
   });
 });
 
@@ -239,5 +265,15 @@ describe("parseMsProjectXml", () => {
     expect(weld.durationDays).toBe(6); // 48h / 8 = 6 days
     expect(weld.resources).toEqual(["Crew A"]);
     expect(weld.preds).toEqual([{ predUid: "1", linkType: "1", lagDuration: "4800" }]);
+  });
+
+  it("rejects a non-root task missing UID rather than silently dropping steel work", () => {
+    const missingUid = xml.replace("<UID>2</UID><Name>Weld beams</Name>", "<Name>Weld beams</Name>");
+    expect(() => parseMsProjectXml(missingUid)).toThrow(/Weld beams.*UID|UID.*Weld beams/i);
+  });
+
+  it("rejects UID zero on a non-root task", () => {
+    const nonRootZero = xml.replace("<UID>2</UID><Name>Weld beams</Name>", "<UID>0</UID><Name>Weld beams</Name>");
+    expect(() => parseMsProjectXml(nonRootZero)).toThrow(/Weld beams.*UID|UID.*Weld beams/i);
   });
 });

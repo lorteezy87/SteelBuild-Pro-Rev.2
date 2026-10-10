@@ -15,7 +15,7 @@
 // Auth: JWT-verified. User must have project access.
 //
 // Secrets required:
-//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+//   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 //   RESEND_API_KEY (for Resend provider)
 //   — OR —
 //   MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_TENANT_ID (for Graph)
@@ -27,6 +27,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
+import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 import {
   isDangerousAttachment,
   MAX_ATTACHMENT_BYTES,
@@ -94,7 +95,7 @@ interface SendResult {
 
 // ── JWT Verification ──────────────────────────────────────────────────────────
 
-async function verifyJwt(req: Request): Promise<{ userId: string; email: string } | null> {
+async function verifyJwt(req: Request): Promise<{ userId: string; email: string } | Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
 
@@ -112,6 +113,9 @@ async function verifyJwt(req: Request): Promise<{ userId: string; email: string 
     });
     if (!resp.ok) return null;
     const user = await resp.json();
+    if (!user?.id) return null;
+    const mfaDenial = mfaDenialForVerifiedUser(user, authHeader, req);
+    if (mfaDenial) return mfaDenial;
     return { userId: user.id, email: user.email };
   } catch {
     return null;
@@ -123,14 +127,12 @@ async function verifyJwt(req: Request): Promise<{ userId: string; email: string 
 /**
  * Every id below is interpolated into a PostgREST filter URL
  * (`?project_id=eq.${projectId}`). PostgREST parses that value as filter
- * SYNTAX, so an unvalidated string is an injection vector — and here it lands
- * inside getProjectRole(), i.e. the authorization check itself, where a crafted
- * value could change which row the role lookup returns.
+ * SYNTAX, so an unvalidated string is an injection vector. Authorization now
+ * uses caller-scoped RPC arguments, but privileged mail queries still build
+ * filters from these identifiers.
  *
- * email-ingest already validated its path-supplied project id with exactly this
- * pattern; email-send took its id from the request BODY and did not. Same guard,
- * applied at the boundary and again defensively at each fetch site, so no future
- * caller can reintroduce it.
+ * Validate the project id at the request boundary and the verified user id
+ * before it is interpolated into the quota query.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -209,74 +211,50 @@ async function checkSendRateLimit(
   }
 }
 
-// ── Project Access Check ──────────────────────────────────────────────────────
+// ── Project Send Authorization ────────────────────────────────────────────────
 
-async function checkProjectAccess(
-  userId: string,
+async function authorizeProjectSend(
+  req: Request,
   projectId: string,
   supabaseUrl: string,
-  serviceKey: string,
-): Promise<boolean> {
-  // Mirrors the RLS helper user_has_project_access: a user_projects row OR org
-  // owner/admin standing both grant access. getProjectRole() resolves both, so a
-  // non-null effective role means the user has access — this fixes org owners/admins
-  // who manage a project without a user_projects row being wrongly 403'd.
-  return (await getProjectRole(userId, projectId, supabaseUrl, serviceKey)) !== null;
-}
-
-// ── Project Role Check ──────────────────────────────────────────────────────────
-
-// Outbound/mutating actions require an elevated project role. Sending email is
-// a mutation (it creates correspondence and persists records), so a viewer or
-// field user must not be able to send even though they have project access.
-const SEND_ALLOWED_ROLES = new Set(["owner", "admin", "pm"]);
-
-async function getProjectRole(
-  userId: string,
-  projectId: string,
-  supabaseUrl: string,
-  serviceKey: string,
-): Promise<string | null> {
-  // Defence in depth: the handler already rejects a non-UUID project_id, but
-  // this function builds PostgREST filters from it, so it refuses to run on
-  // anything that isn't a UUID regardless of how it was called.
-  if (!isUuid(projectId) || !isUuid(userId)) return null;
-
-  const headers = { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` };
+  anonKey: string,
+): Promise<Response | null> {
+  // A project membership can survive removal from its workspace. Resolve both
+  // current workspace/active-project access and the PM write floor under the
+  // caller's JWT, before any service-role mail reads or outbound effects. The
+  // canonical role helper also accounts for workspace owners/admins/defaults.
+  const checks = [
+    {
+      rpc: "user_has_project_access",
+      args: { p_project_id: projectId },
+      denied: "No access to this project",
+    },
+    {
+      rpc: "user_has_project_role_at_least",
+      args: { p_project_id: projectId, p_min_role: "pm" },
+      denied: "Your project role does not permit sending email",
+    },
+  ];
   try {
-    // 1. Direct project membership role.
-    const resp = await fetch(
-      `${supabaseUrl}/rest/v1/user_projects?user_id=eq.${userId}&project_id=eq.${projectId}&select=role&limit=1`,
-      { headers },
-    );
-    if (resp.ok) {
-      const rows = await resp.json();
-      const role = Array.isArray(rows) && rows.length ? rows[0]?.role : null;
-      if (typeof role === "string" && role) return role.toLowerCase();
+    for (const check of checks) {
+      const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${check.rpc}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": anonKey,
+          "Authorization": req.headers.get("Authorization") ?? "",
+        },
+        body: JSON.stringify(check.args),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) throw new Error("Project authorization lookup failed");
+      const allowed: unknown = await response.json();
+      if (allowed === false) return errorResponse(403, check.denied, req);
+      if (allowed !== true) throw new Error("Invalid project authorization response");
     }
-    // 2. Org owner/admin fallback — mirrors get_my_project_role: an org owner or
-    //    admin has an effective project role even without a user_projects row.
-    const projResp = await fetch(
-      `${supabaseUrl}/rest/v1/projects?id=eq.${projectId}&select=org_id&limit=1`,
-      { headers },
-    );
-    if (!projResp.ok) return null;
-    const projRows = await projResp.json();
-    const orgId = Array.isArray(projRows) && projRows.length ? projRows[0]?.org_id : null;
-    // DB-sourced, so trusted — but it is interpolated into another filter URL
-    // below, and "trusted source" is exactly the assumption that rots. Check it.
-    if (!isUuid(orgId)) return null;
-    const omResp = await fetch(
-      `${supabaseUrl}/rest/v1/organization_members?org_id=eq.${orgId}&user_id=eq.${userId}&select=role&limit=1`,
-      { headers },
-    );
-    if (!omResp.ok) return null;
-    const omRows = await omResp.json();
-    const orgRole = Array.isArray(omRows) && omRows.length ? String(omRows[0]?.role || "").toLowerCase() : null;
-    if (orgRole === "owner" || orgRole === "admin") return orgRole;
     return null;
   } catch {
-    return null;
+    return errorResponse(503, "Project permissions can't be verified right now. Please retry shortly.", req);
   }
 }
 
@@ -437,7 +415,7 @@ async function sendViaMsGraph(
 
 // ── Attachment Helpers ──────────────────────────────────────────────────────────
 
-function base64ToBytes(b64: string): Uint8Array {
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const clean = b64.replace(/\s/g, "");
   const binary = atob(clean);
   const bytes = new Uint8Array(binary.length);
@@ -445,7 +423,7 @@ function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
-async function hashContent(data: Uint8Array): Promise<string> {
+async function hashContent(data: Uint8Array<ArrayBuffer>): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -608,6 +586,7 @@ async function handle(req: Request): Promise<Response> {
 
   // Authenticate
   const user = await verifyJwt(req);
+  if (user instanceof Response) return user;
   if (!user) return errorResponse(401, "Unauthorized — valid JWT required", req);
 
   // Parse body
@@ -693,20 +672,12 @@ async function handle(req: Request): Promise<Response> {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceKey) return errorResponse(500, "Edge function not configured", req);
+  if (!supabaseUrl || !anonKey || !serviceKey) return errorResponse(500, "Edge function not configured", req);
 
-  // Verify project access
-  const hasAccess = await checkProjectAccess(user.userId, body.project_id, supabaseUrl, serviceKey);
-  if (!hasAccess) return errorResponse(403, "No access to this project", req);
-
-  // Verify project role. Membership alone is not enough to send outbound email —
-  // per the RBAC contract, mutating/outbound actions require owner/admin/pm.
-  // A viewer or field user is a member but must not be able to send.
-  const projectRole = await getProjectRole(user.userId, body.project_id, supabaseUrl, serviceKey);
-  if (!projectRole || !SEND_ALLOWED_ROLES.has(projectRole)) {
-    return errorResponse(403, "Your project role does not permit sending email", req);
-  }
+  const authorizationDenial = await authorizeProjectSend(req, body.project_id, supabaseUrl, anonKey);
+  if (authorizationDenial) return authorizationDenial;
 
   // Per-user hourly cap. Checked AFTER authorization (so an unauthorized caller
   // can't probe it) and BEFORE the provider call (so a throttled user never

@@ -125,7 +125,7 @@ describe("enrichApprovalMatrixRows — sheets and holds (2026 columns)", () => {
   });
 
   it("keeps buildApprovalMatrixRows order and fields untouched", () => {
-    const submittals = [{ id: "a", drawing_set_ids: ["s1"], status: "Submitted", submittal_number: "001", submitted_date: "2026-08-01" }];
+    const submittals = [{ id: "a", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Submitted", submittal_number: "001", submitted_date: "2026-08-01" }];
     const base = buildApprovalMatrixRows(SETS, submittals);
     const { rows } = enrich(submittals);
     expect(rows.map((r) => r.id)).toEqual(base.map((r) => r.id));
@@ -135,8 +135,8 @@ describe("enrichApprovalMatrixRows — sheets and holds (2026 columns)", () => {
 
 describe("enrichApprovalMatrixRows — stage", () => {
   const submittals = [
-    { id: "a", drawing_set_ids: ["s1"], status: "Under Review", ball_in_court: "EOR", submittal_number: "001", submitted_date: "2026-08-01" },
-    { id: "v", drawing_set_ids: ["s2"], status: "Void", submittal_number: "002" },
+    { id: "a", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Under Review", ball_in_court: "EOR", submittal_number: "001", submitted_date: "2026-08-01" },
+    { id: "v", submittal_type: "Shop Drawing", drawing_set_ids: ["s2"], status: "Void", submittal_number: "002" },
   ];
 
   it("matches the Process Board's stage for every set (one rule, two tabs)", () => {
@@ -158,8 +158,8 @@ describe("enrichApprovalMatrixRows — stage", () => {
   });
 
   it("resolvePackageStage prefers the governing submittal over sheet stages", () => {
-    expect(resolvePackageStage([{ id: "a", status: "Released for Fabrication", submitted_date: "2026-08-01" }], [{ stage: "IFA" }])).toBe("Released");
-    expect(resolvePackageStage([{ id: "v", status: "Void" }], [{ stage: "OFA" }])).toBe("OFA");
+    expect(resolvePackageStage([{ id: "a", submittal_type: "Shop Drawing", status: "Released for Fabrication", submitted_date: "2026-08-01" }], [{ stage: "IFA" }])).toBe("Released");
+    expect(resolvePackageStage([{ id: "v", submittal_type: "Shop Drawing", status: "Void" }], [{ stage: "OFA" }])).toBe("OFA");
     expect(resolvePackageStage([], [])).toBe("Not Started");
   });
 });
@@ -613,11 +613,11 @@ describe("matchesMatrixFilter — every pill's count equals the rows its filter 
     { id: "d1", drawing_set_id: "s1" }, { id: "d2", drawing_set_id: "s2" }, { id: "d6", drawing_set_id: "s6" },
   ];
   const submittals = [
-    { id: "late", drawing_set_ids: ["s1"], status: "Submitted", submitted_date: "2026-01-05", required_date: "2000-01-01", submittal_number: "1" },
-    { id: "ok", drawing_set_ids: ["s2"], status: "Approved", submitted_date: "2026-01-05", returned_date: "2026-01-09", submittal_number: "2" },
-    { id: "rr", drawing_set_ids: ["s3"], status: "Revise and Resubmit", submitted_date: "2026-01-05", submittal_number: "3" },
-    { id: "eor", drawing_set_ids: ["s4"], status: "Under Review", submitted_date: "2026-01-05", submittal_number: "4", approver_notes: [{ id: "n", note: "Confirm camber?", response: "" }] },
-    { id: "void", drawing_set_ids: ["s5"], status: "Void", submittal_number: "5" },
+    { id: "late", submittal_type: "Shop Drawing", drawing_set_ids: ["s1"], status: "Submitted", submitted_date: "2026-01-05", required_date: "2000-01-01", submittal_number: "1" },
+    { id: "ok", submittal_type: "Shop Drawing", drawing_set_ids: ["s2"], status: "Approved", submitted_date: "2026-01-05", returned_date: "2026-01-09", submittal_number: "2" },
+    { id: "rr", submittal_type: "Shop Drawing", drawing_set_ids: ["s3"], status: "Revise and Resubmit", submitted_date: "2026-01-05", submittal_number: "3" },
+    { id: "eor", submittal_type: "Shop Drawing", drawing_set_ids: ["s4"], status: "Under Review", submitted_date: "2026-01-05", submittal_number: "4", approver_notes: [{ id: "n", note: "Confirm camber?", response: "" }] },
+    { id: "void", submittal_type: "Shop Drawing", drawing_set_ids: ["s5"], status: "Void", submittal_number: "5" },
   ];
   const { rows } = enrich(submittals, { sets, drawings, holds: [hold("d1"), hold("d6")] });
   const summary = summarizeApprovalMatrix(rows);

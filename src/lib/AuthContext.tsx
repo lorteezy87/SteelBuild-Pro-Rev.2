@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useRef, type ReactNode } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
@@ -6,6 +6,15 @@ import { stripPrivilegeMeta } from '@/lib/authMeta';
 import { queryClientInstance } from '@/lib/query-client';
 import { clearPendingPhotos } from '@/lib/field/blobStore';
 import { assertTermsAccepted, TERMS_VERSION } from '@/lib/signupClickwrap';
+import { passwordResetRedirect } from '@/lib/authRedirects';
+import { ACTIVE_PROJECT_ID_KEY, PROJECTS_CACHE_KEY } from '@/lib/projectSelection';
+import { setActiveOrgId } from '@/lib/activeOrg';
+import { isNativePlatform } from '@/lib/native/platform';
+import {
+  getPasswordRecoveryHold, subscribePasswordRecovery, capturePasswordRecovery,
+  recoveryAppliesTo, markRecoveryPasswordUpdated, clearPasswordRecoveryAfterSignOut, refreshPasswordRecovery,
+  type PasswordRecoveryPhase,
+} from '@/lib/passwordRecovery';
 
 // Clear every trace of the previous user's tenant data from the browser so it
 // can never render for the next user on a shared device (M38): the React Query
@@ -13,7 +22,13 @@ import { assertTermsAccepted, TERMS_VERSION } from '@/lib/signupClickwrap';
 // photo blobs in IndexedDB (the outbox ops and their blobs must go together).
 function clearTenantClientState(): void {
   queryClientInstance.clear();
+  setActiveOrgId(null);
   try {
+    // Only cached server data and identity selections; preserve user-created
+    // local notes, crane libraries, and unrelated appearance preferences.
+    for (const key of [PROJECTS_CACHE_KEY, ACTIVE_PROJECT_ID_KEY, 'sbp:current-org',
+      '__steelbuild_recent_searches']) localStorage.removeItem(key);
+    sessionStorage.removeItem('sbp-landing-redirected');
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i);
       if (key && key.startsWith('sbp:field:outbox:')) {
@@ -69,11 +84,15 @@ export type AuthContextValue = {
   }) => Promise<SignUpResult>;
   // H22 — self-serve credential recovery/rotation.
   isPasswordRecovery: boolean;
+  passwordRecoveryPhase: PasswordRecoveryPhase | null;
+  finishPasswordRecovery: () => Promise<{ success: boolean; error?: string }>;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   // H23 — TOTP multi-factor auth. `mfaRequired` gates the app when the session
   // is aal1 but the user has a verified factor (must step up before entering).
   mfaRequired: boolean;
+  /** Blocks entry while an unverified session's MFA status is unresolved. */
+  isCheckingMfa: boolean;
   mfaStatusDegraded: boolean;
   mfaStatusMessage: string | null;
   retryMfaStatus: () => Promise<void>;
@@ -95,6 +114,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
+  const signOutInFlightRef = useRef(false);
+  const signOutAttemptRef = useRef<{
+    userId: string | null;
+    accessToken: string | null;
+    recoveryId: string | null;
+  } | null>(null);
   // Kept for API compatibility with components that read this flag
   const [isLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
@@ -104,25 +131,49 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // the emailed reset link). AuthenticatedApp renders the set-new-password screen
   // instead of the normal app so the recovery session is used only to set a new
   // password, then cleared. (H22)
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const recoveryHold = useSyncExternalStore(subscribePasswordRecovery, getPasswordRecoveryHold, (): null => null);
+  const isPasswordRecovery = recoveryAppliesTo(recoveryHold, user?.id ?? null);
+  const passwordRecoveryPhase = isPasswordRecovery ? recoveryHold?.phase ?? null : null;
   // True when the current session is aal1 but the user has a verified TOTP
   // factor (i.e. must complete an MFA challenge before entering the app). H23.
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [isCheckingMfa, setIsCheckingMfa] = useState(true);
+  const mfaGenerationRef = useRef(0);
+  const mfaSatisfiedUserRef = useRef<string | null>(null);
+  const currentSessionAccessTokenRef = useRef<string | null>(null);
+  const sessionGenerationRef = useRef(0);
   const [mfaStatusDegraded, setMfaStatusDegraded] = useState(false);
   const [mfaStatusMessage, setMfaStatusMessage] = useState<string | null>(null);
 
   // Recompute whether the session needs an MFA step-up. Fail closed on AAL
   // lookup errors: block app entry until the MFA state can be confirmed.
-  const refreshMfaRequired = async (): Promise<void> => {
+  const refreshMfaRequired = async (allowBackground = false): Promise<void> => {
+    const generation = ++mfaGenerationRef.current;
+    const checkingUserId = currentUserIdRef.current;
+    // A routine renewal of the already-verified identity must not unmount
+    // project forms. First sign-in, identity changes, and previous failures
+    // still hold the app behind the MFA barrier until this request settles.
+    const previouslySatisfied = Boolean(checkingUserId && mfaSatisfiedUserRef.current === checkingUserId);
+    setIsCheckingMfa(!(allowBackground && previouslySatisfied));
     try {
-      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      setMfaRequired(!!data && data.currentLevel === 'aal1' && data.nextLevel === 'aal2');
+      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (error || !data || !data.currentLevel || !data.nextLevel) {
+        throw error ?? new Error('MFA status unavailable');
+      }
+      if (generation !== mfaGenerationRef.current) return;
+      const requiresChallenge = data.currentLevel === 'aal1' && data.nextLevel === 'aal2';
+      mfaSatisfiedUserRef.current = requiresChallenge ? null : checkingUserId;
+      setMfaRequired(requiresChallenge);
       setMfaStatusDegraded(false);
       setMfaStatusMessage(null);
     } catch {
+      if (generation !== mfaGenerationRef.current) return;
+      mfaSatisfiedUserRef.current = null;
       setMfaRequired(true);
       setMfaStatusDegraded(true);
       setMfaStatusMessage('We could not verify your MFA status. Retry to continue or sign out.');
+    } finally {
+      if (generation === mfaGenerationRef.current) setIsCheckingMfa(false);
     }
   };
 
@@ -169,6 +220,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // state whenever the signed-in identity changes or clears (M38).
   const syncIdentity = (nextUserId: string | null): void => {
     const prevUserId = currentUserIdRef.current;
+    if (prevUserId !== nextUserId) setSignOutFailed(false);
     if (nextUserId) {
       if (prevUserId && prevUserId !== nextUserId) {
         // Different user signed in on this device — drop the old tenant's data.
@@ -183,49 +235,91 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     currentUserIdRef.current = nextUserId;
   };
 
+  // All ways of accepting a session share the same MFA barrier. Generation
+  // checks prevent profile/MFA responses from a previous identity winning later.
+  const publishSessionUser = async (sbUser: SupabaseUser, accessToken: string | null, allowBackground = false): Promise<void> => {
+    refreshPasswordRecovery();
+    const generation = ++sessionGenerationRef.current;
+    ++mfaGenerationRef.current;
+    const preserveVerifiedSession = allowBackground &&
+      currentUserIdRef.current === sbUser.id && mfaSatisfiedUserRef.current === sbUser.id;
+    if (!preserveVerifiedSession) mfaSatisfiedUserRef.current = null;
+    setIsCheckingMfa(!preserveVerifiedSession);
+    currentSessionAccessTokenRef.current = accessToken;
+    syncIdentity(sbUser.id);
+    const nextUser = await mapSupabaseUser(sbUser);
+    if (generation !== sessionGenerationRef.current) return;
+    setUser(nextUser);
+    setIsAuthenticated(true);
+    setAuthError(null);
+    await refreshMfaRequired(preserveVerifiedSession);
+  };
+
+  const clearSessionUser = (): void => {
+    mfaSatisfiedUserRef.current = null;
+    currentSessionAccessTokenRef.current = null;
+    ++sessionGenerationRef.current;
+    ++mfaGenerationRef.current;
+    syncIdentity(null);
+    setUser(null);
+    setIsAuthenticated(false);
+    setIsCheckingMfa(false);
+    setMfaRequired(false);
+    setMfaStatusDegraded(false);
+    setMfaStatusMessage(null);
+  };
+
   // Listen for Supabase auth state changes
   useEffect(() => {
     const handleSession = async (session: Session | null, event?: string) => {
+      const generation = sessionGenerationRef.current;
       try {
+        if (event === 'SIGNED_OUT') {
+          const attempt = signOutAttemptRef.current;
+          // An older SDK request can emit SIGNED_OUT after a new login or
+          // recovery has arrived. It may only release the session it captured.
+          if (attempt && (currentUserIdRef.current !== attempt.userId ||
+              currentSessionAccessTokenRef.current !== attempt.accessToken)) return;
+          const record = getPasswordRecoveryHold();
+          const recoveryId = attempt ? attempt.recoveryId :
+            record && recoveryAppliesTo(record, currentUserIdRef.current) ? record.id : null;
+          if (recoveryId) {
+            clearPasswordRecoveryAfterSignOut(recoveryId, currentUserIdRef.current);
+          }
+          clearSessionUser();
+          setAuthError({ type: 'auth_required', message: 'Authentication required' });
+          return;
+        }
         if (session?.user) {
-          syncIdentity(session.user.id);
-          setUser(await mapSupabaseUser(session.user));
-          setIsAuthenticated(true);
-          setAuthError(null);
-          void refreshMfaRequired();
+          await publishSessionUser(
+            session.user,
+            session.access_token,
+            event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' ||
+              // Supabase also emits SIGNED_IN when a tab regains focus.
+              // Only an identical current session may reuse its prior proof;
+              // a new same-user login still waits for its own MFA result.
+              (event === 'SIGNED_IN' && Boolean(session.access_token) &&
+                currentSessionAccessTokenRef.current === session.access_token),
+          );
         } else {
           // Session is null/expired — try refreshing before giving up
           try {
             const { data: refreshData } = await supabase.auth.refreshSession();
+            if (generation !== sessionGenerationRef.current) return;
             if (refreshData?.session?.user) {
-              syncIdentity(refreshData.session.user.id);
-              setUser(await mapSupabaseUser(refreshData.session.user));
-              setIsAuthenticated(true);
-              setAuthError(null);
-              void refreshMfaRequired();
+              await publishSessionUser(refreshData.session.user, refreshData.session.access_token);
               return;
             }
           } catch {
             // Refresh failed — fall through to logout
           }
-          // Real sign-out (explicit SIGNED_OUT event or unrecoverable session):
-          // clear Sentry attribution + the previous user's client state.
-          if (event === 'SIGNED_OUT' || currentUserIdRef.current) {
-            syncIdentity(null);
-          }
-          setUser(null);
-          setIsAuthenticated(false);
-          setMfaRequired(false);
-          setMfaStatusDegraded(false);
-          setMfaStatusMessage(null);
+          if (generation !== sessionGenerationRef.current) return;
+          clearSessionUser();
           setAuthError({ type: 'auth_required', message: 'Authentication required' });
         }
       } catch {
-        setUser(null);
-        setIsAuthenticated(false);
-        setMfaRequired(false);
-        setMfaStatusDegraded(false);
-        setMfaStatusMessage(null);
+        if (generation !== sessionGenerationRef.current) return;
+        clearSessionUser();
         setAuthError({ type: 'auth_required', message: 'Authentication required' });
       } finally {
         setIsLoadingAuth(false);
@@ -233,9 +327,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     };
 
     // Get initial session — handles expired/invalid tokens by returning null session
+    const initialGeneration = sessionGenerationRef.current;
     supabase.auth.getSession()
-      .then(({ data: { session } }) => handleSession(session))
+      .then(({ data: { session } }) => {
+        if (initialGeneration === sessionGenerationRef.current) return handleSession(session);
+      })
       .catch(() => {
+        if (initialGeneration !== sessionGenerationRef.current) return;
         setIsLoadingAuth(false);
         setIsAuthenticated(false);
         setAuthError({ type: 'auth_required', message: 'Unable to reach authentication server.' });
@@ -245,11 +343,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       // The emailed reset link establishes a recovery session and fires this
       // event; flag it so the app shows the set-new-password screen (H22).
-      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
+      if (event === 'PASSWORD_RECOVERY') capturePasswordRecovery(session);
       handleSession(session, event);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      ++sessionGenerationRef.current;
+      ++mfaGenerationRef.current;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loginWithPassword = async ({ email, password }: { email: string; password: string }): Promise<LoginResult> => {
@@ -257,13 +359,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      syncIdentity(data.user?.id ?? null);
-      setUser(await mapSupabaseUser(data.user));
-      setIsAuthenticated(true);
-      setAuthError(null);
-      // If this account has a verified TOTP factor, the session is still aal1
-      // here — flag the required step-up so the app shows the MFA screen (H23).
-      void refreshMfaRequired();
+      if (!data.user) throw new Error('Sign-in did not return a user.');
+      await publishSessionUser(data.user, data.session?.access_token ?? null);
       return { success: true };
     } catch (error: unknown) {
       setIsAuthenticated(false);
@@ -328,10 +425,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!data.session) {
         return { success: true, needsConfirmation: true };
       }
-      syncIdentity(data.user?.id ?? null);
-      setUser(await mapSupabaseUser(data.user));
-      setIsAuthenticated(true);
-      setAuthError(null);
+      if (!data.user) throw new Error('Sign-up did not return a user.');
+      await publishSessionUser(data.user, data.session?.access_token ?? null);
       return { success: true, needsConfirmation: false };
     } catch (error: unknown) {
       const err = error as { message?: string; status?: number } | undefined;
@@ -349,8 +444,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // "Redirect URLs" allowlist (dashboard) — see docs/runbooks/owner-checklist.md.
   const sendPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const redirectTo =
-        typeof window !== 'undefined' ? `${window.location.origin}/update-password` : undefined;
+      const redirectTo = passwordResetRedirect(
+        typeof window !== 'undefined' ? window.location.origin : undefined,
+        isNativePlatform(),
+      );
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
       return { success: true };
@@ -367,10 +464,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Set a new password. Used both from the recovery screen (H22) and from
   // Settings → Profile for a signed-in user rotating their credential.
   const updatePassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    const updatingUserId = currentUserIdRef.current;
+    const updatingToken = currentSessionAccessTokenRef.current;
+    const record = getPasswordRecoveryHold();
+    const recovery = recoveryAppliesTo(record, updatingUserId) ? record : null;
+    if (recovery && (!updatingUserId || recovery.userId !== updatingUserId || recovery.phase !== 'password')) {
+      return { success: false, error: 'This recovery session is unavailable. Sign out and request a new reset link.' };
+    }
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      setIsPasswordRecovery(false);
+      if (recovery) {
+        if (currentUserIdRef.current !== updatingUserId || currentSessionAccessTokenRef.current !== updatingToken ||
+            getPasswordRecoveryHold()?.id !== recovery.id) {
+          return { success: false, error: 'Your session changed. Please try again.' };
+        }
+        if (!markRecoveryPasswordUpdated(recovery.id)) {
+          return { success: false, error: 'Your recovery state changed. Finish signing out and try again.' };
+        }
+      }
       return { success: true };
     } catch (error: unknown) {
       const err = error as { message?: string } | undefined;
@@ -405,9 +517,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // aal2, so recompute the gate.
   const verifyMfaFactor = async (factorId: string, code: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
+      const { data, error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
       if (error) throw error;
-      await refreshMfaRequired();
+      if (!data?.user || !data.access_token || currentUserIdRef.current !== data.user.id) {
+        throw new Error('Your session changed. Please sign in again.');
+      }
+      // AAL1 profile reads are denied by the server MFA hook. Publish the
+      // verified profile before releasing the gate; a separate AAL refresh
+      // could otherwise outrun the MFA_CHALLENGE_VERIFIED profile lookup.
+      await publishSessionUser(data.user, data.access_token);
       return { success: true };
     } catch (error: unknown) {
       const err = error as { message?: string } | undefined;
@@ -435,16 +553,59 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    // Clear Sentry attribution + wipe the previous user's cached tenant data /
-    // offline outboxes so nothing carries over on a shared device (M38).
-    syncIdentity(null);
-    setUser(null);
-    setIsAuthenticated(false);
-    setMfaRequired(false);
-    setMfaStatusDegraded(false);
-    setMfaStatusMessage(null);
+  const signOutSession = async (): Promise<{ success: boolean; error?: string }> => {
+    if (signOutInFlightRef.current) return { success: false, error: 'Sign-out is already in progress.' };
+    signOutInFlightRef.current = true;
+    setIsSigningOut(true);
+    const signingOutUserId = currentUserIdRef.current;
+    const signingOutToken = currentSessionAccessTokenRef.current;
+    const record = getPasswordRecoveryHold();
+    const recovery = recoveryAppliesTo(record, signingOutUserId) ? record : null;
+    signOutAttemptRef.current = {
+      userId: signingOutUserId,
+      accessToken: signingOutToken,
+      recoveryId: recovery?.id ?? null,
+    };
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      // The SDK clears its persisted session only after a successful sign-out.
+      // Do not erase a different identity that arrived while this request ran.
+      // SIGNED_OUT may already have cleared these refs during the SDK call.
+      if ((currentUserIdRef.current === signingOutUserId && currentSessionAccessTokenRef.current === signingOutToken) ||
+          (!currentUserIdRef.current && !currentSessionAccessTokenRef.current)) {
+        clearSessionUser();
+        if (recovery && getPasswordRecoveryHold() && !clearPasswordRecoveryAfterSignOut(recovery.id, signingOutUserId)) {
+          throw new Error('Recovery state could not be cleared.');
+        }
+        if (getPasswordRecoveryHold() && getPasswordRecoveryHold()?.id !== recovery?.id) {
+          return { success: false, error: 'Your recovery session changed. Please finish signing out.' };
+        }
+        setSignOutFailed(false);
+        return { success: true };
+      }
+      return { success: false, error: 'Your session changed. Please try again.' };
+    } catch {
+      // Both returned and thrown failures leave the SDK session intact. Keep
+      // the app and tenant data intact too, and show a retryable, honest state.
+      // This message is generic: never expose server errors or session values.
+      if (currentUserIdRef.current === signingOutUserId || (recovery && !currentUserIdRef.current)) {
+        setSignOutFailed(true);
+      }
+      return { success: false, error: 'Sign-out did not complete. Please try again.' };
+    } finally {
+      signOutAttemptRef.current = null;
+      signOutInFlightRef.current = false;
+      setIsSigningOut(false);
+    }
+  };
+
+  const logout = async (): Promise<void> => { await signOutSession(); };
+  const finishPasswordRecovery = async (): Promise<{ success: boolean; error?: string }> => {
+    if (!recoveryAppliesTo(getPasswordRecoveryHold(), currentUserIdRef.current)) {
+      return { success: false, error: 'Your recovery session changed.' };
+    }
+    return signOutSession();
   };
 
   const retryMfaStatus = async (): Promise<void> => {
@@ -457,31 +618,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const checkAppState = async () => {
+    const generation = sessionGenerationRef.current;
     setIsLoadingAuth(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      syncIdentity(session.user.id);
-      setUser(await mapSupabaseUser(session.user));
-      setIsAuthenticated(true);
-      setAuthError(null);
-    } else {
-      // Try refreshing the session before giving up
-      try {
-        const { data: refreshData } = await supabase.auth.refreshSession();
-        if (refreshData?.session?.user) {
-          syncIdentity(refreshData.session.user.id);
-          setUser(await mapSupabaseUser(refreshData.session.user));
-          setIsAuthenticated(true);
-          setAuthError(null);
-          setIsLoadingAuth(false);
-          return;
-        }
-      } catch {
-        // Refresh failed — fall through to auth required
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (generation !== sessionGenerationRef.current) return;
+      if (error) throw error;
+      if (session?.user) {
+        await publishSessionUser(session.user, session.access_token);
+        return;
       }
-      setAuthError({ type: 'auth_required', message: 'Authentication required' });
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (generation !== sessionGenerationRef.current) return;
+      if (refreshError) throw refreshError;
+      if (refreshData?.session?.user) {
+        await publishSessionUser(refreshData.session.user, refreshData.session.access_token);
+      } else {
+        clearSessionUser();
+        setAuthError({ type: 'auth_required', message: 'Authentication required' });
+      }
+    } catch {
+      if (generation !== sessionGenerationRef.current) return;
+      clearSessionUser();
+      setAuthError({ type: 'auth_required', message: 'Unable to reach authentication server.' });
+    } finally {
+      setIsLoadingAuth(false);
     }
-    setIsLoadingAuth(false);
   };
 
   return (
@@ -497,9 +659,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       loginWithPassword,
       signUpWithPassword,
       isPasswordRecovery,
+      passwordRecoveryPhase,
+      finishPasswordRecovery,
       sendPasswordReset,
       updatePassword,
       mfaRequired,
+      isCheckingMfa,
       mfaStatusDegraded,
       mfaStatusMessage,
       retryMfaStatus,
@@ -512,6 +677,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       checkAppState,
     }}>
       {children}
+      {signOutFailed && (
+        <section
+          role="alert"
+          aria-label="Sign-out failed"
+          style={{
+            position: 'fixed', insetInlineEnd: 16, bottom: 16, zIndex: 2000,
+            width: 'min(420px, calc(100vw - 32px))', padding: 16,
+            border: '1px solid var(--border-strong, var(--border-default))',
+            borderRadius: 12, background: 'var(--bg-elevated, var(--bg-surface))',
+            color: 'var(--text-primary)', boxShadow: 'var(--shadow-lg)',
+          }}
+        >
+          <p style={{ margin: '0 0 12px', lineHeight: 1.5 }}>
+            Sign-out did not complete. {isAuthenticated ? 'You are still signed in. ' : ''}Check your connection and try again.
+          </p>
+          <button
+            type="button"
+            className="sbd-btn sbd-btn-primary"
+            disabled={isSigningOut}
+            aria-busy={isSigningOut}
+            onClick={() => { void logout(); }}
+          >
+            {isSigningOut ? 'Signing out…' : 'Retry sign out'}
+          </button>
+        </section>
+      )}
     </AuthContext.Provider>
   );
 };

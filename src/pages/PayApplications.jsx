@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { presentGeneratedFile } from "@/lib/native/fileExport";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { localToday } from "@/utils/dates";
 import { formatMoney, sumMoney } from "@/lib/money";
@@ -33,10 +34,14 @@ import PayApplicationsControlCenter from "./payApplications/PayApplicationsContr
 import { assertProjectId, toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
+import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
+import PayApplicationVoidDialog from "./payApplications/PayApplicationVoidDialog";
+import { buildVoidPayApplicationPatch, canMovePayApplication } from "./payApplications/payApplicationStatus";
+import "./payApplications/payApplicationsLayout.css";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
-const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
-const input = { ...mono, boxSizing: "border-box", fontSize: 12, padding: "6px 8px", borderRadius: 3, background: "var(--bg-input, var(--bg-surface-low))", border: "1px solid var(--border-default)", color: "var(--text-primary)", outline: "none" };
+const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "var(--payapp-card-padding, 16px)" };
+const input = { ...mono, boxSizing: "border-box", fontSize: "var(--payapp-input-font-size, 12px)", padding: "6px 8px", borderRadius: 3, background: "var(--bg-input, var(--bg-surface-low))", border: "1px solid var(--border-default)", color: "var(--text-primary)", outline: "none" };
 const lbl = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: 4 };
 const btn = { ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "7px 14px", borderRadius: 3, border: "1px solid var(--border-default)", cursor: "pointer" };
 const btnP = { ...btn, background: "var(--accent-muted)", borderColor: "var(--accent)", color: "var(--accent)" };
@@ -48,16 +53,16 @@ function NewAppModal({ open, defaultRetainage, onClose, onCreate, busy }) {
   const [retainage, setRetainage] = useState(String(defaultRetainage ?? 10));
   if (!open) return null;
   return (
-    <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={onClose}>
-      <div style={{ ...card, width: 440, maxWidth: "92vw" }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 14px", fontSize: 16, color: "var(--text-primary)" }}>New Pay Application</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+    <div role="dialog" aria-modal="true" aria-labelledby="payapp-new-modal-title" className="payapp-new-modal" onClick={onClose}>
+      <div className="payapp-new-modal__card" style={card} onClick={(e) => e.stopPropagation()}>
+        <h3 id="payapp-new-modal-title" style={{ margin: "0 0 14px", fontSize: 16, color: "var(--text-primary)" }}>New Pay Application</h3>
+        <div className="payapp-new-modal__fields">
           <div><span style={lbl}>Period from</span><input style={{ ...input, width: "100%" }} type="date" value={periodFrom} onChange={(e) => setFrom(e.target.value)} /></div>
           <div><span style={lbl}>Period to</span><input style={{ ...input, width: "100%" }} type="date" value={periodTo} onChange={(e) => setTo(e.target.value)} /></div>
           <div><span style={lbl}>Retainage %</span><input style={{ ...input, width: "100%" }} type="number" value={retainage} onChange={(e) => setRetainage(e.target.value)} /></div>
         </div>
         <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginBottom: 14 }}>Lines are drafted from this project&apos;s Schedule of Values; prior completed work carries forward.</div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <div className="payapp-new-modal__actions">
           <button style={{ ...btn, background: "var(--bg-page)", color: "var(--text-muted)" }} onClick={onClose} disabled={busy}>Cancel</button>
           <button style={btnP} disabled={busy} onClick={() => onCreate({ periodFrom: periodFrom || null, periodTo: periodTo || null, retainagePercent: num(retainage) })}>{busy ? "Creating…" : "Create"}</button>
         </div>
@@ -69,14 +74,18 @@ function NewAppModal({ open, defaultRetainage, onClose, onCreate, busy }) {
 export default function PayApplications() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
+  const { role, isLoading: roleLoading } = useProjectRole(projectId);
+  const statusContext = { projectId, role, roleLoading };
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [voidTarget, setVoidTarget] = useState(null);
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
   useEffect(() => {
     setSelectedId(null);
     setNewOpen(false);
+    setVoidTarget(null);
   }, [projectId]);
 
   const {
@@ -92,7 +101,7 @@ export default function PayApplications() {
   // Preserve the change-orders invalidation prefix, with a separate cache shape.
   const changesQuery = useQuery({ queryKey: ["change-orders", projectId, "payapp-evidence"], queryFn: () => listPayAppChangeOrders(projectId), enabled: !!projectId });
   const changeOrders = changesQuery.data || [];
-  const contractQuery = useQuery({ queryKey: ["projects", projectId, "payapp-contract"], queryFn: () => getPayAppContract(projectId), enabled: !!projectId });
+  const contractQuery = useQuery({ queryKey: ["projects", projectId, "payapp-contract"], queryFn: () => getPayAppContract(projectId), select: (contract) => contract, enabled: !!projectId });
   const sourcesReady = contractQuery.isSuccess && !contractQuery.isFetching && sovQuery.isSuccess && changesQuery.isSuccess && !sovQuery.isFetching && !changesQuery.isFetching;
 
   const contract = useMemo(() => ({
@@ -103,6 +112,9 @@ export default function PayApplications() {
   }), [contractQuery.data, changeOrders]);
 
   const selectedApp = payApps.find((a) => a.id === selectedId) || null;
+  const voidApp = voidTarget?.projectId === projectId
+    ? payApps.find((app) => app.id === voidTarget.id && app.project_id === projectId) || null
+    : null;
   // Only a DRAFT pay app is editable — once submitted/approved/paid the G703
   // figures are a billing record (locked in the UI here + by the DB trigger, C2).
   const isDraft = selectedApp?.status === "draft";
@@ -150,9 +162,35 @@ export default function PayApplications() {
     onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
   });
   const statusMut = useMutation({
-    mutationFn: ({ id, status }) => updatePayApplication(id, { status }),
+    mutationFn: ({ id, status }) => {
+      const application = payApps.find((app) => app.id === id) || null;
+      if (status === "void" || !canMovePayApplication(application, statusContext, status)) {
+        throw new Error("This status change is unavailable for your current project role or application state.");
+      }
+      return updatePayApplication(id, { status });
+    },
     onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); },
     onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
+  });
+  const voidMut = useMutation({
+    mutationFn: ({ id, projectId: targetProjectId, reason }) => {
+      const application = payApps.find((app) => app.id === id) || null;
+      if (targetProjectId !== projectId || !canMovePayApplication(application, statusContext, "void")) {
+        throw new Error("Voiding is unavailable for your current project role or application state.");
+      }
+      return updatePayApplication(id, buildVoidPayApplicationPatch(reason));
+    },
+    onSuccess: (application, { id, projectId: targetProjectId }) => {
+      // Bind cache, audit and dialog completion to the request's original
+      // project/application even if navigation changed while the RPC ran.
+      qc.setQueryData(["pay_applications", targetProjectId], (previous) =>
+        Array.isArray(previous) ? previous.map((app) => app.id === id ? application : app) : previous);
+      qc.invalidateQueries({ queryKey: ["pay_applications", targetProjectId] });
+      qc.invalidateQueries({ queryKey: ["payapp_lines", id] });
+      logActivity("pay_application", "status_changed", application, { projectId: targetProjectId, description: "→ void" });
+      setVoidTarget((current) => current?.id === id && current.projectId === targetProjectId ? null : current);
+      toast.success(`Pay Application #${application.application_number} voided`);
+    },
   });
   const delMut = useMutation({
     mutationFn: (id) => softDeletePayApplication(id),
@@ -160,10 +198,17 @@ export default function PayApplications() {
     onError: (e) => toast.error(`Delete failed: ${toUserErrorMessage(e)}`),
   });
 
-  const exportPdf = () => {
+  const exportPdf = async () => {
     try {
       if (!linesReady || lineMut.isPending) throw new Error("Wait for complete certificate lines before exporting.");
-      buildPayAppPdf({ app: selectedApp, lines, project: activeProject }).save(`${suggestPayAppFilename(selectedApp, activeProject)}.pdf`);
+      const filename = `${suggestPayAppFilename(selectedApp, activeProject)}.pdf`;
+      const pdf = buildPayAppPdf({ app: selectedApp, lines, project: activeProject });
+      const presentation = await presentGeneratedFile({
+        blob: pdf.output("blob"),
+        filename,
+        title: "Pay application",
+      });
+      if (presentation !== "downloaded" && presentation !== "shared") return;
       toast.success("Pay application PDF exported");
     } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };
@@ -244,21 +289,21 @@ export default function PayApplications() {
         />
         {(sovQuery.isError || changesQuery.isError || contractQuery.isError) && <p role="alert">Could not load current SOV, contract, or change orders. <button onClick={() => { sovQuery.refetch(); changesQuery.refetch(); contractQuery.refetch(); }}>Retry contract data</button></p>}
         {selectedApp && (
-          <div style={{ padding: "0 20px 20px", maxWidth: 1240, margin: "0 auto" }}>
+          <div className="payapp-editor">
             <PayAppReconciliationPanel result={lineMut.isPending ? null : reconciliation} linesError={linesQuery.isError}
               liveState={sovQuery.isError || changesQuery.isError || contractQuery.isError ? "error" : sourcesReady ? "ready" : "loading"}
               historical={!isDraft} busy={appsFetching || linesQuery.isFetching || sovQuery.isFetching || changesQuery.isFetching || contractQuery.isFetching || lineMut.isPending}
               onRefresh={() => { refresh(); sovQuery.refetch(); changesQuery.refetch(); contractQuery.refetch(); }} />
-            <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
-              <div style={card}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div className="payapp-editor__grid">
+              <div className="payapp-editor__summary" style={card}>
+                <div className="payapp-editor__summary-heading">
                   <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>G702 Summary — App #{selectedApp.application_number}</div>
-                  <button onClick={() => setSelectedId(null)} style={{ ...btn, padding: "3px 7px" }}>✕</button>
+                  <button aria-label="Close pay application" onClick={() => setSelectedId(null)} style={{ ...btn, padding: "3px 7px" }}>✕</button>
                 </div>
                 {summary && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 12 }}>
                     {summary.map(([k, v], i) => (
-                      <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0", borderTop: i > 0 ? "1px solid var(--border-subtle, var(--border-default))" : "none" }}>
+                      <div key={k} className="payapp-editor__summary-row" style={{ borderTop: i > 0 ? "1px solid var(--border-subtle, var(--border-default))" : "none" }}>
                         <span style={{ ...mono, fontSize: 10, color: k.includes("CURRENT") ? "var(--accent)" : "var(--text-muted)", fontWeight: k.includes("CURRENT") ? 700 : 400 }}>{k}</span>
                         <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: k.includes("CURRENT") ? "var(--accent)" : "var(--text-primary)" }}>{formatMoney(v)}</span>
                       </div>
@@ -266,16 +311,25 @@ export default function PayApplications() {
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <select style={{ ...input, width: "auto" }} value={selectedApp.status} onChange={(e) => statusMut.mutate({ id: selectedApp.id, status: e.target.value })}>
-                    {PAY_APP_STATUSES.map((s) => <option key={s} value={s}>{PAY_APP_STATUS_LABELS[s]}</option>)}
+                  <select aria-label="Pay application status" style={{ ...input, width: "auto" }} value={selectedApp.status}
+                    disabled={roleLoading || !roleAtLeast(role, "pm") || appsFetching || statusMut.isPending || voidMut.isPending}
+                    onChange={(e) => {
+                      const status = e.target.value;
+                      if (!canMovePayApplication(selectedApp, statusContext, status) || statusMut.isPending || voidMut.isPending) return;
+                      if (status === "void") setVoidTarget({ id: selectedApp.id, projectId });
+                      else statusMut.mutate({ id: selectedApp.id, status });
+                    }}>
+                    {PAY_APP_STATUSES.map((s) => <option key={s} value={s} disabled={s !== selectedApp.status && !canMovePayApplication(selectedApp, statusContext, s)}>{PAY_APP_STATUS_LABELS[s]}</option>)}
                   </select>
                   <button style={btnP} disabled={!linesReady || lineMut.isPending} onClick={exportPdf}>Export PDF</button>
                   <button style={{ ...btn, color: "var(--status-error)", borderColor: "var(--status-error)", opacity: isDraft ? 1 : 0.4, cursor: isDraft ? "pointer" : "not-allowed" }} disabled={!isDraft} title={isDraft ? "" : "Only a draft pay application can be deleted — set status to void instead."} onClick={() => { if (confirm("Delete this pay application?")) delMut.mutate(selectedApp.id); }}>Delete</button>
                 </div>
               </div>
-              <div style={{ ...card, overflowX: "auto" }}>
+              {/* The focusable region lets keyboard users scroll a locked G703 sheet. */}
+              <div className="payapp-editor__sheet" style={card} role="region" aria-label="G703 continuation sheet" aria-describedby="payapp-sheet-scroll-note" tabIndex={0}>
                 <div style={{ ...lbl, marginBottom: 8 }}>G703 Continuation Sheet — {isDraft ? "enter % complete & stored" : <span style={{ color: "var(--status-warning, var(--accent))" }}>🔒 {PAY_APP_STATUS_LABELS[selectedApp.status] || selectedApp.status} — figures locked</span>}</div>
-                <table style={{ ...mono, width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <p id="payapp-sheet-scroll-note" className="payapp-editor__scroll-note">Scroll within this sheet to review all G703 columns.</p>
+                <table className="payapp-editor__table" style={{ ...mono, width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
                     <tr style={{ color: "var(--text-muted)", textAlign: "right" }}>
                       <th style={{ textAlign: "left", padding: 4 }}>#</th>
@@ -301,11 +355,11 @@ export default function PayApplications() {
                           <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(l.work_completed_previous)}</td>
                           <td style={{ padding: 4, color: "var(--text-primary)" }}>{formatMoney(l.work_completed_this_period)}</td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft || !linesReady || lineMut.isPending}
+                            <input aria-label={`Line ${l.line_item_number} percent complete`} style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft || !linesReady || lineMut.isPending}
                               onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.percent_complete)) lineMut.mutate({ line: l, edit: { percentComplete: v } }); }} />
                           </td>
                           <td style={{ padding: 4 }}>
-                            <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft || !linesReady || lineMut.isPending}
+                            <input aria-label={`Line ${l.line_item_number} materials stored`} style={{ ...input, width: 104, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft || !linesReady || lineMut.isPending}
                               onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.materials_stored)) lineMut.mutate({ line: l, edit: { materialsStored: v } }); }} />
                           </td>
                           <td style={{ padding: 4, color: "var(--text-primary)", fontWeight: 700 }}>{formatMoney(f.totalCompletedStored)}</td>
@@ -322,6 +376,13 @@ export default function PayApplications() {
             </div>
           </div>
         )}
+        {voidApp && <PayApplicationVoidDialog
+          key={`${voidApp.project_id}:${voidApp.id}`}
+          applicationNumber={voidApp.application_number}
+          allowed={!appsFetching && !statusMut.isPending && canMovePayApplication(voidApp, statusContext, "void")}
+          onCancel={() => setVoidTarget(null)}
+          onConfirm={(reason) => voidMut.mutateAsync({ id: voidApp.id, projectId: voidApp.project_id, reason })}
+        />}
         {newOpen && <NewAppModal
           key={projectId}
           open

@@ -1,209 +1,138 @@
-import React, { useState, useEffect } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import React, { useState, useEffect, useId, useRef } from "react";
 import { formatCurrency } from "../shared/formatters";
-import PhoenixModal, { btnPrimary, btnSecondary, btnDanger, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
-// `inputDisabledStyle` is no longer used for CO Number — it stays imported for
-// the read-only Margin $ helper / Original Contract Value fields below.
+import PhoenixModal, { btnPrimary, btnSecondary, btnDanger, inputStyle, inputDisabledStyle, labelStyle } from "@/components/shared/PhoenixModal";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
+import { changeOrderStatusOptions } from "@/lib/changeOrders/lifecycle";
+import { localToday } from "@/utils/dates";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { buildChangeOrderPayload } from "./changeOrderPayload";
 
 const empty = {
   project_id: "", project_name: "", title: "", description: "",
   reason_code: "Owner Request", status: "Draft", cost_code_id: "",
-  submitted_date: new Date().toISOString().split("T")[0],
-  approved_date: null, co_amount: 0, margin_percent: 0, schedule_impact_days: 0,
-  approved_by: "", notes: "", attachments: "",
-  co_number: "",
-  source_rfi_id: null, sov_line_item_id: "", sov_line_number: null,
+  submitted_date: "", approved_date: "", co_amount: 0, margin_percent: 0,
+  schedule_impact_days: 0, approved_by: "", notes: "", attachments: "", co_number: "",
+  source_rfi_id: null, sov_line_item_id: "", sov_line_number: null, sov_mode: "",
+  decision_notes: "", void_reason: "",
 };
 
-export default function COFormModal({ open, onClose, onSave, onDelete = null, isSaving, co, projects = [], nextNumber, prefill = null, sovItems = [], sourceRfiLabel = "" }) {
+function Field({ label, children, wide = false }) {
+  const id = useId();
+  // The single native control is nested and receives the matching id below.
+  // eslint-disable-next-line jsx-a11y/label-has-for
+  return <label htmlFor={id} style={{ display: "block", minWidth: 0, ...(wide ? { gridColumn: "1 / -1" } : {}) }}>
+    <span style={labelStyle}>{label}</span>{React.cloneElement(children, { id })}
+  </label>;
+}
+
+export default function COFormModal({ open, onClose, onSave, onDelete = null, isSaving = false, co, projects = [], prefill = null, sovItems = [], sourceRfiLabel = "", canApprove = true, canVoid = true, writesDisabled = false, recoveryPending = false }) {
   const [form, setForm] = useState(empty);
-  const [errors, setErrors] = useState({});
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const draftKey = co ? `edit:${co.project_id}:${co.id}` : `new:${prefill?.project_id || ""}:${prefill?.source_rfi_id || ""}`;
+  const initializedKey = useRef(null);
+  const activeAttempt = useRef(null);
 
   useEffect(() => {
-    if (co) setForm({ ...empty, ...co });
-    // For new COs, seed from `prefill` (e.g. when converting a cost-impact RFI)
-    // and leave co_number BLANK so the "Auto-assigned …" placeholder shows. The
-    // createMut on the parent page fills a fresh "CO #NNN" via
-    // getNextFormattedNumber if the user saves without typing one in.
-    else setForm({ ...empty, ...(prefill || {}) });
-    setErrors({});
-  }, [co, open, prefill]);
+    if (!open) { initializedKey.current = null; return; }
+    if (initializedKey.current === draftKey) return;
+    initializedKey.current = draftKey;
+    activeAttempt.current = null;
+    setSaving(false);
+    setForm({ ...empty, submitted_date: localToday(), ...(co || prefill || {}), ...(!co ? { co_number: "" } : {}) });
+    setError("");
+  }, [co, open, prefill, draftKey]);
 
-  const validate = () => {
-    const e = {};
-    if (!form.project_id) e.project_id = "Required";
-    if (!form.title?.trim()) e.title = "Required";
-    if (!form.reason_code) e.reason_code = "Required";
-    // Negative values are allowed — they represent deducts / credits back to the GC/owner.
-    if (form.co_amount !== 0 && form.co_amount !== "" && isNaN(Number(form.co_amount))) {
-      e.co_amount = "Must be a valid number";
+  const busy = isSaving || saving;
+  const locked = busy || writesDisabled;
+  const approved = co?.status === "Approved";
+  const approving = form.status === "Approved" && !approved;
+  const selectedProject = projects.find(project => project.id === form.project_id);
+  const projectSovItems = sovItems.filter(line => !line.project_id || line.project_id === form.project_id);
+  const statuses = changeOrderStatusOptions(co?.status).filter(status => (status !== "Approved" || canApprove || approved) && (status !== "Void" || canVoid || co?.status === "Void"));
+  const set = (key, value) => setForm(previous => ({ ...previous, [key]: value }));
+  const close = () => { if (!busy) onClose(); };
+
+  const handleSave = async () => {
+    if (locked || activeAttempt.current) return;
+    let payload;
+    try {
+      if (recoveryPending) payload = {};
+      else {
+      if (!form.project_id || !selectedProject) throw new Error("Choose an available project.");
+      if (!form.title?.trim()) throw new Error("Enter a change-order title.");
+      if (!form.reason_code) throw new Error("Choose a reason code.");
+      payload = buildChangeOrderPayload(form, { existing: co, canApprove, canVoid });
+      if (approving && form.sov_mode === "adjust_line" && !projectSovItems.some(line => line.id === form.sov_line_item_id)) throw new Error("Choose an existing SOV line from this project.");
+      payload.project_name = selectedProject.name;
+      payload.title = form.title.trim();
+      }
+    } catch (cause) {
+      setError(toUserErrorMessage(cause));
+      return;
     }
-    const mp = Number(form.margin_percent);
-    if (isNaN(mp) || mp < 0 || mp > 100) {
-      e.margin_percent = "Must be between 0 and 100";
+    const attempt = {};
+    activeAttempt.current = attempt;
+    setSaving(true);
+    setError("");
+    try { await onSave(payload); }
+    catch (cause) { if (activeAttempt.current === attempt) setError(toUserErrorMessage(cause)); }
+    finally {
+      if (activeAttempt.current === attempt) { activeAttempt.current = null; setSaving(false); }
     }
-    setErrors(e);
-    return Object.keys(e).length === 0;
   };
 
-  const handleSave = () => {
-    if (!validate()) return;
-    const data = buildChangeOrderPayload(form);
-    const proj = projects.find(p => p.id === form.project_id);
-    if (proj) data.project_name = proj.name;
-    onSave(data);
-  };
-
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const selectedProject = projects.find(p => p.id === form.project_id);
-  const grid = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 };
-
-  return (
-    <PhoenixModal
-      open={open}
-      onClose={onClose}
-      title={co ? `Edit ${co.co_number || "CO"}` : "New Change Order"}
-      footer={<>
-        {co && onDelete ? (
-          <button
-            style={{ ...btnDanger, marginRight: "auto" }}
-            onClick={() => onDelete(co)}
-            disabled={isSaving}
-          >
-            Delete
-          </button>
-        ) : null}
-        <button style={btnSecondary} onClick={onClose}>Cancel</button>
-        <button style={btnPrimary} onClick={handleSave} disabled={isSaving}>
-          {isSaving ? "Saving…" : co ? "Update" : "Create"}
-        </button>
+  return <PhoenixModal open={open} onClose={close} title={co ? `Edit ${co.co_number || "CO"}` : "New Change Order"} footer={<>
+    {co && !approved && onDelete && <button type="button" style={{ ...btnDanger, marginRight: "auto" }} onClick={() => { if (!locked) onDelete(co); }} disabled={locked}>Delete</button>}
+    <button type="button" style={btnSecondary} onClick={close} disabled={busy}>Cancel</button>
+    <button type="button" style={btnPrimary} onClick={handleSave} disabled={locked}>{busy ? "Saving…" : recoveryPending ? "Recover saved change order" : co ? "Update" : "Create"}</button>
+  </>}>
+    {form.source_rfi_id && <p style={{ color: "var(--accent)", fontSize: 12 }}>Converted from {sourceRfiLabel || "a cost-impact RFI"}</p>}
+    {error && <p role="alert" style={{ color: "var(--status-error)", fontSize: 13 }}>{error}</p>}
+    {writesDisabled && <p role="status" style={{ color: "var(--status-warning)", fontSize: 13 }}>Saving is paused until project records are available.</p>}
+    {recoveryPending && <p role="status" style={{ color: "var(--status-warning)", fontSize: 13 }}>The original save may have completed. Recover it with the same details before making further changes. This recovery stays available when you reopen the editor. After reloading or changing workspaces, check the register before creating another change order.</p>}
+    {approved && <p style={{ color: "var(--text-secondary)", fontSize: 12 }}>The approved amount, cost code, SOV relationship, and approval record are locked. Void this change order and issue a new one to change its commercial scope.</p>}
+    <fieldset disabled={locked || recoveryPending} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: 14 }}>
+      <Field label="CO Number"><input style={inputDisabledStyle} value={co?.co_number || ""} readOnly placeholder="Assigned when created" /></Field>
+      <Field label="Project *"><select style={inputStyle} value={form.project_id} disabled={!!co} onChange={event => setForm(previous => ({ ...previous, project_id: event.target.value, sov_line_item_id: "", sov_line_number: null }))}>
+        <option value="">Select project</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+      </select></Field>
+      <Field label="Title *" wide><input style={inputStyle} value={form.title || ""} onChange={event => set("title", event.target.value)} /></Field>
+      <Field label="Description" wide><textarea style={{ ...inputStyle, minHeight: 72, resize: "vertical" }} value={form.description || ""} onChange={event => set("description", event.target.value)} /></Field>
+      <Field label="Reason Code *"><select style={inputStyle} value={form.reason_code} onChange={event => set("reason_code", event.target.value)}>
+        {["Owner Request", "Design Change", "Differing Conditions", "Scope Gap", "Error & Omission", "Weather", "Other"].map(reason => <option key={reason}>{reason}</option>)}
+      </select></Field>
+      <Field label="Status"><select style={inputStyle} value={form.status} onChange={event => setForm(previous => ({ ...previous, status: event.target.value, ...(event.target.value === "Approved" && !previous.approved_date ? { approved_date: localToday() } : {}) }))}>
+        {statuses.map(status => <option key={status}>{status}</option>)}
+      </select></Field>
+      <Field label="CO Amount ($)"><input type="number" step="0.01" style={approved ? inputDisabledStyle : inputStyle} disabled={approved} value={form.co_amount ?? ""} onChange={event => set("co_amount", event.target.value)} /></Field>
+      <Field label="Margin %"><input type="number" style={inputStyle} value={form.margin_percent ?? ""} onChange={event => set("margin_percent", event.target.value)} min="0" max="100" step="0.1" /></Field>
+      <Field label="Margin $"><input style={inputDisabledStyle} value={formatCurrency((Number(form.co_amount) || 0) * (Number(form.margin_percent) || 0) / 100)} disabled readOnly /></Field>
+      <Field label="Schedule Impact (days)"><input type="number" style={inputStyle} value={form.schedule_impact_days ?? ""} onChange={event => set("schedule_impact_days", event.target.value)} min="0" max="2147483647" step="1" /></Field>
+      {approving && <Field label="SOV treatment *"><select style={inputStyle} value={form.sov_mode || ""} onChange={event => set("sov_mode", event.target.value)}>
+        <option value="">Choose how approval affects SOV</option>
+        <option value="new_line" disabled={Number(form.co_amount) < 0}>Create a new SOV line</option>
+        <option value="adjust_line">Adjust an existing SOV line</option>
+        <option value="none">Leave SOV unchanged</option>
+      </select></Field>}
+      <Field label={approving && form.sov_mode === "adjust_line" ? "SOV Line Item *" : "SOV Line Item"}><select style={inputStyle} value={form.sov_line_item_id || ""} disabled={approved || (approving && form.sov_mode !== "adjust_line")} onChange={event => {
+        const line = projectSovItems.find(candidate => candidate.id === event.target.value);
+        setForm(previous => ({ ...previous, sov_line_item_id: line?.id || "", sov_line_number: line?.line_item_number ?? null }));
+      }}><option value="">No linked line</option>{projectSovItems.map(line => <option key={line.id} value={line.id}>#{line.line_item_number} · {line.description || "(no description)"}</option>)}</select></Field>
+      {selectedProject && <Field label="Original Contract Value"><input style={inputDisabledStyle} value={formatCurrency(selectedProject.original_contract_value)} disabled readOnly /></Field>}
+      <Field label="Submitted Date"><input type="date" style={inputStyle} value={form.submitted_date || ""} onChange={event => set("submitted_date", event.target.value)} /></Field>
+      {(approving || approved) && <>
+        <Field label={approving ? "Approved Date *" : "Approved Date"}><input type="date" style={approved ? inputDisabledStyle : inputStyle} readOnly={approved} value={approved ? co.approved_date || "" : form.approved_date || ""} onChange={event => set("approved_date", event.target.value)} /></Field>
+        <Field label={approving ? "Approved By *" : "Approved By"}><input style={approved ? inputDisabledStyle : inputStyle} readOnly={approved} value={approved ? co.approved_by || "" : form.approved_by || ""} onChange={event => set("approved_by", event.target.value)} /></Field>
       </>}
-    >
-      {form.source_rfi_id && (
-        <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 6, background: "var(--accent-muted)", border: "1px solid var(--accent-border)", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, letterSpacing: "0.04em" }}>
-          ⤷ Converted from {sourceRfiLabel || "a cost-impact RFI"}
-        </div>
-      )}
-      <div style={grid}>
-        <FormField label="CO Number">
-          {/* User-assignable, RFI-style. Edit mode shows the existing
-              number; new mode shows blank with "Auto-assigned if blank"
-              placeholder so the user can either type their own or leave
-              empty to let the createMut auto-format the next free
-              "CO #NNN" via getNextFormattedNumber. */}
-          {co ? (
-            <input
-              style={inputStyle}
-              value={form.co_number || ""}
-              onChange={(e) => set("co_number", e.target.value)}
-              placeholder="CO #001"
-            />
-          ) : (
-            <input
-              style={{ ...inputStyle, opacity: 0.7 }}
-              value={form.co_number || ""}
-              onChange={(e) => set("co_number", e.target.value)}
-              placeholder={nextNumber ? `Auto-assigned: ${nextNumber}` : "Auto-assigned if blank"}
-            />
-          )}
-        </FormField>
-        <FormField label="Project *" error={errors.project_id}>
-          <Select value={form.project_id} onValueChange={v => set("project_id", v)} disabled={!!co}>
-            <SelectTrigger disabled={!!co}><SelectValue placeholder="Select project" /></SelectTrigger>
-            <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-          </Select>
-        </FormField>
-        <FormField label="Title *" error={errors.title} span2>
-          <input style={inputStyle} value={form.title} onChange={e => set("title", e.target.value)} />
-        </FormField>
-        <FormField label="Description" span2>
-          <textarea style={{ ...inputStyle, height: 72, resize: "vertical" }} value={form.description} onChange={e => set("description", e.target.value)} />
-        </FormField>
-        <FormField label="Reason Code *">
-          <Select value={form.reason_code} onValueChange={v => set("reason_code", v)} disabled={false}>
-            <SelectTrigger disabled={false}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {["Owner Request","Design Change","Differing Conditions","Scope Gap","Error & Omission","Weather","Other"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </FormField>
-        <FormField label="Status" error={errors.status}>
-          <Select value={form.status} onValueChange={v => set("status", v)} disabled={false}>
-            <SelectTrigger disabled={false}><SelectValue /></SelectTrigger>
-            <SelectContent>{["Draft","Submitted","Under Review","Approved","Rejected","Void"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-          </Select>
-        </FormField>
-        <FormField label="CO Amount ($)" error={errors.co_amount}>
-          <input type="number" style={inputStyle} value={form.co_amount} onChange={e => set("co_amount", e.target.value)} />
-        </FormField>
-        <FormField label="Margin %" error={errors.margin_percent}>
-          <input type="number" style={inputStyle} value={form.margin_percent} onChange={e => set("margin_percent", e.target.value)} min="0" max="100" step="0.1" placeholder="0" />
-        </FormField>
-        {/* Live-calculated Margin $ — read-only helper, not persisted */}
-        <FormField label="Margin $">
-          <input
-            style={inputDisabledStyle}
-            value={formatCurrency((Number(form.co_amount) || 0) * (Number(form.margin_percent) || 0) / 100)}
-            disabled
-            readOnly
-          />
-        </FormField>
-        <FormField label="Schedule Impact (days)">
-          <input type="number" style={inputStyle} value={form.schedule_impact_days || 0} onChange={e => set("schedule_impact_days", e.target.value)} min="0" placeholder="0" />
-        </FormField>
-        <FormField label="SOV Line Item">
-          <Select
-            value={form.sov_line_item_id || "none"}
-            onValueChange={(v) => {
-              if (v === "none") { setForm(p => ({ ...p, sov_line_item_id: "", sov_line_number: null })); return; }
-              const item = sovItems.find(s => s.id === v);
-              setForm(p => ({ ...p, sov_line_item_id: v, sov_line_number: item ? item.line_item_number : null }));
-            }}
-          >
-            <SelectTrigger><SelectValue placeholder="Link to SOV line (optional)" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">— None —</SelectItem>
-              {sovItems.map(s => (
-                <SelectItem key={s.id} value={s.id}>{`#${s.line_item_number} · ${s.description || "(no description)"}`}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormField>
-        {selectedProject && (
-          <FormField label="Original Contract Value">
-            <input style={inputDisabledStyle} value={formatCurrency(selectedProject.original_contract_value)} disabled readOnly />
-          </FormField>
-        )}
-        <FormField label="Submitted Date">
-          <input type="date" style={inputStyle} value={form.submitted_date} onChange={e => set("submitted_date", e.target.value)} />
-        </FormField>
-        <FormField label="Approved Date">
-          <input type="date" style={inputStyle} value={form.approved_date || ""} onChange={e => set("approved_date", e.target.value)} />
-        </FormField>
-        <FormField label="Approved By">
-          <input style={inputStyle} value={form.approved_by} onChange={e => set("approved_by", e.target.value)} />
-        </FormField>
-        <FormField label="Notes" span2>
-          <textarea style={{ ...inputStyle, height: 56, resize: "vertical" }} value={form.notes} onChange={e => set("notes", e.target.value)} />
-        </FormField>
-        <FormField label="Attachments (comma-separated)" span2>
-          <input style={inputStyle} value={form.attachments} onChange={e => set("attachments", e.target.value)} placeholder="file1.pdf, file2.pdf" />
-        </FormField>
-      </div>
-      {/* Inbound chips — schedule tasks that link to this CO. Read-only;
-          edit the link from the schedule task's LINKS tab. Only renders
-          when we're editing an existing CO. */}
-      {co?.id && form.project_id && (
-        <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--divider)" }}>
-          <RelatedScheduleTasksChips
-            projectId={form.project_id}
-            relatedField="related_change_order_ids"
-            targetId={co.id}
-          />
-        </div>
-      )}
-    </PhoenixModal>
-  );
+      {approving && <p style={{ gridColumn: "1 / -1", color: "var(--text-secondary)", fontSize: 12, margin: 0 }}>
+        {form.sov_mode === "new_line" ? `Approval will add a new SOV line for ${formatCurrency(Number(form.co_amount))}.` : form.sov_mode === "adjust_line" ? `Approval will adjust the selected SOV line by ${formatCurrency(Number(form.co_amount))}. A deduct reduces its value.` : form.sov_mode === "none" ? "Approval will update the change-order total without changing scheduled billing values." : "Choose the billing treatment explicitly before approving."}
+      </p>}
+      {form.status === "Rejected" && co?.status !== "Rejected" && <Field label="Rejection reason" wide><textarea style={inputStyle} value={form.decision_notes || ""} onChange={event => set("decision_notes", event.target.value)} /></Field>}
+      {form.status === "Void" && co?.status !== "Void" && <Field label="Void reason" wide><textarea style={inputStyle} value={form.void_reason || ""} onChange={event => set("void_reason", event.target.value)} /></Field>}
+      <Field label="Notes" wide><textarea style={{ ...inputStyle, minHeight: 56, resize: "vertical" }} value={form.notes || ""} onChange={event => set("notes", event.target.value)} /></Field>
+      <Field label="Attachments (comma-separated)" wide><input style={inputStyle} value={form.attachments || ""} onChange={event => set("attachments", event.target.value)} placeholder="file1.pdf, file2.pdf" /></Field>
+    </fieldset>
+    {co?.id && form.project_id && <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--divider)" }}><RelatedScheduleTasksChips projectId={form.project_id} relatedField="related_change_order_ids" targetId={co.id} /></div>}
+  </PhoenixModal>;
 }

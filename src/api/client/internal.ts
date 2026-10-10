@@ -19,6 +19,6 @@ export type QueryBuilder = any;
 // trips the table-literal overload (TS won't propagate the constraint cleanly
 // through the union of 57 string literals). We re-type from() through an
 // untyped shim and rely on createEntityClient's surface to enforce shape.
-export const sbFrom = (table: string): QueryBuilder =>
+export const sbFrom = (table: string, client = supabase): QueryBuilder =>
    
-  (supabase.from as unknown as (t: string) => any)(table);
+  (client.from as unknown as (t: string) => any)(table);

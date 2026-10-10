@@ -53,8 +53,25 @@ export function parseLinkedIds(value) {
     .filter(Boolean);
 }
 
-function drawingState(wp, drawingsById) {
-  const ids = parseLinkedIds(wp.linked_drawing_ids);
+/** Index the exact set evidence once; avoid rescanning every project submittal for every sheet. */
+function indexApprovalEvidenceBySet(evidence) {
+  const bySet = new Map();
+  for (const set of evidence.drawingSets ?? []) {
+    bySet.set(String(set.id), { drawingSets: [set], submittals: [] });
+  }
+  for (const submittal of evidence.submittals ?? []) {
+    for (const setId of submittal.drawing_set_ids ?? []) {
+      const key = String(setId);
+      const scoped = bySet.get(key) ?? { drawingSets: [], submittals: [] };
+      scoped.submittals.push(submittal);
+      bySet.set(key, scoped);
+    }
+  }
+  return bySet;
+}
+
+function drawingState(wp, drawingsById, approvalEvidenceBySet, drawingReadyCache, pieceScope = null) {
+  const ids = pieceScope ? pieceScope.drawingIds : parseLinkedIds(wp.linked_drawing_ids);
   const linked = ids.map((id) => drawingsById.get(String(id))).filter(Boolean);
   const approved = linked.filter((drawing) =>
     APPROVED_DRAWING_STAGES.has(drawing.stage || drawing.status)
@@ -67,33 +84,43 @@ function drawingState(wp, drawingsById) {
   // one approved sheet and six blocked ones therefore read "ready, 0 blocked"
   // here while Fab Release reported "6 blocked" on the same data.
   //
-  // Reuse the gate's own per-sheet predicates so the two surfaces can't
-  // diverge again, and require EVERY linked sheet to pass. Evidence-backed
-  // approvals (submittals / revisions) aren't loaded on this page, so
-  // isApprovedForFab runs on sheet state alone — that can only be more
-  // conservative than the gate, never falsely green.
+  // Reuse the gate's own per-sheet predicates and require EVERY linked sheet
+  // to pass. The page supplies complete drawing-set and shop-submittal reads;
+  // a legacy sheet stage alone can never clear this check.
   const rejected = linked.filter((d) => isRejectedSheet(d));
   const superseded = linked.filter((d) => isSupersededSheet(d) && !isRejectedSheet(d));
   // A sheet is fab-ready only if the release predicate passes AND the gate
   // wouldn't block it for rejection/supersession. isApprovedForFab checks
   // superseded/void/on_hold release states but not the rejected disposition,
   // which is a separate blocking reason in computeFabReleaseGate.
-  const sheetIsFabReady = (d) =>
-    isApprovedForFab(d) &&
-    !isRejectedSheet(d) &&
-    !isSupersededSheet(d) &&
-    !isUnresolvedCurrentRevision(d);
+  const sheetIsFabReady = (d) => {
+    const key = String(d.id);
+    if (!drawingReadyCache.has(key)) {
+      drawingReadyCache.set(key,
+        isApprovedForFab(
+          d,
+          approvalEvidenceBySet.get(String(d.drawing_set_id ?? "")) ?? { drawingSets: [], submittals: [] },
+        ) &&
+        !isRejectedSheet(d) &&
+        !isSupersededSheet(d) &&
+        !isUnresolvedCurrentRevision(d),
+      );
+    }
+    return drawingReadyCache.get(key);
+  };
   const fabReady = linked.filter(sheetIsFabReady);
   const blockedSheets = linked.filter((d) => !sheetIsFabReady(d));
   // Unresolvable links count as blocked: we can't prove a sheet we can't see.
   const missingLinks = ids.length - linked.length;
-  const blockedCount = blockedSheets.length + missingLinks;
+  const missingScopeLinks = pieceScope?.missingLinkCount ?? 0;
+  const blockedCount = blockedSheets.length + missingLinks + missingScopeLinks;
 
   return {
     linkedCount: ids.length,
     knownCount: linked.length,
     approvedCount: approved.length,
     missingLinks,
+    missingScopeLinks,
     hasAny: ids.length > 0,
     hasApproved: approved.length > 0,
     allKnownApproved: linked.length > 0 && approved.length === linked.length,
@@ -102,7 +129,7 @@ function drawingState(wp, drawingsById) {
     rejectedCount: rejected.length,
     supersededCount: superseded.length,
     blockedCount,
-    /** Every linked sheet is release-ready and at least one exists. */
+    /** Every linked sheet has a governing approval stage; other fab gates still apply. */
     allFabReady: ids.length > 0 && blockedCount === 0,
   };
 }
@@ -120,6 +147,10 @@ function phaseIndex(phase) {
  * @param {Map<string, object>} [options.releasesByWp]  indexReleasesByWorkPackage()
  * @param {Map<string, object>} [options.piecesByWp]    summarizePiecesByWorkPackage()
  * @param {string} [options.pieceControlMode]           projects.piece_control_mode
+ * @param {import('@/lib/exports/fabRelease').FabApprovalEvidence} [options.approvalEvidence]
+ * @param {Map<string, import('@/lib/exports/fabRelease').FabApprovalEvidence>} [options.approvalEvidenceBySet]
+ * @param {Map<string, boolean>} [options.drawingReadyCache]
+ * @param {Map<string, import('./canonical').PieceDrawingScope>} [options.pieceDrawingScopeByWp]
  * @param {string|Date} [options.today]
  */
 export function getWorkPackageSignals(wp, options = {}) {
@@ -127,6 +158,9 @@ export function getWorkPackageSignals(wp, options = {}) {
   const deliveriesByWp = options.deliveriesByWp || new Map();
   const releasesByWp = options.releasesByWp || new Map();
   const piecesByWp = options.piecesByWp || new Map();
+  const approvalEvidence = options.approvalEvidence || {};
+  const approvalEvidenceBySet = options.approvalEvidenceBySet || indexApprovalEvidenceBySet(approvalEvidence);
+  const drawingReadyCache = options.drawingReadyCache || new Map();
   const today = options.today ? dateValue(options.today) || options.today : todayStart();
   if (today?.setHours) today.setHours(0, 0, 0, 0);
 
@@ -147,7 +181,10 @@ export function getWorkPackageSignals(wp, options = {}) {
   const complete = isClosedStatus(status) || progress >= 100;
   const endDate = dateValue(wp.scheduled_end_date);
   const overdue = Boolean(endDate && endDate < today && !complete);
-  const drawing = drawingState(wp, drawingsById);
+  const pieceScope = pieceDriven
+    ? options.pieceDrawingScopeByWp?.get(wpKey) ?? { drawingIds: [], missingLinkCount: pieces?.leafCount ?? 1 }
+    : null;
+  const drawing = drawingState(wp, drawingsById, approvalEvidenceBySet, drawingReadyCache, pieceScope);
   const phaseIdx = phaseIndex(phase);
   const inProductionPhase = phaseIdx >= phaseIndex("Fabrication");
   const inDeliveryOrField = phaseIdx >= phaseIndex("Delivery");
@@ -169,13 +206,15 @@ export function getWorkPackageSignals(wp, options = {}) {
   } else if (inProductionPhase && !drawing.hasAny) {
     flags.push({ key: "no_drawings", label: "No linked drawings", severity: "high" });
   } else if (inProductionPhase && !drawing.allFabReady) {
-    // Sheet-level count so this agrees with Fab Release instead of implying
-    // "released" the moment a single sheet is approved.
+    // Count sheets whose exact governing shop-submittal approval is missing;
+    // this is a drawing-stage signal, not the server's full fab-release result.
     flags.push({
       key: "drawings_not_released",
       label: drawing.blockedCount > 0
-        ? `${drawing.blockedCount} sheet${drawing.blockedCount === 1 ? "" : "s"} not released`
-        : "Drawings not released",
+        ? drawing.missingScopeLinks > 0
+          ? `${drawing.missingScopeLinks} lot/set drawing link${drawing.missingScopeLinks === 1 ? "" : "s"} missing`
+          : `${drawing.blockedCount} sheet${drawing.blockedCount === 1 ? "" : "s"} lack governing IFC/Released`
+        : "Drawing approval incomplete",
       severity: "high",
     });
   }
@@ -246,6 +285,9 @@ export function getWorkPackageSignals(wp, options = {}) {
  * @param {Map<string, object>} [extras.releasesByWp]
  * @param {Map<string, object>} [extras.piecesByWp]
  * @param {string} [extras.pieceControlMode]
+ * @param {import('@/lib/exports/fabRelease').FabApprovalEvidence['submittals']} [extras.submittals]
+ * @param {import('@/lib/exports/fabRelease').FabApprovalEvidence['drawingSets']} [extras.drawingSets]
+ * @param {Map<string, import('./canonical').PieceDrawingScope>} [extras.pieceDrawingScopeByWp]
  */
 export function buildWorkPackageMetrics(workPackages = [], drawings = [], deliveries = [], extras = {}) {
   const drawingsById = new Map(drawings.map((drawing) => [String(drawing.id), drawing]));
@@ -263,6 +305,12 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     releasesByWp: extras.releasesByWp,
     piecesByWp: extras.piecesByWp,
     pieceControlMode: extras.pieceControlMode,
+    approvalEvidence: { submittals: extras.submittals ?? [], drawingSets: extras.drawingSets ?? [] },
+    approvalEvidenceBySet: indexApprovalEvidenceBySet({
+      submittals: extras.submittals ?? [], drawingSets: extras.drawingSets ?? [],
+    }),
+    drawingReadyCache: new Map(),
+    pieceDrawingScopeByWp: extras.pieceDrawingScopeByWp,
   };
 
   const enriched = workPackages.map((wp) => ({
@@ -306,14 +354,12 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     wp._signals.flags.some((flag) => flag.key === "no_drawings" || flag.key === "drawings_not_released")
   );
   const overdue = enriched.filter((wp) => wp._signals.overdue);
-  // Fail-closed: every linked sheet must be release-ready, same direction as
-  // the Fab Release gate. `hasApproved` (any one sheet) used to qualify here.
-  // A package Fab Release already released is past this bucket.
-  const readyForFab = enriched.filter((wp) =>
-    wp._signals.phase === "Detailing" &&
+  // Legacy property name; this is a drawing-stage clearance candidate, not
+  // a fabrication release. Material, RFI, PDF, hold and server checks still
+  // govern whether the shop can actually start.
+  const drawingStageClear = enriched.filter((wp) =>
     !wp._signals.released &&
-    wp._signals.drawing.allFabReady &&
-    wp._signals.status !== "On Hold"
+    wp._signals.drawing.allFabReady
   );
   /** Packages with at least one sheet the fab gate would block. */
   const fabBlocked = enriched.filter((wp) => (wp._signals.drawing.blockedCount ?? 0) > 0);
@@ -352,7 +398,7 @@ export function buildWorkPackageMetrics(workPackages = [], drawings = [], delive
     onHold,
     drawingGaps,
     overdue,
-    readyForFab,
+    drawingStageClear,
     fabBlocked,
     blockedSheetCount,
     released,
@@ -375,8 +421,8 @@ export function matchesFocusFilter(wp, focus, metrics) {
       return s.risk === focus;
     case "drawing_gaps":
       return (s.flags || []).some((f) => f.key === "no_drawings" || f.key === "drawings_not_released");
-    case "ready_fab":
-      return Boolean(metrics?.readyForFab?.some((w) => w.id === wp.id));
+    case "drawing_stage_clear":
+      return Boolean(metrics?.drawingStageClear?.some((w) => w.id === wp.id));
     case "released":
       return Boolean(s.released);
     case "exception":

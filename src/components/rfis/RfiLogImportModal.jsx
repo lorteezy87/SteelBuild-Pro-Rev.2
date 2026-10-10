@@ -19,8 +19,18 @@ const AI      = "var(--ai-accent, var(--status-info))";
  * RFI log import wizard: upload PDF → AI extract → preview → confirm.
  * Mirrors the ShippingTicketImportModal pattern but with dedup on
  * (project_id, rfi_number) so re-running the import is safe.
+ *
+ * @param {{
+ *   open: boolean,
+ *   projectId?: string | null,
+ *   projectName?: string | null,
+ *   projects?: Array<Pick<import("@/api/client/supabaseTypes").RowWithAliases<"projects">, "id"> & Partial<Pick<import("@/api/client/supabaseTypes").RowWithAliases<"projects">, "name" | "org_id" | "project_number">>>,
+ *   onClose: () => void,
+ *   onCreated?: (result: { created: number, skipped: number }) => void,
+ *   assertCanImport?: (projectId: string) => void
+ * }} props
  */
-export default function RfiLogImportModal({ open, projectId, projectName, projects = [], onClose, onCreated }) {
+export default function RfiLogImportModal({ open, projectId, projectName, projects = [], onClose, onCreated, assertCanImport }) {
   const qc = useQueryClient();
   const trapRef = useFocusTrap(open);
   const fileInput = useRef(null);
@@ -33,6 +43,34 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
   const [chosenProjectId, setChosen] = useState(projectId || null);
   const [lastResult, setLastResult] = useState(null);
   const [err, setErr] = useState(null);
+  const sessionRef = useRef(0);
+  const mountedRef = useRef(false);
+  const closeTimerRef = useRef(null);
+  const currentRef = useRef({ open, projects, assertCanImport });
+  currentRef.current = { open, projects, assertCanImport };
+
+  useEffect(() => {
+    sessionRef.current += 1;
+    mountedRef.current = true;
+    setStep("upload"); setFile(null); setUploaded(null); setParsed(null);
+    setMatched(null); setChosen(projectId || null); setLastResult(null); setErr(null);
+    return () => {
+      mountedRef.current = false;
+      sessionRef.current += 1;
+      clearTimeout(closeTimerRef.current);
+    };
+  }, [open, projectId]);
+
+  const createImportGuard = () => {
+    const session = sessionRef.current;
+    const isCurrent = () => mountedRef.current && currentRef.current.open && sessionRef.current === session;
+    const assert = (targetProjectId) => {
+      if (!isCurrent()) throw new Error("Import session changed. Reopen the log and try again.");
+      if (!currentRef.current.projects.some((project) => project.id === targetProjectId)) throw new Error("Select a project from the current workspace before importing.");
+      currentRef.current.assertCanImport?.(targetProjectId);
+    };
+    return { assert, isCurrent };
+  };
 
   if (!open) return null;
 
@@ -70,8 +108,10 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
 
   const runExtract = async () => {
     if (!file) return;
+    const guard = createImportGuard();
     setStep("extracting"); setErr(null);
     try {
+      guard.assert(projectId || chosenProjectId);
       const kind = fileKind(file);
       let res;
       if (kind === "csv") {
@@ -79,6 +119,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
         // the eventual commit. Warnings are bubbled up so the user can
         // see "we couldn't find a Subject column" etc.
         res = await readRfiCsvFile(file);
+        guard.assert(projectId || chosenProjectId);
         setUploaded(null); // no upload needed for CSV
         if (res.warnings?.length) {
           console.warn("[RfiLogImport] CSV warnings:", res.warnings);
@@ -92,11 +133,14 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
       } else {
         // PDF path: upload + AI extraction (legacy, requires API credits).
         const up = await uploadRfiLog(file);
+        guard.assert(projectId || chosenProjectId);
         setUploaded(up);
-        res = await extractRfiLog(up);
+        res = await extractRfiLog({ ...up, project_id: projectId || chosenProjectId });
       }
+      guard.assert(projectId || chosenProjectId);
       setParsed(res);
-      const match = await resolveProjectForRfiLog(res.header?.job_number);
+      const match = await resolveProjectForRfiLog(res.header?.job_number, projects);
+      guard.assert(match?.id || projectId || chosenProjectId);
       if (match) {
         setMatched(match);
         setChosen(match.id);
@@ -105,6 +149,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
       }
       setStep("preview");
     } catch (e) {
+      if (!guard.isCurrent()) return;
       setErr(e?.message || String(e));
       setStep("upload");
     }
@@ -113,23 +158,28 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
   const runCommit = async () => {
     if (!parsed) return;
     if (!chosenProjectId) { setErr("Pick a project first."); return; }
+    const guard = createImportGuard();
     setStep("committing"); setErr(null);
     try {
+      guard.assert(chosenProjectId);
       const project = projects.find(p => p.id === chosenProjectId);
       const res = await commitRfiLog({
         header:      parsed.header,
         rfis:        parsed.rfis,
         projectId:   chosenProjectId,
         projectName: project?.name || projectName || null,
+        assertCanImport: guard.assert,
       });
-      setLastResult(res);
-      toast.success(`${res.created} RFI${res.created === 1 ? "" : "s"} imported${res.skipped ? `, ${res.skipped} skipped (already in project)` : ""}`);
       qc.invalidateQueries({ queryKey: ["rfis"] });
       qc.invalidateQueries({ queryKey: ["rfis", chosenProjectId] });
+      if (!guard.isCurrent()) return;
+      setLastResult(res);
+      toast.success(`${res.created} RFI${res.created === 1 ? "" : "s"} imported${res.skipped ? `, ${res.skipped} skipped (already in project)` : ""}`);
       onCreated?.(res);
       setStep("done");
-      setTimeout(() => { reset(); onClose(); }, 1500);
+      closeTimerRef.current = setTimeout(() => { if (guard.isCurrent()) { reset(); onClose(); } }, 1500);
     } catch (e) {
+      if (!guard.isCurrent()) return;
       setErr(e?.message || String(e));
       setStep("preview");
     }
@@ -197,7 +247,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
                   background: "var(--bg-page)",
                 }}
               >
-                <input ref={fileInput} type="file"
+                <input ref={fileInput} type="file" aria-label="RFI log file"
                        accept=".csv,.tsv,.txt,text/csv,application/csv,text/plain,application/pdf,.pdf"
                        style={{ display: "none" }}
                        onChange={(e) => acceptFile(e.target.files?.[0])} />

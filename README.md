@@ -16,20 +16,37 @@ moat.
 ## Stack
 
 - **Frontend**: Vite + React 18, shadcn/radix UI primitives, TanStack Query,
-  React Router, Recharts, react-leaflet. Styling via CSS custom-property tokens
-  (`src/styles/tokens.css`, the "SteelBuild Dark" system) + a small
-  design-system module — **NOT Tailwind**.
+  React Router, Recharts. Styling is **token-first**: CSS custom properties
+  (`src/styles/tokens.css`, the SteelBuild dual-theme system) plus a small
+  design-system module carry every surface, text and border colour. Tailwind is
+  installed and compiled (`tailwind.config.js`, `@tailwind` directives in
+  `src/globals.css`) and is used for layout/utility classes — but colours come
+  from tokens only, never a hardcoded hex. See the design-system rules in
+  [`CLAUDE.md`](./CLAUDE.md).
 - **Viewers**: a **self-hosted IFC viewer** (`web-ifc` wasm + `three.js`,
   lazy-loaded) for the Detailing Control Center's 3D tab; `pdf.js` for drawings.
 - **Data**: Supabase (Postgres + RLS + Storage + Auth + Edge Functions).
-- **Hosting**: Cloudflare Workers (`steelbuild-pro-rev-2`). Production deploys
-  are **CI-gated** — a push to `main` runs `.github/workflows/ci.yml` (lint +
-  TS/JS typechecks + strictNullChecks + noImplicitAny + Vitest + production
-  build), and only a green run publishes the Worker. Vercel is retired.
+- **Hosting**: Cloudflare Workers (`steelbuild-pro-rev-2`), serving
+  `steelbuild-pro.com`. Production deploys require five green jobs: `ci`,
+  `secret-scan`, `supabase-drift`, `edge-typecheck`, and `commercial-postgres`.
+  Vercel is retired.
 - **LLM**: a provider-agnostic gateway via the `llm-proxy` Edge Function
   (currently OpenAI `gpt-4o` / `gpt-4o-mini`). Never call a provider from the browser.
 - **Billing**: Stripe subscription plans via the `stripe-billing` Edge Function.
 - **Monitoring**: Sentry (`@sentry/react`) with masked session replay.
+
+## Rebuild direction
+
+This rebuild covers the full fabricator/erector workflow, including drawings,
+shop release, production, logistics, field work, schedule, and commercial
+controls. Erection-only workspaces must retain relevant field workflows while
+fabrication capabilities are enforced server-side as well as in navigation.
+Proposed intelligence extensions include reviewed field-note drafts, scanned
+drawing intake with page evidence, schedule-blocker analysis, cited document
+answers and RFI drafts, and clearly labeled proposal/training visuals. They
+are roadmap items unless a specific feature is verified in source and hosted
+acceptance; AI output does not authorize release, clear holds, or approve
+engineering decisions.
 
 ## Multi-tenancy
 
@@ -60,6 +77,16 @@ deep-links to each step. It's separate from the data-setup onboarding
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md#domain-workflow) for the full glossary
 and the status×ball-in-court → stage mapping.
+
+## Viewport behavior
+
+The calculator workspace responds to the **available content width**, including
+the space left beside the app sidebar. Crane-pick fields stack when needed, and
+its 3D view resizes with its container and the phone viewport. Virtualized command
+registers retain their columns in an aligned, keyboard-scrollable horizontal
+region instead of clipping the rightmost actions. These are source-level layout
+changes; the authenticated crane-pick route still needs rendered viewport
+acceptance on target devices.
 
 ## Local development
 
@@ -96,8 +123,11 @@ billing secrets live server-side in the Edge Functions' environment.
 | `npm run typecheck:js` | `tsc --noEmit` against `jsconfig.json` (JS/JSX)|
 | `npm run typecheck:strict` | strictNullChecks ratchet — all `.ts/.tsx` except the grandfathered list |
 | `npm run typecheck:noimplicitany` | noImplicitAny ratchet — all `.ts/.tsx` except the grandfathered list |
+| `npm run check:no-new-js` | Reject new JS/JSX source files on this branch |
 | `npm test`             | Vitest run (unit + jsdom integration tests)    |
 | `npm run test:watch`   | Vitest in watch mode                           |
+| `npm run test:e2e:foundation` | No-backend desktop/mobile browser acceptance |
+| `npm run perf:bundle` | Check production bundle budgets after build |
 | `npm run supabase:drift` | Compare remote Supabase schema vs migrations (skips without token / `ALLOW_SKIP=1`) |
 | `npm run supabase:delete-deprecated-fns` | Dry-run delete of retired Edge Functions (`DRY_RUN=0` to apply) |
 
@@ -122,13 +152,23 @@ public/          static assets, web-ifc wasm, pdf workers
 
 ## Database migrations
 
-Migrations live in `supabase/migrations/` (mixed legacy `NNN_name.sql` and
-timestamped `YYYYMMDDhhmmss_name.sql` — the history was **re-baselined** (29
-active files; ~190 legacy migrations archived), so inspect the directory for the
-latest rather than assuming a number). Apply live changes via
-the Supabase MCP (`apply_migration`) and commit the same SQL so repo history
-matches the database. After a migration that changes the exposed schema, the SQL
-ends with `NOTIFY pgrst, 'reload schema'`.
+Migrations live in `supabase/migrations/` (timestamped
+`YYYYMMDDhhmmss_name.sql` — the history was **re-baselined** on 2026-06-20 and
+~190 legacy migrations are archived in `supabase/migrations_archive/`, so
+inspect the directory rather than assuming a number; 123 files as of
+2026-09-22). After a migration that changes the exposed schema, the SQL ends
+with `NOTIFY pgrst, 'reload schema'`.
+
+**Do not apply migrations with `supabase db push` or the Supabase MCP
+`apply_migration`.** This Supabase project is shared with a sibling app, so the
+remote ledger carries versions this repo does not own (42 of 130 as of
+2026-09-22, catalogued in `supabase/production-ownership-manifest.json`) and the
+CLI refuses; `apply_migration` stamps its own apply-time version, which is how
+the ledger drifted in the first place. Migrations here are applied and stamped
+by hand, and the committed filename **must** be the stamped ledger version.
+`Supabase drift check` compares the two on every branch, so a stamp whose file
+is unmerged turns `main` and every open PR red. Read the full procedure in
+[`CLAUDE.md`](./CLAUDE.md) before applying anything.
 
 ## Auth, roles & tenancy
 
@@ -195,41 +235,87 @@ flag (off by default) and a type-the-name confirmation.
 
 ## Testing
 
-The Phase 0 closure baseline is 251 Vitest files and 2,968 tests: pure-helper
-suites (default `node` env) plus jsdom integration tests
-(`// @vitest-environment jsdom`) that drive real components/import flows with the
-Supabase client mocked. Playwright smoke and fab-release gate specs are available
-under `e2e/`, but remain opt-in and nonblocking until dedicated test fixtures are
-configured. Counts change as tested helper modules are added; run `npm test --
---run` for the current total (678 files / 6,470 tests as of 2026-09-19).
+Vitest runs pure helpers in `node` and component/integration tests in jsdom
+(`// @vitest-environment jsdom`), with Supabase mocked. The 2026-10-08
+`73664ef16` CI run passed 8,193 tests across 842 files. The blocking
+`npm run test:e2e:foundation` suite passed 76 desktop/mobile browser checks
+without a backend. Authenticated Playwright scenarios need a configured login
+fixture: `e2e/mobile-overflow.spec.ts` includes the exact
+`/CalculatorsHub?calc_tab=cranepick` route at 360, 393, and 430px, but those
+cases were listed, not run, at this checkpoint. The foundation pass does not
+establish logged-in calculator viewport acceptance.
 
 ## CI/CD
 
 `.github/workflows/ci.yml` runs on configured push branches and pull requests
-targeting the supported bases: lint, four typecheck gates
-(TS, JS/JSX, the **strictNullChecks** ratchet, and the **noImplicitAny**
-ratchet), Vitest, and a production build — all blocking. Only a green `ci` job
-lets the gated deploy job publish the `steelbuild-pro-rev-2` Cloudflare Worker,
-followed by a post-deploy health check. An advisory `dependency-audit` job
-(`npm audit`, non-blocking) and an opt-in post-deploy Playwright smoke round it
-out. A concurrency group cancels redundant runs without interrupting a
-production deploy.
+targeting the supported bases. The blocking `ci` job runs lint, the no-new-JS
+gate, four typecheck gates (TS, JS/JSX, **strictNullChecks**, **noImplicitAny**),
+Vitest, no-backend Playwright foundation acceptance, database helper/account
+deletion/MFA checks, the production build, and bundle budgets. Production
+deploys and PR previews also require `secret-scan` (gitleaks),
+`supabase-drift` (the production ledger), `edge-typecheck` (released Edge
+Functions), and `commercial-postgres` (commercial SQL and concurrent database
+acceptance). A red required job skips the web deploy and preview. A
+post-deploy health check follows. `dependency-audit` reports vulnerabilities
+but is not a deployment prerequisite; optional authenticated Playwright
+smoke runs separately. A concurrency group cancels redundant runs without
+interrupting a production deploy.
+
+Three more workflows live beside it: `storage-backup.yml` (nightly Storage
+backup), `supabase-deploy-reviewed.yml` (manual, reviewed Edge Function deploy
+for `llm-proxy`, `project-export` and `stripe-billing`), and
+`supabase-retire-deprecated.yml`.
 
 ## Deployment
 
 Feature work lands on a feature branch and is reviewed through a pull request. A
-push to **`main`** runs the `ci` job; **only if it passes**
-does the deploy job publish the static-asset Cloudflare Worker configured in
-`wrangler.jsonc`. A red run cannot deploy — production stays on the last good
-build. The GitHub Action is the sole production path. Remaining gap:
-no branch-protection required check (repo plan), so red/unreviewed commits can
-still land on `main` even though they cannot deploy. [`CLAUDE.md`](./CLAUDE.md)
-documents the full workflow + git-safety rules. Edge Functions deploy separately
-(Supabase MCP `deploy_edge_function` or `supabase functions deploy`).
+push to **`main`** runs `ci`, `secret-scan`, `supabase-drift`, `edge-typecheck`,
+and `commercial-postgres`; **only if all five pass** does the deploy job publish the
+static-asset Cloudflare Worker configured in `wrangler.jsonc`. A red run cannot
+deploy — production stays on the last good build. The GitHub Action is the sole
+production path; Cloudflare's own Workers Builds git integration must stay
+disconnected, because it would deploy on push with no gate. Rollback is
+`wrangler rollback <version-id>`, not a redeploy. Remaining gap: no
+branch-protection required check (repo plan), so red/unreviewed commits can
+still land on `main` even though they cannot deploy.
+[`CLAUDE.md`](./CLAUDE.md) documents the full workflow + git-safety rules.
 
-**Staging.** The former Vercel and Supabase staging projects are retired, so
-staging E2E jobs cannot run until the environment is rebuilt. Setup requirements
-remain in [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
+**Edge Functions** deploy separately from the web app. The reviewed path is the
+manual `supabase-deploy-reviewed.yml` workflow (`llm-proxy`, `project-export`,
+`stripe-billing`); others go via `supabase functions deploy`. Nine functions are
+live in production as of 2026-09-22: `llm-proxy`, `email-ingest`, `email-send`,
+`stripe-billing`, `project-export`, `health`, `command-center-read`,
+`command-center-session-handoff`, `account-delete`. The repo also carries
+`staging-e2e-bootstrap` (staging only) and `legacy-app-files-copy` (retired from
+production 2026-09-21). Every previously deprecated function — `sharepoint-proxy`,
+`bluebeam-proxy`, `stripe-setup`, `stripe-webhook`, `stripe-worker`, `sheets-api`
+— has been deleted.
+
+**Staging.** Rebuilt 2026-09-21 on a persistent Supabase branch
+(`ndyfjffsulfbwpmwdmic`) behind the `steelbuild-pro-staging` Worker, deployed by
+the `deploy-staging-cloudflare` job from the `staging` branch. It holds no
+production data, Auth users, secrets or stored objects. Read-only and
+disposable-mutation E2E jobs run against it. Details, including what the
+schema restore did and did not cover, are in
+[`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
+
+**Current release work (2026-10-09).** [PR #499](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/499)
+has merged. [PR #516](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/516)
+integrates the reviewed drawing evidence, workspace membership, recovery,
+account-erasure identity and billing changes. Its full combined checks and
+authenticated acceptance must pass before publication. The five Drawing Control
+migrations, membership resolver, revision manifest, durable checkout and project
+capacity changes are installed on staging with verified ledger payloads; these
+remain pending in production. Production has received nine separately reviewed
+SQL migrations during this release, including atomic billing, but the matching
+Edge release and frontend publication remain pending. `CLOUDFLARE_ENABLED` is
+temporarily false to preserve the existing live Worker while dependencies are
+verified; restoring it and publishing through all five gates are required to
+complete the production update. See the current
+[`release evidence`](./docs/audits/PRODUCTION_RELEASE_2026-10-08.md) for exact
+versions, hashes and acceptance limits. Whole-app enterprise and monetization
+readiness, provider delivery, backup restore, authenticated workflow/viewport
+acceptance and the build-tool advisory remain open.
 
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor
@@ -239,6 +325,24 @@ target. Enterprise-readiness remediation status + owner action list live in
 Tier 1 split matrix
 [`docs/runbooks/tier1-enterprise-status.md`](./docs/runbooks/tier1-enterprise-status.md)
 (code-complete vs owner-only: PITR, Stripe Tax dashboard, branch protection, …).
+The broader 2026-09-21 production-readiness audit — security, tenancy, data
+correctness, performance, release process and store readiness, with a §9
+reconciliation against current `main` — is
+[`docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](./docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md).
+
+## Mobile (iOS / Android)
+
+**The product ships as a web app today.** Neither store build exists yet.
+
+- **iOS** — a sign-in-only Capacitor 8 shell (`capacitor.config.ts`, appId
+  `com.steelbuildpro.app`, `webDir: dist`). The `ios/` Xcode project is
+  committed: `npm run cap:sync` copies the web build into it, and
+  `npm run cap:open` opens it in Xcode. Signing, archiving and App Store
+  Connect need a Mac with Xcode and can't run in CI/Linux. The runbook, including what's left before submission, is
+  [`docs/app-store/SUBMISSION.md`](./docs/app-store/SUBMISSION.md).
+- **Android / Google Play** — **no platform exists**: `@capacitor/android` is
+  not a dependency and there is no `android/` directory. Play submission is a
+  from-scratch task, not a configuration change.
 
 ## Error monitoring
 
@@ -312,6 +416,8 @@ stays always on. Config: `src/config/moduleGating.js` + `useModuleAccess`.
 
 - **Architecture + decisions** → [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 - **Known issues + remediation** → [`TECH_DEBT.md`](./TECH_DEBT.md)
+- **Production-readiness audit (2026-09-21)** → [`docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md`](./docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md)
+- **App Store submission runbook** → [`docs/app-store/SUBMISSION.md`](./docs/app-store/SUBMISSION.md)
 - **Enterprise Tier 1 status** → [`docs/runbooks/tier1-enterprise-status.md`](./docs/runbooks/tier1-enterprise-status.md)
 - **Agent / deploy conventions** → [`CLAUDE.md`](./CLAUDE.md) · concurrent claims → [`AGENT_CLAIMS.md`](./AGENT_CLAIMS.md)
 - **Drawing/submittal stage glossary** → [`ARCHITECTURE.md#domain-workflow`](./ARCHITECTURE.md#domain-workflow)

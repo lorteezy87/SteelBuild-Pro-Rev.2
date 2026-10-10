@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { verifiedSubmittalEvidence } from '@/test/fixtures/submittalEvidence';
 import {
   isApprovedForFab,
   isApprovedForTurnover,
@@ -74,9 +75,9 @@ const superseded = {
 const noSetName = { id: "8", sheet_number: "Z-1", title: "Misc", stage: "Released", is_deleted: false };
 
 describe("isApprovedForFab (Slice 8 IFC/Released)", () => {
-  it("accepts Released / IFC stage and submittal-derived IFC", () => {
-    expect(isApprovedForFab(released)).toBe(true);
-    expect(isApprovedForFab(ifcStage)).toBe(true);
+  it("requires a set-linked Shop Drawing submittal even when the sheet has a Released / IFC stage", () => {
+    expect(isApprovedForFab(released)).toBe(false);
+    expect(isApprovedForFab(ifcStage)).toBe(false);
     expect(
       isApprovedForFab(
         { id: "9", drawing_set_id: "set-1", stage: "OFS", is_deleted: false },
@@ -84,6 +85,8 @@ describe("isApprovedForFab (Slice 8 IFC/Released)", () => {
           submittals: [
             {
               id: "s1",
+              ...verifiedSubmittalEvidence('s1'),
+              submittal_type: "Shop Drawing",
               status: "Approved",
               ball_in_court: "GC",
               drawing_set_ids: ["set-1"],
@@ -92,6 +95,17 @@ describe("isApprovedForFab (Slice 8 IFC/Released)", () => {
         },
       ),
     ).toBe(true);
+  });
+
+  it("rejects Product Data approval and timestamp-deleted drawings or sets", () => {
+    const evidence = {
+      submittals: [{ id: "s1", ...verifiedSubmittalEvidence('s1'), submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC", drawing_set_ids: ["set-1"] }],
+      drawingSets: [{ id: "set-1" }],
+    };
+    expect(isApprovedForFab(released, evidence)).toBe(true);
+    expect(isApprovedForFab(released, { ...evidence, submittals: [{ ...evidence.submittals[0], submittal_type: "Product Data" }] })).toBe(false);
+    expect(isApprovedForFab({ ...released, deleted_at: "2026-10-07T00:00:00Z" }, evidence)).toBe(false);
+    expect(isApprovedForFab(released, { ...evidence, drawingSets: [{ id: "set-1", deleted_at: "2026-10-07T00:00:00Z" }] })).toBe(false);
   });
 
   it("rejects bare set_approval_status / ifc_status and pre-IFC stages", () => {
@@ -106,7 +120,7 @@ describe("isApprovedForFab (Slice 8 IFC/Released)", () => {
 
 describe("isApprovedForTurnover", () => {
   it("matches fab approval rules", () => {
-    expect(isApprovedForTurnover(released)).toBe(true);
+    expect(isApprovedForTurnover(released)).toBe(false);
     expect(isApprovedForTurnover(inReview)).toBe(false);
   });
 });

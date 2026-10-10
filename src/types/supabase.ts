@@ -13547,6 +13547,40 @@ export type Database = {
         }
         Returns: Json
       }
+      retry_revision_comparison: {
+        Args: { p_comparison_id: string }
+        Returns: {
+          ai_summary: string | null
+          compare_status: string | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          delta_count: number | null
+          deterministic_stats: Json | null
+          drawing_id: string | null
+          error_message: string | null
+          from_analysis_id: string | null
+          from_revision_id: string | null
+          id: string
+          is_deleted: boolean
+          metadata: Json | null
+          model: string | null
+          project_id: string | null
+          raw_ai_response: Json | null
+          requested_by: string | null
+          source: string
+          to_analysis_id: string | null
+          to_revision_id: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drawing_revision_comparisons"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_revision_comparison: {
         Args: {
           p_comparison_id: string

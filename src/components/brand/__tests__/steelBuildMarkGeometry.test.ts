@@ -6,14 +6,10 @@ import { MARK_AMBER, MARK_PATH, MARK_TILE_BG } from "../steelBuildMarkGeometry";
 const read = (rel: string) => readFileSync(resolve(process.cwd(), rel), "utf8");
 const squash = (value: string) => value.replace(/\s+/g, " ").trim();
 
-/**
- * The hex-S is drawn in five places that cannot import each other: the React
- * component (via this module), three static SVGs served out of public/, and the
- * plain-node raster generator. A drifted copy means the favicon, the app icon
- * and the nav logo stop being the same logo, which nobody notices until it
- * ships. These tests are the only thing holding them together.
+/** Legacy SVGs remain available to older installed clients. Keep their geometry
+ * consistent, while the active raster assets come from the approved badge.
  */
-describe("SteelBuild-Pro hex-S mark geometry", () => {
+describe("legacy SteelBuild-Pro mark geometry", () => {
   const STATIC_SVGS = [
     "public/steelbuild-pro-mark.svg",
     "public/favicon.svg",
@@ -24,13 +20,11 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     expect(squash(read(file))).toContain(MARK_PATH);
   });
 
-  it("keeps the raster generator on the same sub-paths", () => {
-    // The script runs under plain node, outside the Vite/TS graph, so it holds
-    // its own copy of the three sub-paths rather than importing this module.
+  it("generates active raster assets from the approved diamond badge", () => {
     const script = read("scripts/generate-brand-rasters.cjs");
-    for (const subPath of MARK_PATH.split(/(?<=Z) /)) {
-      expect(script).toContain(subPath);
-    }
+    expect(script).toContain('"marketing", "steelbuild-pro-logo.jpg"');
+    expect(script).toContain("badgeOnCanvas");
+    expect(script).not.toContain("MARK_PATH");
   });
 
   it("fills evenodd everywhere so the carved S stays transparent", () => {
@@ -39,11 +33,10 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     }
   });
 
-  it("uses the brand palette's Signal Amber and Foundry Black", () => {
+  it("keeps legacy mark colors and the active Signal Amber token", () => {
     expect(MARK_AMBER).toBe("#F5BB00");
     expect(MARK_TILE_BG).toBe("#0D1117");
     expect(read("src/styles/brand-theme.css")).toContain("--sbp-signal-amber:          #F5BB00");
-    expect(read("src/styles/brand-theme.css")).toMatch(/--brand-amber:\s+var\(--sbp-signal-amber\)/);
   });
 
   it("leaves the product accent on the approved brand orange", () => {
@@ -51,16 +44,6 @@ describe("SteelBuild-Pro hex-S mark geometry", () => {
     expect(brandCss).toMatch(/--accent:\s+var\(--brand-orange\)/);
   });
 
-  it("fills the landing-page mark with Signal Amber, not the landing UI accent", () => {
-    // The landing page keeps its own executive-light accent (C.amber, #F5A800)
-    // for buttons, rules and focus rings. It is close enough to Signal Amber to
-    // look right in isolation, which is exactly why passing it to the mark went
-    // unnoticed: the public logo rendered a different yellow from the favicon
-    // and the in-app logo.
-    const landing = read("src/pages/Landing.jsx");
-    expect(landing).toContain("<SteelBuildMark size={size} color={MARK_AMBER}");
-    expect(landing).not.toMatch(/<SteelBuildMark[^>]*color=\{C\.amber\}/);
-  });
 });
 
 /** Width and height out of a PNG's IHDR chunk, which always starts at byte 16. */

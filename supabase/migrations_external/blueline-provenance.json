@@ -1,0 +1,34 @@
+{
+  "projectRef": "kjrwqagyeswwoxpjkcko",
+  "recoveredOn": "2026-10-05",
+  "source": "Authenticated read-only Supabase migration ledger",
+  "originalAuthor": null,
+  "originalRepository": null,
+  "originalCommit": null,
+  "sourceQuery": "select version, name, statements from supabase_migrations.schema_migrations where version in ('20260927004958','20260927005727') order by version;",
+  "migrations": [
+    {
+      "version": "20260927004958",
+      "file": "20260927004958_blueline_pwa_backend.sql",
+      "statements": 1,
+      "utf8Bytes": 11937,
+      "ledgerMd5": "90c195f23a51ac15eab8a755180499b8",
+      "sha256": "743bb7064dc844d26eeb130a2c10b2c9353746323ade1a90c66dc6d4a266878b"
+    },
+    {
+      "version": "20260927005727",
+      "file": "20260927005727_blueline_storage_limit.sql",
+      "statements": 1,
+      "utf8Bytes": 82,
+      "ledgerMd5": "65e40cc38b712d83709521cce773b63c",
+      "sha256": "0ceb1a0b25e66c5a24d8aec1a39645a6e4785277e1f8c13895f94ed05690ed61"
+    }
+  ],
+  "liveDataCounts": {
+    "documents": 53,
+    "revisions": 19,
+    "audit": 56,
+    "storedFiles": 22
+  },
+  "scope": "Evidence-only reconciliation. No schema, records, storage objects, or migration history changed."
+}

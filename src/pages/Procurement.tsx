@@ -37,6 +37,7 @@ import type { RowWithAliases } from '@/api/supabaseClient';
 import type { Json } from '@/types/supabase';
 import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
+import { useNumberedCreateDraft } from '@/hooks/useNumberedCreateDraft';
 import { toUserErrorMessage, withProjectId } from '@/lib/mutations/standardMutation';
 import { exportToCSV } from '@/lib/csv';
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES, addWeeks } from './procurement/format';
@@ -56,6 +57,7 @@ export default function Procurement() {
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<RowWithAliases<'deliveries'> | null>(null);
+  const createDraft = useNumberedCreateDraft(projectId, showForm && !editing, 'procurement-register');
   const [deleteTarget, setDeleteTarget] = useState<RowWithAliases<'deliveries'> | null>(null);
   const [filterCat, setFilterCat] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -117,8 +119,8 @@ export default function Procurement() {
   );
 
   const createMut = useMutation({
-    mutationFn: (data: any) => entities.Delivery.create(
-      withProjectId({ ...data, delivery_type: 'PROCUREMENT' }, projectId),
+    mutationFn: (data: any) => createDraft.save(
+      withProjectId({ ...data, delivery_title: data.description?.trim(), delivery_type: 'PROCUREMENT' }, projectId), entities.Delivery.create,
     ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement'] });
@@ -359,7 +361,7 @@ export default function Procurement() {
             item={editing}
             vendors={vendors}
             workPackages={workPackages}
-            onClose={() => { setShowForm(false); setEditing(null); }}
+            onClose={() => { if (!createMut.isPending && !updateMut.isPending) { setShowForm(false); setEditing(null); } }}
             onSave={(data) => {
               if (editing) {
                 updateMut.mutate({ id: editing.id, data });
@@ -368,6 +370,7 @@ export default function Procurement() {
               }
             }}
             isSaving={createMut.isPending || updateMut.isPending}
+            recoveryPending={createDraft.recoveryPending}
           />
         )}
         <DeleteDialog

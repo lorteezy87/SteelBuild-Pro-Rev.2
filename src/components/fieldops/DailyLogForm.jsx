@@ -29,6 +29,7 @@ import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
 import MultiSelectChips from "@/components/shared/MultiSelectChips";
 import { Cloud, RefreshCw } from "lucide-react";
 import { getCurrentWeather, geocodeAddress as geocodeNominatim } from "@/components/shared/weatherUtils";
+import { createDailyLogDraft } from "@/lib/field/dailyLogDraft";
 
 const inputStyle = {
   width: "100%",
@@ -115,31 +116,12 @@ async function geocodeWithFallback(address) {
 }
 
 export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving }) {
-  const isEditing = !!log;
+  const isEditing = !!log?.id;
 
-  const [formData, setFormData] = useState({
-    project_id: projectId,
-    date: new Date().toISOString().split("T")[0],
-    superintendent: "",
-    crew_name: "",
-    headcount: "",
-    hours_worked: "",
-    weather_description: "",
-    temperature: "",
-    wind_speed: "",
-    activities: "",
-    equipment_used: "",
-    materials_received: "",
-    delays: "",
-    delay_hours: "",
-    safety_incidents: 0,
-    safety_notes: "",
-    photos: [],
-    related_action_item_ids: [],
-    related_rfi_ids: [],
-    delivery_ids: [],
+  const [formData, setFormData] = useState(() => ({
+    ...createDailyLogDraft(projectId),
     metadata: { manning: emptyManning() },
-  });
+  }));
 
   // Weather banner state — only relevant on create. We surface it once
   // the auto-pull resolves so the user knows the values came from an API
@@ -148,27 +130,30 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
   const [weatherBanner, setWeatherBanner] = useState(null); // { auto: true, source: "...", at: ISO }
   const [weatherLoading, setWeatherLoading] = useState(false);
   const weatherFetchedRef = useRef(false);
+  const weatherGenerationRef = useRef(0);
+  const weatherEditedRef = useRef(false);
 
   useEffect(() => {
-    if (log) {
-      setFormData({
-        ...log,
-        photos: asArray(log.photos),
-        related_action_item_ids: asArray(log.related_action_item_ids),
-        related_rfi_ids: asArray(log.related_rfi_ids),
-        delivery_ids: asArray(log.delivery_ids),
-        metadata: { ...asObject(log.metadata), manning: { ...emptyManning(), ...asObject(asObject(log.metadata).manning) } },
-      });
-      // If this row was created with an auto-pull, surface the banner so
-      // an editor knows the weather fields are not free-form (they were
-      // pulled from Open-Meteo at create time). Editing them is fine —
-      // the banner just labels the provenance.
-      const meta = asObject(log.metadata);
-      if (meta.weather_auto) {
-        setWeatherBanner({ auto: true, ...meta.weather_auto, persisted: true });
-      }
-    }
-  }, [log]);
+    weatherGenerationRef.current += 1;
+    weatherFetchedRef.current = false;
+    weatherEditedRef.current = false;
+    setWeatherLoading(false);
+    const draft = { ...createDailyLogDraft(projectId), ...log };
+    const meta = asObject(draft.metadata);
+    setFormData({
+      ...draft,
+      photos: asArray(draft.photos),
+      related_action_item_ids: asArray(draft.related_action_item_ids),
+      related_rfi_ids: asArray(draft.related_rfi_ids),
+      delivery_ids: asArray(draft.delivery_ids),
+      metadata: { ...meta, manning: { ...emptyManning(), ...asObject(meta.manning) } },
+    });
+    // Existing records retain their provenance; a fresh/copied draft clears it.
+    setWeatherBanner(meta.weather_auto ? { auto: true, ...meta.weather_auto, persisted: true } : null);
+    // A response belongs to this draft only, even if another record opens
+    // while geocoding/weather is in flight. Also invalidate on unmount.
+    return () => { weatherGenerationRef.current += 1; };
+  }, [log, projectId]);
 
   // ── Project context ──
   const { data: projects = [] } = useQuery({
@@ -192,23 +177,27 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
   useEffect(() => {
     if (isEditing) return;
     if (weatherFetchedRef.current) return;
-    if (!project?.address) return;
+    if (!project?.address || project.id !== projectId || formData.project_id !== projectId) return;
     // Don't overwrite manual edits — if any weather field already has
     // a value when this effect fires, bail.
     const { weather_description, temperature, wind_speed } = formData;
     if (weather_description || temperature || wind_speed) return;
 
     weatherFetchedRef.current = true;
+    const generation = weatherGenerationRef.current;
+    const isCurrentDraft = () => weatherGenerationRef.current === generation;
     setWeatherLoading(true);
 
     (async () => {
       try {
         const coords = await geocodeWithFallback(project.address);
+        if (!isCurrentDraft() || weatherEditedRef.current) return;
         if (!coords) {
           setWeatherBanner({ failed: true, reason: "Couldn't geocode project address" });
           return;
         }
         const weather = await getCurrentWeather(coords.latitude, coords.longitude);
+        if (!isCurrentDraft() || weatherEditedRef.current) return;
         if (!weather) {
           setWeatherBanner({ failed: true, reason: "Open-Meteo didn't return a current reading" });
           return;
@@ -235,13 +224,14 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
         }));
         setWeatherBanner({ auto: true, ...auto });
       } catch (err) {
+        if (!isCurrentDraft() || weatherEditedRef.current) return;
         console.warn("[DailyLogForm] weather auto-pull failed:", err);
         setWeatherBanner({ failed: true, reason: "Network or API error" });
       } finally {
-        setWeatherLoading(false);
+        if (isCurrentDraft()) setWeatherLoading(false);
       }
     })();
-  }, [isEditing, project, formData]);
+  }, [isEditing, project, projectId, formData, log]);
 
   // ── Action Items + RFIs for cross-link multi-selects (project-scoped) ──
   const { data: actionItems = [] } = useQuery({
@@ -389,7 +379,20 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     });
   };
 
-  const set = (field) => (e) => setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+  const set = (field) => (e) => {
+    const value = e.target.value;
+    const isWeatherField = ["weather_description", "temperature", "wind_speed"].includes(field);
+    if (isWeatherField) {
+      weatherEditedRef.current = true;
+      setWeatherBanner(null);
+    }
+    setFormData((prev) => {
+      if (!isWeatherField) return { ...prev, [field]: value };
+      const metadata = { ...asObject(prev.metadata) };
+      delete metadata.weather_auto;
+      return { ...prev, [field]: value, metadata };
+    });
+  };
   const setField = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
 
   return (
