@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { runInNewContext } from "node:vm";
+import { describe, expect, it, vi } from "vitest";
 
 const readFunction = (name, file = "index.ts") =>
   readFileSync(
@@ -11,6 +12,30 @@ const readFunction = (name, file = "index.ts") =>
 const auth = readFunction("_shared", "maintenance-auth.ts");
 const copy = readFunction("legacy-app-files-copy");
 const bootstrap = readFunction("staging-e2e-bootstrap");
+
+function retiredCopyEntrypoint() {
+  const privilegedWork = vi.fn(() => {
+    throw new Error("A retired endpoint must not read secrets or perform privileged work");
+  });
+  const serve = vi.fn();
+  // Execute the shipped body, removing only the Edge runtime type declaration.
+  // Additional runtime imports fail instead of being silently mocked away.
+  const source = copy.replace(
+    /^import "jsr:@supabase\/functions-js@[^"]+\/edge-runtime\.d\.ts";\r?\n/m,
+    "",
+  );
+  runInNewContext(source, {
+    Deno: { serve, env: { get: privilegedWork } },
+    Response,
+    fetch: privilegedWork,
+    createClient: privilegedWork,
+    maintenanceClient: privilegedWork,
+  }, { timeout: 1000 });
+  expect(serve).toHaveBeenCalledTimes(1);
+  expect(serve.mock.calls[0][0]).toBeTypeOf("function");
+  expect(privilegedWork).not.toHaveBeenCalled();
+  return { handler: serve.mock.calls[0][0], privilegedWork };
+}
 
 describe("one-time maintenance Edge Function contracts", () => {
   it("authenticates a preimage against only the private DB hash", () => {
@@ -26,48 +51,35 @@ describe("one-time maintenance Edge Function contracts", () => {
     expect(auth).toContain("context.expected_project_ref !== actualProjectRef");
   });
 
-  it("copies only app-files/uploads and never deletes objects", () => {
-    expect(copy).toContain('const BUCKET = "app-files"');
-    expect(copy).toContain('const SOURCE_FOLDER = "uploads"');
-    expect(copy).toContain("storage.copy(source, destination)");
-    expect(copy).not.toMatch(/storage\.remove|deleteObject|\.move\(/);
-    expect(copy).toContain("originals_deleted: 0");
-  });
+  it.each(["GET", "POST", "OPTIONS", "DELETE"])(
+    "the shipped copy endpoint permanently denies %s without privileged work",
+    async (method) => {
+      const { handler, privilegedWork } = retiredCopyEntrypoint();
+      const response = await handler(new Request(
+        "https://edge.example.invalid/legacy-app-files-copy?signedStreamVerify=true&limit=1",
+        { method, headers: { "x-sbp-maintenance-token": "synthetic-retired-token" } },
+      ));
+      expect(response.status).toBe(410);
+      expect(response.headers.get("content-type")).toBe("application/json");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toEqual({ error: "Maintenance endpoint permanently closed." });
+      expect(privilegedWork).not.toHaveBeenCalled();
+    },
+  );
 
-  it("returns copy aggregates rather than object paths", () => {
-    expect(copy).toContain("scanned,");
-    expect(copy).toContain("copied,");
-    expect(copy).toContain("existing,");
-    expect(copy).toContain("etag_verified: etagVerified,");
-    expect(copy).toContain("hash_verified: hashVerified,");
-    expect(copy).toContain("content_verified: contentVerified,");
-    expect(copy).toContain("verification_failed: failed,");
-    expect(copy).not.toMatch(/source_path|destination_path/);
-    expect(copy).not.toMatch(/\n\s+source,|\n\s+destination,/);
-  });
-
-  it("hashes both objects when equal-size copies do not have matching ETags", () => {
-    expect(copy).toContain("sourceEtag === destinationEtag");
-    expect(copy).toContain("async function downloadSha256(");
-    expect(copy).toContain("const sourceHash = await downloadSha256(storage, source)");
-    expect(copy).toContain("const destinationHash = await downloadSha256(storage, destination)");
-    expect(copy).toContain('crypto.subtle.digest("SHA-256"');
-    expect(copy).toContain("sourceHash === destinationHash");
-    expect(copy).not.toContain("Promise.all");
-  });
-
-  it("exposes only one existing equal-size pair through five-minute signed URLs", () => {
-    expect(copy).toContain("signedStreamVerify && limit !== 1");
-    const signedMode = copy.slice(copy.indexOf("if (signedStreamVerify) {"));
-    expect(signedMode.indexOf("storage.createSignedUrl(source, 300)")).toBeLessThan(
-      signedMode.indexOf("const destinationEtag = objectEtag(destinationInfo.data)"),
-    );
-    expect(copy).toContain("storage.createSignedUrl(source, 300)");
-    expect(copy).toContain("storage.createSignedUrl(destination, 300)");
-    expect(copy).toContain("source_signed_url: sourceSigned.data.signedUrl");
-    expect(copy).toContain("destination_signed_url: destinationSigned.data.signedUrl");
-    expect(copy).toContain("source_size: sourceSize");
-    expect(copy).toContain("destination_size: objectSize(destinationInfo.data)");
+  it("does not inspect credentials, query parameters or a body before denying a retired request", async () => {
+    const { handler, privilegedWork } = retiredCopyEntrypoint();
+    const inspectRequest = vi.fn(() => {
+      throw new Error("Retirement must not depend on request data");
+    });
+    const request = new Proxy(new Request("https://edge.example.invalid/legacy-app-files-copy", {
+      method: "POST",
+      body: "not valid JSON",
+    }), { get: inspectRequest });
+    const response = await handler(request);
+    expect(response.status).toBe(410);
+    expect(inspectRequest).not.toHaveBeenCalled();
+    expect(privilegedWork).not.toHaveBeenCalled();
   });
 
   it("hard-locks bootstrap to staging and deletes only unconfirmed synthetic users", () => {

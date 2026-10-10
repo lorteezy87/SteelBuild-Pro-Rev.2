@@ -40,11 +40,24 @@ regexes = [
   '''kjrwqagyeswwoxpjkcko''',
 
   # Sentry DSN. Write-only ingest keys, designed to ship in the browser bundle;
-  # .env.example explains this. Both the app DSN and the CSP report-uri key.
+  # .env.example explains this. The CSP report key has its own scoped rule below.
   '''https://o?\d*\.?[a-z0-9]*\.?ingest\.(us\.)?sentry\.io''',
-  '''sentry_key=[a-f0-9]{32}''',
 
   # Anti-FOUC inline-script CSP hash in public/_headers, recomputed and asserted
   # by scripts/__tests__/deployHeaders.test.ts.
   '''sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=''',
 ]
+
+# public/_headers publishes this exact Sentry CSP report-ingestion key. It is
+# public browser configuration, not a Sentry auth token. Match the complete
+# generic-api-key finding (not just Secret) AND this exact file; retain every
+# upstream rule and detect other credentials even on the same CSP header line.
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Exact public Sentry CSP report key in public/_headers"
+condition = "AND"
+regexTarget = "match"
+paths = ['''^public[/\\]_headers$''']
+regexes = ['''^sentry_key=6709c2092ebda9743a803919a79c7b46$''']

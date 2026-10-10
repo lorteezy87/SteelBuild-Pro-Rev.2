@@ -27,9 +27,11 @@ const SRC = readFileSync(new URL("../FieldToday.jsx", import.meta.url), "utf8");
 
 /** The progress mutation plus setProgress — not the whole page. */
 const PROGRESS_REGION = (() => {
-  const start = SRC.indexOf("const progressMut = useMutation");
+  // Bound by the declarations, not the hook name: the owned mutation wrapper
+  // adds an owner argument but must preserve the original capture-day wiring.
+  const start = SRC.search(/\bconst\s+progressMut\s*=/);
   expect(start, "progressMut not found — this guard would pass vacuously").toBeGreaterThan(-1);
-  const end = SRC.indexOf("const punchMut = useMutation", start);
+  const end = SRC.search(/\bconst\s+punchMut\s*=/);
   expect(end, "punchMut not found — the region would run to EOF").toBeGreaterThan(start);
   return SRC.slice(start, end);
 })();
@@ -46,7 +48,7 @@ describe("field progress captures the local day at the tap", () => {
   });
 
   it("the online write takes the captured day from the mutation variables", () => {
-    expect(PROGRESS_REGION).toMatch(/mutationFn:\s*\(\{[^}]*capturedDay[^}]*\}\)/);
+    expect(PROGRESS_REGION).toMatch(/mutationFn:\s*\(\{[^}]*\bcapturedDay\b[^}]*\}\s*(?:,[^)]*)?\)\s*=>/);
     expect(PROGRESS_REGION).toMatch(/persistScheduleProgress\(\{[\s\S]*?capturedDay,[\s\S]*?\}\)/);
   });
 
