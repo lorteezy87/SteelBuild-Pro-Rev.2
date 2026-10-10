@@ -110,6 +110,11 @@
         "evidence": "PENDING PRODUCTION APPLY - not yet in the ledger. project_row_counts has refused every end user on archived projects since 20260914010000, and hard_delete_project runs it only on archived ones, so erasing a project, or any workspace with projects (hard_delete_organization, the account-delete Edge Function), fails with 'Not authorized to read this project'. Now also admits user_has_project_role_at_least(project, 'admin') only with current workspace membership, so stale user_projects rows cannot restore census access. Production ledger absence rechecked 2026-10-05; this remains required and the drift gate must report it missing until applied. Apply before 20260927160000. Once applied and recorded as 20260927150000, move the version into the LEDGER literal in scripts/__tests__/migrationOverrides.test.ts and drop this override."
       },
       {
+        "version": "20260921083000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - security repair that forces create_change_request submissions to server-controlled Submitted status and JWT requester identity, preventing project viewers from forging PM workflow decisions during INSERT."
+      },
+      {
         "version": "20260921080604",
         "lifecycle": "required",
         "evidence": "Launch-security candidate. Verified in a rolled-back staging transaction with authenticated role checks; not yet applied to production. Preserve the normal drift gate until the reviewed SQL is explicitly approved, applied and stamped with matching payload."

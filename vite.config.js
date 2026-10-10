@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'url'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
+import { telemetryAssetManifest } from './scripts/vite/telemetryAssetManifest.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -136,6 +137,7 @@ export default defineConfig({
   plugins: [
     react(),
     copyWebIfcWasm(),
+    telemetryAssetManifest(),
     // Must be LAST so it sees the final emitted bundle + source maps. Gated on
     // the auth token; uploads are best-effort (errorHandler swallows failures)
     // so a misconfigured token/slug can never fail a production deploy.

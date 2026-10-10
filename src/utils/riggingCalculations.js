@@ -246,7 +246,7 @@ export function buildWarnings({ angleStatus, capacityStatus, angleDegrees, utili
   if (angleStatus === "red") {
     out.push({
       severity: "red",
-      message: `Sling angle ${Number(angleDegrees).toFixed(1)}° is below 30° — unsafe configuration. Reduce sling length or widen pick points to raise angle.`,
+      message: `Sling angle ${Number(angleDegrees).toFixed(1)}° is below 30° — stop for sling-manufacturer or qualified person review. At unchanged pick-point spacing, more hook height increases the angle. Recheck sling lengths, headroom and all ratings before changing the rigging.`,
     });
   }
   // An outright overload is a different problem from a 90–100% critical lift:
