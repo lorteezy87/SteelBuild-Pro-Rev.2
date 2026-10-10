@@ -41,6 +41,17 @@ function renderPanel() {
 }
 
 describe("selected sheet transmittal presentation", () => {
+  it('uses field-facing evidence labels and keeps unknown revision and distribution explicit', () => {
+    mocks.sheetTransmittal.mockReturnValue({ isPending: false, isError: false, data: { kind: 'none' } });
+    const view = render(<MemoryRouter><SheetContextPanel entry={{ ...entry, row: { ...entry.row, current_revision_id: null, current_revision: null, current_status: null } }} projectId="project-1" /></MemoryRouter>);
+    expect(screen.queryByText('drawing_revisions')).not.toBeInTheDocument();
+    expect(screen.queryByText('release_status')).not.toBeInTheDocument();
+    expect(screen.getByText('Current revision')).toBeInTheDocument();
+    expect(screen.getByText('Revision distribution')).toBeInTheDocument();
+    expect(view.container.querySelector('[data-evidence="revision"]')).toHaveTextContent('Not verified');
+    expect(view.container.querySelector('[data-evidence="distribution"]')).toHaveTextContent('Not verified');
+    expect(screen.getByText('Distribution is separate from fabrication authorization.')).toBeInTheDocument();
+  });
   it("links the exact shop-sheet transmittal, states draft and revision evidence, and avoids fab authorization", () => {
     mocks.sheetTransmittal.mockReturnValue({
       isPending: false, isError: false,

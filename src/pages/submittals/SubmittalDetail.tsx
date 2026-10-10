@@ -3,7 +3,7 @@ import type { ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatDate } from "@/components/shared/formatters";
-import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
+import { CLOSED_SUBMITTAL_STATUSES, isUsableShopDrawingSubmittal } from "@/lib/submittalStageMapping";
 import { nextSubmittalAction } from "@/lib/submittalActionEngine";
 import type { OfsChecklistState } from "@/lib/ofsCompletionGate";
 import CommentThreadRaw from "@/components/collaboration/CommentThread";
@@ -177,6 +177,7 @@ export function SubmittalDetail({
   onComponentRemoveType,
 }: SubmittalDetailProps) {
   const [pendingIfcAction, setPendingIfcAction] = useState<{
+    submittalId: string | undefined;
     nextStatus: string | null;
     nextBallInCourt: string | null;
     label: string;
@@ -224,6 +225,7 @@ export function SubmittalDetail({
   }
 
   const cfg = STATUS_CFG[submittal.status ?? ""] || STATUS_CFG.Draft;
+  const canOfferFabRelease = isUsableShopDrawingSubmittal(submittal);
   const {
     approverNotesStatus,
     overdue,
@@ -313,7 +315,7 @@ export function SubmittalDetail({
               onClick={() => {
                 if (action.disabled) return;
                 if (action.currentStage === "OFS" && action.nextStage === "IFC") {
-                  setPendingIfcAction(action);
+                  setPendingIfcAction({ ...action, submittalId: submittal.id });
                   return;
                 }
                 onAdvance(action);
@@ -330,13 +332,13 @@ export function SubmittalDetail({
         })()}
 
         <IfcIssueDialog
-          open={!!pendingIfcAction}
+          open={canOfferFabRelease && !!pendingIfcAction && pendingIfcAction.submittalId === submittal.id}
           submittalNumber={submittal.submittal_number}
           dispositions={commentDispositions}
           onClose={() => setPendingIfcAction(null)}
           onConfirm={({ checklist, overrideReason }) => {
-            if (!pendingIfcAction || !onAdvance) return;
-            const action = pendingIfcAction;
+            if (!pendingIfcAction || !onAdvance || !canOfferFabRelease || pendingIfcAction.submittalId !== submittal.id) return;
+            const { submittalId: _reviewedSubmittal, ...action } = pendingIfcAction;
             setPendingIfcAction(null);
             onAdvance({
               ...action,
@@ -446,7 +448,7 @@ export function SubmittalDetail({
 
         <DetailSection title="Status workflow">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {STATUSES.map((status) => (
+            {STATUSES.filter(status => status !== 'Released for Fabrication' || canOfferFabRelease).map((status) => (
               <button
                 key={status}
                 onClick={() => status !== submittal.status && onStatusChange(status)}

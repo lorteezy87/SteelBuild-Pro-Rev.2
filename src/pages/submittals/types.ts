@@ -14,7 +14,7 @@ export interface Submittal {
   returned_date?: string | null;
   spec_section?: string;
   discipline?: string;
-  submittal_type?: string;
+  submittal_type?: string | null;
   project_id?: string;
   notes?: string | null;
   /** Questions for EOR/AOR + their responses. Unanswered notes flag Incomplete. */

@@ -1,6 +1,14 @@
-import { expect, type Page, type Response } from '@playwright/test';
-import { acceptanceOptions, observeReadOnlyPage, visitRegister } from './acceptance';
-import { test } from './drawing-evidence-test';
+import { expect, type Page, type Response, type TestInfo } from '@playwright/test';
+import { acceptanceOptions, observeReadOnlyPage, visitRegister } from './acceptance.js';
+import { test } from './drawing-evidence-test.js';
+
+import type { DrawingCaseStage } from './drawing-evidence-reporter.js';
+
+function stage(testInfo: TestInfo, value: DrawingCaseStage): void {
+  const annotation = testInfo.annotations.find(entry => entry.type === 'drawing-evidence-stage');
+  if (annotation) annotation.description = value;
+  else testInfo.annotations.push({ type: 'drawing-evidence-stage', description: value });
+}
 
 interface Coverage {
   submittal_id: string;
@@ -82,11 +90,14 @@ test.beforeAll(() => {
 });
 
 test('drawing register, exact revision evidence and approval matrix agree', async ({ page }, testInfo) => {
+  testInfo.annotations.push({ type: 'drawing-evidence-case', description: 'manifest' });
+  stage(testInfo, 'submittal-register');
   const submittalOptions = acceptanceOptions('submittals');
   const drawingOptions = acceptanceOptions('drawings');
   const coverage = collectCoverage(page, submittalOptions.supabaseUrl);
   const probe = await observeReadOnlyPage(page, submittalOptions.supabaseUrl, submittalOptions.projectId);
   await visitRegister(page, 'submittals', submittalOptions);
+  stage(testInfo, 'fixture-identity');
   const fixtureRows = probe.rows.get('submittals')?.filter(row => row.title === submittalOptions.fixtureText) || [];
   expect(fixtureRows.length, 'The existing Shop Drawing fixture must be unambiguous').toBe(1);
   const submittal = fixtureRows[0];
@@ -94,16 +105,19 @@ test('drawing register, exact revision evidence and approval matrix agree', asyn
   const submittalId = String(submittal.id);
   await expect.poll(() => coverage.batch.has(submittalId), { message: 'Register must load authoritative revision coverage' }).toBe(true);
   await coverage.settle();
+  stage(testInfo, 'detail-open');
   const list = page.getByRole('region', { name: 'Submittal register list', exact: true });
   await list.getByRole('button', { name: /^Open submittal / })
     .filter({ has: page.getByText(submittalOptions.fixtureText!, { exact: true }) }).click();
 
   const details = page.getByRole('region', { name: 'Submittal details', exact: true });
   const panel = details.getByRole('region', { name: 'Exact revision evidence', exact: true });
+  stage(testInfo, 'evidence-read');
   await expect(panel).toBeVisible();
   await expect.poll(() => coverage.single.has(submittalId), { message: 'Detail must load its own exact revision evidence' }).toBe(true);
   await probe.settle();
   await coverage.settle();
+  stage(testInfo, 'evidence-assertions');
   const detailCoverage = coverage.single.get(submittalId)!;
   const batchCoverage = coverage.batch.get(submittalId)!;
   expect(detailCoverage.submittal_status).toBe(submittal.status);
@@ -127,15 +141,22 @@ test('drawing register, exact revision evidence and approval matrix agree', asyn
   await panel.screenshot({ path: testInfo.outputPath('revision-evidence.png') });
   probe.assertHealthy();
 
+  stage(testInfo, 'detail-quiescence');
+  await probe.settle();
+  await coverage.settle();
+  probe.assertHealthy();
+  stage(testInfo, 'drawing-register');
   await visitRegister(page, 'drawings', drawingOptions);
   const sets = probe.rows.get('drawing_sets')?.filter(row => row.set_name === drawingOptions.fixtureText) || [];
   expect(sets.length, 'The drawing set fixture must be unambiguous').toBe(1);
   expect(submittal.drawing_set_ids, 'The selected fixtures must describe the same review package').toContain(sets[0].id);
   await page.getByRole('main', { name: 'Main content', exact: true })
     .screenshot({ path: testInfo.outputPath('drawing-register.png') });
+  stage(testInfo, 'matrix-open');
   await page.goto('/DrawingSubmittalHub?hub_tab=matrix');
   const matrix = page.getByRole('table', { name: 'Approval matrix', exact: true });
   await expect(matrix).toBeVisible();
+  stage(testInfo, 'matrix-assertions');
   const row = matrix.getByRole('row').filter({ has: page.getByRole('button', { name: drawingOptions.fixtureText!, exact: true }) });
   await expect(row).toBeVisible();
   await expect(row.getByRole('link', { name: String(submittal.submittal_number), exact: true })).toBeVisible();
@@ -148,9 +169,11 @@ test('drawing register, exact revision evidence and approval matrix agree', asyn
     || (['Approved', 'Approved as Noted'].includes(String(submittal.status)) && ['GC', 'Owner'].includes(String(submittal.ball_in_court))))) {
     await expect(row.getByText('Revision evidence required', { exact: true })).toBeVisible();
   }
+  stage(testInfo, 'matrix-expand');
   const disclosure = row.getByRole('button', { name: drawingOptions.fixtureText!, exact: true });
   await disclosure.click();
   await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  stage(testInfo, 'final-health');
   await probe.settle();
   await coverage.settle();
   probe.assertHealthy();
@@ -160,26 +183,37 @@ test('drawing register, exact revision evidence and approval matrix agree', asyn
 });
 
 test('legacy untyped approval is excluded from drawing authority', async ({ page }, testInfo) => {
+  testInfo.annotations.push({ type: 'drawing-evidence-case', description: 'legacy' });
+  stage(testInfo, 'submittal-register');
   const options = { ...acceptanceOptions('submittals'), fixtureText: 'Staging erection drawings' };
   const coverage = collectCoverage(page, options.supabaseUrl);
   const probe = await observeReadOnlyPage(page, options.supabaseUrl, options.projectId);
   await visitRegister(page, 'submittals', options);
+  stage(testInfo, 'fixture-identity');
   const rows = probe.rows.get('submittals')?.filter(row => row.title === options.fixtureText) || [];
   expect(rows).toHaveLength(1);
   const legacy = rows[0];
   expect(legacy.submittal_type).toBeNull();
   expect(legacy.status).toBe('Approved');
+  stage(testInfo, 'detail-open');
   const list = page.getByRole('region', { name: 'Submittal register list', exact: true });
   await list.getByRole('button', { name: /^Open submittal / })
     .filter({ has: page.getByText(options.fixtureText, { exact: true }) }).click();
   const details = page.getByRole('region', { name: 'Submittal details', exact: true });
+  stage(testInfo, 'evidence-assertions');
   await expect(details.getByText(/This legacy record has no submittal type and cannot govern drawing approval/)).toBeVisible();
   await expect(details.getByRole('region', { name: 'Exact revision evidence', exact: true })).toHaveCount(0);
   await details.screenshot({ path: testInfo.outputPath('legacy-unclassified.png') });
 
+  stage(testInfo, 'detail-quiescence');
+  await probe.settle();
+  await coverage.settle();
+  probe.assertHealthy();
+  stage(testInfo, 'matrix-open');
   await page.goto('/DrawingSubmittalHub?hub_tab=matrix');
   const matrix = page.getByRole('table', { name: 'Approval matrix', exact: true });
   await expect(matrix).toBeVisible();
+  stage(testInfo, 'matrix-assertions');
   const row = matrix.getByRole('row').filter({ has: page.getByRole('button', { name: 'STG Erection Drawings', exact: true }) });
   await expect(row).toBeVisible();
   await expect(row.getByRole('link', { name: String(legacy.submittal_number), exact: true })).toHaveCount(0);
@@ -187,6 +221,7 @@ test('legacy untyped approval is excluded from drawing authority', async ({ page
   await expect(row.getByText('from sheets', { exact: true })).toBeVisible();
   await expect(row.getByRole('link', { name: 'Create submittal for STG Erection Drawings', exact: true })
     .or(row.getByText('No submittal', { exact: true }))).toBeVisible();
+  stage(testInfo, 'final-health');
   await probe.settle();
   await coverage.settle();
   expect(coverage.batch.has(String(legacy.id))).toBe(false);
