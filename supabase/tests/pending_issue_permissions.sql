@@ -31,6 +31,7 @@ SET LOCAL session_replication_role = origin;
 DROP TRIGGER IF EXISTS trg_sync_rfi_date_aliases ON public.rfis;
 \ir ../migrations/20260921054458_allow_project_members_to_raise_change_requests.sql
 \ir ../migrations/20260921055027_synchronize_rfi_date_aliases.sql
+\ir ../migrations/20260921083000_secure_change_request_initial_state.sql
 
 SET LOCAL ROLE authenticated;
 DO $permissions$
@@ -41,10 +42,13 @@ BEGIN
   '10000000-5eed-4000-8000-000000000002'::uuid,
   '10000000-5eed-4000-8000-000000000003'::uuid
  ] LOOP
-  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);
-  row := public.create_change_request('30000000-5eed-4000-8000-000000000001','{"title":"Member request"}');
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated','email',u::text || '@example.invalid')::text,true);
+  row := public.create_change_request('30000000-5eed-4000-8000-000000000001','{"title":"Member request","status":"Approved","requested_by":"Project Manager"}');
   IF row.id IS NULL OR row.cr_number IS NULL OR row.created_by <> u THEN
    RAISE EXCEPTION 'Member creation/atomic number/actor failed';
+  END IF;
+  IF row.status <> 'Submitted' OR row.requested_by <> (u::text || '@example.invalid') THEN
+   RAISE EXCEPTION 'Caller controlled initial workflow state or requester identity';
   END IF;
   UPDATE public.change_requests SET title='PM edit' WHERE id=row.id;
   GET DIAGNOSTICS affected=ROW_COUNT;

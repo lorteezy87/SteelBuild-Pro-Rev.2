@@ -1,6 +1,48 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const { JSDOM } = require("jsdom");
+
+// Parse trusted Vite output without running scripts or loading resources.
+// Initial fetches come from actual tags, never inline JSON/strings/comments.
+// Keep prefetch and conditional tags conservatively charged to the budget.
+function initialHtmlAssets(html) {
+  const buildOrigin = "https://steelbuild-build.invalid";
+  const scriptTypes = new Set([
+    "", "module", "text/javascript", "application/javascript",
+    "text/ecmascript", "application/ecmascript", "application/x-ecmascript",
+    "application/x-javascript", "text/javascript1.0", "text/javascript1.1",
+    "text/javascript1.2", "text/javascript1.3", "text/javascript1.4",
+    "text/javascript1.5", "text/jscript", "text/livescript",
+    "text/x-ecmascript", "text/x-javascript",
+  ]);
+  const fetchLinks = new Set(["stylesheet", "modulepreload", "preload", "prefetch"]);
+  const dom = new JSDOM(html, { url: `${buildOrigin}/`, contentType: "text/html" });
+  const files = new Set();
+  try {
+    for (const element of dom.window.document.querySelectorAll("script[src],link[href]")) {
+      let reference;
+      if (element.tagName === "SCRIPT") {
+        const type = (element.getAttribute("type") ?? "").trim().toLowerCase().split(";")[0];
+        if (!scriptTypes.has(type)) continue;
+        reference = element.getAttribute("src");
+      } else {
+        const relations = (element.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
+        if (!relations.some((relation) => fetchLinks.has(relation))) continue;
+        reference = element.getAttribute("href");
+      }
+      if (!reference) continue;
+      let url;
+      try { url = new URL(reference, buildOrigin); } catch { continue; }
+      if (url.origin !== buildOrigin || !url.pathname.startsWith("/assets/")) continue;
+      const file = url.pathname.slice("/assets/".length);
+      if (/^[^/]+\.(?:js|css)$/.test(file)) files.add(file);
+    }
+    return files;
+  } finally {
+    dom.window.close();
+  }
+}
 
 const distAssets = path.join(process.cwd(), "dist", "assets");
 const maxInitialGzipKb = Number(process.env.SBP_MAX_INITIAL_GZIP_KB || 320);
@@ -37,9 +79,7 @@ const assets = fs.readdirSync(distAssets)
 
 const htmlPath = path.join(process.cwd(), "dist", "index.html");
 const html = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, "utf8") : "";
-const initialFiles = new Set(
-  [...html.matchAll(/\/assets\/([^"']+\.(?:js|css))/g)].map((match) => match[1])
-);
+const initialFiles = initialHtmlAssets(html);
 
 const totals = assets.reduce((acc, asset) => {
   acc.bytes += asset.bytes;
@@ -71,4 +111,3 @@ if (kb(initialTotals.gzip) > maxInitialGzipKb) {
 if (kb(totals.gzip) > maxTotalGzipKb) {
   fail(`total gzip budget exceeded: ${kb(totals.gzip).toFixed(1)} KB > ${maxTotalGzipKb} KB`);
 }
-
