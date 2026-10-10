@@ -7,8 +7,17 @@ import { nextSubmittalAction } from "../submittalActionEngine";
 // but over Pro's status×BIC matrix.
 
 describe("nextSubmittalAction", () => {
+  it.each([null, undefined, '', ' ', 'Product Data', 'Calculation', 'Shop drawing'])('does not suggest fabrication workflow for type %s', (submittal_type) => {
+    for (const ball_in_court of ['EOR', 'Detailer', 'GC', 'Owner']) {
+      const action = nextSubmittalAction({ submittal_type, status: 'Approved', ball_in_court });
+      expect(action.disabled).toBe(true);
+      expect(action.nextStatus).toBeNull();
+      expect(action.nextStage).toBeNull();
+      expect(action.label).not.toMatch(/scrub|construction|fabrication/i);
+    }
+  });
   it("Draft (→ IFA) suggests Send for Approval (OFA)", () => {
-    const a = nextSubmittalAction({ status: "Draft", ball_in_court: "Detailer" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Draft", ball_in_court: "Detailer" });
     expect(a.currentStage).toBe("IFA");
     expect(a.label).toBe("Send for Approval (OFA)");
     expect(a.nextStage).toBe("OFA");
@@ -18,7 +27,7 @@ describe("nextSubmittalAction", () => {
   });
 
   it("Submitted to EOR (→ OFA) suggests Log Return (BFA)", () => {
-    const a = nextSubmittalAction({ status: "Submitted", ball_in_court: "EOR" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Submitted", ball_in_court: "EOR" });
     expect(a.currentStage).toBe("OFA");
     expect(a.label).toBe("Log Return (BFA)");
     expect(a.nextStage).toBe("BFA");
@@ -26,13 +35,13 @@ describe("nextSubmittalAction", () => {
   });
 
   it("Submitted to Detailer (→ IFA) is still internal prep → OFA", () => {
-    const a = nextSubmittalAction({ status: "Submitted", ball_in_court: "Detailer" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Submitted", ball_in_court: "Detailer" });
     expect(a.currentStage).toBe("IFA");
     expect(a.nextStage).toBe("OFA");
   });
 
   it("Approved as Noted at EOR (→ BFA) routes to detailer scrub (OFS)", () => {
-    const a = nextSubmittalAction({ status: "Approved as Noted", ball_in_court: "EOR" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved as Noted", ball_in_court: "EOR" });
     expect(a.currentStage).toBe("BFA");
     expect(a.label).toBe("Send for Scrub (OFS)");
     expect(a.nextStage).toBe("OFS");
@@ -40,14 +49,14 @@ describe("nextSubmittalAction", () => {
   });
 
   it("Approved at EOR (→ BFA) routes to scrub (OFS) by default (Slice 4)", () => {
-    const a = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "EOR" });
     expect(a.currentStage).toBe("BFA");
     expect(a.label).toBe("Send for Scrub (OFS)");
     expect(a.nextStage).toBe("OFS");
   });
 
   it("Approved as Noted at Detailer (→ OFS) suggests Issue for Construction (IFC)", () => {
-    const a = nextSubmittalAction({ status: "Approved as Noted", ball_in_court: "Detailer" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved as Noted", ball_in_court: "Detailer" });
     expect(a.currentStage).toBe("OFS");
     expect(a.label).toBe("Issue for Construction (IFC)");
     expect(a.nextStage).toBe("IFC");
@@ -57,7 +66,7 @@ describe("nextSubmittalAction", () => {
   });
 
   it("Approved at Detailer (→ OFS) preserves Approved when issuing IFC", () => {
-    const a = nextSubmittalAction({ status: "Approved", ball_in_court: "Detailer" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "Detailer" });
     expect(a.currentStage).toBe("OFS");
     expect(a.nextStage).toBe("IFC");
     expect(a.nextStatus).toBe("Approved");
@@ -65,14 +74,14 @@ describe("nextSubmittalAction", () => {
   });
 
   it("Approved at EOR routes to OFS without flipping disposition to AAN", () => {
-    const a = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "EOR" });
     expect(a.nextStage).toBe("OFS");
     expect(a.nextStatus).toBe("Approved");
     expect(a.nextBallInCourt).toBe("Detailer");
   });
 
   it("Approved at GC (→ IFC) suggests Release for Fabrication", () => {
-    const a = nextSubmittalAction({ status: "Approved", ball_in_court: "GC" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "GC" });
     expect(a.currentStage).toBe("IFC");
     expect(a.label).toBe("Release for Fabrication");
     expect(a.nextStage).toBe("Released");
@@ -80,27 +89,27 @@ describe("nextSubmittalAction", () => {
   });
 
   it("Revise and Resubmit (→ R&R first-class stage) frames the move as a resubmit", () => {
-    const a = nextSubmittalAction({ status: "Revise and Resubmit", ball_in_court: "Detailer" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Revise and Resubmit", ball_in_court: "Detailer" });
     expect(a.currentStage).toBe("R&R");
     expect(a.label).toBe("Resubmit for Approval (OFA)");
     expect(a.nextStage).toBe("OFA");
   });
 
   it("Rejected behaves like R&R (loop back to resubmit)", () => {
-    const a = nextSubmittalAction({ status: "Rejected", ball_in_court: "Detailer" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Rejected", ball_in_court: "Detailer" });
     expect(a.label).toBe("Resubmit for Approval (OFA)");
     expect(a.nextStage).toBe("OFA");
   });
 
   it("Released for Fabrication is terminal — disabled, no next move", () => {
-    const a = nextSubmittalAction({ status: "Released for Fabrication", ball_in_court: null });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Released for Fabrication", ball_in_court: null });
     expect(a.disabled).toBe(true);
     expect(a.isTerminal).toBe(true);
     expect(a.nextStatus).toBeNull();
   });
 
   it("Void is terminal — disabled", () => {
-    const a = nextSubmittalAction({ status: "Void" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Void" });
     expect(a.disabled).toBe(true);
     expect(a.isTerminal).toBe(true);
     expect(a.label).toBe("Voided");
@@ -116,7 +125,7 @@ describe("nextSubmittalAction", () => {
     let s: { status: string | null; ball_in_court: string | null } = { status: "Draft", ball_in_court: "Detailer" };
     const seen: string[] = [];
     for (let i = 0; i < 10; i++) {
-      const a = nextSubmittalAction(s);
+      const a = nextSubmittalAction({ ...s, submittal_type: "Shop Drawing" });
       seen.push(a.currentStage);
       if (a.disabled || !a.nextStatus) break;
       s = { status: a.nextStatus, ball_in_court: a.nextBallInCourt };
@@ -136,7 +145,7 @@ describe("nextSubmittalAction", () => {
 
 describe("nextSubmittalAction with approvedRoutesToScrub", () => {
   it("Approved at EOR (→ BFA) routes to scrub (OFS) like AAN by default", () => {
-    const a = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
+    const a = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "EOR" });
     expect(a.currentStage).toBe("BFA");
     expect(a.label).toBe("Send for Scrub (OFS)");
     expect(a.nextStage).toBe("OFS");
@@ -144,8 +153,8 @@ describe("nextSubmittalAction with approvedRoutesToScrub", () => {
   });
 
   it("default Approved matches AAN branch on stage/BIC (preserves disposition)", () => {
-    const approvedOn = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
-    const aanOff = nextSubmittalAction({ status: "Approved as Noted", ball_in_court: "EOR" });
+    const approvedOn = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "EOR" });
+    const aanOff = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved as Noted", ball_in_court: "EOR" });
     expect(approvedOn.label).toBe(aanOff.label);
     expect(approvedOn.nextStage).toBe(aanOff.nextStage);
     expect(approvedOn.nextBallInCourt).toBe(aanOff.nextBallInCourt);
@@ -156,7 +165,7 @@ describe("nextSubmittalAction with approvedRoutesToScrub", () => {
 
   it("flag-off (explicit false) keeps the legacy Approved → IFC skip", () => {
     const a = nextSubmittalAction(
-      { status: "Approved", ball_in_court: "EOR" },
+      { submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "EOR" },
       { approvedRoutesToScrub: false },
     );
     expect(a.label).toBe("Issue for Construction (IFC)");
@@ -164,8 +173,8 @@ describe("nextSubmittalAction with approvedRoutesToScrub", () => {
   });
 
   it("empty opts object is identical to the no-opts default (Approved → OFS)", () => {
-    const withOpts = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" }, {});
-    const noOpts = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
+    const withOpts = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "EOR" }, {});
+    const noOpts = nextSubmittalAction({ submittal_type: "Shop Drawing", status: "Approved", ball_in_court: "EOR" });
     expect(withOpts.nextStage).toBe("OFS");
     expect(withOpts.label).toBe(noOpts.label);
     expect(withOpts.nextStage).toBe(noOpts.nextStage);
@@ -178,7 +187,7 @@ describe("nextSubmittalAction with approvedRoutesToScrub", () => {
     };
     const seen: string[] = [];
     for (let i = 0; i < 8; i++) {
-      const a = nextSubmittalAction(s);
+      const a = nextSubmittalAction({ ...s, submittal_type: "Shop Drawing" });
       seen.push(a.currentStage);
       if (a.disabled || !a.nextStatus) break;
       s = { status: a.nextStatus, ball_in_court: a.nextBallInCourt };
@@ -191,7 +200,7 @@ describe("nextSubmittalAction with approvedRoutesToScrub", () => {
 
   it("flag-on does not disturb non-Approved dispositions (AAN still → OFS)", () => {
     const a = nextSubmittalAction(
-      { status: "Approved as Noted", ball_in_court: "EOR" },
+      { submittal_type: "Shop Drawing", status: "Approved as Noted", ball_in_court: "EOR" },
       { approvedRoutesToScrub: true },
     );
     expect(a.label).toBe("Send for Scrub (OFS)");
@@ -254,7 +263,7 @@ describe("nextSubmittalAction with a custom approval chain", () => {
 
   it("decision statuses ignore the chain (Approved as Noted → scrub)", () => {
     const a = nextSubmittalAction({
-      status: "Approved as Noted", ball_in_court: "EOR",
+      submittal_type: "Shop Drawing", status: "Approved as Noted", ball_in_court: "EOR",
       approval_chain: CHAIN, approval_chain_step: 3,
     });
     expect(a.label).toBe("Send for Scrub (OFS)");

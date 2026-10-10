@@ -100,6 +100,22 @@ function renderGrid(props: Partial<DrawingRegisterGridPanelProps> = {}) {
 }
 
 describe("DrawingRegisterGridPanel — release affordance", () => {
+  it.each([false, true])('aligns every non-virtual header with its cell when selection is %s', (selectable) => {
+    registerRows = [makeRow({ sheet_number: 'E-101', sheet_title: 'Anchor Bolt Plan', discipline: 'Structural', drawing_set_name: 'Erection package', current_revision: 'B' })];
+    const view = renderGrid(selectable ? { selected: new Set(), onToggleSelect: vi.fn() } : {});
+    const table = view.container.querySelector('table')!;
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    const cells = Array.from(table.querySelector('tbody tr')!.querySelectorAll('td'));
+    expect(headers.length).toBe(cells.length);
+    const cellFor = (name: string) => cells[headers.findIndex(header => (header.getAttribute('aria-label') || header.textContent) === name)];
+    expect(within(cellFor('Watch') as HTMLElement).getByRole('button', { name: 'Watch this sheet' })).toBeVisible();
+    expect(cellFor('Sheet')).toHaveTextContent('E-101');
+    expect(cellFor('Title')).toHaveTextContent('Anchor Bolt Plan');
+    expect(cellFor('Disc.')).toHaveTextContent('Structural');
+    expect(cellFor('Set')).toHaveTextContent('Erection package');
+    expect(cellFor('Rev')).toHaveTextContent('B');
+    expect(cellFor('Distribution')).toHaveTextContent('no revision');
+  });
   beforeEach(() => {
     canEdit = true;
   });
@@ -599,7 +615,7 @@ describe("DrawingRegisterGridPanel — selected sheet context", () => {
       .toHaveAttribute("href", "/DrawingSubmittalHub?hub_tab=submittals&recordId=legacy");
   });
 
-  it("routes set-linked Product Data and untyped records to Shop Drawing classification", () => {
+  it("routes set-linked reviewed Product Data and untyped records to a new Shop Drawing package", () => {
     registerRows = [makeRow()];
     const packages = buildSetPackages(
       [{ id: "dwg-1", drawing_set_id: "set-1", drawing_set_name: "Main Steel - IFC" }] as any,
@@ -621,10 +637,9 @@ describe("DrawingRegisterGridPanel — selected sheet context", () => {
     const context = screen.getByRole("complementary", { name: "Sheet context" });
     expect(within(context).getByText("Not verified", { selector: "[data-evidence='approval']" })).toBeInTheDocument();
     expect(within(context).getByText(/2 set-ID-linked records do not govern Shop Drawing approval/i)).toBeInTheDocument();
-    expect(within(context).getByText(/classify one as Shop Drawing if appropriate, or create\/link/i)).toBeInTheDocument();
-    expect(within(context).getByRole("link", { name: "Classify linked record as Shop Drawing" }))
-      .toHaveAttribute("href", "/DrawingSubmittalHub?hub_tab=submittals&recordId=untyped");
-    expect(within(context).getByRole("link", { name: "Create or link a Shop Drawing submittal" }))
+    expect(within(context).getByText(/reviewed non-Shop records cannot be reclassified/i)).toBeInTheDocument();
+    expect(within(context).queryByRole("link", { name: /classify linked record/i })).not.toBeInTheDocument();
+    expect(within(context).getByRole("link", { name: "Create a Shop Drawing package" }))
       .toHaveAttribute("href", "/DrawingSubmittalHub?hub_tab=submittals&targetSetId=set-1");
     expect(within(context).queryByText(/historical name-only match/i)).not.toBeInTheDocument();
   });

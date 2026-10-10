@@ -10,7 +10,11 @@ interface ReadOnlyProbe {
   assertHealthy(): void;
   settle(): Promise<void>;
   dispose(): Promise<void>;
+  diagnostics(): ReadOnlyFailureCategory[];
 }
+export const READ_ONLY_FAILURE_CATEGORIES = ['browser-runtime', 'browser-console', 'request-failed',
+  'http-error', 'invalid-project-response', 'invalid-json', 'blocked-write'] as const;
+export type ReadOnlyFailureCategory = typeof READ_ONLY_FAILURE_CATEGORIES[number];
 const pageProbes = new WeakMap<Page, { origin: string; allowAuthLogout: boolean; probe: ReadOnlyProbe }>();
 // Individually inspected read-only RPCs; names beginning with "get" are not
 // sufficient evidence. Keep this list explicit as application reads evolve.
@@ -21,7 +25,7 @@ const readOnlyRpcPaths = new Set([
 ]);
 
 export const REGISTER_CONTRACTS = {
-  drawings: { path: "/Drawings", headings: ["Detailing Control Center"], tables: ["drawings", "drawing_sets"], fixtureTable: "drawing_sets" },
+  drawings: { path: "/Drawings", headings: ["Drawing Control"], tables: ["drawings", "drawing_sets"], fixtureTable: "drawing_sets" },
   submittals: { path: "/Submittals", headings: ["Submittal Register"], tables: ["submittals"], fixtureTable: "submittals" },
   rfis: { path: "/RFIs", headings: ["RFI Control Center", "RFI Work Queue"], tables: ["rfis"], fixtureTable: null },
 } as const;
@@ -61,6 +65,8 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
     return existing.probe;
   }
   const failures: string[] = [];
+  const categories = new Set<ReadOnlyFailureCategory>();
+  const fail = (category: ReadOnlyFailureCategory, message: string) => { categories.add(category); failures.push(message); };
   const rows = new Map<string, Row[]>();
   const pending = new Set<Promise<void>>();
   const inFlight = new Set<Request>();
@@ -68,20 +74,20 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
     if (new URL(request.url()).origin === origin) inFlight.add(request);
   };
   const onRequestFinished = (request: Request) => { inFlight.delete(request); };
-  const onPageError = () => failures.push("Uncaught browser runtime error");
+  const onPageError = () => fail('browser-runtime', "Uncaught browser runtime error");
   const onConsole = (message: { type(): string }) => {
-    if (message.type() === "error") failures.push("Browser console error");
+    if (message.type() === "error") fail('browser-console', "Browser console error");
   };
   const onRequestFailed = (request: Request) => {
     inFlight.delete(request);
     const url = new URL(request.url());
-    if (url.origin === origin) failures.push(`Supabase request failed: ${url.pathname}`);
+    if (url.origin === origin) fail('request-failed', `Supabase request failed: ${url.pathname}`);
   };
   const onResponse = (response: Response) => {
     const url = new URL(response.url());
     if (url.origin !== origin) return;
     if (response.status() >= 400) {
-      failures.push(`Supabase HTTP ${response.status()}: ${url.pathname}`);
+      fail('http-error', `Supabase HTTP ${response.status()}: ${url.pathname}`);
       return;
     }
     if (response.request().method() !== "GET" || !response.ok()
@@ -93,12 +99,12 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
         const body: unknown = await response.json();
         if (!Array.isArray(body) || body.some(row => !row || typeof row !== "object" || Array.isArray(row)
           || (row.project_id !== undefined && row.project_id !== projectId))) {
-          failures.push(`Invalid project-scoped rows: ${table}`);
+          fail('invalid-project-response', `Invalid project-scoped rows: ${table}`);
           return;
         }
         rows.set(table, body as Row[]);
       } catch {
-        failures.push(`Invalid JSON response: ${table}`);
+        fail('invalid-json', `Invalid JSON response: ${table}`);
       }
     })();
     pending.add(read);
@@ -115,7 +121,7 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
     const logout = options.allowAuthLogout === true && request.method() === "POST"
       && url.pathname === "/auth/v1/logout";
     if (read || rpcRead || refresh || logout) return route.fallback();
-    failures.push(`Blocked write during read-only acceptance: ${request.method()} ${url.pathname}`);
+    fail('blocked-write', `Blocked write during read-only acceptance: ${request.method()} ${url.pathname}`);
     return route.abort("blockedbyclient");
   };
   page.on("pageerror", onPageError);
@@ -137,6 +143,7 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
   page.once("close", detach);
   const probe: ReadOnlyProbe = {
     rows,
+    diagnostics() { return [...categories]; },
     watchProject(nextProjectId) {
       if (projectId !== nextProjectId) rows.clear();
       projectId = nextProjectId;
@@ -166,12 +173,18 @@ export const readOnlyTest = baseTest.extend<{
 }>({
   readOnlySupabaseUrl: [process.env.E2E_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "", { option: true }],
   allowAuthLogout: [false, { option: true }],
-  readOnlyPageGuard: [async ({ page, readOnlySupabaseUrl, allowAuthLogout }, use) => {
+  readOnlyPageGuard: [async ({ page, readOnlySupabaseUrl, allowAuthLogout }, use, testInfo) => {
     if (!readOnlySupabaseUrl) throw new Error("Read-only acceptance requires a Supabase URL.");
     const probe = await observeReadOnlyPage(page, readOnlySupabaseUrl, undefined, { allowAuthLogout });
-    await use();
-    await probe.settle();
-    probe.assertHealthy();
+    try {
+      await use();
+      await probe.settle();
+      probe.assertHealthy();
+    } finally {
+      for (const category of probe.diagnostics()) {
+        testInfo.annotations.push({ type: 'read-only-failure-category', description: category });
+      }
+    }
     // Do not unroute here: navigation effects may run until page teardown.
   }, { auto: true }],
 });

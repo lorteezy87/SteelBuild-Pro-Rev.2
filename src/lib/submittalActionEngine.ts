@@ -16,6 +16,7 @@ import {
   submittalStatusToStage,
   stageToSubmittalStatus,
   isRRStatus,
+  isUsableShopDrawingSubmittal,
 } from "@/lib/submittalStageMapping";
 import {
   chainState,
@@ -25,6 +26,9 @@ import {
 
 export interface SubmittalLike {
   status?: string | null;
+  submittal_type?: string | null;
+  is_deleted?: boolean | null;
+  deleted_at?: string | null;
   ball_in_court?: string | null;
   approved_date?: string | null;
   /** Custom routing chain (approvalChains.js) — jsonb array of { party }. */
@@ -58,8 +62,7 @@ export interface SubmittalAction {
 const DONE_TERMINALS = new Set<string>(["Released for Fabrication", "Void"]);
 
 /**
- * Optional routing overrides. Flag-gated behavior lives here so the default
- * (all-absent) call is byte-for-byte identical to the historical engine.
+ * Optional routing overrides for the typed Shop Drawing approval workflow.
  */
 export interface NextSubmittalActionOptions {
   /**
@@ -80,8 +83,9 @@ export interface NextSubmittalActionOptions {
  * per the canonical flow + disposition, and maps that back to the
  * (status, ball_in_court) pair the caller should persist.
  *
- * `opts` carries flag-gated routing overrides; omitting it (or passing all
- * defaults) yields identical output to the pre-flag engine.
+ * Exact Shop Drawing classification is required for post-approval fabrication
+ * moves. Ordinary submission, return and resubmission remain available to
+ * other document types; database write gates remain authoritative.
  */
 export function nextSubmittalAction(
   submittal: SubmittalLike | null | undefined,
@@ -91,10 +95,11 @@ export function nextSubmittalAction(
   const status = submittal?.status || "Draft";
   const bic = submittal?.ball_in_court ?? null;
   const currentStage = submittalStatusToStage(status, bic, submittal?.approved_date) || "Not Started";
+  const shopDrawing = isUsableShopDrawingSubmittal(submittal);
 
   if (DONE_TERMINALS.has(status)) {
     return {
-      label: status === "Void" ? "Voided" : "Released for Fab",
+      label: status === "Void" ? "Voided" : shopDrawing ? "Released for Fab" : "No further review step",
       nextStatus: null,
       nextBallInCourt: null,
       nextStage: currentStage,
@@ -102,6 +107,13 @@ export function nextSubmittalAction(
       disabled: true,
       isTerminal: true,
     };
+  }
+
+  // Product Data and unclassified legacy approvals are ordinary review
+  // dispositions. They cannot authorize the drawing scrub/IFC/fab workflow.
+  if (!shopDrawing && (status === 'Approved' || status === 'Approved as Noted')) {
+    return { label: 'Approval recorded', nextStatus: null, nextBallInCourt: null,
+      nextStage: null, currentStage, disabled: true, isTerminal: false };
   }
 
   // ── Custom approval chain (approvalChains.js) ─────────────────────────
