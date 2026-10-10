@@ -300,6 +300,12 @@ jobs:
           npm ci --prefix supabase/tests/membership-revocation --ignore-scripts
           npm test --prefix supabase/tests/membership-revocation
 
+      - name: Verify mailbox credential isolation
+        # Required ci gate; migrates synthetic tokens inside in-memory Postgres.
+        run: |
+          npm ci --prefix supabase/tests/email-account-credentials --ignore-scripts
+          npm test --prefix supabase/tests/email-account-credentials
+
       - name: Verify enrolled MFA database boundaries
         run: |
           npm ci --prefix supabase/tests/server-mfa --ignore-scripts

@@ -4515,7 +4515,6 @@ export type Database = {
       }
       email_accounts: {
         Row: {
-          access_token: string | null
           connection_type: string
           created_at: string
           created_by: string | null
@@ -4526,12 +4525,9 @@ export type Database = {
           last_sync_at: string | null
           project_id: string
           provider: string
-          refresh_token: string | null
-          token_expires_at: string | null
           updated_at: string
         }
         Insert: {
-          access_token?: string | null
           connection_type?: string
           created_at?: string
           created_by?: string | null
@@ -4542,12 +4538,9 @@ export type Database = {
           last_sync_at?: string | null
           project_id: string
           provider?: string
-          refresh_token?: string | null
-          token_expires_at?: string | null
           updated_at?: string
         }
         Update: {
-          access_token?: string | null
           connection_type?: string
           created_at?: string
           created_by?: string | null
@@ -4558,8 +4551,6 @@ export type Database = {
           last_sync_at?: string | null
           project_id?: string
           provider?: string
-          refresh_token?: string | null
-          token_expires_at?: string | null
           updated_at?: string
         }
         Relationships: [

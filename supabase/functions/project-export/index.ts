@@ -6,12 +6,10 @@
 // entitled to read, and writes ONE audit row for every successful export.
 //
 // Security model:
-//   1. Reads run through a JWT-scoped Supabase client (anon key + the caller's
-//      Authorization header). Postgres RLS therefore filters every row to
-//      projects the caller can access — a user simply cannot export a project
-//      they cannot read. We also do an explicit up-front access check on the
-//      `projects` row so an unauthorized caller gets a clean 403 instead of an
-//      empty export.
+//   1. The caller must hold the canonical project-admin role (including the
+//      workspace owner/admin bypass). The role check and every read use a
+//      JWT-scoped Supabase client so Postgres evaluates the caller's current
+//      organization membership and project role.
 //   2. The audit row is written with the SERVICE ROLE so the client can neither
 //      forge nor suppress it. Every successful export is recorded in
 //      `activities` (action='exported', entity_type='Project').
@@ -249,8 +247,23 @@ async function handle(req: Request): Promise<Response> {
     global: { headers: { Authorization: authHeader } },
   });
 
-  // Explicit access gate: fetch the project header under RLS. If the caller has
-  // no access, RLS yields no row and we return 403 (rather than an empty dump).
+  // Export is intentionally more restrictive than ordinary project reads.
+  // Resolve authority through the caller-scoped canonical database helper so
+  // removed workspace members and stale project-role rows fail closed.
+  const { data: canExport, error: roleErr } = await rls.rpc(
+    "user_has_project_role_at_least",
+    { p_project_id: projectId, p_min_role: "admin" },
+  );
+  if (roleErr || typeof canExport !== "boolean") {
+    console.error(`[project-export] role check failed: ${roleErr?.message ?? "invalid result"}`);
+    return errorResponse(503, "Unable to verify export authorization", req);
+  }
+  if (!canExport) {
+    return errorResponse(403, "Project administrator access required", req);
+  }
+
+  // Fetch the project header under the same caller RLS session after the role
+  // gate. This also avoids disclosing whether a denied project exists.
   const { data: project, error: projectErr } = await rls
     .from("projects")
     .select("*")
