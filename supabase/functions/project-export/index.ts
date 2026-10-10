@@ -12,9 +12,10 @@
 //      they cannot read. We also do an explicit up-front access check on the
 //      `projects` row so an unauthorized caller gets a clean 403 instead of an
 //      empty export.
-//   2. The audit row is written with the SERVICE ROLE so the client can neither
-//      forge nor suppress it. Every successful export is recorded in
-//      `activities` (action='exported', entity_type='Project').
+//   2. The mandatory audit insert uses the same caller JWT. RLS rechecks project
+//      access and activities_stamp_actor stamps auth.uid(), ignoring supplied
+//      actor IDs. Export succeeds only after the returned actor matches the
+//      freshly verified user. Existing activity INSERT permissions are unchanged.
 //
 // Preserve the deployed shared v2 contract in ./exportShape.ts.
 // Table reads page to completeness under caller RLS and fail on any missing page.
@@ -22,7 +23,7 @@
 //
 // Auth: JWT-verified. Method: POST { project_id }.
 //
-// Secrets required: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+// Configuration required: SUPABASE_URL, SUPABASE_ANON_KEY
 //
 // Deploy:
 //   supabase functions deploy project-export
@@ -234,8 +235,7 @@ async function handle(req: Request): Promise<Response> {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !anonKey || !serviceKey) {
+  if (!supabaseUrl || !anonKey) {
     return errorResponse(500, "Edge function not configured", req);
   }
 
@@ -299,9 +299,10 @@ async function handle(req: Request): Promise<Response> {
     exportedBy: user.displayName,
   });
 
-  // Audit with the service role so the record cannot be forged or suppressed by
-  // the client. Failure to write the audit row aborts the export — an
-  // unaudited export of sensitive project data is not acceptable.
+  // Preserve the caller's database identity through the mandatory final write.
+  // The installed actor trigger overwrites supplied IDs with auth.uid(); a
+  // service-role insert has no caller sub and silently records a NULL actor.
+  // RLS also denies this insert if project access was revoked during the reads.
   const auditRecord = buildExportAuditRecord({
     projectId,
     project: project as Record<string, unknown>,
@@ -310,10 +311,16 @@ async function handle(req: Request): Promise<Response> {
     performedByUserId: user.id,
   });
 
-  const admin = createClient(supabaseUrl, serviceKey);
-  const { error: auditErr } = await admin.from("activities").insert(auditRecord);
-  if (auditErr) {
-    console.error(`[project-export] audit insert failed: ${auditErr.message}`);
+  const { data: persistedAudit, error: auditErr } = await rls
+    .from("activities")
+    .insert(auditRecord)
+    .select("id,performed_by_user_id")
+    .single<{ id: string; performed_by_user_id: string | null }>();
+  if (auditErr || !persistedAudit
+    || typeof persistedAudit.id !== "string"
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(persistedAudit.id)
+    || persistedAudit.performed_by_user_id !== user.id) {
+    console.error("[project-export] audit insert failed or verified actor was not persisted");
     return errorResponse(500, "Failed to record export audit entry", req);
   }
 

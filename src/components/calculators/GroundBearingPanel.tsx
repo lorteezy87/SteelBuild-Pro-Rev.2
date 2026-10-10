@@ -21,10 +21,17 @@ export default function GroundBearingPanel() {
   const [allowable, setAllowable] = useState("");
 
   const n = (raw: string) => parseNumericInput(raw);
-  const bad = (raw: string) => !isBlankInput(raw) && !Number.isFinite(n(raw));
-  const invalid = [
-    [reaction, "Outrigger reaction"], [matWeight, "Mat weight"], [len, "Mat length"], [wid, "Mat width"], [allowable, "Allowable bearing"],
-  ].filter(([raw]) => bad(raw)).map(([, label]) => `${label} isn't a number.`);
+  const fields: Array<{ raw: string; label: string; allowZero?: boolean }> = [
+    { raw: reaction, label: "Outrigger reaction" }, { raw: matWeight, label: "Mat weight", allowZero: true },
+    { raw: len, label: "Mat length" }, { raw: wid, label: "Mat width" }, { raw: allowable, label: "Allowable bearing" },
+  ];
+  const invalid = fields.flatMap(({ raw, label, allowZero }) => {
+    if (isBlankInput(raw)) return [];
+    const value = n(raw);
+    if (!Number.isFinite(value)) return [`${label} isn't a number.`];
+    if (allowZero ? value < 0 : value <= 0) return [`${label} must be ${allowZero ? "zero or greater" : "greater than zero"}.`];
+    return [];
+  });
 
   const result = invalid.length === 0
     ? groundBearing({
@@ -35,6 +42,9 @@ export default function GroundBearingPanel() {
         allowableBearing: n(allowable),
       })
     : null;
+  if (invalid.length === 0 && [reaction, len, wid, allowable].every(raw => !isBlankInput(raw)) && !result) {
+    invalid.push("These values are outside the calculator's supported numeric range. Check the dimensions, loads and units.");
+  }
 
   const presetValue = IBC_PRESUMPTIVE_BEARING.find((p) => String(p.psf) === allowable.replace(/,/g, "").trim())?.psf ?? "";
 

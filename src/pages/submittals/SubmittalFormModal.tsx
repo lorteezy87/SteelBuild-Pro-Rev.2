@@ -62,17 +62,21 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
   const [drawingTypes, setDrawingTypes] = useState<DrawingType[]>([]);
   const toggleDrawingType = (t: DrawingType) =>
     setDrawingTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  const initialType = initial.submittal_type ?? (initial.id ? "" : "Shop Drawing");
+  const initialStatus = !initial.id && initialType === "Shop Drawing"
+    ? "Draft"
+    : initial.status || "Draft";
   const [form, setForm] = useState({
     submittal_number: initial.submittal_number || "",
     title:            initial.title            || "",
-    submittal_type:   initial.submittal_type   ?? (initial.id ? "" : "Shop Drawing"),
+    submittal_type:   initialType,
     discipline:       initial.discipline       || "",
     spec_section:     initial.spec_section     || "",
     revision:         initial.revision         || "0",
     round_number:     initial.round_number     || 1,
-    submitted_date:   initial.submitted_date   || "",
+    submitted_date:   !initial.id && initialType === "Shop Drawing" ? "" : initial.submitted_date || "",
     required_date:    initial.required_date    || "",
-    status:           initial.status           || "Draft",
+    status:           initialStatus,
     ball_in_court:    initial.ball_in_court    || "EOR",
     submitted_by:     initial.submitted_by     || "",
     reviewer:         initial.reviewer         || "",
@@ -83,6 +87,16 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
   const setField = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
   const isEdit = !!initial.id;
   const typeLocked = isEdit && (initial.status !== 'Draft' || !!initial.current_round_id);
+  const availableStatuses = isEdit
+    ? STATUSES
+    : form.submittal_type === 'Shop Drawing'
+      ? ['Draft']
+      : STATUSES.filter(status => status !== 'Released for Fabrication');
+  const setSubmittalType = (submittalType: string) => {
+    setForm(previous => !isEdit && submittalType === 'Shop Drawing'
+      ? { ...previous, submittal_type: submittalType, status: 'Draft', submitted_date: '' }
+      : { ...previous, submittal_type: submittalType });
+  };
   const submitInFlight = useRef(false);
 
   const handleSubmit = async () => {
@@ -251,13 +265,18 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
           )}
           <div>
             <Label>Type</Label>
-            <Select disabled={typeLocked} value={form.submittal_type} onValueChange={(v) => setField("submittal_type", v)}>
+            <Select disabled={typeLocked} value={form.submittal_type} onValueChange={setSubmittalType}>
               <SelectTrigger aria-label="Submittal type"><SelectValue placeholder="Unclassified" /></SelectTrigger>
               <SelectContent>
                 {TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
             {isEdit && !initial.submittal_type && <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 11 }}>This legacy record is unclassified and cannot govern drawing approval.{typeLocked ? ' Create a new Shop Drawing package for a new drawing review.' : ' Choose a type explicitly before submitting this Draft.'}</p>}
+            {isEdit && initial.submittal_type !== 'Shop Drawing' && initial.status === 'Released for Fabrication' && (
+              <p role="status" style={{ color: 'var(--status-review)', fontSize: 11 }}>
+                Historical release status is preserved for this record, but it does not govern drawing approval. Create a new Shop Drawing package for future drawing review and fabrication authorization.
+              </p>
+            )}
           </div>
           <div>
             <Label>Discipline</Label>
@@ -284,7 +303,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
             <Select disabled={isEdit} value={form.status} onValueChange={(v) => setField("status", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(!isEdit && form.submittal_type === 'Shop Drawing' ? ['Draft'] : STATUSES).map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {availableStatuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

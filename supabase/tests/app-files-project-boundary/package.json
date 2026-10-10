@@ -1,0 +1,14 @@
+{
+  "name": "steelbuild-app-file-reservation-verification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node verify.ts",
+    "test:postgres": "node postgres.ts"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.1"
+  }
+}

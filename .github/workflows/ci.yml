@@ -161,6 +161,16 @@ jobs:
           npm test --prefix supabase/tests/project-plan-limits
           npm run test:postgres --prefix supabase/tests/project-plan-limits
 
+      - name: Verify source-only project file reservations and concurrent retries
+        env:
+          APP_FILE_POSTGRES_TEST: "1"
+          APP_FILE_POSTGRES_CREATE_DB: "1"
+          APP_FILE_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_app_file_reservations_test
+        run: |
+          npm ci --prefix supabase/tests/app-files-project-boundary --ignore-scripts
+          npm test --prefix supabase/tests/app-files-project-boundary
+          npm run test:postgres --prefix supabase/tests/app-files-project-boundary
+
   edge-typecheck:
     name: Release Edge Function typecheck
     runs-on: ubuntu-latest
