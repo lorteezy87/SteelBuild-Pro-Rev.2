@@ -145,12 +145,12 @@
 @media(prefers-reduced-motion:reduce){.marketing-landing .site-header,.marketing-landing .logo{transition:none}}
 
 /* Real structural-steel photography: preserve visible framing beside the copy. */
-.marketing-landing .hero-background{inset:0 0 0 auto;width:62%;object-position:center 78%}
+.marketing-landing .hero-background{inset:0 0 0 auto;width:62%;object-position:center center}
 .marketing-landing .hero:before{background:linear-gradient(90deg,var(--marketing-color-14) 0%,var(--marketing-color-14) 34%,var(--marketing-color-124) 43%,var(--marketing-color-125) 65%,var(--marketing-color-126) 100%)}
 .marketing-landing .hero:after{background:linear-gradient(0deg,var(--marketing-color-5) 0%,var(--marketing-color-127) 32%)}
 @media(max-width:560px){
   .marketing-landing .hero{min-height:0;padding-bottom:116px}
-  .marketing-landing .hero-background{position:relative;inset:auto;display:block;width:calc(100% + 40px);height:300px;margin:34px -20px 0;object-position:center 78%;z-index:0}
+  .marketing-landing .hero-background{position:relative;inset:auto;display:block;width:calc(100% + 40px);height:300px;margin:34px -20px 0;object-position:center center;z-index:0}
   .marketing-landing .hero:before,.marketing-landing .hero:after{display:none}
 }
 
