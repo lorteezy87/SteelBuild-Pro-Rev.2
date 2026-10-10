@@ -1,0 +1,53 @@
+name: Drawing upload transaction PostgreSQL
+
+on:
+  push:
+    paths:
+      - supabase/candidates/drawing-set-revision-transaction.sql
+      - supabase/tests/drawing-set-revision-transaction/**
+      - .github/workflows/drawing-upload-postgres.yml
+  pull_request:
+    paths:
+      - supabase/candidates/drawing-set-revision-transaction.sql
+      - supabase/tests/drawing-set-revision-transaction/**
+      - .github/workflows/drawing-upload-postgres.yml
+
+permissions:
+  contents: read
+
+jobs:
+  drawing-upload-postgres:
+    name: Atomic drawing upload rollback and concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: steelbuild_drawing_upload_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: drawing-upload-fixture-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d steelbuild_drawing_upload_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: supabase/tests/drawing-set-revision-transaction/package-lock.json
+      - name: Verify source-only candidate against synthetic PostgreSQL
+        env:
+          DRAWING_UPLOAD_POSTGRES_TEST: "1"
+          DRAWING_UPLOAD_POSTGRES_URL: postgresql://postgres:drawing-upload-fixture-only@127.0.0.1:5432/steelbuild_drawing_upload_test
+        run: |
+          npm ci --prefix supabase/tests/drawing-set-revision-transaction --ignore-scripts
+          npm test --prefix supabase/tests/drawing-set-revision-transaction
+          npm run test:postgres --prefix supabase/tests/drawing-set-revision-transaction
