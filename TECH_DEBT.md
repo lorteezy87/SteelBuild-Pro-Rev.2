@@ -13,8 +13,12 @@ The Phase 0 release-candidate baseline is reconciled through Batch 40 on
 deployment or migration application. Remaining items below are intentionally
 classified instead of hidden behind a green local report:
 
-- **P0 release blockers:** none found in the local source, test, lint, typecheck,
-  build, dependency-audit, or date/timezone checks.
+This is a historical checkpoint, not the current release status. The
+2026-10-10 drift and dependency findings are tracked under
+[PR #498 post-merge release debt](#pr-498-post-merge-release-debt-2026-10-10).
+
+- **P0 release blockers at that checkpoint:** none found in the local source,
+  test, lint, typecheck, build, dependency-audit, or date/timezone checks.
 - **P1 required before production:** owner verification of staging database
   state and migrations, Edge Function deployment/configuration, staging smoke
   coverage, and required CI/branch-protection enforcement.
@@ -194,6 +198,32 @@ Taken at `ada5426`; **§9 reconciles it against `main@7227d32`** after PRs
 #460–#464, so check a finding's status there before working it. Counts after
 that reconciliation: 0 critical · 20 high (3 closed) · 54 medium (8 closed) ·
 ~45 low. No committed credential was found in the tree or its history.
+
+### PR #498 post-merge release debt (2026-10-10)
+
+[PR #498](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/498)
+merged as `3f7e68087`. The source fix makes `create_change_request` ignore
+caller-supplied workflow state, forces `Submitted`, and derives requester
+identity from the authenticated JWT. Application and concurrent PostgreSQL
+acceptance passed. That closes the source defect only.
+
+- **P0 — production migration drift.** The
+  [2026-10-10 `main` CI run](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/38036928550)
+  reported ten required migrations absent from the production ledger, with no
+  unknown, deprecated, unresolved, environment-excluded or Edge Function
+  drift. The new entry is
+  `20260921083000_secure_change_request_initial_state.sql`; the other nine are
+  the release migrations already tracked in the current release evidence.
+  Apply reviewed SQL manually, stamp the exact committed filename version,
+  verify the ledger payload against the file, and rerun drift. Never clear this
+  by changing the manifest, deleting a stamp, running `supabase db push`, using
+  `migration repair`, or invoking MCP `apply_migration`.
+- **P1 — advisory development-toolchain audit.** The production dependency
+  gate reports zero unwaived advisories at moderate or higher. The separate
+  all-dependencies audit reports five high findings from `braces` through
+  `chokidar`, `micromatch`, `fast-glob`, and Tailwind 3. The automated fix would
+  install Tailwind 4, a breaking change. Resolve this as a discrete, tested
+  toolchain upgrade; do not run `npm audit fix --force`.
 
 **Already closed by `main` / production — do not re-open:** AUTH-1 (org admin
 could delete the sole owner), AUTH-3 (invite tokens readable by every member),
@@ -579,14 +609,15 @@ that resolution instead of pinning it red.
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
   Phase 0 tablet kit is landed; Phases 1-4 domain migrations remain pending.
-- **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
-  2026-06-17).** The 2 remaining `esbuild`-via-`vite` highs were patched within the
-  vite-6 line (`esbuild@0.25.12`), so **`vite@8` is no longer required** to clear
-  the audit. Separately, several direct deps are a major version behind (react
-  18→19, vite 6→8, tailwind 3→4, typescript 5→6, eslint 9→10, react-router-dom 6→7,
-  the Stripe SDKs 3→6 / 5→9, pdfjs-dist 4→6, recharts 2→3, zod 3→4, date-fns 3→4);
-  none are security-driven now — treat each as a discrete, tested upgrade, not
-  `npm audit fix --force`. `web-ifc`/`three` are current.
+- **Dependency vulnerabilities — OPEN in development tooling (verified
+  2026-10-10).** Production dependencies have zero unwaived advisories at
+  moderate or higher. The all-dependencies audit reports five high findings in
+  the Tailwind 3 toolchain through `braces`, `chokidar`, `micromatch`, and
+  `fast-glob`; see the dated release-debt entry above. Several direct deps also
+  remain a major version behind (react 18→19, vite 6→8, tailwind 3→4,
+  typescript 5→6, eslint 9→10, react-router-dom 6→7, the Stripe SDKs 3→6 / 5→9,
+  pdfjs-dist 4→6, recharts 2→3, zod 3→4, date-fns 3→4). Treat each as a
+  discrete, tested upgrade, not `npm audit fix --force`.
 
 ### Database / migrations
 
@@ -601,9 +632,12 @@ that resolution instead of pinning it red.
   and reconciling prod `schema_migrations` to exactly the 3 baseline versions (200
   stale rows reverted, bookkeeping-only). Verified from-zero on a local stack (counts
   matched prod: 102 tables / 321 policies / 71 functions); `db push` reports up to date.
-  Runbook `docs/db-baseline-cutover.md`; **lockstep discipline to prevent re-drift** in
-  `ARCHITECTURE.md` → Migrations (after each MCP `apply_migration`, commit a repo file
-  named with the recorded version; or use `migration new` + `db push`).
+  Runbook `docs/db-baseline-cutover.md`; **lockstep discipline to prevent
+  re-drift** is in `ARCHITECTURE.md` → Migrations. Commit the migration file,
+  apply reviewed SQL by hand, stamp the production ledger with that exact
+  filename version, and verify the stored payload. Never use MCP
+  `apply_migration`, `supabase db push`, or `migration repair` on the shared
+  project.
 
 - **CI gates the production deploy (since 2026-06-19).** `ci.yml` runs
   lint→typecheck→typecheck:js→typecheck:strict→typecheck:noimplicitany→test→build,

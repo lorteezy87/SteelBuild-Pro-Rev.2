@@ -317,6 +317,19 @@ versions, hashes and acceptance limits. Whole-app enterprise and monetization
 readiness, provider delivery, backup restore, authenticated workflow/viewport
 acceptance and the build-tool advisory remain open.
 
+**Change-request security follow-through (2026-10-10).**
+[PR #498](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/498)
+has merged. New change requests now ignore caller-supplied workflow state and
+start as server-controlled `Submitted` records with requester identity taken
+from the authenticated JWT. The source, application and PostgreSQL acceptance
+checks passed, but migration
+`20260921083000_secure_change_request_initial_state.sql` is still one of ten
+required migrations missing from the production ledger. The drift gate remains
+red and the web deploy was skipped, so this fix is not yet verified in
+production. The production dependency audit reports no unwaived advisories;
+the advisory all-dependencies audit separately reports five high findings in
+the Tailwind 3 build-toolchain path.
+
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor
 target. Enterprise-readiness remediation status + owner action list live in
