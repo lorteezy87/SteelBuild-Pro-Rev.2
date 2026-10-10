@@ -49,4 +49,14 @@ describe("approved steel diamond badge assets", () => {
       "/steelbuild-pro-icon-maskable-512.png",
     ]));
   });
+
+  it("precaches only the approved badge and current installed-app icons", () => {
+    const serviceWorker = text("public/sw.js");
+    expect(serviceWorker).toContain('"/marketing/steelbuild-pro-logo.jpg"');
+    expect(serviceWorker).toContain('"/favicon-64.png"');
+    expect(serviceWorker).toContain('"/steelbuild-pro-icon-maskable-512.png"');
+    expect(serviceWorker).not.toContain('"/favicon.svg"');
+    expect(serviceWorker).not.toContain('"/icon-maskable.svg"');
+    expect(serviceWorker).not.toContain('"/steelbuild-pro-mark.svg"');
+  });
 });
