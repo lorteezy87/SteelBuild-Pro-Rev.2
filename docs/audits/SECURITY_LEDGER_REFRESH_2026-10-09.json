@@ -1,0 +1,92 @@
+{
+  "recordedAtUtc": "2026-10-09T23:59:18Z",
+  "projectRef": "kjrwqagyeswwoxpjkcko",
+  "method": "Read-only selected migration-ledger metadata; no SQL bodies or customer records returned",
+  "scope": "Only listed versions. Ledger presence and payload hashes do not alone prove current deployed definitions, policies or effective behavior.",
+  "requestedVersions": [
+    "20260922015713",
+    "20260927150000",
+    "20260927160000",
+    "20261005100745",
+    "20261007073051",
+    "20261007084117",
+    "20261007090057",
+    "20261008032524",
+    "20261008071019",
+    "20261008201934",
+    "20261008201944",
+    "20261008201945",
+    "20261008234107",
+    "20261008234249",
+    "20261008235532",
+    "20261009001532",
+    "20261009001555",
+    "20261009003246",
+    "20261009140000",
+    "20261009221740"
+  ],
+  "observed": [
+    {
+      "version": "20260922015713",
+      "name": "piece_events_primary_key_and_index_cleanup",
+      "statement_count": 1,
+      "first_payload_sha256": "5e91c05e0d37e2775f11f5d734df7d5cc955b471f1bd2bbed9c84c43f94f1b80"
+    },
+    {
+      "version": "20260927150000",
+      "name": "erasure_census_admits_project_admins",
+      "statement_count": 1,
+      "first_payload_sha256": "34500dcf125e3b10432dcfb44c3d10705b77a491263dcd95f155e3c1160550c5"
+    },
+    {
+      "version": "20260927160000",
+      "name": "account_deletion_releases_authorship",
+      "statement_count": 1,
+      "first_payload_sha256": "e67a55a414277691c20599003cedcafc79bad51ccc447b47930ff06d3602215c"
+    },
+    {
+      "version": "20261005100745",
+      "name": "retry_failed_revision_comparison",
+      "statement_count": 1,
+      "first_payload_sha256": "e05b215cc397e96d41bf10d037d491ff1b2078db62fd60762c13b1fdcdd9839d"
+    },
+    {
+      "version": "20261007073051",
+      "name": "enforce_enrolled_mfa_at_server_boundaries",
+      "statement_count": 1,
+      "first_payload_sha256": "8354f2ff700eb49b4d3e6580419c07087bc1e6cfbbe6222dec58bc1a52162e9e"
+    },
+    {
+      "version": "20261007084117",
+      "name": "permit_authorship_cleanup_through_immutable_guards",
+      "statement_count": 1,
+      "first_payload_sha256": "870c0bd5e93e6fc042971a49f1814fa0753d41fc0aa836ac92906fa34e3f8c3f"
+    },
+    {
+      "version": "20261007090057",
+      "name": "acquire_erasure_relation_locks_before_rows",
+      "statement_count": 1,
+      "first_payload_sha256": "6f26bbec42ca29e33accb246f38a3fa9ecbf34d1f0b10ec51eda9152015aeb2d"
+    },
+    {
+      "version": "20261008071019",
+      "name": "atomic_stripe_billing_events",
+      "statement_count": 1,
+      "first_payload_sha256": "3dfc1339eb999c33b5bad396d439958c8a6e6820071a612e33e686db9d5bbe44"
+    }
+  ],
+  "absentVersions": [
+    "20261008032524",
+    "20261008201934",
+    "20261008201944",
+    "20261008201945",
+    "20261008234107",
+    "20261008234249",
+    "20261008235532",
+    "20261009001532",
+    "20261009001555",
+    "20261009003246",
+    "20261009140000",
+    "20261009221740"
+  ]
+}
