@@ -19,6 +19,7 @@ import {
 import { fetchCrossSetSource } from "@/lib/crossSetSupersedeRepository";
 import {
   buildDrawingRecord,
+  buildInitialRevisionRecords,
   detectMultiSheetSamePageRegression,
   planExistingSetSheetReplace,
 } from "../drawingSetUploadHelpers";
@@ -201,6 +202,7 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
 
       const sanitizedRecords = records.map((r) => sanitizeDrawingPayload(r).record);
       const insertedRows = [];
+      const newlyCreatedRows = [];
 
       let existingLive = [];
       try {
@@ -273,7 +275,10 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
       if (replacePlan.toCreate.length > 0 && !cancelledRef.current) {
         try {
           const inserted = await entities.Drawing.bulkCreate(replacePlan.toCreate);
-          if (Array.isArray(inserted)) insertedRows.push(...inserted);
+          if (Array.isArray(inserted)) {
+            insertedRows.push(...inserted);
+            newlyCreatedRows.push(...inserted);
+          }
           createdRows += Array.isArray(inserted) ? inserted.length : replacePlan.toCreate.length;
         } catch (bulkErr) {
           console.warn("[drawings] bulkCreate failed, falling back to per-row:", bulkErr);
@@ -281,13 +286,36 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
             if (cancelledRef.current) break;
             try {
               const row = await entities.Drawing.create(replacePlan.toCreate[i]);
-              if (row) insertedRows.push(row);
+              if (row) {
+                insertedRows.push(row);
+                newlyCreatedRows.push(row);
+              }
               createdRows++;
             } catch (err) {
               console.error("Failed to create sheet:", replacePlan.toCreate[i]?.sheet_number, err);
               failedRows++;
             }
           }
+        }
+      }
+
+      // A sheet is not fully imported until its initial, source-bound revision
+      // exists. Previously the wizard stopped after creating `drawings`, so the
+      // PDF and extracted text were in the database while revision-driven UI
+      // made the upload look missing. Keep this as one bulk statement and fail
+      // loudly if the complete ledger was not returned.
+      if (newlyCreatedRows.length > 0) {
+        setProcessingStatus(prev => ({
+          ...prev,
+          progress: 82,
+          message: `Recording ${newlyCreatedRows.length} current revision${newlyCreatedRows.length === 1 ? "" : "s"}…`,
+        }));
+        const revisionRecords = buildInitialRevisionRecords(newlyCreatedRows);
+        const createdRevisions = await entities.DrawingRevision.bulkCreate(revisionRecords);
+        if (!Array.isArray(createdRevisions) || createdRevisions.length !== revisionRecords.length) {
+          throw new Error(
+            `Drawing pages were stored, but revision tracking completed for only ${createdRevisions?.length || 0} of ${revisionRecords.length} sheets. Refresh before retrying.`,
+          );
         }
       }
 
