@@ -54,6 +54,8 @@ export interface GroundBearingResult {
 /**
  * Bearing pressure under one outrigger mat. Returns null unless the reaction,
  * both dimensions and the allowable are > 0 and the mat weight is ≥ 0.
+ * Nonrepresentable intermediate/results are also refused: finite inputs can
+ * overflow an area to Infinity and falsely report zero pressure as green.
  *
  * Status: > 100% of allowable is red; ≥ 90% is yellow — within 10% of the
  * allowable leaves little room for soft spots or a wet day, and that band is
@@ -70,13 +72,16 @@ export function groundBearing(input: GroundBearingInput): GroundBearingResult | 
   const pressure = totalLoad / area;
   const utilization = (pressure / allowableBearing) * 100;
   const requiredArea = totalLoad / allowableBearing;
+  const requiredSquareSide = Math.sqrt(requiredArea);
+  if (![totalLoad, area, pressure, utilization, requiredArea, requiredSquareSide]
+    .every(value => Number.isFinite(value) && value > 0)) return null;
   return {
     totalLoad,
     area,
     pressure,
     utilization,
     requiredArea,
-    requiredSquareSide: Math.sqrt(requiredArea),
+    requiredSquareSide,
     status: utilization > 100 ? "red" : utilization >= 90 ? "yellow" : "green",
   };
 }
