@@ -35,6 +35,7 @@ Notes:
 
 
 
+
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
 | 2026-10-09 | codex-drawing-extraction-provenance | Atomic drawing source extraction provenance | supabase/candidates/drawing-set-revision-transaction.sql; supabase/tests/drawing-set-revision-transaction/**; docs/audits/DRAWING_UPLOAD_HISTORY_TRANSACTION_2026-10-09.md; docs/superpowers/plans/2026-10-09-drawing-upload-transaction.md | Reproduce stale text/callouts on changed PDFs and false harvested defaults on added sheets; implement only root-reviewed explicit unknown/provenance retention contract in uninstalled candidate; no hosted or client writes. |
