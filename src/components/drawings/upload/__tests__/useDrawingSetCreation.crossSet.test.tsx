@@ -12,6 +12,7 @@ const m = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
   revisionUpdate: vi.fn(),
+  revisionBulkCreate: vi.fn(),
   invalidateEntities: vi.fn(),
   autoCreate: vi.fn(),
   logActivity: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock("@/api/supabaseClient", () => ({
   entities: {
     DrawingSet: { filter: m.setFilter, create: m.setCreate, update: m.setUpdate },
     Drawing: { filter: m.drawingFilter, bulkCreate: m.bulkCreate, create: m.create, update: m.update },
-    DrawingRevision: { update: m.revisionUpdate },
+    DrawingRevision: { update: m.revisionUpdate, bulkCreate: m.revisionBulkCreate },
   },
 }));
 vi.mock("@/services/cacheRegistry", () => ({ invalidateEntities: m.invalidateEntities }));
@@ -102,6 +103,7 @@ beforeEach(() => {
   m.setUpdate.mockResolvedValue({});
   m.drawingFilter.mockResolvedValue([]);
   m.bulkCreate.mockImplementation(async (rows: Row[]) => rows.map((row) => ({ ...row, id: `new-${row.sheet_number}` })));
+  m.revisionBulkCreate.mockImplementation(async (rows: Row[]) => rows.map((row, index) => ({ ...row, id: `revision-${index + 1}` })));
   m.create.mockImplementation(async (row: Row) => ({ ...row, id: `new-${row.sheet_number}` }));
   m.update.mockImplementation(async (id: string, patch: Record<string, unknown>) => ({ ...rowsById[id], id, ...patch }));
   m.invalidateEntities.mockResolvedValue(undefined);
@@ -117,6 +119,14 @@ describe("useDrawingSetCreation — cross-set supersede", () => {
     await handleCreate(SHEETS, { supersedeIds: OLD_IDS });
 
     expect(m.bulkCreate).toHaveBeenCalledTimes(1);
+    expect(m.revisionBulkCreate).toHaveBeenCalledWith(SHEETS.map((sheet) => expect.objectContaining({
+      drawing_id: `new-${sheet.sheetNumber}`,
+      revision_code: "2",
+      file_url: "app-files/rev-a.pdf",
+      pdf_page: sheet.pdfPage,
+      is_current: true,
+      release_status: "received",
+    })));
     // The commit-time re-read is of the active project, once.
     expect(m.fetchSource).toHaveBeenCalledTimes(1);
     expect(m.fetchSource).toHaveBeenCalledWith("p1");
@@ -175,6 +185,21 @@ describe("useDrawingSetCreation — cross-set supersede", () => {
     ]);
     expect(result.superseded).toHaveLength(2);
     expect(state.setProcessError).toHaveBeenCalledWith("1 sheet(s) failed to save. 2 saved successfully.");
+  });
+
+  it("does not report success or supersede prior pages when initial revision tracking fails", async () => {
+    m.revisionBulkCreate.mockRejectedValueOnce(new Error("revision insert refused"));
+    const { handleCreate, state, onComplete } = mount();
+
+    await handleCreate(SHEETS, { supersedeIds: OLD_IDS });
+
+    expect(m.fetchSource).not.toHaveBeenCalled();
+    expect(m.update).not.toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(state.setStep).not.toHaveBeenCalledWith(5);
+    expect(state.setProcessError).toHaveBeenLastCalledWith(
+      "Failed to save drawings: revision insert refused",
+    );
   });
 
   it("never supersedes another set's pages when the user can't write drawings", async () => {

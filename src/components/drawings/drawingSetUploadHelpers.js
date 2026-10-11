@@ -85,6 +85,33 @@ export function buildDrawingRecord({ sheet, fileResults, meta, activeProject, re
   };
 }
 
+/**
+ * Every imported sheet must enter the revision ledger with the exact PDF/page
+ * that was reviewed during intake.  Register, comparison, submittal evidence,
+ * and release readiness all use this row as the source of record; a bare
+ * `drawings` row is only a partially imported sheet.
+ */
+export function buildInitialRevisionRecords(drawings = []) {
+  return drawings.map((drawing) => {
+    if (!drawing?.id || !drawing?.project_id) {
+      throw new Error("Cannot create revision tracking for an imported sheet without its drawing and project ids.");
+    }
+    return {
+      project_id: drawing.project_id,
+      drawing_id: drawing.id,
+      revision_code: drawing.revision_number || "v1",
+      sheet_number: drawing.sheet_number || "—",
+      sheet_title: drawing.title || "Untitled",
+      version_number: 1,
+      is_current: true,
+      release_status: "received",
+      file_url: drawing.file_url || null,
+      pdf_page: drawing.pdf_page ?? null,
+      received_at: drawing.created_at || new Date().toISOString(),
+    };
+  });
+}
+
 export function makeProgressSteps(activeId, doneIds = [], warnings = {}) {
   return [
     { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload")  },

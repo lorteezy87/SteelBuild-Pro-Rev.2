@@ -16,6 +16,7 @@ vi.mock("@/components/drawings/intakeReview", () => ({
 import { extractSheetsFromPdf, parseFilename, validatePdfPage } from "@/lib/pdfSheetExtractor";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
 import {
+  buildInitialRevisionRecords,
   MAX_PDF_SIZE_MB, formatBytes, validateAndExtract, buildDrawingRecord,
   makeProgressSteps, mergeAiSetMetadata, detectMultiSheetSamePageRegression,
   planExistingSetSheetReplace,
@@ -108,6 +109,37 @@ describe("buildDrawingRecord", () => {
       file_url: "https://x/a.pdf",
       pdf_page: 3,
     });
+  });
+});
+
+describe("buildInitialRevisionRecords", () => {
+  it("binds every imported sheet to its reviewed PDF page as a received current revision", () => {
+    expect(buildInitialRevisionRecords([{
+      id: "drawing-1",
+      project_id: "project-1",
+      revision_number: "A",
+      sheet_number: "S-101",
+      title: "Anchor bolt plan",
+      file_url: "org/uploads/file.pdf",
+      pdf_page: 7,
+      created_at: "2026-10-10T11:54:43.000Z",
+    }])).toEqual([{
+      project_id: "project-1",
+      drawing_id: "drawing-1",
+      revision_code: "A",
+      sheet_number: "S-101",
+      sheet_title: "Anchor bolt plan",
+      version_number: 1,
+      is_current: true,
+      release_status: "received",
+      file_url: "org/uploads/file.pdf",
+      pdf_page: 7,
+      received_at: "2026-10-10T11:54:43.000Z",
+    }]);
+  });
+
+  it("refuses a partial insert response without drawing identity", () => {
+    expect(() => buildInitialRevisionRecords([{ project_id: "project-1" }])).toThrow(/drawing and project ids/i);
   });
 });
 
