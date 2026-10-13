@@ -63,8 +63,23 @@ vi.mock("@/lib/supabase", () => ({
       };
       return chain;
     }),
-    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+    rpc: vi.fn(async (name) => {
+      if (name === "get_my_feature_flags") {
+        try {
+          return { data: await mocks.featureFlags(), error: null };
+        } catch (error) {
+          return { data: null, error };
+        }
+      }
+      return { data: null, error: null };
+    }),
   },
+}));
+
+vi.mock("@/components/shared/useAppSecurity", () => ({
+  useAppSecurity: () => ({
+    user: { id: "test-user-id", email: "test@example.com" },
+  }),
 }));
 
 import Submittals from "@/pages/Submittals";

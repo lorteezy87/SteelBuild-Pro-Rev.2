@@ -12878,6 +12878,13 @@ export type Database = {
         Args: { p_email: string; p_key: string }
         Returns: boolean
       }
+      get_my_feature_flags: {
+        Args: never
+        Returns: {
+          enabled: boolean
+          flag_key: string
+        }[]
+      }
       field_sync_op: {
         Args: {
           p_client_op_id: string
