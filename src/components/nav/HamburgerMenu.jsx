@@ -5,7 +5,7 @@ export default function HamburgerMenu({ open, onToggle }) {
     <button
       type="button"
       onClick={onToggle}
-      aria-label={open ? "Close navigation" : "Open navigation"}
+      aria-label={open ? "Close navigation menu" : "Open navigation"}
       aria-expanded={open}
       style={{
         width: 44, height: 44, borderRadius: 10,

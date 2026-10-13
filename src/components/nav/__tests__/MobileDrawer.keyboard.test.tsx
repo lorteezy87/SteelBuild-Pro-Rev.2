@@ -3,6 +3,7 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import HamburgerMenu from "../HamburgerMenu";
 import MobileDrawer from "../MobileDrawer";
 
 const navigate = vi.fn();
@@ -28,6 +29,14 @@ function Shell() {
   </>;
 }
 
+function IntegratedShell() {
+  const [open, setOpen] = useState(false);
+  return <>
+    <HamburgerMenu open={open} onToggle={() => setOpen((value) => !value)} />
+    <MobileDrawer open={open} onClose={() => setOpen(false)} onNavigate={navigate} currentPageName="Dashboard" />
+  </>;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   document.body.style.overflow = "auto";
@@ -38,6 +47,16 @@ afterEach(() => {
 });
 
 describe("MobileDrawer keyboard navigation", () => {
+  it("gives the topbar and drawer close controls distinct accessible names", async () => {
+    const user = userEvent.setup();
+    render(<IntegratedShell />);
+
+    await user.click(screen.getByRole("button", { name: "Open navigation" }));
+
+    expect(screen.getByRole("button", { name: "Close navigation menu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close navigation drawer" })).toBeInTheDocument();
+  });
+
   it("skips closed drawer controls in the page tab order", async () => {
     const user = userEvent.setup();
     render(<Shell />);
@@ -53,7 +72,7 @@ describe("MobileDrawer keyboard navigation", () => {
     const trigger = screen.getByRole("button", { name: "Open navigation" });
     trigger.focus();
     await user.keyboard("{Enter}");
-    const close = screen.getByRole("button", { name: "Close navigation" });
+    const close = screen.getByRole("button", { name: "Close navigation drawer" });
     expect(close).toHaveFocus();
     expect(document.body.style.overflow).toBe("hidden");
     await user.tab({ shift: true });
@@ -88,7 +107,7 @@ describe("MobileDrawer keyboard navigation", () => {
     render(<Shell />);
     const trigger = screen.getByRole("button", { name: "Open navigation" });
     await user.click(trigger);
-    await user.click(screen.getByRole("button", { name: "Close navigation" }));
+    await user.click(screen.getByRole("button", { name: "Close navigation drawer" }));
     expect(screen.queryByRole("dialog", { name: "Mobile navigation" })).toBeNull();
     expect(trigger).toHaveFocus();
     expect(document.body.style.overflow).toBe("auto");

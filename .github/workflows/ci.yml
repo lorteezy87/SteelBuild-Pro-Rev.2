@@ -288,6 +288,20 @@ jobs:
           npm ci --prefix supabase/tests/function-search-path --ignore-scripts
           npm test --prefix supabase/tests/function-search-path
 
+      - name: Verify trigger-only function execution grants
+        # Required ci gate: the synthetic catalog proves API-role EXECUTE is
+        # removed without preventing authenticated writes from firing triggers.
+        run: |
+          npm ci --prefix supabase/tests/security-definer-execution --ignore-scripts
+          npm test --prefix supabase/tests/security-definer-execution
+
+      - name: Verify caller-scoped feature flag privacy
+        # Required CI coverage: ordinary users must never receive another
+        # user's override email address from the raw feature_flags table.
+        run: |
+          npm ci --prefix supabase/tests/feature-flag-privacy --ignore-scripts
+          npm test --prefix supabase/tests/feature-flag-privacy
+
       - name: Verify account deletion authorization
         run: |
           npm ci --prefix supabase/tests/account-deletion --ignore-scripts
