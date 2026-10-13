@@ -74,7 +74,7 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close navigation"
+            aria-label="Close navigation drawer"
             style={{
               width: 40,
               height: 40,
