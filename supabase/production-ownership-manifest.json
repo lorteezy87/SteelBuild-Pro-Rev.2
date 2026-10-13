@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261013093000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - caller-scoped feature-flag read candidate. Replaces the cross-tenant authenticated raw-table read with system-admin-only selection and an authenticated SECURITY DEFINER RPC that returns only each caller's effective key and boolean. Requires exact SQL review, hosted staging checks for admin management and ordinary-user reads, manual application, and a matching ledger stamp before production release."
+      },
+      {
         "version": "20261009125901",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - durable org-scoped checkout intent and service-only reservation/customer/session RPCs. Requires reviewed exact SQL, installed-schema staging rollback, independent PostgreSQL concurrency acceptance and verified manual ledger stamp before deploying dependent checkout handler. No frozen exemption. See docs/superpowers/specs/2026-10-09-durable-checkout-design.md and docs/audits/DURABLE_CHECKOUT_RELEASE_2026-10-09.md."
