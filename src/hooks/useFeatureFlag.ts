@@ -42,12 +42,12 @@ export async function fetchEffectiveFlags(): Promise<Map<string, boolean>> {
 /** All flags as a Map<key, enabled> for the current user. */
 export function useAllFlags() {
   const { user } = useAppSecurity();
-  const userId = user?.id ?? null;
+  const userCacheKey = user?.id ?? user?.email?.toLowerCase() ?? null;
   return useQuery({
-    queryKey: ["feature_flags", userId],
+    queryKey: ["feature_flags", userCacheKey],
     staleTime: STALE_TIME,
     refetchOnWindowFocus: false,
-    enabled: Boolean(userId),
+    enabled: Boolean(userCacheKey),
     queryFn: fetchEffectiveFlags,
   });
 }
