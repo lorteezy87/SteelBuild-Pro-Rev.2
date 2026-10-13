@@ -162,7 +162,7 @@ Append-only audit records contain:
 - prior and new capability documents;
 - event timestamp.
 
-Direct insert, update, and delete are denied. A guard trigger rejects mutation after insert. Current org owners/admins may read events; ordinary members may not. Hard organization erasure removes the rows through the repository's existing reviewed erasure workflow. The event is immutable during the organization's lifetime, not exempt from required account/org erasure.
+Direct insert, update, and delete are denied. A guard trigger rejects mutation after insert. Current org owners/admins may read events; ordinary members may not. The migration explicitly enables RLS and grants only the required `SELECT` access instead of relying on automatic Data API exposure. Hard organization erasure removes the rows through the repository's existing reviewed erasure workflow. The event is immutable during the organization's lifetime, not exempt from required account/org erasure.
 
 ### Bootstrap and backfill
 
@@ -175,7 +175,7 @@ Direct insert, update, and delete are denied. A guard trigger rejects mutation a
 
 ### Read-only snapshot
 
-`public.get_my_organization_capabilities(p_org_id uuid)` is a `SECURITY DEFINER`, `STABLE` RPC with a safe fixed search path. It:
+`public.get_my_organization_capabilities(p_org_id uuid)` is a `SECURITY INVOKER`, `STABLE` wrapper over an auth-checking `private.get_my_organization_capabilities(p_org_id uuid)` implementation. The private implementation is `SECURITY DEFINER`, has `search_path = ''`, schema-qualifies every object, and is not in an exposed Data API schema. The wrapper:
 
 1. requires `auth.uid()` and current membership in `p_org_id`;
 2. returns the operating mode, preset version, revision, and complete capability map;
@@ -186,7 +186,7 @@ The UI caches this snapshot under a query key containing user id, org id, and re
 
 ### Mode update
 
-`public.set_organization_operating_mode(p_org_id, p_mode, p_expected_revision, p_reason)` is the only client-callable mutation. It:
+`public.set_organization_operating_mode(p_org_id, p_mode, p_expected_revision, p_reason)` is the only client-callable mutation. It is a `SECURITY INVOKER` wrapper over an auth-checking `private.set_organization_operating_mode(...)` implementation. The private implementation:
 
 1. requires an authenticated current owner/admin and `steelbuild_security.satisfies_mfa()`;
 2. locks the current mode row;
@@ -196,7 +196,7 @@ The UI caches this snapshot under a query key containing user id, org id, and re
 6. appends the immutable event; and
 7. returns the new snapshot.
 
-It is `SECURITY DEFINER`, uses a fixed safe search path, qualifies objects, and grants execute only to `authenticated`. All other function/table privileges are explicitly revoked.
+The private implementation is `SECURITY DEFINER`, has `search_path = ''`, qualifies every object, and can be executed only through narrowly granted authenticated access. The public wrapper grants execute only to `authenticated`. The private schema is not exposed through the Data API, and all unrelated function/table privileges are explicitly revoked.
 
 ### Authorization helpers
 
