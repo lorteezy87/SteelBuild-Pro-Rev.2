@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261013085637",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - source-only hardening for five reviewed internal SECURITY DEFINER helpers and future postgres-owned function defaults. Revokes PUBLIC/anon/authenticated/service_role execution from three erasure internals and two journal-wrapper implementations while preserving their postgres-owned wrapper call paths. Removes the global PUBLIC function default plus Supabase's public-schema anon/authenticated/service_role defaults so future functions fail closed unless a migration grants an intended role explicitly. A dedicated PGlite regression reproduces the broad defaults, proves wrapper execution after revocation, preserves existing explicit RPC grants, and confirms new functions are no longer API-callable by default. Production was inspected read-only on 2026-10-13; no SQL was applied or stamped. Keep visible in missingMigrations until exact-file staging acceptance, owner-authorized manual production application, and matching ledger payload verification."
+      },
+      {
         "version": "20261013083754",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - source-only audit repair for 58 reviewed public SECURITY DEFINER functions that return trigger, remain bound to SteelBuild row triggers, and currently grant direct EXECUTE to authenticated and service_role. The migration revokes API-role execution only after verifying each present function is still trigger-returning and trigger-bound; absent functions are tolerated for repo/live replay drift. A dedicated PGlite regression proves authenticated writes still fire all bound triggers and that unrelated RPC and unreviewed trigger grants are unchanged. Production was inspected read-only on 2026-10-13; no SQL was applied or stamped. Keep visible in missingMigrations until exact-file staging acceptance, owner-authorized manual production application, and matching ledger payload verification."

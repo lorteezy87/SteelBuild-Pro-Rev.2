@@ -6,6 +6,10 @@ const migration = await readFile(
   new URL("../../migrations/20261013083754_revoke_bound_trigger_function_execute.sql", import.meta.url),
   "utf8",
 );
+const helperMigration = await readFile(
+  new URL("../../migrations/20261013085637_secure_function_defaults_and_internal_helpers.sql", import.meta.url),
+  "utf8",
+);
 
 const triggerFunctions = [
   "compute_expense_amount",
@@ -76,6 +80,22 @@ assert.deepEqual(
   "the migration must contain exactly the reviewed trigger-function inventory",
 );
 
+const helperFunctions = [
+  "public.erasure_toggle_user_triggers(text[],boolean,text[])",
+  "public.hard_delete_toggle_triggers(text[],boolean,boolean,text[])",
+  "public.hard_delete_release_dependents(text,uuid[],integer)",
+  "public.bulk_update_piece_attributes_impl(uuid,uuid[],jsonb)",
+  "public.set_piece_hold_impl(uuid,uuid[],boolean,text)",
+];
+const helperMigrationFunctions = [
+  ...helperMigration.matchAll(/'public\.([a-z0-9_]+\([^']+\))'/g),
+].map((match) => `public.${match[1]}`);
+assert.deepEqual(
+  helperMigrationFunctions,
+  helperFunctions,
+  "the helper migration must contain exactly the reviewed internal-function inventory",
+);
+
 const db = new PGlite();
 
 async function privilege(role, identity) {
@@ -113,6 +133,8 @@ try {
     create role anon;
     create role authenticated;
     create role service_role;
+    alter default privileges for role postgres in schema public
+      grant execute on functions to anon, authenticated, service_role;
     create table public.trigger_probe(id bigint generated always as identity primary key);
     create table public.trigger_hits(function_name text not null);
     grant insert on public.trigger_probe to authenticated;
@@ -121,6 +143,34 @@ try {
     language sql security definer set search_path = '' as $$ select 1 $$;
     revoke all on function public.reviewed_rpc() from public, anon, authenticated, service_role;
     grant execute on function public.reviewed_rpc() to authenticated;
+
+    create function public.default_before_hardening() returns integer
+    language sql set search_path = '' as $$ select 1 $$;
+
+    create function public.erasure_toggle_user_triggers(text[], boolean, text[] default '{}') returns text[]
+    language sql security definer set search_path = '' as $$ select $1 $$;
+    create function public.hard_delete_toggle_triggers(text[], boolean, boolean default true, text[] default '{}') returns text[]
+    language sql security definer set search_path = '' as $$ select $1 $$;
+    create function public.hard_delete_release_dependents(text, uuid[], integer default 0) returns jsonb
+    language sql security definer set search_path = '' as $$ select jsonb_build_object('table', $1) $$;
+    create function public.bulk_update_piece_attributes_impl(uuid, uuid[], jsonb) returns jsonb
+    language sql security definer set search_path = '' as $$ select $3 $$;
+    create function public.set_piece_hold_impl(uuid, uuid[], boolean, text) returns jsonb
+    language sql security definer set search_path = '' as $$ select jsonb_build_object('on_hold', $3) $$;
+
+    create function public.internal_helper_probe() returns integer
+    language plpgsql security definer set search_path = '' as $$
+    begin
+      perform public.erasure_toggle_user_triggers(array['probe'], true, '{}');
+      perform public.hard_delete_toggle_triggers(array['probe'], true, true, '{}');
+      perform public.hard_delete_release_dependents('probe', array[]::uuid[], 0);
+      perform public.bulk_update_piece_attributes_impl(null, array[]::uuid[], '{}'::jsonb);
+      perform public.set_piece_hold_impl(null, array[]::uuid[], false, null);
+      return 5;
+    end
+    $$;
+    revoke all on function public.internal_helper_probe() from public, anon, authenticated, service_role;
+    grant execute on function public.internal_helper_probe() to authenticated, service_role;
   `);
 
   for (const name of triggerFunctions) await createTriggerFunction(name);
@@ -153,7 +203,40 @@ try {
   await db.exec("drop function public.compute_expense_amount() cascade");
   await db.exec(migration);
 
-  console.log("PASS: 58 reviewed trigger-only functions denied to API roles; bindings still execute; RPC and decoy grants preserved; repeat/missing-object safe.");
+  assert.equal(await privilege("authenticated", "public.default_before_hardening()"), true, "fixture must reproduce authenticated default grants");
+  assert.equal(await privilege("service_role", "public.default_before_hardening()"), true, "fixture must reproduce service-role default grants");
+  for (const identity of helperFunctions) {
+    assert.equal(await privilege("authenticated", identity), true, `${identity}: fixture reproduces authenticated grant`);
+    assert.equal(await privilege("service_role", identity), true, `${identity}: fixture reproduces service-role grant`);
+  }
+
+  await db.exec(helperMigration);
+
+  for (const identity of helperFunctions) {
+    for (const role of ["anon", "authenticated", "service_role"]) {
+      assert.equal(await privilege(role, identity), false, `${identity}: ${role} execution must be denied`);
+    }
+  }
+  assert.equal(await privilege("authenticated", "public.internal_helper_probe()"), true, "reviewed wrapper grant must remain");
+  await db.exec("set role authenticated");
+  const probe = (await db.query("select public.internal_helper_probe() as count")).rows[0];
+  await db.exec("reset role");
+  assert.equal(probe.count, 5, "postgres-owned SECURITY DEFINER wrapper must retain helper access");
+
+  await db.exec(`
+    create function public.default_after_hardening() returns integer
+    language sql set search_path = '' as $$ select 1 $$;
+  `);
+  for (const role of ["anon", "authenticated", "service_role"]) {
+    assert.equal(await privilege(role, "public.default_after_hardening()"), false, `future function default must deny ${role}`);
+  }
+  assert.equal(await privilege("authenticated", "public.reviewed_rpc()"), true, "existing explicit RPC grants must remain");
+
+  await db.exec(helperMigration);
+  await db.exec("drop function public.erasure_toggle_user_triggers(text[],boolean,text[])");
+  await db.exec(helperMigration);
+
+  console.log("PASS: 58 trigger-only and 5 internal functions denied; bindings/wrappers still execute; secure future defaults; RPC/decoy grants preserved; repeat/missing-object safe.");
 } catch (error) {
   console.error(error);
   process.exitCode = 1;
