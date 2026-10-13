@@ -102,6 +102,27 @@ for (const width of WIDTHS) {
       });
     }
 
+    test("mobile navigation reaches its full width with unambiguous close controls", async ({ page }) => {
+      await page.goto("/Dashboard");
+      await settle(page);
+
+      await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+      const drawer = page.getByRole("dialog", { name: "Mobile navigation", exact: true });
+      await expect(drawer).toBeVisible();
+
+      await expect(page.getByRole("button", { name: "Close navigation menu", exact: true })).toHaveCount(1);
+      await expect(drawer.getByRole("button", { name: "Close navigation drawer", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Close navigation", exact: true })).toHaveCount(0);
+
+      await expect.poll(async () => (await drawer.boundingBox())?.x ?? -1).toBe(0);
+      const box = await drawer.boundingBox();
+      if (!box) throw new Error("Mobile navigation drawer has no layout box");
+      expect(box.width).toBeCloseTo(Math.min(360, width * 0.92), 0);
+
+      await drawer.getByRole("button", { name: "Close navigation drawer", exact: true }).click();
+      await expect(drawer).toBeHidden();
+    });
+
     // One 12-16px gutter each side, not the hub wrapper's padding stacked on
     // the Control Center's (that put the hero 38px in).
     test("Projects hero sits in one symmetric 12-16px gutter", async ({ page }) => {
