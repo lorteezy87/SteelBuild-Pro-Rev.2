@@ -6,7 +6,51 @@ exactly what's needed.
 
 ---
 
-## Phase 0 closure status
+## Current production and Detailing repair status (2026-10-15)
+
+The version 20 frontend release is deployed from
+`b3cabc81eb1b4ecdd10e35b449e5c9217d5ab6f8`. All five required release jobs
+passed, and [production verification run 38771618666](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/38771618666)
+verified the unchanged GitHub artifact and exact entry asset on both public
+domains. Full release and rollback identifiers are in `README.md` → Deployment.
+Authenticated smoke was skipped because `E2E_ENABLED` was not enabled.
+This evidence verifies frontend promotion, not every application workflow.
+
+- **P1 — blocked Submittals form actions; open, confirmed from source and owner screenshot.**
+  `src/pages/submittals/SubmittalFormModal.tsx` uses the shared centered Radix
+  dialog without a desktop height cap or a scrollable body. Tall content can
+  place the heading and Create/Save/Cancel actions outside the viewport.
+  Repair the viewport bounds, scroll containment and reachable actions; verify
+  short desktop, phone and landscape windows, both themes, keyboard access,
+  linked-set selection, and create/edit paths. Do not claim a rendered fix from
+  jsdom or CSS assertions alone.
+- **P1 — drawing intake Edge Function transport error; open, investigation in progress.**
+  The owner reports `llm-proxy edge function failed: Failed to send a request to
+  the Edge Function`. Production `llm-proxy` v44 is active with gateway JWT
+  verification disabled and internal authentication retained. Direct probes
+  returned the expected production-origin CORS headers and rejected an
+  unauthenticated POST with 401. These probes do not reproduce a successful
+  signed-in extraction or establish the reported failure's cause. Capture the
+  actual failing request, fix its cause, and cover upload/revision failure and
+  recovery without inventing PDF-page provenance or approval/release status.
+- **P1 — authenticated Detailing acceptance; open.** Verify the drawing register,
+  intake, revision handoff, linked submittal rounds, approval transitions, holds,
+  transmittals and specialist-tool navigation with project-scoped fixtures.
+  Include direct requests, permission denials, query failures and narrow
+  viewports; do not turn this into an unqualified "entire center fixed" claim.
+- **P2 — build-tool dependency advisory; open.** The release run reports five
+  high-severity findings in the Tailwind/chokidar/braces dependency chain.
+  Production-dependency audit passed. A toolchain upgrade needs its own
+  compatibility work; do not apply a forced major upgrade during this repair.
+
+Version 19 remains available for rollback. Its old source reference was
+preserved before the owner's approved one-time Sites-only `--force-with-lease`
+update. This exception grants no standing authorization to rewrite GitHub or
+future source history. Frontend promotion applied no SQL or Edge Function changes.
+
+## Historical Phase 0 closure status
+
+The following is a historical baseline, not the current production defect list.
 
 The Phase 0 release-candidate baseline is reconciled through Batch 40 on
 `agent/handoff-cleanup`. The local closure gates passed without a production
@@ -218,7 +262,7 @@ RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
   production rejects), DATA-5, LOGIC-5, LOGIC-6.
 - **Release pipeline.** CI-2 is resolved by the Sites handoff: the production
   job holds no Cloudflare or reusable Sites publishing credential, builds only
-  on a green main SHA, and emits a checksummed archive for an authorized Sites
+  when the five required jobs pass for the main SHA, and emits a checksummed archive for an authorized Sites
   promotion. Branch protection remains blocked by the repository plan
   (B41-P1-005). **CI-10:**
   the Netlify site is still connected and builds every PR — confirm it cannot
