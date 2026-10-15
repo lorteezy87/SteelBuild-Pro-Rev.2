@@ -1,7 +1,7 @@
 # SteelBuild Pro
 
 ## Stack
-Vite, React 18, TypeScript, Supabase (project: kjrwqagyeswwoxpjkcko), Tailwind. Hosted on Cloudflare Workers (see Deploy).
+Vite, React 18, TypeScript, Supabase (project: kjrwqagyeswwoxpjkcko), Tailwind. Production is hosted on ChatGPT Sites (see Deploy); Cloudflare Workers remains the staging and PR-preview platform.
 
 Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` from `@/api/supabaseClient` — a thin re-export barrel. The implementation lives in `src/api/client/*` domain modules (entities, auth, storage, uploads, llm, functions, entityClient, fieldMapping, …), not inline in supabaseClient.ts.
 
@@ -18,17 +18,18 @@ The active rebuild covers the entire subcontractor app for structural steel fabr
 - `npm run build` — production build
 - The `ci` job blocks on `lint`, `typecheck`, `typecheck:js`, `typecheck:strict`, `typecheck:noimplicitany`, `check:no-new-js`, `test`, `test:e2e:foundation`, database helper/account deletion/MFA checks, `build`, and `perf:bundle`.
   - New source files must be `.ts`/`.tsx` (enforced by `check:no-new-js`). Editing existing `.js`/`.jsx` files is fine.
-  - **Production deploys and PR previews require five jobs:** `ci`, `secret-scan`, `supabase-drift`, `edge-typecheck`, and `commercial-postgres`. Staging requires the same jobs except `supabase-drift`. `edge-typecheck` checks released Edge Functions; `commercial-postgres` checks commercial SQL and concurrent database behavior. A failed required job blocks publishing.
+  - **Production release artifacts and PR previews require five jobs:** `ci`, `secret-scan`, `supabase-drift`, `edge-typecheck`, and `commercial-postgres`. Staging requires the same jobs except `supabase-drift`. `edge-typecheck` checks released Edge Functions; `commercial-postgres` checks commercial SQL and concurrent database behavior. A failed required job blocks the release handoff.
 - Tests run with `TZ=UTC` (`vite.config.js`), which hides local-vs-UTC bugs.
   - A test that must prove local-day behaviour has to inject the zone, for example by stubbing the date conversion or the `Date` getters.
   - Building dates from local parts passes vacuously on the UTC runner.
 
-## Deploy — Cloudflare Workers
-- **Production:** the static-asset Worker `steelbuild-pro-rev-2`, configured in `wrangler.jsonc`.
-- **Publishing:** only CI's gated "Deploy to Cloudflare Workers (production)" job publishes it, after the five required jobs above pass. PR previews are created only when their required jobs pass.
+## Deploy — ChatGPT Sites
+- **Production:** the public Site pinned by `.openai/hosting.json`; the legacy `steelbuild-pro-rev-2` Worker is not the production publisher.
+- **Publishing:** CI's `prepare-sites-release` job creates a checksummed archive only after the five required jobs pass. An authorized Sites operator promotes that exact archive; GitHub stores no reusable Sites credential. Follow `docs/runbooks/sites-release.md`.
+- **Verification:** `.github/workflows/sites-production-verify.yml` downloads the gated artifact and proves both domains serve its exact Vite entry bytes before optional authenticated smoke.
 - **Custom domains:** `steelbuild-pro.com` and `www.steelbuild-pro.com`.
 - **Vercel is retired.** Don't reintroduce it.
-- **`wrangler.jsonc`:** keep `workers_dev` and `preview_urls` set explicitly. Adding `routes` silently turns both off, which once broke the post-deploy health check.
+- **Cloudflare:** `wrangler.jsonc` and `wrangler.staging.jsonc` remain for legacy rollback, staging, and PR previews. Do not attach the production domains to them.
 
 ## Design system: SteelBuild dual theme
 - Colors: CSS variables only (`var(--bg-*)`, `var(--text-*)`, `var(--accent)`, `var(--cmd-*)`, `var(--sbd-*)`). Never hardcode surface/text/border hex in components.
@@ -171,8 +172,8 @@ A NULL optional column means *unknown*, not *false* — never render it as an af
 ## Production-readiness audit (2026-09-21)
 `docs/audits/PRODUCTION_READINESS_AUDIT_2026-09-21.md` is the evidence-based audit of security, tenancy, data correctness, performance, store readiness and release process. §9 reconciles it against `main` after PRs #460–#464, so read a finding's status there before acting on it. The invariants above that it found regressed are flagged inline in this file; the rest are tracked in `TECH_DEBT.md`.
 
-## Current rebuild and release boundary (2026-10-09)
-[PR #499](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/499) has merged; [PR #516](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/516) is the current hardening integration. The five Drawing Control migrations, membership resolver, round-revision manifest, durable checkout and project-capacity SQL are installed and payload-verified on staging, pending production. Nine separately reviewed SQL migrations have reached production during this release. The matching Edge handlers and frontend publication remain pending, and the full combined source checks and authenticated acceptance remain required. The temporary repository variable `CLOUDFLARE_ENABLED=false` preserves the current live Worker until backend dependencies and staging acceptance are ready; restore it and complete the five-gate publication before reporting production updated. See [release evidence](./docs/audits/PRODUCTION_RELEASE_2026-10-08.md) for exact versions, hashes and scope. Do not infer enterprise readiness, provider delivery, backup restoration or authenticated crane/workflow acceptance from source checks or SQL rollback tests. Keep build-tool advisories and the remaining full-app work visible.
+## Current hosting and release boundary (2026-10-15)
+Production is Sites version 19 for project `appgprj_6a586bd122e48191baf2041322b2325d`; its source tree matched GitHub `main` at `98bdf17ec9c9aeeaf0d993b8b56200d7927bb21f` when released. Both custom domains are active. `CLOUDFLARE_ENABLED=false` is intentional because the legacy Worker no longer owns production routing. Future web releases use the five-gate Sites artifact and authorized promotion procedure above. Local checks, an uploaded artifact, or a saved Site version are not hosted-production evidence until the Sites deployment succeeds and the exact-domain verification passes. Database and Edge Function releases remain separate reviewed operations. Do not infer enterprise readiness, provider delivery, backup restoration, or authenticated workflow acceptance from source checks alone.
 
 ## Branches — PRs target `main`
 `main` is the integration and GitHub default branch (verified 2026-09-11). Open PRs against `main`. Check the live default branch and `git rev-list --count origin/main..HEAD` before opening a PR; older notes naming `codex/base44-deploy-nick` are stale.

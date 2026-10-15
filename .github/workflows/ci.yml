@@ -6,28 +6,25 @@
 #                suite + production Vite build. Runs on EVERY push and pull
 #                request to any branch, so contributors get green/red feedback
 #                before merge.
-#   - deploy-cloudflare: THE production deploy — `wrangler deploy` to the
-#                Cloudflare Worker. GATED on `ci`, secret scan, Edge typecheck
-#                production drift and commercial PostgreSQL acceptance, and ONLY on a push to main, so
-#                a red lint/typecheck/test/build cannot reach
-#                steelbuild-pro.com. That gate only holds while this is the SOLE
-#                publisher, so Cloudflare's own Workers Builds git integration
-#                (which deploys on push, ungated) must stay disconnected.
-#                Opt-in via the CLOUDFLARE_ENABLED repo variable — while it is
-#                unset, pushes to main deploy NOWHERE.
-#                See docs/runbooks/cloudflare-migration.md.
+#   - prepare-sites-release: THE production release gate. After all five
+#                required jobs pass on a main push, it builds with the reviewed
+#                production browser configuration and uploads a checksummed
+#                Sites archive tied to the exact commit. GitHub does not store
+#                a reusable Sites publishing credential; an authorized Sites
+#                operator promotes that exact artifact and then runs the
+#                production verification workflow. See
+#                docs/runbooks/sites-release.md.
 #   - preview-cloudflare: per-PR preview URL via `wrangler versions upload`,
 #                which uploads a version WITHOUT promoting it to the live
 #                deployment. Replaces the previews Workers Builds used to post.
-#   - e2e-smoke: Playwright smoke AFTER deploy, NON-BLOCKING (it is not in
-#                `deploy-cloudflare.needs`, so it can never gate or roll back
-#                prod). Opt-in via E2E_ENABLED. See e2e/README.md.
+#   - Production E2E moved to sites-production-verify.yml so it can only run
+#                after the authorized Sites promotion and exact-asset check.
 #   - staging-e2e-readonly / staging-e2e-mutations: authenticated Playwright
 #                runs against a staging environment, opt-in via STAGING_E2E_*
 #                and STAGING_BASE_URL. Their credentials and Supabase target are
 #                staging-specific and cannot target prod.
 #   - dependency-audit: `npm audit` over production deps, ADVISORY (not in
-#                `deploy-cloudflare.needs`, so a newly disclosed CVE alarms the
+#                `prepare-sites-release.needs`, so a newly disclosed CVE alarms the
 #                run without blocking the release train).
 #
 # REMOVED (2026-09): the `deploy` and `deploy-staging` jobs, which shipped to
@@ -43,12 +40,14 @@
 #                there is nothing to weigh and the run should fail.
 #
 # What does NOT run here:
-#   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
+#   - Production E2E as a blocking build gate. It runs after an authorized Sites
+#     promotion in sites-production-verify.yml and remains observe-only.
 #   - SAST — still queued; needs an owner decision on tooling
 #     (see ENTERPRISE_READINESS_AUDIT.md L13).
 #   - Lighthouse / automated a11y auditing (queued for later).
 #
-# NOTE ON ENFORCEMENT: deploy dependencies block a failed build from publishing.
+# NOTE ON ENFORCEMENT: release dependencies block a failed build from producing
+# a promotable production artifact.
 # Branch protection must ALSO require these checks to prevent unchecked merges
 # or direct changes to the workflow itself. Repository credentials still need
 # migration into restricted environments; YAML alone does not isolate secrets.
@@ -192,7 +191,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # CI placeholders for Vite/Vitest. Real values come from the
-    # VITE_SUPABASE_* repo secrets in the deploy/preview jobs; CI only needs
+    # VITE_SUPABASE_* repo secrets in the release/preview jobs; CI only needs
     # non-empty values so src/lib/supabase.ts passes its import-time guard. No
     # test should hit this URL — anything that touches the network is expected
     # to mock the supabase client. Those jobs REFUSE to build if they ever see
@@ -334,7 +333,7 @@ jobs:
         # (node --max-old-space-size=4096 ...vite build) because the large
         # BIM/PDF/three vendor chunks OOM Rollup at Node's default heap. That
         # limit now lives in package.json so it applies everywhere the build
-        # runs — CI here, the Cloudflare deploy/preview jobs, and local. This
+        # runs — CI here, the Sites release/Cloudflare preview jobs, and local. This
         # NODE_OPTIONS is kept as a redundant safety net only.
         run: npm run build
         env:
@@ -467,44 +466,25 @@ jobs:
           fi
           npm run supabase:drift
 
-  # ── Gated PRODUCTION deploy → Cloudflare Workers ─────────────────────────
-  # THE production deploy path. The Vercel `deploy` / `deploy-staging` jobs
-  # that used to live here are gone: that account is closed, so those jobs
-  # could only ever fail.
+  # ── Gated PRODUCTION handoff → ChatGPT Sites ─────────────────────────────
+  # Sites is the production hostname owner. GitHub builds one immutable archive
+  # only after every required release gate passes. The archive contains
+  # .openai/hosting.json plus dist/, and its manifest binds the Sites project,
+  # source SHA, exact Vite entry asset, full dist tree and archive checksum.
   #
-  # Gated on `ci`, so a red lint / typecheck / test / build cannot reach
-  # steelbuild-pro.com. That gate is only real if this stays the SOLE
-  # publisher — Cloudflare's own Workers Builds git integration deploys on
-  # push with no gate at all, so it must be disconnected in the dashboard.
-  # See step 2 of docs/runbooks/cloudflare-migration.md.
-  #
-  # INERT until you opt in: runs only when the `CLOUDFLARE_ENABLED` repo
-  # VARIABLE is "true" (a variable, not a secret — `secrets.*` is unreliable in
-  # a job-level `if`, same pattern as e2e-smoke). NOTE the consequence: while
-  # it is unset, pushing to main deploys NOWHERE. That is deliberate — better
-  # than half-deploying before the secrets below exist — but it does mean the
-  # variable is what turns production deploys back on.
-  #
-  # There is no `vercel pull` equivalent to fetch build-time env, so the VITE_*
-  # values come from repo secrets. They are browser-safe by design (the
-  # Supabase URL + publishable anon key ship in the bundle; see src/lib/env.ts)
-  # — no service key is ever a VITE_* var.
-  #
-  # Setup + cutover steps: docs/runbooks/cloudflare-migration.md
-  deploy-cloudflare:
-    name: Deploy to Cloudflare Workers (production)
+  # Sites write credentials are deliberately short lived and never stored in
+  # GitHub. An authorized operator downloads this artifact, verifies it, saves
+  # and deploys it through Sites, then dispatches sites-production-verify.yml.
+  # See docs/runbooks/sites-release.md.
+  prepare-sites-release:
+    name: Prepare Sites production release
     needs: [ci, secret-scan, supabase-drift, edge-typecheck, commercial-postgres]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.CLOUDFLARE_ENABLED == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Serialize production deploys and never cancel one mid-flight — an
-    # interrupted deploy wastes minutes and can leave a half-published Worker.
     concurrency:
-      group: cloudflare-production-deploy
+      group: sites-production-release
       cancel-in-progress: false
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -518,11 +498,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify deploy configuration
-        # FAIL CLOSED. The `ci` job builds with deliberate placeholder Supabase
-        # values; if those ever leaked into this job's env the build would
-        # succeed and publish an app that cannot reach the database — a green
-        # deploy of a dead site. Refuse to build instead.
+      - name: Verify production build configuration
+        # The general CI build uses placeholders. This release artifact must be
+        # built with the browser-safe production URL and anon key or it would
+        # promote a site that cannot reach Supabase.
         run: |
           set -e
           if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
@@ -535,20 +514,11 @@ jobs:
               exit 1
               ;;
           esac
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets are not set"
-            exit 1
-          fi
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Build (production)
-        # Plain `npm run build`. Response headers and SPA routing are NOT part
-        # of the bundle — they come from public/_headers (which Vite copies
-        # verbatim into dist/) and wrangler.jsonc. deployHeaders.test.ts is the
-        # only thing asserting those headers still exist, so it runs in `ci`
-        # above before anything reaches here.
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
@@ -560,28 +530,38 @@ jobs:
           VITE_APP_VERSION: ${{ github.sha }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
-      - name: Confirm _headers reached the build output
-        # public/_headers is a plain file Vite copies verbatim. If it ever stops
-        # landing in dist/, the deploy silently loses every security header and
-        # the immutable asset caching — exactly the kind of failure nobody
-        # notices for months. Check it before publishing, not after.
+      - name: Package and attest the Sites release
         run: |
           set -e
           test -f dist/_headers || { echo "::error::dist/_headers missing — headers would be dropped"; exit 1; }
           test -f dist/wasm/web-ifc.wasm || { echo "::error::dist/wasm/web-ifc.wasm missing — IFC viewer would render nothing"; exit 1; }
+          mkdir -p release/package/.openai
+          cp .openai/hosting.json release/package/.openai/hosting.json
+          cp -R dist release/package/dist
+          tar -czf "release/steelbuild-sites-${GITHUB_SHA}.tar.gz" -C release/package .openai dist
+          rm -rf release/package
+          npm run sites:release:create -- \
+            --archive "release/steelbuild-sites-${GITHUB_SHA}.tar.gz" \
+            --manifest release/sites-release-manifest.json \
+            --commit "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --ref "$GITHUB_REF_NAME"
+          mkdir -p release/verify
+          tar -xzf "release/steelbuild-sites-${GITHUB_SHA}.tar.gz" -C release/verify
+          npm run sites:release:verify -- \
+            --archive "release/steelbuild-sites-${GITHUB_SHA}.tar.gz" \
+            --manifest release/sites-release-manifest.json \
+            --repository-root release/verify \
+            --commit "$GITHUB_SHA"
+          rm -rf release/verify
 
-      - name: Deploy to Cloudflare Workers
-        # Uses the pinned wrangler from devDependencies (not @latest) so the
-        # deploy tool version is reviewed like any other dependency bump.
-        run: npx wrangler deploy
-
-      - name: Post-deploy health check
-        # Both public hostnames must serve this job's exact Vite entry asset.
-        # HTTP 200 alone missed the 2026-10-08 outage: another hosting provider
-        # answered with an app bundle built without Supabase configuration.
-        # Red here means "deployed but not serving"; the Worker is already
-        # published, so this is an alert rather than an automatic rollback.
-        run: node scripts/check-production-domains.ts
+      - name: Upload immutable Sites release handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: sites-production-${{ github.sha }}
+          path: release/
+          retention-days: 90
+          if-no-files-found: error
 
   # ── PR preview → Cloudflare version preview URL ──────────────────────────
   # Gives back the per-PR preview URLs that Cloudflare's Workers Builds git
@@ -606,7 +586,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      vars.CLOUDFLARE_ENABLED == 'true'
+      vars.CLOUDFLARE_PREVIEWS_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # One preview per PR; a new push supersedes the old upload.
@@ -657,7 +637,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_APP_VERSION: ${{ github.sha }}
           # No SENTRY_AUTH_TOKEN: previews must not upload source maps or claim
-          # a Sentry release. Only the production deploy does that.
+          # a Sentry release. Only the production release build does that.
 
       - name: Confirm _headers reached the build output
         run: |
@@ -844,78 +824,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: staging-playwright-mutation-report
-          path: playwright-report/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # ── E2E smoke (post-deploy, NON-BLOCKING) ────────────────────────────────
-  # The "unit tests pass != it works" layer: signs in with a real session and
-  # asserts the daily-driver workflow (drawings -> submittals -> RFIs) plus the
-  # server-arbitrated fab-release gate against the JUST-DEPLOYED app.
-  #
-  # Deploy-safety: this runs AFTER `deploy`, and `deploy` does NOT list it in
-  # `needs`, so a flaky or failing E2E run can NEVER block or roll back a
-  # production deploy. It is observe-only.
-  #
-  # Opt-in: only runs when the `E2E_ENABLED` repo VARIABLE is "true" (a variable,
-  # not a secret — `secrets.*` is unreliable in a job-level `if`). Until you set
-  # it, this job is skipped (never red). Set it once the dedicated test account +
-  # secrets exist (see e2e/README.md). Each spec ALSO self-skips when its own
-  # fixture env is unset, so you can enable the read-only smoke first and add the
-  # mutation-aware fab-release gate later by setting the E2E_FAB_* secrets — the
-  # gate spec WRITES to fab_release_log, so point it at a TEST org only.
-  e2e-smoke:
-    name: E2E smoke (post-deploy, non-blocking)
-    needs: deploy-cloudflare
-    if: ${{ vars.E2E_ENABLED == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browser (chromium)
-        run: npx playwright install --with-deps chromium
-
-      - name: Run E2E suite
-        run: npm run test:e2e
-        env:
-          E2E_BASE_URL: https://steelbuild-pro.com
-          E2E_PROJECT_ID: ${{ vars.E2E_PROJECT_ID }}
-          E2E_DRAWING_FIXTURE_TEXT: ${{ vars.E2E_DRAWING_FIXTURE_TEXT }}
-          E2E_SUBMITTAL_FIXTURE_TEXT: ${{ vars.E2E_SUBMITTAL_FIXTURE_TEXT }}
-          # Sign-in: global-setup (browser session) + the API fixtures. The
-          # passwords are secrets; the anon key is browser-public but stored as a
-          # secret for one consistent place.
-          E2E_USER: ${{ secrets.E2E_USER }}
-          E2E_PASS: ${{ secrets.E2E_PASS }}
-          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
-          E2E_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
-          # Optional viewer account -> enables the fab-gate RLS-deny assertion.
-          E2E_VIEWER_USER: ${{ secrets.E2E_VIEWER_USER }}
-          E2E_VIEWER_PASS: ${{ secrets.E2E_VIEWER_PASS }}
-          # Fab-release gate fixture (TEST org ONLY — the spec WRITES one append-
-          # only row per run). Leave unset to skip that spec and run only the
-          # read-only smoke. Verify the two drawing ids with the gate's own fn:
-          #   select * from fab_release_blocking_rfis(array['<uuid>']::uuid[]);
-          E2E_FAB_PROJECT_ID: ${{ secrets.E2E_FAB_PROJECT_ID }}
-          E2E_BLOCKED_DRAWING_ID: ${{ secrets.E2E_BLOCKED_DRAWING_ID }}
-          E2E_CLEAN_DRAWING_ID: ${{ secrets.E2E_CLEAN_DRAWING_ID }}
-
-      - name: Upload Playwright report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
           path: playwright-report/
           retention-days: 7
           if-no-files-found: ignore

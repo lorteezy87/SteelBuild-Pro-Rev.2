@@ -1,0 +1,135 @@
+name: Verify Sites production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: GitHub Actions run ID that produced the Sites release artifact
+        required: true
+        type: string
+      release_sha:
+        description: Full 40-character main commit SHA promoted through Sites
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: sites-production-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify exact Sites release on production domains
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Validate requested release identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -e
+          case "$RELEASE_RUN_ID" in
+            ''|*[!0-9]*) echo "::error::release_run_id must be numeric"; exit 1 ;;
+          esac
+          case "$RELEASE_SHA" in
+            *[!0-9a-fA-F]*|'') echo "::error::release_sha must be hexadecimal"; exit 1 ;;
+          esac
+          test "${#RELEASE_SHA}" -eq 40 || { echo "::error::release_sha must contain 40 characters"; exit 1; }
+          RUN_JSON="$(gh run view "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json event,headBranch,headSha,workflowName,jobs)"
+          jq -e --arg sha "$RELEASE_SHA" \
+            '.workflowName == "CI" and .event == "push" and .headBranch == "main" and .headSha == $sha' \
+            <<<"$RUN_JSON" >/dev/null || { echo "::error::release artifact must come from the CI push run for this exact main SHA"; exit 1; }
+          for job in \
+            "Lint + Typecheck + Test + Build" \
+            "Secret scan (gitleaks)" \
+            "Supabase drift check" \
+            "Release Edge Function typecheck" \
+            "Commercial SQL + concurrent PostgreSQL acceptance" \
+            "Prepare Sites production release"
+          do
+            jq -e --arg name "$job" \
+              'any(.jobs[]; .name == $name and .conclusion == "success")' \
+              <<<"$RUN_JSON" >/dev/null || { echo "::error::required release job was not successful: $job"; exit 1; }
+          done
+
+      - name: Checkout the promoted source commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download the gated release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -e
+          mkdir -p release
+          gh run download "$RELEASE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "sites-production-${RELEASE_SHA}" \
+            --dir release
+
+      - name: Verify artifact and exact production assets
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -e
+          ARCHIVE="release/steelbuild-sites-${RELEASE_SHA}.tar.gz"
+          test -f "$ARCHIVE" || { echo "::error::Sites release archive is missing"; exit 1; }
+          test -f release/sites-release-manifest.json || { echo "::error::Sites release manifest is missing"; exit 1; }
+          mkdir -p release/extracted
+          tar -xzf "$ARCHIVE" -C release/extracted
+          npm run sites:release:verify -- \
+            --archive "$ARCHIVE" \
+            --manifest release/sites-release-manifest.json \
+            --repository-root release/extracted \
+            --commit "$RELEASE_SHA"
+          npm run sites:verify:production -- release/extracted/dist
+
+      - name: Install Playwright browser
+        if: ${{ vars.E2E_ENABLED == 'true' }}
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authenticated production smoke
+        if: ${{ vars.E2E_ENABLED == 'true' }}
+        run: npm run test:e2e
+        env:
+          E2E_BASE_URL: https://steelbuild-pro.com
+          E2E_PROJECT_ID: ${{ vars.E2E_PROJECT_ID }}
+          E2E_DRAWING_FIXTURE_TEXT: ${{ vars.E2E_DRAWING_FIXTURE_TEXT }}
+          E2E_SUBMITTAL_FIXTURE_TEXT: ${{ vars.E2E_SUBMITTAL_FIXTURE_TEXT }}
+          E2E_USER: ${{ secrets.E2E_USER }}
+          E2E_PASS: ${{ secrets.E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          E2E_VIEWER_USER: ${{ secrets.E2E_VIEWER_USER }}
+          E2E_VIEWER_PASS: ${{ secrets.E2E_VIEWER_PASS }}
+          E2E_FAB_PROJECT_ID: ${{ secrets.E2E_FAB_PROJECT_ID }}
+          E2E_BLOCKED_DRAWING_ID: ${{ secrets.E2E_BLOCKED_DRAWING_ID }}
+          E2E_CLEAN_DRAWING_ID: ${{ secrets.E2E_CLEAN_DRAWING_ID }}
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() && vars.E2E_ENABLED == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: sites-production-playwright-${{ inputs.release_sha }}
+          path: playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore

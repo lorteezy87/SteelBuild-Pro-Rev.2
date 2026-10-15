@@ -76,7 +76,7 @@ export async function verifyDomain(
 }
 
 async function main(): Promise<void> {
-  const expected = await expectedRelease(resolve('dist'));
+  const expected = await expectedRelease(resolve(process.argv[2] ?? 'dist'));
   for (let attempt = 1; attempt <= 6; attempt += 1) {
     const results = await Promise.allSettled(
       PRODUCTION_DOMAINS.map((domain) => verifyDomain(domain, expected)),

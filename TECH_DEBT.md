@@ -216,9 +216,11 @@ RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
   contract query is permanently broken by the global `['projects']` select
   default), DATA-4 (two shipping importers write `deliveries` in a shape
   production rejects), DATA-5, LOGIC-5, LOGIC-6.
-- **Release pipeline.** CI-2 — the deploy jobs declare no `environment:`, so the
-  production Cloudflare token is reachable from any branch's workflow. Branch
-  protection remains blocked by the repository plan (B41-P1-005). **CI-10 (new):**
+- **Release pipeline.** CI-2 is resolved by the Sites handoff: the production
+  job holds no Cloudflare or reusable Sites publishing credential, builds only
+  on a green main SHA, and emits a checksummed archive for an authorized Sites
+  promotion. Branch protection remains blocked by the repository plan
+  (B41-P1-005). **CI-10:**
   the Netlify site is still connected and builds every PR — confirm it cannot
   publish to the production hostnames, then disconnect it. An ungated publisher
   is the same risk class as Cloudflare Workers Builds.
@@ -605,11 +607,12 @@ that resolution instead of pinning it red.
   `ARCHITECTURE.md` → Migrations (after each MCP `apply_migration`, commit a repo file
   named with the recorded version; or use `migration new` + `db push`).
 
-- **CI gates the production deploy (since 2026-06-19).** `ci.yml` runs
+- **CI gates the production release artifact.** `ci.yml` runs
   lint→typecheck→typecheck:js→typecheck:strict→typecheck:noimplicitany→test→build,
-  and **only a green `ci` job runs the `deploy` job** (`vercel deploy --prebuilt
-  --prod`). Vercel's git auto-deploy is off (`vercel.json`
-  `git.deploymentEnabled.main:false`), so a **red push cannot reach production**.
+  and only the five required green jobs allow `prepare-sites-release` to emit a
+  checksummed Site archive. GitHub cannot publish it directly and stores no
+  reusable Sites credential; an authorized promotion and exact-domain
+  verification are separate recorded steps. Vercel is retired.
   Remaining gap: no **branch-protection required check** (repo plan), so
   red/unreviewed commits can still land on `main` (they just can't deploy).
   Enable branch protection (owner) or move to a PR-gated merge flow.

@@ -54,6 +54,6 @@ describe('executed backend release gate', () => {
   });
   it('binds the frontend publisher to security checks too', () => {
     const ci = load(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')) as Workflow;
-    expect(ci.jobs['deploy-cloudflare'].needs).toEqual(expect.arrayContaining(['ci', 'secret-scan', 'supabase-drift', 'edge-typecheck', 'commercial-postgres']));
+    expect(ci.jobs['prepare-sites-release'].needs).toEqual(expect.arrayContaining(['ci', 'secret-scan', 'supabase-drift', 'edge-typecheck', 'commercial-postgres']));
   });
 });

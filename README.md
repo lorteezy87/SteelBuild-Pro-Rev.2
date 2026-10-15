@@ -26,8 +26,9 @@ moat.
 - **Viewers**: a **self-hosted IFC viewer** (`web-ifc` wasm + `three.js`,
   lazy-loaded) for the Detailing Control Center's 3D tab; `pdf.js` for drawings.
 - **Data**: Supabase (Postgres + RLS + Storage + Auth + Edge Functions).
-- **Hosting**: Cloudflare Workers (`steelbuild-pro-rev-2`), serving
-  `steelbuild-pro.com`. Production deploys require five green jobs: `ci`,
+- **Hosting**: ChatGPT Sites serves `steelbuild-pro.com` and
+  `www.steelbuild-pro.com`; Cloudflare Workers remains for staging and PR
+  previews. Production release artifacts require five green jobs: `ci`,
   `secret-scan`, `supabase-drift`, `edge-typecheck`, and `commercial-postgres`.
   Vercel is retired.
 - **LLM**: a provider-agnostic gateway via the `llm-proxy` Edge Function
@@ -252,16 +253,20 @@ targeting the supported bases. The blocking `ci` job runs lint, the no-new-JS
 gate, four typecheck gates (TS, JS/JSX, **strictNullChecks**, **noImplicitAny**),
 Vitest, no-backend Playwright foundation acceptance, database helper/account
 deletion/MFA checks, the production build, and bundle budgets. Production
-deploys and PR previews also require `secret-scan` (gitleaks),
+release artifacts and PR previews also require `secret-scan` (gitleaks),
 `supabase-drift` (the production ledger), `edge-typecheck` (released Edge
 Functions), and `commercial-postgres` (commercial SQL and concurrent database
-acceptance). A red required job skips the web deploy and preview. A
-post-deploy health check follows. `dependency-audit` reports vulnerabilities
+acceptance). A red required job skips the production handoff and preview.
+After an authorized Sites promotion, the verification workflow compares both
+public domains with the exact gated artifact. `dependency-audit` reports vulnerabilities
 but is not a deployment prerequisite; optional authenticated Playwright
-smoke runs separately. A concurrency group cancels redundant runs without
-interrupting a production deploy.
+smoke runs separately. A concurrency group cancels redundant feature-branch
+runs without interrupting a main release-artifact build.
 
-Three more workflows live beside it: `storage-backup.yml` (nightly Storage
+Release and operations workflows beside it include
+`sites-production-verify.yml` (manual
+post-promotion exact-asset and optional authenticated smoke),
+`storage-backup.yml` (nightly Storage
 backup), `supabase-deploy-reviewed.yml` (manual, reviewed Edge Function deploy
 for `llm-proxy`, `project-export` and `stripe-billing`), and
 `supabase-retire-deprecated.yml`.
@@ -270,12 +275,14 @@ for `llm-proxy`, `project-export` and `stripe-billing`), and
 
 Feature work lands on a feature branch and is reviewed through a pull request. A
 push to **`main`** runs `ci`, `secret-scan`, `supabase-drift`, `edge-typecheck`,
-and `commercial-postgres`; **only if all five pass** does the deploy job publish the
-static-asset Cloudflare Worker configured in `wrangler.jsonc`. A red run cannot
-deploy — production stays on the last good build. The GitHub Action is the sole
-production path; Cloudflare's own Workers Builds git integration must stay
-disconnected, because it would deploy on push with no gate. Rollback is
-`wrangler rollback <version-id>`, not a redeploy. Remaining gap: no
+and `commercial-postgres`; **only if all five pass** does
+`prepare-sites-release` build and upload the checksummed Site archive. It does
+not publish. An authorized operator saves and deploys that exact archive through
+Sites, then dispatches `sites-production-verify.yml` with the release run ID and
+SHA. GitHub stores no reusable Sites credential. A red run creates no promotable
+artifact, so production stays on the last good Site version. Rollback redeploys
+the recorded prior saved Sites version. See
+[`docs/runbooks/sites-release.md`](./docs/runbooks/sites-release.md). Remaining gap: no
 branch-protection required check (repo plan), so red/unreviewed commits can
 still land on `main` even though they cannot deploy.
 [`CLAUDE.md`](./CLAUDE.md) documents the full workflow + git-safety rules.
@@ -299,23 +306,16 @@ disposable-mutation E2E jobs run against it. Details, including what the
 schema restore did and did not cover, are in
 [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
 
-**Current release work (2026-10-09).** [PR #499](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/499)
-has merged. [PR #516](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/516)
-integrates the reviewed drawing evidence, workspace membership, recovery,
-account-erasure identity and billing changes. Its full combined checks and
-authenticated acceptance must pass before publication. The five Drawing Control
-migrations, membership resolver, revision manifest, durable checkout and project
-capacity changes are installed on staging with verified ledger payloads; these
-remain pending in production. Production has received nine separately reviewed
-SQL migrations during this release, including atomic billing, but the matching
-Edge release and frontend publication remain pending. `CLOUDFLARE_ENABLED` is
-temporarily false to preserve the existing live Worker while dependencies are
-verified; restoring it and publishing through all five gates are required to
-complete the production update. See the current
-[`release evidence`](./docs/audits/PRODUCTION_RELEASE_2026-10-08.md) for exact
-versions, hashes and acceptance limits. Whole-app enterprise and monetization
-readiness, provider delivery, backup restore, authenticated workflow/viewport
-acceptance and the build-tool advisory remain open.
+**Current hosting boundary (2026-10-15).** Production is Sites version 19 for
+the project pinned by `.openai/hosting.json`. Its deployed source tree matched
+GitHub `main` at `98bdf17ec9c9aeeaf0d993b8b56200d7927bb21f`, and both custom
+domains are active. `CLOUDFLARE_ENABLED=false` is intentional because the legacy
+Worker no longer owns production routing. Future web releases use the gated
+Sites artifact, authorized promotion, and exact-domain verification described
+above. Source checks, an uploaded artifact, or a saved Site version alone are
+not hosted-production evidence. Whole-app enterprise and monetization readiness,
+provider delivery, backup restore, authenticated workflow/viewport acceptance,
+and the build-tool advisory remain open.
 
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor
