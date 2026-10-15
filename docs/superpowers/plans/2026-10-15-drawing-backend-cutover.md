@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 18, TypeScript, TanStack Query, Supabase Auth/Storage/PostgREST, PostgreSQL 17, existing Vitest/Playwright and isolated PGlite/pg harnesses; Node 24 for SQL tooling, existing Deno 2.9.6 Edge gate. No new product dependency is planned.
 
-**Spec:** [Approved design](../specs/2026-10-15-drawing-backend-cutover-design.md), approved explicitly by the owner in this chat on October 15. Planning source: `1b4adbb39`; code baseline `11cbd5fb`. This plan awaits review and execution-method selection. No task is marked complete from previous runs.
+**Spec:** [Approved design](../specs/2026-10-15-drawing-backend-cutover-design.md), approved explicitly by the owner in this chat on October 15. Planning source: `1b4adbb39`; code baseline `11cbd5fb`. The owner approved this implementation plan and selected subagent-driven execution on October 15. Production remains read-only pending separate exact-change approval. No task is marked complete from previous runs.
 
 ## Global Constraints
 
