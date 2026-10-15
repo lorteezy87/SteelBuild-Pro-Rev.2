@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { initialize as baseInitialize, ids, actor, migrationUrl, sourcePath, type Database } from '../submittal-revision-evidence/fixture.ts';
 export { ids, actor, type Database };
 export const candidateUrl=new URL('../../candidates/drawing-set-revision-transaction.sql',import.meta.url);
+export const sourceCandidateUrl=new URL('../../candidates/drawing-adopted-source-protection.sql',import.meta.url);
 export const path=`${ids.org}/uploads/${ids.project}/reviewed-new.pdf`;
 export const zoneA='abababab-abab-4bab-8bab-abababababab',zoneB='bcbcbcbc-bcbc-4cbc-8cbc-bcbcbcbcbcbc';
 export async function initialize(db:Database){
@@ -30,9 +31,20 @@ export async function initialize(db:Database){
   }
   await db.exec(`
     grant usage on schema public to anon,authenticated,service_role;
+    alter table storage.objects add column owner uuid default '${ids.pm}';
+    create function storage.foldername(text) returns text[] language sql immutable as $$ select (string_to_array($1,'/'))[1:array_length(string_to_array($1,'/'),1)-1] $$;
+    alter table storage.objects enable row level security;
+    grant select,insert,update,delete on storage.objects to authenticated,service_role;
     alter table public.drawing_holds add foreign key(drawing_id) references public.drawings(id);
     create function public.user_is_org_member(p_org uuid) returns boolean language sql stable security definer set search_path='' as $$
       select p_org='${ids.org}'::uuid and coalesce((select is_member from auth.test_access where user_id=auth.uid()),false) $$;
+    create policy auth_read on storage.objects for select to authenticated using
+      (bucket_id='app-files' and (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' and public.user_is_org_member(((storage.foldername(name))[1])::uuid));
+    create policy auth_upload on storage.objects for insert to authenticated with check
+      (bucket_id='app-files' and (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' and public.user_is_org_member(((storage.foldername(name))[1])::uuid));
+    create policy auth_update on storage.objects for update to authenticated using (bucket_id='app-files' and owner=auth.uid()) with check (bucket_id='app-files' and owner=auth.uid());
+    create policy auth_delete on storage.objects for delete to authenticated using (bucket_id='app-files' and owner=auth.uid());
+    create policy require_enrolled_mfa on storage.objects as restrictive for all to authenticated using ((select steelbuild_security.satisfies_mfa())) with check ((select steelbuild_security.satisfies_mfa()));
     create unique index drawing_revision_unique_code on public.drawing_revisions(drawing_id,revision_code);
     create unique index drawing_revision_unique_version on public.drawing_revisions(drawing_id,version_number);
     create unique index drawing_zone_unique_key on public.drawing_zones(drawing_revision_id,zone_key);

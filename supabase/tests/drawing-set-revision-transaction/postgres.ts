@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
-import { initialize, candidateUrl, ids, actor, request, execute, createRequest, createSet, receipt, path, zoneA, zoneB, type Database } from './fixture.ts';
+import { initialize, candidateUrl, sourceCandidateUrl, ids, actor, request, execute, createRequest, createSet, receipt, path, zoneA, zoneB, type Database } from './fixture.ts';
 import { runCases, snapshot, tables } from './cases.ts';
 import { runCommandCases } from './commandCases.ts';
+import { runSourceCases } from './sourceCases.ts';
 
 assert.equal(process.env.DRAWING_UPLOAD_POSTGRES_TEST,'1','Explicit disposable fixture opt-in required');
 const connectionString=process.env.DRAWING_UPLOAD_POSTGRES_URL;
@@ -22,10 +23,10 @@ pool.on('release',(_error:unknown,client:pg.PoolClient)=>leased.delete(client));
 async function connect(){const client=await pool.connect();pids.set(client,(await client.query('select pg_backend_pid() pid')).rows[0].pid);return client;}
 const admin=await connect();
 function database(client:pg.PoolClient):Database{return {exec:sql=>client.query(sql),query:async<T extends Record<string,unknown>>(sql:string,parameters?:unknown[])=>({rows:(await client.query(sql,parameters)).rows as T[]})};}
-const db=database(admin),candidate=await readFile(candidateUrl,'utf8');
+const db=database(admin),candidate=await readFile(candidateUrl,'utf8'),sourceCandidate=await readFile(sourceCandidateUrl,'utf8');
 async function reset(){
   await admin.query('drop schema if exists public,auth,storage,steelbuild_security,extensions,steelbuild_workflow,steelbuild_drawing_revision cascade;create schema public');
-  await initialize(db);await db.exec(candidate);
+  await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);
 }
 async function session(){const c=await connect();await actor(database(c));await c.query('begin;set local role authenticated');return c;}
 async function finish(c:pg.PoolClient,p:Awaited<ReturnType<typeof request>>,key=randomUUID(),create=false){
@@ -44,8 +45,65 @@ let count=0;
 async function check(name:string,run:()=>Promise<void>){await reset();await run();count++;console.log(`PASS concurrent ${name}`);}
 try{
   assert.equal((await admin.query("select count(*)::int n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_%' and c.relkind='r'")).rows[0].n,0,'Disposable fixture database must start empty');
-  await initialize(db);await db.exec(candidate);console.log(`${await runCases(db)} actual PostgreSQL behavioral checks passed`);
+  await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);console.log(`${await runCases(db)} actual PostgreSQL behavioral checks passed`);
   console.log(`${await runCommandCases(db)} actual PostgreSQL atomic command checks passed`);
+  console.log(`${await runSourceCases(db)} actual PostgreSQL source protection checks passed`);
+  for(const create of [true,false])for(const first of ['apply','replace'])await check(`concurrentReplaceAndApplyHasOneSafeWinner ${create?'create':'revision'} ${first} first`,async()=>{
+    const p=await (create?createRequest:request)(db),before=await snapshot(db);
+    if(first==='apply'){
+      const consumer=await session();await (create?createSet:execute)(database(consumer),p,randomUUID());
+      const writer=await session(),started=Date.now();
+      await assert.rejects(writer.query("update storage.objects set version='racing-replacement' where name=$1",[path]),/DRAWING_SOURCE_BUSY/);
+      assert.ok(Date.now()-started<1500,'Source policy must use NOWAIT, not the statement snapshot after waiting');
+      await writer.query('rollback');writer.release();assert.deepEqual(await snapshot(db),before);
+      await consumer.query('commit');consumer.release();
+      const committed=await snapshot(db),retry=await session();
+      assert.equal((await retry.query("update storage.objects set version='racing-replacement' where name=$1 returning id",[path])).rows.length,0);
+      await retry.query('commit');retry.release();assert.deepEqual(await snapshot(db),committed);
+      assert.deepEqual((await admin.query('select public.get_drawing_revision_sources($1,$2) sources',[ids.project,[path]])).rows[0].sources,p.source_objects);
+    }else{
+      const writer=await session();await writer.query("update storage.objects set version='racing-replacement' where name=$1",[path]);
+      const started=Date.now();await assert.rejects(finish(await session(),p,randomUUID(),create),/DRAWING_REVISION_BUSY/);
+      assert.ok(Date.now()-started<1500);assert.deepEqual(await snapshot(db),before);
+      await writer.query('commit');writer.release();
+      const changed=await snapshot(db);await assert.rejects(finish(await session(),p,randomUUID(),create),/SOURCE_CHANGED/);
+      assert.deepEqual(await snapshot(db),changed);
+      assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.adopted_sources')).rows[0].n,0);
+      await finish(await session(),await (create?createRequest:request)(db),randomUUID(),create);
+    }
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.adopted_sources')).rows[0].n,1);
+  });
+  await check('policy helper sees committed adoption after its statement snapshot began',async()=>{
+    await admin.query(`create function public.source_policy_barrier() returns boolean language plpgsql volatile as $$ begin perform pg_advisory_xact_lock(777000113);return true;end $$`);
+    const blocker=await connect();await blocker.query('begin;select pg_advisory_xact_lock(777000113)');
+    const reader=await session();
+    const result=reader.query(`select public.drawing_source_mutation_allowed('app-files',$1,$1) allowed from (select public.source_policy_barrier() as waited offset 0) gate where gate.waited`,[path]);
+    await waiting(reader);await finish(await session(),await createRequest(db),randomUUID(),true);
+    await blocker.query('commit');blocker.release();assert.equal((await result).rows[0].allowed,false);
+    await reader.query('commit');reader.release();
+  });
+  await check('direct policy helper gives foreign actors no project row locks',async()=>{
+    const caller=await session();await actor(database(caller),ids.foreign);
+    assert.equal((await caller.query("select public.drawing_source_mutation_allowed('app-files',$1,$1) allowed",[path])).rows[0].allowed,false);
+    await admin.query('begin');await admin.query('select id from storage.objects where name=$1 for update nowait',[path]);await admin.query('rollback');
+    await caller.query('rollback');caller.release();
+  });
+  await check('project erasure versus adoption serializes on the project row',async()=>{
+    const p=await createRequest(db),consumer=await session();await createSet(database(consumer),p,randomUUID());
+    const eraser=await session(),erasure=eraser.query('select public.soft_delete_project($1)',[ids.project]);await waiting(eraser);
+    await consumer.query('commit');consumer.release();await erasure;
+    await eraser.query('select public.hard_delete_project($1,$2)',[ids.project,'Synthetic concurrent source erasure']);
+    await eraser.query('commit');eraser.release();
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.adopted_sources')).rows[0].n,0);
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,0);
+  });
+  await check('project erasure winner makes concurrent intake busy then unauthorized',async()=>{
+    const p=await createRequest(db),eraser=await session();await eraser.query('select public.soft_delete_project($1)',[ids.project]);
+    await eraser.query('select public.hard_delete_project($1,$2)',[ids.project,'Synthetic concurrent source erasure']);
+    await assert.rejects(finish(await session(),p,randomUUID(),true),/BUSY/);
+    await eraser.query('commit');eraser.release();await assert.rejects(finish(await session(),p,randomUUID(),true),/NOT_AUTHORIZED/);
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.adopted_sources')).rows[0].n,0);
+  });
   for(const create of [false,true])await check(`same ${create?'create':'revision'} request is immediately busy then returns committed receipt once`,async()=>{
     const p=await (create?createRequest:request)(db),key=randomUUID(),a=await session();
     const first=await (create?createSet:execute)(database(a),p,key),started=Date.now();
@@ -196,7 +254,11 @@ try{
       sheet_number:row.sheet_number,sheet_title:'Reviewed boundary sheet',revision_code:'B',file_path:`${prefix}${index+1}.pdf`,pdf_page:1,reviewed:true,
       extraction:{text:{state:'unavailable'},callouts:{state:'unavailable'}}});
     p.source_objects=(await admin.query('select public.get_drawing_revision_sources($1,$2) sources',[ids.project,existing.map(e=>e.file_path)])).rows[0].sources;
-    const fingerprints=async()=>Promise.all(tables.map(async table=>(await admin.query(`select md5(coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]')::text) digest from ${table} t`)).rows[0].digest));
+    const fingerprints=async()=>{
+      const digests:string[]=[];
+      for(const table of tables)digests.push((await admin.query(`select md5(coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]')::text) digest from ${table} t`)).rows[0].digest);
+      return digests;
+    };
     const before=await fingerprints();
     // An over-bound prior observation refuses before writes, even when each field fits.
     // Disable only the synthetic timestamp trigger so this fixture changes exactly one byte.

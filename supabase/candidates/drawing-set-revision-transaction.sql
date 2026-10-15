@@ -307,12 +307,14 @@ BEGIN
     OR EXISTS(SELECT 1 FROM jsonb_array_elements(v_sources)e WHERE jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['path','token']
       OR (SELECT count(*) FROM jsonb_object_keys(e))<>2 OR coalesce(e->>'token','') !~ '^[0-9a-f]{64}$') THEN
     RAISE EXCEPTION 'DRAWING_REVISION_SOURCE_SCOPE: Exact project source snapshots must cover the request' USING ERRCODE='22023'; END IF;
-  PERFORM o.id FROM storage.objects o WHERE o.bucket_id='app-files' AND o.name=ANY(v_paths) ORDER BY o.name,o.id FOR SHARE NOWAIT;
+  PERFORM o.id FROM storage.objects o WHERE o.bucket_id='app-files' AND o.name=ANY(v_paths) ORDER BY o.name,o.id FOR UPDATE NOWAIT;
   FOR v_expected IN SELECT value FROM jsonb_array_elements(v_sources) LOOP
     SELECT * INTO v_object FROM storage.objects WHERE bucket_id='app-files' AND name=v_expected->>'path';
     IF v_object.id IS NULL OR steelbuild_drawing_revision.source_token(v_object) IS DISTINCT FROM v_expected->>'token' THEN
       RAISE EXCEPTION 'DRAWING_REVISION_SOURCE_CHANGED: Source metadata changed since review; review it again' USING ERRCODE='40001'; END IF;
   END LOOP;
+
+  PERFORM steelbuild_drawing_revision.adopt_sources(v_project,v_paths);
 
   IF (SELECT count(*) FROM public.drawing_zones WHERE drawing_revision_id=ANY(v_changed_revisions||v_removed_revisions))>1000 THEN
     RAISE EXCEPTION 'DRAWING_REVISION_LIMIT: Zone count exceeds the tested bound' USING ERRCODE='54000'; END IF;

@@ -6,7 +6,10 @@ type Payload=Awaited<ReturnType<typeof request>>;
 const sheet=(p:Payload)=>(p.sheets as Record<string,unknown>[])[0];
 export const tables=['public.drawing_sets','public.drawings','public.drawing_revisions','public.drawing_zones','public.drawing_links',
   'public.drawing_zone_dependencies','public.drawing_activity','public.drawing_zone_activity','public.alerts','public.submittals',
-  'public.submittal_rounds','public.submittal_round_revision_evidence','steelbuild_drawing_revision.requests','steelbuild_drawing_revision.source_observations'];
+  'public.submittal_rounds','public.submittal_round_revision_evidence','steelbuild_drawing_revision.requests','steelbuild_drawing_revision.source_observations',
+  'steelbuild_drawing_revision.adopted_sources','steelbuild_workflow.round_context','steelbuild_workflow.round_requests','storage.objects',
+  'public.organizations','public.projects','public.organization_members','public.data_erasure_log','public.rfis','public.drawing_holds',
+  'public.drawing_signoffs','public.submittal_comment_dispositions','public.drawing_watchers'];
 export async function snapshot(db:Database){
   const result:Record<string,unknown>={};
   for(const table of tables)result[table]=(await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]') value from ${table} t`)).rows[0].value;

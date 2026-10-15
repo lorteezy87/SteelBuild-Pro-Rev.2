@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - supabase/candidates/drawing-set-revision-transaction.sql
+      - supabase/candidates/drawing-adopted-source-protection.sql
       - supabase/tests/drawing-set-revision-transaction/**
       - .github/workflows/drawing-upload-postgres.yml
   pull_request:
     paths:
       - supabase/candidates/drawing-set-revision-transaction.sql
+      - supabase/candidates/drawing-adopted-source-protection.sql
       - supabase/tests/drawing-set-revision-transaction/**
       - .github/workflows/drawing-upload-postgres.yml
 
