@@ -3,6 +3,7 @@ import { initialize as baseInitialize, ids, actor, migrationUrl, sourcePath, typ
 export { ids, actor, type Database };
 export const candidateUrl=new URL('../../candidates/drawing-set-revision-transaction.sql',import.meta.url);
 export const sourceCandidateUrl=new URL('../../candidates/drawing-adopted-source-protection.sql',import.meta.url);
+export const boundaryCandidateUrl=new URL('../../candidates/drawing-command-write-boundary.sql',import.meta.url);
 export const path=`${ids.org}/uploads/${ids.project}/reviewed-new.pdf`;
 export const zoneA='abababab-abab-4bab-8bab-abababababab',zoneB='bcbcbcbc-bcbc-4cbc-8cbc-bcbcbcbcbcbc';
 export async function initialize(db:Database){
@@ -12,7 +13,7 @@ export async function initialize(db:Database){
   const nameIndex=baseline.match(/CREATE UNIQUE INDEX "uq_drawing_sets_project_set_name"[^;]+;/)?.[0];
   if(!nameIndex)throw new Error('Missing set-name uniqueness fixture');
   await db.exec(nameIndex);
-  for(const table of ['drawing_zones','drawing_links','drawing_zone_dependencies','drawing_activity','drawing_zone_activity','drawing_watchers','alerts']){
+  for(const table of ['drawing_zones','drawing_links','drawing_zone_dependencies','drawing_activity','drawing_zone_activity','drawing_watchers','alerts','pma_audit_logs']){
     const start=baseline.indexOf(`CREATE TABLE IF NOT EXISTS "public"."${table}" (`);
     await db.exec(baseline.slice(start,baseline.indexOf('\n);',start)+3));
     await db.exec(`alter table public.${table} add primary key(${table==='drawing_watchers'?'drawing_id,user_id':'id'})`);
@@ -20,7 +21,7 @@ export async function initialize(db:Database){
   for(const statement of baseline.matchAll(/ALTER TABLE ONLY "public"\."(drawing_zones|drawing_links|drawing_zone_dependencies|drawing_activity|drawing_zone_activity|drawing_watchers|alerts)"\s+ADD CONSTRAINT[^;]+FOREIGN KEY[^;]+;/g)){
     await db.exec(statement[0]);
   }
-  for(const name of ['tg_validate_drawing_zone_dependency_project','validate_drawing_link_target','validate_drawing_zone_polygon','update_updated_at','sync_drawing_set_counts','log_drawing_activity','log_drawing_zone_activity','log_drawing_link_activity','drawing_watch_notify_revision']){
+  for(const name of ['audit_log_trigger','tg_validate_drawing_zone_dependency_project','validate_drawing_link_target','validate_drawing_zone_polygon','update_updated_at','sync_drawing_set_counts','log_drawing_activity','log_drawing_zone_activity','log_drawing_link_activity','drawing_watch_notify_revision']){
     const start=baseline.indexOf(`CREATE OR REPLACE FUNCTION "public"."${name}"()`);
     if(start<0)throw new Error(`Missing function ${name}`);
     await db.exec(baseline.slice(start,baseline.indexOf('ALTER FUNCTION',start)));
@@ -31,6 +32,64 @@ export async function initialize(db:Database){
   }
   await db.exec(`
     grant usage on schema public to anon,authenticated,service_role;
+    alter table public.drawing_activity drop constraint chk_drawing_activity_event_type;
+    alter table public.drawing_activity add constraint chk_drawing_activity_event_type check(event_type in ('created','stage_changed','revision_changed','approval_changed','deleted','restored','ai_status_changed','superseded','hold_placed','hold_released'));
+    alter table public.drawings add column scale_status text check(scale_status in ('undetected','ambiguous','auto','manual'));
+    alter table public.drawing_sets add column titleblock_revision_rect jsonb;
+    alter table auth.test_access add column app_role text default 'admin';
+    update auth.test_access set app_role='viewer' where user_id<>'${ids.pm}';
+    create or replace function public.user_has_project_role_at_least(p_project_id uuid,p_role text) returns boolean language sql stable security definer set search_path='' as $$
+      select p_project_id='${ids.project}'::uuid and coalesce((select is_member and case p_role
+        when 'admin' then is_pm and app_role='admin' when 'pm' then is_pm when 'field' then is_pm or app_role='field' else true end
+        from auth.test_access where user_id=auth.uid()),false) $$;
+    alter table public.drawing_holds alter column id set default gen_random_uuid();
+    alter table public.drawing_holds add column reason text not null default 'Synthetic hold',
+      add column prior_release_status text,add column placed_by_id uuid,add column placed_by_name text,
+      add column placed_at timestamptz not null default now(),add column released_by_id uuid,add column released_by_name text,
+      add column released_at timestamptz,add column release_notes text,add column created_at timestamptz not null default now(),
+      add column updated_at timestamptz not null default now(),add column prior_stage text,add column metadata jsonb not null default '{}';
+    alter table public.drawing_holds alter column is_active set default true;
+    alter table public.drawing_holds add constraint drawing_holds_reason_not_blank check(length(btrim(reason))>0),
+      add constraint chk_drawing_holds_prior_stage check(prior_stage is null or prior_stage in ('Not Started','IFA','OFA','BFA','OFS','IFC','Released')),
+      add constraint chk_drawing_holds_release_consistent check((is_active and released_at is null) or (not is_active and released_at is not null));
+    create table public.user_profiles(id uuid primary key,full_name text,email text);
+    alter table public.drawing_sets add foreign key(locked_by) references auth.users(id) on delete set null;
+    insert into public.user_profiles values('${ids.pm}','Synthetic PM','fixture@example.invalid');
+    grant all on public.drawings,public.drawing_sets,public.drawing_revisions,public.drawing_holds to authenticated,service_role;
+    do $$ begin
+      if not exists(select 1 from pg_roles where rolname='drawing_fixture_inherited') then create role drawing_fixture_inherited nologin;end if;
+      if not exists(select 1 from pg_roles where rolname='drawing_fixture_settable') then create role drawing_fixture_settable nologin;end if;
+      if not exists(select 1 from pg_roles where rolname='drawing_fixture_auth_admin') then create role drawing_fixture_auth_admin nologin;end if;
+    end $$;
+    grant usage on schema auth to drawing_fixture_auth_admin;
+    grant select,delete on auth.users to drawing_fixture_auth_admin;
+    grant drawing_fixture_inherited to authenticated;
+    grant drawing_fixture_settable to authenticated with inherit false,set true;
+    grant usage on schema public to drawing_fixture_inherited,drawing_fixture_settable;
+    grant update(file_url) on public.drawings to public,drawing_fixture_inherited,drawing_fixture_settable;
+    grant truncate on public.drawings to drawing_fixture_inherited,drawing_fixture_settable;
+    -- Current staging catalog bodies, captured SELECT-only 2026-10-15. These
+    -- replaced the baseline count trigger; no migration history is invented.
+    create or replace function public.recount_drawing_set(p_set_id uuid) returns void language plpgsql security definer set search_path='public' as $$
+    begin
+      update public.drawing_sets ds set
+        sheet_count=(select count(*) from public.drawings where drawing_set_id=p_set_id and not is_deleted),
+        processed_count=(select count(*) filter(where ai_extraction_status='Processed') from public.drawings where drawing_set_id=p_set_id and not is_deleted),
+        needs_review_count=(select count(*) filter(where ai_extraction_status='NeedsReview') from public.drawings where drawing_set_id=p_set_id and not is_deleted),
+        failed_count=(select count(*) filter(where ai_extraction_status='Failed' or upload_status='Failed') from public.drawings where drawing_set_id=p_set_id and not is_deleted),updated_at=now()
+        where ds.id=p_set_id;
+      update public.drawing_sets set is_deleted=true,deleted_at=now() where id=p_set_id and is_deleted=false and sheet_count=0;
+    end $$;
+    create or replace function public.sync_drawing_set_counts() returns trigger language plpgsql security definer set search_path='public','pg_temp' as $$
+    declare v_set uuid;
+    begin
+      if tg_op='UPDATE' and new.drawing_set_id is distinct from old.drawing_set_id and old.drawing_set_id is not null then perform public.recount_drawing_set(old.drawing_set_id);end if;
+      v_set:=case when tg_op='DELETE' then old.drawing_set_id else new.drawing_set_id end;
+      if v_set is not null then perform public.recount_drawing_set(v_set);end if;
+      return coalesce(new,old);
+    end $$;
+    revoke all on function public.recount_drawing_set(uuid),public.sync_drawing_set_counts() from public,anon,authenticated,service_role;
+    grant execute on function public.recount_drawing_set(uuid) to service_role;
     alter table storage.objects add column owner uuid default '${ids.pm}';
     create function storage.foldername(text) returns text[] language sql immutable as $$ select (string_to_array($1,'/'))[1:array_length(string_to_array($1,'/'),1)-1] $$;
     alter table storage.objects enable row level security;
@@ -51,7 +110,7 @@ export async function initialize(db:Database){
     create unique index drawing_links_active_unique on public.drawing_links(drawing_zone_id,linked_record_type,linked_record_id,link_role) where removed_at is null;
     create unique index drawing_dependencies_active_unique on public.drawing_zone_dependencies(source_zone_id,target_zone_id,relationship) where removed_at is null;
     update public.drawing_sets set revision='A',file_url='${sourcePath}',updated_at='2026-10-09T00:00:00Z' where id='${ids.set}';
-    update public.drawings set revision_number='A',updated_at='2026-10-09T00:00:00Z' where id='${ids.drawing}';
+    update public.drawings set revision_number='A',updated_at='2026-10-09T00:00:00Z' where id in ('${ids.drawing}','${ids.drawing2}');
     insert into storage.objects(bucket_id,name) values('app-files','${path}');
     insert into public.drawing_zones(id,project_id,drawing_id,drawing_revision_id,zone_key,label,x_min,y_min,x_max,y_max,status) values
       ('${zoneA}','${ids.project}','${ids.drawing}','${ids.revision}','Z-1','Connection bay',0,0,0.4,0.4,'green'),
@@ -64,6 +123,14 @@ export async function initialize(db:Database){
     grant select,insert,update,delete on public.drawing_zones,public.drawing_links,public.drawing_zone_dependencies to authenticated,service_role;
     alter default privileges grant all on tables to authenticated,service_role;
     alter default privileges grant execute on functions to authenticated,service_role;
+  `);
+  for(const table of ['drawings','drawing_sets','drawing_revisions'])await db.exec(`
+    create trigger trg_audit_log after insert or update or delete on public.${table} for each row execute function public.audit_log_trigger();
+    alter table public.${table} enable row level security;
+    create policy fixture_read on public.${table} for select to authenticated using(public.user_has_project_access(project_id));
+    create policy fixture_update on public.${table} for update to authenticated using(public.user_has_project_role_at_least(project_id,'pm')) with check(public.user_has_project_role_at_least(project_id,'pm'));
+    create policy fixture_insert on public.${table} for insert to authenticated with check(public.user_has_project_role_at_least(project_id,'pm'));
+    create policy fixture_delete on public.${table} for delete to authenticated using(public.user_has_project_role_at_least(project_id,'admin'));
   `);
 }
 export async function request(db:Database):Promise<Record<string,unknown>>{

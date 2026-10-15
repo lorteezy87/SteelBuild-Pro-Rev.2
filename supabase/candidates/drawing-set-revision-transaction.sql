@@ -3,6 +3,22 @@
 BEGIN;
 CREATE SCHEMA steelbuild_drawing_revision;
 REVOKE ALL ON SCHEMA steelbuild_drawing_revision FROM PUBLIC,anon,authenticated,service_role;
+-- Transaction-local authority is private state, never a caller-controlled GUC.
+CREATE TABLE steelbuild_drawing_revision.command_context (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),transaction_id bigint NOT NULL,backend_pid integer NOT NULL,
+  actor_id uuid NOT NULL,project_id uuid NOT NULL,set_id uuid NOT NULL,operation text NOT NULL
+    CHECK(operation IN ('create_set','revise_set','publish','hold','lock','archive','approval_sync')),
+  UNIQUE(transaction_id,backend_pid,set_id)
+);
+ALTER TABLE steelbuild_drawing_revision.command_context ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON steelbuild_drawing_revision.command_context FROM PUBLIC,anon,authenticated,service_role;
+CREATE FUNCTION public.get_drawing_command_capabilities(p_project_id uuid) RETURNS jsonb
+LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$
+  SELECT jsonb_build_object('contract_version',1,'new_set',false,'revision',false,
+    'write_boundary',false,'source_protection',false,'receipt_lookup',false)
+$$;
+REVOKE ALL ON FUNCTION public.get_drawing_command_capabilities(uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.get_drawing_command_capabilities(uuid) TO authenticated;
 CREATE TABLE steelbuild_drawing_revision.requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -132,7 +148,7 @@ GRANT EXECUTE ON FUNCTION public.get_drawing_command_receipt(uuid,text,jsonb) TO
 CREATE FUNCTION steelbuild_drawing_revision.apply_command(p_request_id uuid,p_operation text,p_request jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET timezone='UTC' SET lock_timeout='2s' AS $$
 DECLARE
-  v_actor uuid:=auth.uid(); v_org uuid; v_project uuid; v_set_id uuid; v_hash text;
+  v_actor uuid:=auth.uid(); v_org uuid; v_project uuid; v_set_id uuid; v_hash text; v_context uuid;
   v_set public.drawing_sets; v_sheet public.drawings; v_current public.drawing_revisions;
   v_receipt jsonb; v_object storage.objects; v_create boolean:=p_operation='create_set';
   v_required text[]; v_allowed text[];
@@ -349,6 +365,8 @@ BEGIN
     RAISE EXCEPTION 'DRAWING_REVISION_HOLD: Resolve the active hold before removing a sheet' USING ERRCODE='22023'; END IF;
   PERFORM steelbuild_drawing_revision.assert_access(v_project);
 
+  INSERT INTO steelbuild_drawing_revision.command_context(transaction_id,backend_pid,actor_id,project_id,set_id,operation)
+    VALUES(txid_current(),pg_backend_pid(),v_actor,v_project,v_set_id,p_operation) RETURNING id INTO v_context;
   IF v_create THEN
     INSERT INTO public.drawing_sets(id,project_id,set_name,discipline,revision,issued_date,issued_by,notes,file_url,revision_history,metadata,set_approval_status)
       VALUES(v_set_id,v_project,v_set.set_name,v_set.discipline,btrim(p_request->>'revision_label'),(p_request->>'issued_date')::date,
@@ -443,6 +461,7 @@ BEGIN
     FROM jsonb_to_recordset(v_observations) AS o(drawing_id uuid,project_id uuid,drawing_set_id uuid,parent_file_url text,parent_pdf_page integer,
       parent_revision_number text,parent_updated_at timestamptz,observed_current_revision_id uuid,observed_current_revision_version integer,extracted_text text,callouts jsonb,callouts_is_sql_null boolean);
   PERFORM steelbuild_drawing_revision.assert_access(v_project);
+  DELETE FROM steelbuild_drawing_revision.command_context WHERE id=v_context;
   RETURN v_result;
 EXCEPTION WHEN lock_not_available OR deadlock_detected THEN
   RAISE EXCEPTION 'DRAWING_REVISION_BUSY: Concurrent work is changing these records; retry the same request' USING ERRCODE='55P03';

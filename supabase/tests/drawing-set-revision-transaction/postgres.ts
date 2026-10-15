@@ -3,10 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
-import { initialize, candidateUrl, sourceCandidateUrl, ids, actor, request, execute, createRequest, createSet, receipt, path, zoneA, zoneB, type Database } from './fixture.ts';
+import { initialize, candidateUrl, sourceCandidateUrl, boundaryCandidateUrl, ids, actor, request, execute, createRequest, createSet, receipt, path, zoneA, zoneB, type Database } from './fixture.ts';
 import { runCases, snapshot, tables } from './cases.ts';
 import { runCommandCases } from './commandCases.ts';
 import { runSourceCases } from './sourceCases.ts';
+import { runBoundaryCases } from './boundaryCases.ts';
+import { command, parent, submit, checklist, execute as roundExecute } from '../submittal-revision-evidence/cases.ts';
 
 assert.equal(process.env.DRAWING_UPLOAD_POSTGRES_TEST,'1','Explicit disposable fixture opt-in required');
 const connectionString=process.env.DRAWING_UPLOAD_POSTGRES_URL;
@@ -23,14 +25,18 @@ pool.on('release',(_error:unknown,client:pg.PoolClient)=>leased.delete(client));
 async function connect(){const client=await pool.connect();pids.set(client,(await client.query('select pg_backend_pid() pid')).rows[0].pid);return client;}
 const admin=await connect();
 function database(client:pg.PoolClient):Database{return {exec:sql=>client.query(sql),query:async<T extends Record<string,unknown>>(sql:string,parameters?:unknown[])=>({rows:(await client.query(sql,parameters)).rows as T[]})};}
-const db=database(admin),candidate=await readFile(candidateUrl,'utf8'),sourceCandidate=await readFile(sourceCandidateUrl,'utf8');
+const db=database(admin),candidate=await readFile(candidateUrl,'utf8'),sourceCandidate=await readFile(sourceCandidateUrl,'utf8'),boundaryCandidate=await readFile(boundaryCandidateUrl,'utf8');
 async function reset(){
   await admin.query('drop schema if exists public,auth,storage,steelbuild_security,extensions,steelbuild_workflow,steelbuild_drawing_revision cascade;create schema public');
-  await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);
+  await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);await db.exec(boundaryCandidate);
 }
 async function session(){const c=await connect();await actor(database(c));await c.query('begin;set local role authenticated');return c;}
 async function finish(c:pg.PoolClient,p:Awaited<ReturnType<typeof request>>,key=randomUUID(),create=false){
   try{const result=await (create?createSet:execute)(database(c),p,key);await c.query('commit');return result;}
+  catch(error){await c.query('rollback');throw error;}finally{c.release();}
+}
+async function finishDaily(c:pg.PoolClient,sql:string,args:unknown[]){
+  try{const result=await c.query(sql,args);await c.query('commit');return result;}
   catch(error){await c.query('rollback');throw error;}finally{c.release();}
 }
 async function waiting(c:pg.PoolClient){
@@ -45,9 +51,86 @@ let count=0;
 async function check(name:string,run:()=>Promise<void>){await reset();await run();count++;console.log(`PASS concurrent ${name}`);}
 try{
   assert.equal((await admin.query("select count(*)::int n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_%' and c.relkind='r'")).rows[0].n,0,'Disposable fixture database must start empty');
-  await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);console.log(`${await runCases(db)} actual PostgreSQL behavioral checks passed`);
+  await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);await db.exec(boundaryCandidate);console.log(`${await runCases(db)} actual PostgreSQL behavioral checks passed`);
+  console.log(`${await runBoundaryCases(db)} actual PostgreSQL write boundary checks passed`);
   console.log(`${await runCommandCases(db)} actual PostgreSQL atomic command checks passed`);
   console.log(`${await runSourceCases(db)} actual PostgreSQL source protection checks passed`);
+  for(const field of ['is_member','is_pm','mfa_satisfied'])await check(`governing approval final receipt wait rechecks ${field}`,async()=>{
+    await roundExecute(db,command(await parent(db),submit));
+    const approval=command(await parent(db),{status:'Approved',ball_in_court:'GC',metadata:{ofs_checklist:checklist}});
+    await admin.query(`create function public.round_receipt_wait() returns trigger language plpgsql as $$ begin perform pg_advisory_xact_lock(777000115);return new;end $$;
+      create trigger late_round_receipt before insert on steelbuild_workflow.round_requests for each row execute function public.round_receipt_wait()`);
+    const before=await snapshot(db),blocker=await connect();await blocker.query('begin;select pg_advisory_xact_lock(777000115)');
+    const caller=await session(),outcome=finishDaily(caller,approval.sql,approval.args).then(()=>null,e=>e);await waiting(caller);
+    await admin.query(`update auth.test_access set ${field}=false where user_id=$1`,[ids.pm]);await blocker.query('commit');blocker.release();
+    assert.match((await outcome).message,/NOT_AUTHORIZED/);assert.deepEqual(await snapshot(db),before);
+  });
+  await check('governing approval holds complete source roster against replacement',async()=>{
+    await roundExecute(db,command(await parent(db),submit));const p=await request(db);
+    const approval=command(await parent(db),{status:'Approved',ball_in_court:'GC',metadata:{ofs_checklist:checklist}}),caller=await session();
+    await roundExecute(database(caller),approval);
+    await assert.rejects(finish(await session(),p),/BUSY/);await caller.query('commit');caller.release();
+    assert.equal((await admin.query('select set_approval_status from public.drawing_sets where id=$1',[ids.set])).rows[0].set_approval_status,'approved');
+    await finishDaily(await session(),'select public.publish_drawing_revision($1,$2)',[ids.revision,'released_for_shop']);
+    await finish(await session(),await request(db));
+    assert.equal((await admin.query('select set_approval_status from public.drawing_sets where id=$1',[ids.set])).rows[0].set_approval_status,'pending_review');
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.command_context')).rows[0].n,0);
+  });
+  await check('governing approval project SHARE lock orders archival after commit',async()=>{
+    await roundExecute(db,command(await parent(db),submit));
+    const caller=await session();await roundExecute(database(caller),command(await parent(db),{status:'Approved',ball_in_court:'GC',metadata:{ofs_checklist:checklist}}));
+    const archiver=await session(),archival=finishDaily(archiver,'select public.soft_delete_project($1)',[ids.project]).then(r=>r,e=>e);await waiting(archiver);
+    assert.equal((await admin.query('select is_deleted from public.projects where id=$1',[ids.project])).rows[0].is_deleted,false);
+    await caller.query('commit');caller.release();const archived=await archival;
+    assert.equal(archived instanceof Error,false);assert.equal((await admin.query('select is_deleted from public.projects where id=$1',[ids.project])).rows[0].is_deleted,true);
+    await assert.rejects(finishDaily(await session(),'select public.publish_drawing_revision($1,$2)',[ids.revision,'released_for_shop']),/NOT_AUTHORIZED/);
+  });
+  await check('revision winner prevents stale publication before and after commit',async()=>{
+    const p=await request(db),before=await snapshot(db),consumer=await session();await execute(database(consumer),p,randomUUID());
+    await assert.rejects(finishDaily(await session(),'select public.publish_drawing_revision($1,$2)',[ids.revision,'reviewed']),/BUSY/);
+    assert.deepEqual(await snapshot(db),before);await consumer.query('commit');consumer.release();
+    const committed=await snapshot(db);await assert.rejects(finishDaily(await session(),'select public.publish_drawing_revision($1,$2)',[ids.revision,'reviewed']),/SOURCE_MISMATCH/);
+    assert.deepEqual(await snapshot(db),committed);
+  });
+  await check('concurrent holds bind only one revision and stale release cannot promote replacement',async()=>{
+    const p=await request(db),holder=await session();
+    const held=(await holder.query('select * from public.place_drawing_hold($1,$2)',[ids.drawing,'First hold'])).rows[0];
+    await assert.rejects(finishDaily(await session(),'select public.place_drawing_hold($1,$2)',[ids.drawing,'Second hold']),/BUSY/);
+    await assert.rejects(finish(await session(),p),/BUSY/);await holder.query('commit');holder.release();
+    await assert.rejects(finishDaily(await session(),'select public.place_drawing_hold($1,$2)',[ids.drawing,'Second hold']),/HOLD/);
+    await finish(await session(),await request(db));
+    await finishDaily(await session(),'select public.release_drawing_hold($1,$2)',[held.id,'Old source only']);
+    assert.equal((await admin.query('select release_status from public.drawing_revisions where drawing_id=$1 and is_current',[ids.drawing])).rows[0].release_status,'received');
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.command_context')).rows[0].n,0);
+  });
+  for(const operation of ['lock','archive'])await check(`${operation} serializes publication and intake`,async()=>{
+    const p=await request(db),owner=await session();
+    if(operation==='lock')await owner.query('select public.set_drawing_set_lock($1,true,$2,$3)',[ids.set,'Review lock',p.expected_set_updated_at]);
+    else await owner.query('select public.delete_drawing_set($1)',[ids.set]);
+    await assert.rejects(finish(await session(),p),/BUSY/);
+    await assert.rejects(finishDaily(await session(),'select public.publish_drawing_revision($1,$2)',[ids.revision,'reviewed']),/BUSY/);
+    await owner.query('commit');owner.release();const committed=await snapshot(db);
+    await assert.rejects(finish(await session(),p),/SET_UNAVAILABLE/);
+    await assert.rejects(finishDaily(await session(),'select public.publish_drawing_revision($1,$2)',[ids.revision,'reviewed']),/SET_UNAVAILABLE/);
+    assert.deepEqual(await snapshot(db),committed);
+  });
+  for(const field of ['is_member','is_pm','mfa_satisfied'])await check(`daily late audit wait rechecks ${field}`,async()=>{
+    await admin.query(`create function public.daily_audit_wait() returns trigger language plpgsql as $$ begin perform pg_advisory_xact_lock(777000114);return new;end $$;
+      create trigger late_daily_audit before insert on public.pma_audit_logs for each row execute function public.daily_audit_wait()`);
+    const before=await snapshot(db),blocker=await connect();await blocker.query('begin;select pg_advisory_xact_lock(777000114)');
+    const caller=await session(),outcome=finishDaily(caller,'select public.publish_drawing_revision($1,$2)',[ids.revision,'reviewed']).then(()=>null,e=>e);await waiting(caller);
+    await admin.query(`update auth.test_access set ${field}=false where user_id=$1`,[ids.pm]);await blocker.query('commit');blocker.release();
+    assert.match((await outcome).message,/NOT_AUTHORIZED/);assert.deepEqual(await snapshot(db),before);
+  });
+  for(const [name,sql,args] of [
+    ['project','select id from public.projects where id=$1 for update',[ids.project]],
+    ['set','select id from public.drawing_sets where id=$1 for update',[ids.set]],
+    ['revision','select id from public.drawing_revisions where id=$1 for update',[ids.revision]],
+  ] as const)await check(`daily ${name} contention is NOWAIT and atomic`,async()=>{
+    const before=await snapshot(db),blocker=await connect();await blocker.query('begin');await blocker.query(sql,[...args]);
+    const started=Date.now();await assert.rejects(finishDaily(await session(),'select public.publish_drawing_revision($1,$2)',[ids.revision,'reviewed']),/BUSY/);assert.ok(Date.now()-started<1500);
+    await blocker.query('rollback');blocker.release();assert.deepEqual(await snapshot(db),before);
+  });
   for(const create of [true,false])for(const first of ['apply','replace'])await check(`concurrentReplaceAndApplyHasOneSafeWinner ${create?'create':'revision'} ${first} first`,async()=>{
     const p=await (create?createRequest:request)(db),before=await snapshot(db);
     if(first==='apply'){
@@ -225,7 +308,7 @@ try{
     await admin.query('delete from public.drawing_watchers');
     await admin.query(`insert into public.drawing_revisions(project_id,drawing_id,revision_code,sheet_number,sheet_title,version_number,is_current,archived_at)
       select $1,$2,'H-'||n,'S1','Retained history',n+1,false,now() from generate_series(1,9750)n`,[ids.project,ids.drawing]);
-    await admin.query(`insert into public.drawing_holds select gen_random_uuid(),$1,$2,false from generate_series(1,1000)`,[ids.project,ids.drawing]);
+    await admin.query(`insert into public.drawing_holds(id,project_id,drawing_id,is_active,released_at) select gen_random_uuid(),$1,$2,false,now() from generate_series(1,1000)`,[ids.project,ids.drawing]);
     const prefix=`${ids.org}/uploads/${ids.project}/bound-`;
     await admin.query("insert into storage.objects(bucket_id,name) select 'app-files',$1||n||'.pdf' from generate_series(1,249)n",[prefix]);
     await admin.query(`insert into public.drawing_zones(project_id,drawing_id,drawing_revision_id,zone_key,label,x_min,y_min,x_max,y_max)

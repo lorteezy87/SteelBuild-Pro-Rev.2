@@ -176,7 +176,7 @@ export async function runSourceCases(db:Database){
   await check('project erasure retains existing authorization archive reason and captured evidence contracts',async()=>{
     await roundExecute(db,command(await parent(db,ids.submittal),submit));
     await adopt(db,false);
-    await denied(db,()=>db.query('delete from public.drawings where id=$1',[ids.drawing]),/IMMUTABLE|foreign key/);
+    await denied(db,()=>db.query('delete from public.drawings where id=$1',[ids.drawing]),/IMMUTABLE|foreign key|permission denied/);
     await denied(db,()=>db.query('select public.hard_delete_project($1,$2)',[ids.project,'Synthetic erasure acceptance']),/ARCHIVE_FIRST/);
     await db.query('select public.soft_delete_project($1)',[ids.project]);
     await denied(db,()=>db.query('select public.hard_delete_project($1,$2)',[ids.project,'short']),/reason/);

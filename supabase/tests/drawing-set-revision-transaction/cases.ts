@@ -9,7 +9,8 @@ export const tables=['public.drawing_sets','public.drawings','public.drawing_rev
   'public.submittal_rounds','public.submittal_round_revision_evidence','steelbuild_drawing_revision.requests','steelbuild_drawing_revision.source_observations',
   'steelbuild_drawing_revision.adopted_sources','steelbuild_workflow.round_context','steelbuild_workflow.round_requests','storage.objects',
   'public.organizations','public.projects','public.organization_members','public.data_erasure_log','public.rfis','public.drawing_holds',
-  'public.drawing_signoffs','public.submittal_comment_dispositions','public.drawing_watchers'];
+  'public.drawing_signoffs','public.submittal_comment_dispositions','public.drawing_watchers','public.user_profiles','public.pma_audit_logs',
+  'steelbuild_drawing_revision.command_context','steelbuild_drawing_revision.hold_bindings','steelbuild_drawing_revision.package_review'];
 export async function snapshot(db:Database){
   const result:Record<string,unknown>={};
   for(const table of tables)result[table]=(await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]') value from ${table} t`)).rows[0].value;
@@ -125,8 +126,8 @@ export async function runCases(db:Database){
     await allowed(db,await request(db));const observations=(await snapshot(db))['steelbuild_drawing_revision.source_observations'];
     await db.query('update public.drawings set is_deleted=true,deleted_at=now() where id=$1',[ids.drawing]);
     assert.deepEqual((await snapshot(db))['steelbuild_drawing_revision.source_observations'],observations);
-    await denied(db,()=>db.query('delete from public.drawings where id=$1',[ids.drawing]),/IMMUTABLE|foreign key/);
-    await denied(db,()=>db.query('delete from public.drawing_sets where id=$1',[ids.set]),/IMMUTABLE|foreign key/);
+    await denied(db,()=>db.query('delete from public.drawings where id=$1',[ids.drawing]),/IMMUTABLE|foreign key|permission denied/);
+    await denied(db,()=>db.query('delete from public.drawing_sets where id=$1',[ids.set]),/IMMUTABLE|foreign key|permission denied/);
   });
   await check('authorized project erasure cascades private receipts and observations',async()=>{
     await allowed(db,await request(db));
@@ -245,7 +246,7 @@ export async function runCases(db:Database){
     const p=await request(db);sheet(p).expected_revision_id=null;await denied(db,()=>execute(db,p),/TRACKING_REQUIRED/);
   });
   await check('installed manifest guard still prevents an archived current revision',async()=>{
-    await denied(db,()=>db.exec(`update public.drawing_revisions set archived_at=now() where id='${ids.revision}'`),/ARCHIVED_REVISION/);
+    await denied(db,()=>db.exec(`update public.drawing_revisions set archived_at=now() where id='${ids.revision}'`),/ARCHIVED_REVISION|permission denied/);
   });
   await check('cross-sheet dependency refuses silent edge loss',async()=>{
     await db.exec(`insert into public.drawing_zones(id,project_id,drawing_id,drawing_revision_id,zone_key,label,x_min,y_min,x_max,y_max)
@@ -267,7 +268,7 @@ export async function runCases(db:Database){
   });
   await check('removed sheet with active dependency or hold rejects atomically',async()=>{
     const p=await request(db);sheet(p).action='removed';await denied(db,()=>execute(db,p),/TOPOLOGY/);
-    await db.exec(`update public.drawing_zone_dependencies set removed_at=now();update public.drawing_links set removed_at=now();insert into public.drawing_holds values(gen_random_uuid(),'${ids.project}','${ids.drawing}',true)`);
+    await db.exec(`update public.drawing_zone_dependencies set removed_at=now();update public.drawing_links set removed_at=now();insert into public.drawing_holds(id,project_id,drawing_id,is_active) values(gen_random_uuid(),'${ids.project}','${ids.drawing}',true)`);
     await denied(db,()=>execute(db,p),/HOLD/);
   });
   await check('added sheet and explicit removal commit together without erasing history',async()=>{
