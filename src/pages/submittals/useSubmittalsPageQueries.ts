@@ -43,7 +43,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   const rowsQuery = useQuery({
     queryKey: ["submittals", projectId],
     queryFn: async () => projectId
-      ? await entities.Submittal.filter({ project_id: projectId }, "-submitted_date") as Submittal[]
+      ? await entities.Submittal.filterAll({ project_id: projectId }, "-submitted_date") as Submittal[]
       : [],
     enabled: !!projectId,
     staleTime: 30_000,
@@ -52,7 +52,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   const drawingSetsQuery = useQuery({
     queryKey: ["drawing_sets", projectId],
     queryFn: async () => projectId
-      ? await entities.DrawingSet.filter({ project_id: projectId }) as DrawingSet[]
+      ? await entities.DrawingSet.filterAll({ project_id: projectId }) as DrawingSet[]
       : [],
     enabled: !!projectId,
     staleTime: 60_000,
@@ -61,7 +61,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   const allRoundsQuery = useQuery({
     queryKey: ["submittal-rounds", projectId],
     queryFn: async () => projectId
-      ? await entities.SubmittalRound.filter(
+      ? await entities.SubmittalRound.filterAll(
           { project_id: projectId },
           "round_number",
         ) as SubmittalRoundRecord[]
@@ -73,7 +73,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   const allRfisQuery = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: async () => projectId
-      ? await entities.RFI.filter({ project_id: projectId }) as SubmittalLinkedRecord[]
+      ? await entities.RFI.filterAll({ project_id: projectId }) as SubmittalLinkedRecord[]
       : [],
     enabled: !!projectId,
     staleTime: 60_000,
@@ -82,7 +82,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   const allTasksQuery = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: async () => projectId
-      ? await entities.ScheduleTask.filter({ project_id: projectId }) as SubmittalLinkedRecord[]
+      ? await entities.ScheduleTask.filterAll({ project_id: projectId }) as SubmittalLinkedRecord[]
       : [],
     enabled: !!projectId,
     staleTime: 60_000,
@@ -91,7 +91,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   const allDrawingsQuery = useQuery({
     queryKey: ["drawings", projectId],
     queryFn: async () => projectId
-      ? await entities.Drawing.filter({ project_id: projectId }) as SubmittalDrawingRecord[]
+      ? await entities.Drawing.filterAll({ project_id: projectId }) as SubmittalDrawingRecord[]
       : [],
     enabled: !!projectId,
     staleTime: 60_000,
@@ -100,7 +100,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   const allSheetResponsesQuery = useQuery({
     queryKey: ["sheet-responses", projectId],
     queryFn: async () => projectId
-      ? await entities.SubmittalSheetResponse.filter({
+      ? await entities.SubmittalSheetResponse.filterAll({
           project_id: projectId,
         }) as SubmittalSheetResponseRecord[]
       : [],
@@ -112,7 +112,7 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     queryKey: ["comment-dispositions", projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      return await entities.SubmittalCommentDisposition.filter({
+      return await entities.SubmittalCommentDisposition.filterAll({
         project_id: projectId,
       }) as SubmittalCommentDispositionRecord[];
     },

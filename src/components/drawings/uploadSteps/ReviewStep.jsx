@@ -5,6 +5,7 @@ import { sheetReviewFlags } from "@/components/drawings/intakeReview";
 import { DISCIPLINES } from "../upload/uploadWizardConstants";
 import { useCrossSetSupersede } from "../upload/useCrossSetSupersede";
 import CrossSetSupersedePanel from "./CrossSetSupersedePanel";
+import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 
 // ─── Review: verify AI-extracted sheets ───────────────────────────────
 export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [], canSupersede = false, projectId }) {
@@ -17,7 +18,14 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   // set name change. Create waits for the check so nobody commits unseen.
   const crossSet = useCrossSetSupersede({ projectId, sheets, meta });
   const checkingOtherSets = crossSet.status === "loading";
+  const invalidSelectedSource = sheets.some(sheet => {
+    if (!sheet.selected) return false;
+    const page = validatePdfPage(sheet.pdfPage);
+    const count = fileResults.find(result => result.fileName === sheet.sourceFile)?.pageCount;
+    return !String(sheet.sheetNumber || "").trim() || page === null || (count > 0 && page > count);
+  });
   const handleCreateClick = () => {
+    if (invalidSelectedSource) return;
     const supersedeIds = canSupersede && crossSet.status === "ready" ? crossSet.checkedIds : [];
     onCreate(sheets.filter(s => s.selected), { supersedeIds, supersedeLabels: crossSet.labels });
   };
@@ -42,14 +50,17 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   };
   const updateSheet = (filteredIdx, key, val) => {
     const realIdx = sheets.indexOf(filtered[filteredIdx]);
-    setSheets(prev => prev.map((s, i) => i === realIdx ? { ...s, [key]: val } : s));
+    setSheets(prev => prev.map((s, i) => i === realIdx ? {
+      ...s, [key]: val,
+      ...(key === "pdfPage" && s.pdfPage !== val ? { extractedText: undefined, callouts: undefined, hyperlinks: undefined } : {}),
+    } : s));
   };
 
   const uniqueFiles = [...new Set(sheets.map(s => s.sourceFile).filter(Boolean))];
   // Every soft problem (scanned, too large, extraction timed out) shows the
   // same amber "manual entry required" warning. Uploads are still allowed —
-  // extractFailed PDFs produce a single pre-populated sheet row the user can
-  // edit inline, so blocking the Create button here would dead-end them.
+  // Known-page failures retain one editable row per physical page. Missing
+  // sheet identities/pages must be reviewed before Create is enabled.
   const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge || r.extractFailed);
 
   // Per-sheet review signal (intakeReview) — the honest "confidence" surface:
@@ -164,7 +175,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
             {r.extractFailed ? (
               <>
-                <span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> could not be auto-extracted by AI. A blank sheet row has been added below — please fill in the sheet details manually, then click Create.
+                <span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> could not be auto-extracted by AI. Review the manual sheet rows below, confirm their identities and PDF pages, then click Create.
                 {r.error && (
                   <div style={{ marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4, letterSpacing: "0.04em" }}>
                     {r.error}
@@ -215,6 +226,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
               <th style={{ padding: "7px 10px", textAlign: "left", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em" }}>DISCIPLINE</th>
               <th style={{ padding: "7px 10px", textAlign: "left", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em" }}>REV</th>
               {multiFile && <th style={{ padding: "7px 10px", textAlign: "left", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em" }}>SOURCE</th>}
+              <th style={{ padding: "7px 10px", textAlign: "left" }}>PDF PAGE</th>
             </tr>
           </thead>
           <tbody>
@@ -267,6 +279,13 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
                     {s.sourceFile?.replace(/\.pdf$/i, "") || "—"}
                   </td>
                 )}
+                <td style={{ padding: "6px 10px" }}>
+                  <input type="number" min="1" step="1"
+                    max={fileResultsByName.get(s.sourceFile)?.pageCount || undefined}
+                    aria-label={`PDF page for ${s.sheetNumber || "unnamed sheet"}`}
+                    value={s.pdfPage ?? ""} onChange={event => updateSheet(i, "pdfPage", validatePdfPage(event.target.value))}
+                    style={{ width: 64, color: "var(--text-primary)", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)" }} />
+                </td>
               </tr>
               );
             })}
@@ -289,11 +308,13 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
         onRetry={crossSet.retry}
       />
 
+      {invalidSelectedSource && <p role="alert">Enter a sheet number and a valid 1-based PDF page for every selected sheet before creating entries.</p>}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
         <Button
           onClick={handleCreateClick}
-          disabled={selectedCount === 0 || checkingOtherSets}
+          disabled={selectedCount === 0 || checkingOtherSets || invalidSelectedSource}
           style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}
         >
           {checkingOtherSets

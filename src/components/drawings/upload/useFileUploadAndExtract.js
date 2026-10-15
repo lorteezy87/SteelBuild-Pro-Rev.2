@@ -161,6 +161,8 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
           scanned:       extractResult.scanned       || false,
           tooLarge:      extractResult.tooLarge      || false,
           extractFailed: extractResult.extractFailed || false,
+          pageCount:     extractResult.pageCount ?? null,
+          error:         extractResult.error || null,
           sizeMB,
         });
 

@@ -22,12 +22,12 @@ const SOURCE: CrossSetSource = {
   drawings: [drawing("old-201", "S-201", "FRAMING PLAN"), drawing("old-204", "S-204", "SECTIONS"), drawing("old-209", "S-209", "DETAILS")],
 };
 const uploadSheet = (sheetNumber: string, sheetTitle: string) => ({
-  sheetNumber, sheetTitle, revision: "2", discipline: "Structural", sourceFile: "rev-a.pdf", sourceFileUrl: "app-files/rev-a.pdf", selected: true,
+  sheetNumber, sheetTitle, revision: "2", discipline: "Structural", sourceFile: "rev-a.pdf", sourceFileUrl: "app-files/rev-a.pdf", selected: true, pdfPage: 1,
 });
 const SHEETS = [uploadSheet("S-201", "Framing Plan"), uploadSheet("S-204", "Sections"), uploadSheet("S-209", "")];
 
-function Harness({ onCreate, canSupersede = true }: { onCreate: (...args: unknown[]) => void; canSupersede?: boolean }) {
-  const [sheets, setSheets] = useState(SHEETS);
+function Harness({ onCreate, canSupersede = true, initialSheets = SHEETS }: { onCreate: (...args: unknown[]) => void; canSupersede?: boolean; initialSheets?: typeof SHEETS }) {
+  const [sheets, setSheets] = useState(initialSheets);
   const [meta, setMeta] = useState({
     setName: "Main Steel – L2 Rev A", setNumber: "", revision: "A", issueDate: "2026-09-11", issuedBy: "", discipline: "Structural",
   });
@@ -35,7 +35,7 @@ function Harness({ onCreate, canSupersede = true }: { onCreate: (...args: unknow
     <ReviewStep
       sheets={sheets}
       setSheets={setSheets}
-      fileResults={[{ fileName: "rev-a.pdf" }]}
+      fileResults={[{ fileName: "rev-a.pdf", pageCount: 3 }]}
       meta={meta}
       setMeta={setMeta}
       aiFilledFields={{}}
@@ -59,6 +59,23 @@ beforeEach(() => {
 });
 
 describe("ReviewStep — pages this upload replaces", () => {
+  it("requires an in-range PDF page and saves the user's corrected mapping", async () => {
+    repo.fetchCrossSetSource.mockResolvedValue(SOURCE);
+    const onCreate = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><Harness onCreate={onCreate} initialSheets={[{ ...SHEETS[0], pdfPage: 0, extractedText: "OLD PAGE", callouts: [{ text: "1/S9" }] } as typeof SHEETS[number]]} /></QueryClientProvider>);
+    const create = await screen.findByRole("button", { name: /Create 1 Entry/ });
+    expect(create).toBeDisabled();
+    const page = screen.getByRole("spinbutton", { name: /PDF page for S-201/ });
+    fireEvent.change(page, { target: { value: "4" } });
+    expect(create).toBeDisabled();
+    fireEvent.change(page, { target: { value: "2" } });
+    expect(create).toBeEnabled();
+    fireEvent.click(create);
+    expect(onCreate.mock.calls[0][0]).toEqual([expect.objectContaining({ sheetNumber: "S-201", pdfPage: 2 })]);
+    expect(onCreate.mock.calls[0][0][0].extractedText).toBeUndefined();
+    expect(onCreate.mock.calls[0][0][0].callouts).toBeUndefined();
+  });
   it("holds Create until the other sets have been checked", async () => {
     let resolve: (value: CrossSetSource) => void = () => {};
     repo.fetchCrossSetSource.mockReturnValue(new Promise<CrossSetSource>((r) => { resolve = r; }));

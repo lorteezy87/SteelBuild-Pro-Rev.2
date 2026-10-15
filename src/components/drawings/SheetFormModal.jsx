@@ -3,6 +3,7 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { STAGES, DISCIPLINES, EMPTY_FORM, mono, surface } from "./drawingsConfig";
+import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 
 /**
  * Modal for creating or editing a single drawing sheet.
@@ -15,6 +16,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
   const [form, setForm] = useState(initial || EMPTY_FORM);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const sourceReadOnly = Boolean(initial?.id);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const labelStyle = {
@@ -30,8 +32,13 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
   const selectStyle = { ...inputStyle };
 
   const handleSubmit = async () => {
+    const pdfPage = validatePdfPage(form.pdf_page);
+    if (!sourceReadOnly && pdfPage === null) {
+      toast.error("Confirm the 1-based PDF page before saving this sheet.");
+      return;
+    }
     let fileUrl = form.file_url || "";
-    if (uploadFile) {
+    if (uploadFile && !sourceReadOnly) {
       setUploading(true);
       try {
         const { file_url } = await integrations.Core.UploadFile({ file: uploadFile, workflow: "attachment" });
@@ -42,15 +49,6 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
         return;
       }
       setUploading(false);
-    }
-    // Coerce pdf_page to a positive integer at save time. Empty string,
-    // NaN, zero, or negatives all become 1 — matches the upload modal's
-    // fallback so manual edits and new uploads obey the same rule.
-    const rawPage = form.pdf_page;
-    let pdfPage = 1;
-    if (rawPage !== "" && rawPage !== null && rawPage !== undefined) {
-      const n = Number(rawPage);
-      if (Number.isFinite(n) && Number.isInteger(n) && n >= 1) pdfPage = n;
     }
     onSave({ ...form, file_url: fileUrl, pdf_page: pdfPage });
   };
@@ -74,11 +72,13 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
         </div>
 
         {/* Form grid */}
+        {sourceReadOnly && <p role="note">Source PDF, page, sheet identity and revision are read-only here. Use a uniquely named New Drawing Set and a new submittal for revised work.</p>}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>Drawing Set</label>
             <input
               list="drawing-set-options"
+              disabled={sourceReadOnly}
               style={inputStyle}
               value={form.drawing_set_name || ""}
               onChange={e => set("drawing_set_name", e.target.value)}
@@ -93,20 +93,21 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
           </div>
           <div>
             <label style={labelStyle}>Sheet Number *</label>
-            <input style={inputStyle} value={form.sheet_number} onChange={e => set("sheet_number", e.target.value)} placeholder="S1-001" />
+            <input disabled={sourceReadOnly} style={inputStyle} value={form.sheet_number} onChange={e => set("sheet_number", e.target.value)} placeholder="S1-001" />
           </div>
           <div>
             <label style={labelStyle}>Revision</label>
-            <input style={inputStyle} value={form.revision_number} onChange={e => set("revision_number", e.target.value)} placeholder="0" />
+            <input disabled={sourceReadOnly} style={inputStyle} value={form.revision_number} onChange={e => set("revision_number", e.target.value)} placeholder="0" />
           </div>
           <div>
             <label style={labelStyle}>PDF Page</label>
             <input
               type="number"
+              disabled={sourceReadOnly}
               min={1}
               step={1}
               style={inputStyle}
-              value={form.pdf_page ?? 1}
+              value={form.pdf_page ?? ""}
               onChange={e => set("pdf_page", e.target.value === "" ? "" : Number(e.target.value))}
               placeholder="1"
             />
@@ -191,11 +192,12 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
             {form.file_url && !uploadFile && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <span style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>FILE ATTACHED</span>
-                <button onClick={() => set("file_url", "")} style={{ background: "none", border: "none", color: "var(--status-error)", fontSize: 10, cursor: "pointer", ...mono }}>REMOVE</button>
+                {!sourceReadOnly && <button onClick={() => set("file_url", "")} style={{ background: "none", border: "none", color: "var(--status-error)", fontSize: 10, cursor: "pointer", ...mono }}>REMOVE</button>}
               </div>
             )}
             <input
               type="file"
+              disabled={sourceReadOnly}
               accept=".pdf,.dwg,.dxf"
               onChange={e => { if (e.target.files?.[0]) setUploadFile(e.target.files[0]); }}
               style={{ ...inputStyle, padding: "6px 10px", fontSize: 11 }}

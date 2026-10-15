@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { entities, integrations } from "@/api/supabaseClient";
-import { useQueryClient } from "@tanstack/react-query";
-import { invalidateEntity } from "@/services/cacheRegistry";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { validatePdfPage } from "@/lib/pdfSheetExtractor";
-import { ensureCurrentRevision, recordSheetSlipSheet } from "@/lib/drawingHub";
 import {
-  normalizeRevisionNumber,
   matchSheets,
   validateRevisionLabel,
   hasAmbiguousSheetMatches,
-  findExactLiveDrawing,
   isPdfFile,
 } from "@/lib/drawingUploadUtils";
-import { extractRevisionSheets, deriveVirtualSets, buildRevisionSnapshot, mergeSetDrawings } from "./revisionUploadHelpers";
+import { extractRevisionSheets, deriveVirtualSets, mergeSetDrawings } from "./revisionUploadHelpers";
 import { dominantStage } from "@/lib/submittalStageMapping";
 import { buildIntakeRecords } from "@/lib/docControl";
 import { AuthContext } from "@/lib/AuthContext";
@@ -46,11 +41,9 @@ import StepRevMeta from "./revisionUploadSteps/RevMetaStep";
 import StepDropPDF from "./revisionUploadSteps/DropPdfStep";
 import StepSheetComparison from "./revisionUploadSteps/SheetComparisonStep";
 import StepProcessing from "./revisionUploadSteps/ProcessingStep";
-import StepSuccess from "./revisionUploadSteps/SuccessStep";
 import { MAX_PDF_SIZE_MB } from "./revisionUploadSteps/constants";
 
-export default function RevisionUploadModal({ open, onClose, onComplete, activeProject, preSelectedSet, drawingSets = [], initialPdfFile = null, initialAttestations = {}, initialReview = null }) {
-  const qc = useQueryClient();
+export default function RevisionUploadModal({ open, onClose, activeProject, preSelectedSet, drawingSets = [], initialPdfFile = null, initialAttestations = {}, initialReview = null }) {
   // This modal is also mounted by legacy drawing pages before their upload
   // step opens. An absent provider must not crash that entire register.
   const user = React.useContext(AuthContext)?.user;
@@ -78,8 +71,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   const [processingMsg, setProcessingMsg] = useState("");
   const [processingPct, setProcessingPct] = useState(0);
   const [flowError, setFlowError] = useState("");
-  const [applyStats, setApplyStats] = useState({ updated: 0, added: 0, removed: 0 });
-  const [applyFailures, setApplyFailures] = useState({ failed: 0, historyFailed: 0, setWriteFailed: false });
   // Cover-sheet metadata + text-layer flag from the extraction. Document Control
   // reads `scanned` to tell "the box was blank" from "the page was unreadable".
   const [extraction, setExtraction] = useState({ setMeta: null, scanned: false });
@@ -135,7 +126,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           },
         });
       if (samePreflightPdf && initialReview) {
-        setExtraction({ setMeta: initialReview.setMeta ?? null, scanned: initialReview.scanned === true });
+        setExtraction({ setMeta: initialReview.setMeta ?? null, scanned: initialReview.scanned === true, pageCount: initialReview.pageCount ?? null });
       }
       setProcessingMsg("Comparing sheets...");
       setProcessingPct(80);
@@ -194,6 +185,15 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   const handleApply = async () => {
     try {
       setFlowError("");
+      const invalidSource = matchedSheets.some(match => {
+        if (!match.newSheet) return false;
+        const page = validatePdfPage(match.newSheet.pdfPage);
+        return !match.newSheet.sourceFileUrl || page === null || (extraction?.pageCount > 0 && page > extraction.pageCount);
+      });
+      if (invalidSource) {
+        setFlowError("Every incoming sheet needs its source PDF and a confirmed in-range PDF page. Return to Document Control to review the source.");
+        return;
+      }
       const ambiguous = (matchedSheets || []).filter((m) => m.change === "ambiguous");
       if (hasAmbiguousSheetMatches(matchedSheets) || ambiguous.length) {
         const detail = ambiguous
@@ -240,177 +240,11 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         setStep("comparison");
         return;
       }
-      setStep("processing");
-      setProcessingMsg("Updating drawing records...");
-      setProcessingPct(10);
-
-    const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.file_url;
-
-    let historyFailed = 0;
-    let updated = 0, added = 0, removed = 0, failed = 0;
-    for (const match of matchedSheets) {
-      try {
-        const existing = findExactLiveDrawing(existingDrawings, match.sheetNumber);
-        if (match.change !== "added" && match.change !== "removed" && match.sheetNumber && !existing && existingDrawings.some((d) => !d.is_superseded && String(d.sheet_number || "").trim() === String(match.sheetNumber || "").trim())) {
-          failed++;
-          console.error(`[RevisionUploadModal] Ambiguous live sheet "${match.sheetNumber}" — skipped`);
-          continue;
-        }
-        if (match.change === "removed") {
-          if (!supersedeUnlisted) { continue; }
-          if (existing) {
-            await entities.Drawing.update(existing.id, { is_superseded: true });
-            removed++;
-            try {
-              const rev = await ensureCurrentRevision({ drawing: existing, userId: null });
-              if (rev?.id) {
-                await entities.DrawingRevision.update(rev.id, { archived_at: new Date().toISOString() });
-              }
-            } catch (histErr) {
-              historyFailed++;
-              console.warn(`[RevisionUploadModal] History archive failed for removed sheet "${match.sheetNumber}":`, histErr);
-            }
-          }
-        } else if (match.change === "added") {
-          const addedPage = validatePdfPage(match.newSheet?.pdfPage);
-          const createdSheet = await entities.Drawing.create({
-            sheet_number: match.newSheet.sheetNumber,
-            title: match.newSheet.sheetTitle,
-            project_id: activeProject?.id,
-            project_name: activeProject?.name,
-            discipline: match.newSheet.discipline || selectedSet.discipline || "Structural",
-            revision_number: normalizeRevisionNumber(match.newSheet.revision ?? revMeta.revisionLabel),
-            stage: "Not Started",
-            file_url: newFileUrl,
-            pdf_page: addedPage ?? 1,
-            drawing_set_name: selectedSet.set_name,
-            ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
-            is_superseded: false,
-            // Only write when the page was actually harvested. `undefined`
-            // leaves the column alone; writing null would record "read, and
-            // blank" for a page nobody read.
-            ...(typeof match.newSheet?.extractedText === "string"
-              ? { extracted_text: match.newSheet.extractedText }
-              : {}),
-            ...(Array.isArray(match.newSheet?.callouts)
-              ? { callouts: match.newSheet.callouts }
-              : {}),
-          });
-          added++;
-          try {
-            if (createdSheet?.id) await ensureCurrentRevision({ drawing: createdSheet, userId: null });
-          } catch (histErr) {
-            historyFailed++;
-            console.warn(`[RevisionUploadModal] History mint failed for added sheet "${match.sheetNumber}":`, histErr);
-          }
-        } else if (existing) {
-            const updatedPage = validatePdfPage(match.newSheet?.pdfPage);
-            try {
-              const slip = await recordSheetSlipSheet({
-                drawing: existing,
-                newCode: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
-                newFileUrl,
-                newPdfPage: updatedPage ?? 1,
-                issuedAt: revMeta.issueDate || null,
-                notes: revMeta.notes || null,
-                userId: null,
-              });
-              if (slip?.skipped && slip.revisionId) {
-                await entities.DrawingRevision.update(slip.revisionId, { file_url: newFileUrl, pdf_page: updatedPage ?? 1 });
-              }
-            } catch (histErr) {
-              historyFailed++;
-              console.warn(`[RevisionUploadModal] Slip-sheet history failed for "${match.sheetNumber}":`, histErr);
-            }
-            await entities.Drawing.update(existing.id, {
-              revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
-              file_url: newFileUrl,
-              pdf_page: updatedPage ?? 1,
-              // Refresh the stored text to THIS revision's page. Leaving the
-              // prior revision's text behind would make the next revision diff
-              // against a sheet that is no longer the sheet of record.
-              ...(typeof match.newSheet?.extractedText === "string"
-                ? { extracted_text: match.newSheet.extractedText }
-                : {}),
-              // Refresh with THIS revision's references. A revision that drops
-              // a detail callout must stop showing a jump to it.
-              ...(Array.isArray(match.newSheet?.callouts)
-                ? { callouts: match.newSheet.callouts }
-                : {}),
-              ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
-              is_superseded: false,
-            });
-            updated++;
-        }
-      } catch (err) {
-        console.error("Failed to process sheet:", match.sheetNumber, err);
-        failed++;
-      }
-      setProcessingPct(10 + Math.round((updated + added + removed + failed) / Math.max(matchedSheets.length, 1) * 75));
-    }
-
-      let setWriteFailed = false;
-      // A set header is a summary of the live sheets. Publishing it before the
-      // individual writes makes a failed sheet look like a complete revision.
-      // This client sequence is still not a DB transaction: an RPC is needed
-      // for true all-or-nothing sheet, history, and header updates.
-      if (failed === 0 && historyFailed === 0 && selectedSet.id) {
-        setProcessingMsg("Updating drawing set...");
-        setProcessingPct(90);
-        let history = [];
-        try { history = JSON.parse(selectedSet.revision_history || "[]"); } catch {}
-        history.push(buildRevisionSnapshot(selectedSet, revMeta.disposition));
-        const liveSheetCount = existingDrawings.filter((drawing) => !drawing.is_superseded && !drawing.is_deleted).length;
-        try {
-          await entities.DrawingSet.update(selectedSet.id, {
-            revision: revMeta.revisionLabel,
-            issued_date: revMeta.issueDate,
-            issued_by: revMeta.issuedBy || selectedSet.issued_by,
-            file_url: newFileUrl,
-            // Untouched sheets stay current on a partial re-issue.
-            sheet_count: liveSheetCount + added - removed,
-            revision_history: JSON.stringify(history),
-            set_approval_status: "pending_review",
-            notes: revMeta.notes || selectedSet.notes,
-          });
-        } catch (setErr) {
-          setWriteFailed = true;
-          console.error("Revision set header update failed after sheet writes:", setErr);
-        }
-      }
-
-      setApplyStats({ updated, added, removed });
-      setApplyFailures({ failed, historyFailed, setWriteFailed });
-      const invalidations = await Promise.allSettled([
-        invalidateEntity(qc, "drawing", activeProject?.id),
-        invalidateEntity(qc, "drawing_revision", activeProject?.id),
-        ...(selectedSet.id ? [invalidateEntity(qc, "drawingSet", activeProject?.id)] : []),
-      ]);
-      if (invalidations.some((result) => result.status === "rejected")) {
-        console.warn("Revision saved but one or more drawing caches could not be invalidated.");
-      }
-      if (failed > 0) {
-        setFlowError(`${failed} sheet(s) failed to process. ${updated + added + removed} succeeded.`);
-      } else if (historyFailed > 0) {
-        setFlowError(`Sheets updated, but revision history could not be written for ${historyFailed} sheet(s) — compare/restore for those revisions may be unavailable.`);
-      } else if (setWriteFailed) {
-        setFlowError("Sheet changes were saved, but the set header could not be updated. Inspect the live register before retrying this revision.");
-      }
-      setProcessingPct(100);
-      await new Promise(r => setTimeout(r, 500));
-      const complete = failed === 0 && historyFailed === 0 && !setWriteFailed;
-      setStep(complete ? "success" : "partial");
-      if (onComplete) {
-        onComplete({
-          complete,
-          failed,
-          historyFailed,
-          setWriteFailed,
-          setId: selectedSet?.id || null,
-          setName: selectedSet?.name || selectedSet?.set_name || selectedSet?.title || null,
-          revisionLabel: revMeta?.revisionLabel || null,
-        });
-      }
+      // The legacy browser sequence committed current pointers, coordination,
+      // parent sources and headers separately. Never fall back to those writes:
+      // the reviewed transaction and direct-write cutover are not installed.
+      setFlowError("The transactional revision service is not enabled. No drawing, revision, or approval records were changed. Close this review and use New Drawing Set with a unique name and a new submittal; explicitly review any old sheets to supersede.");
+      setStep("comparison");
     } catch (error) {
       console.error("Revision apply failed:", error);
       setFlowError(error?.message || "Failed to apply revision changes.");
@@ -428,7 +262,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   };
 
   const handleClose = () => { reset(); onClose(); };
-  const STEP_ORDER = ["selectSet", "revMeta", "dropPDF", "comparison", "success"];
+  const STEP_ORDER = ["selectSet", "revMeta", "dropPDF", "comparison"];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -449,6 +283,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         </DialogHeader>
 
         <div style={{ paddingTop: 8 }}>
+          <p role="note">In-place revision application is temporarily held for source/evidence integrity. You may review this PDF, or close and use New Drawing Set with a unique name and a new submittal. No revision changes will be applied here until the reviewed transaction service is enabled.</p>
           {samePreflightPdf && initialReview && step !== "success" && (
             <div style={{ marginBottom: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--divider)", background: "var(--hover-bg)", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
               <strong style={{ color: "var(--text-primary)" }}>Document Control review carried forward.</strong>
@@ -475,17 +310,6 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             <DocControlAttestationProvider value={attestationState}>
               <StepSheetComparison selectedSet={selectedSet} revMeta={revMeta} extraction={extraction} activeProject={activeProject} matchedSheets={matchedSheets} setMatchedSheets={setMatchedSheets} supersedeUnlisted={supersedeUnlisted} setSupersedeUnlisted={setSupersedeUnlisted} onBack={() => setStep("dropPDF")} onConfirm={handleApply} />
             </DocControlAttestationProvider>
-          )}
-          {step === "success" && (
-            <StepSuccess selectedSet={selectedSet} revMeta={revMeta} stats={applyStats} onClose={handleClose} />
-          )}
-          {step === "partial" && (
-            <section role="status" style={{ padding: "18px 4px", fontFamily: "var(--font-body)", color: "var(--text-primary)" }}>
-              <h3 style={{ margin: "0 0 8px", color: "var(--status-warning-bright)" }}>Partial revision upload</h3>
-              <p>{applyStats.updated + applyStats.added + applyStats.removed} sheet action(s) saved; {applyFailures.failed} sheet action(s) failed, {applyFailures.historyFailed} history write(s) failed{applyFailures.setWriteFailed ? ", and the set header could not be updated" : ""}.</p>
-              <p>The set header advances only when every sheet and history write succeeds. Inspect the live drawing register before starting another upload of this revision; some changes may already be saved.</p>
-              <button type="button" onClick={handleClose} style={{ padding: "9px 16px", borderRadius: 8, background: "var(--accent)", color: "var(--on-accent)", border: "none", cursor: "pointer" }}>Close and inspect register</button>
-            </section>
           )}
         </div>
       </DialogContent>

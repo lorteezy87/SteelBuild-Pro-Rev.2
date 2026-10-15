@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { assignPdfPages, validatePdfPage } from "../pdfSheetExtractor";
 
 describe("validatePdfPage", () => {
@@ -34,168 +34,38 @@ describe("validatePdfPage", () => {
 });
 
 describe("assignPdfPages", () => {
-  let warnSpy;
-  beforeEach(() => {
-    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("preserves explicit mappings rather than inferring them from row count", () => {
+    expect(assignPdfPages([{ pdfPage: 2 }, { pdfPage: 1 }], 2).map(s => s.pdfPage)).toEqual([2, 1]);
   });
-  afterEach(() => {
-    warnSpy.mockRestore();
+  it("preserves valid shared pages without inventing unused pages", () => {
+    expect(assignPdfPages([{ pdfPage: 1 }, { pdfPage: 1 }, { pdfPage: 1 }], 2).map(s => s.pdfPage)).toEqual([1, 1, 1]);
   });
-
-  describe("one-sheet-per-page (sheets.length === pageCount)", () => {
-    it("ignores LLM pdfPage and assigns deterministically by index+1", () => {
-      // Worst-case input: LLM returned pdfPage=1 for every sheet (the
-      // exact bug we are guarding against). Deterministic override
-      // should still produce 1, 2, 3 because the count matches.
-      const sheets = [
-        { sheetNumber: "S-101", pdfPage: 1 },
-        { sheetNumber: "S-102", pdfPage: 1 },
-        { sheetNumber: "S-103", pdfPage: 1 },
-      ];
-      const result = assignPdfPages(sheets, 3);
-      expect(result.map(s => s.pdfPage)).toEqual([1, 2, 3]);
-    });
-
-    it("overrides even when the LLM emitted plausible-looking pages", () => {
-      // The deterministic override is unconditional when counts match —
-      // index ordering is the source of truth for sheet position in
-      // this layout.
-      const sheets = [
-        { sheetNumber: "A201", pdfPage: 7 },
-        { sheetNumber: "A202", pdfPage: 8 },
-      ];
-      const result = assignPdfPages(sheets, 2);
-      expect(result.map(s => s.pdfPage)).toEqual([1, 2]);
-    });
-
-    it("preserves all other sheet fields", () => {
-      const sheets = [
-        { sheetNumber: "S-101", sheetTitle: "Foundation Plan", discipline: "Structural", pdfPage: 1 },
-      ];
-      const [r] = assignPdfPages(sheets, 1);
-      expect(r.sheetNumber).toBe("S-101");
-      expect(r.sheetTitle).toBe("Foundation Plan");
-      expect(r.discipline).toBe("Structural");
-      expect(r.pdfPage).toBe(1);
-    });
-
-    it("does not mutate the input array or its members", () => {
-      const sheets = [{ sheetNumber: "S-101", pdfPage: 99 }];
-      const before = JSON.stringify(sheets);
-      assignPdfPages(sheets, 1);
-      expect(JSON.stringify(sheets)).toBe(before);
-    });
+  it("leaves out-of-range values unresolved even when row and page counts match", () => {
+    expect(assignPdfPages([{ pdfPage: 7 }, { pdfPage: 8 }], 2).map(s => s.pdfPage)).toEqual([null, null]);
   });
-
-  describe("drawing-index style (sheets.length !== pageCount)", () => {
-    it("trusts the LLM's pdfPage when it is a valid positive integer", () => {
-      // 5 sheets across a 10-page PDF — drawing index on page 1, sheets
-      // on later pages. The LLM's pdfPage values are authoritative here
-      // because index+1 would misalign.
-      const sheets = [
-        { sheetNumber: "S-101", pdfPage: 2 },
-        { sheetNumber: "S-102", pdfPage: 4 },
-        { sheetNumber: "S-103", pdfPage: 5 },
-        { sheetNumber: "S-104", pdfPage: 7 },
-        { sheetNumber: "S-105", pdfPage: 9 },
-      ];
-      const result = assignPdfPages(sheets, 10);
-      expect(result.map(s => s.pdfPage)).toEqual([2, 4, 5, 7, 9]);
-    });
-
-    it("coerces numeric-string pdfPage to a number", () => {
-      const sheets = [
-        { sheetNumber: "S-101", pdfPage: "3" },
-        { sheetNumber: "S-102", pdfPage: "5" },
-      ];
-      const result = assignPdfPages(sheets, 10);
-      expect(result.map(s => s.pdfPage)).toEqual([3, 5]);
-    });
+  it("retains other sheet fields without mutating the input", () => {
+    const sheet = Object.freeze({ sheetNumber: "S-101", sheetTitle: "Foundation Plan", discipline: "Structural", pdfPage: 99 });
+    expect(assignPdfPages([sheet], 1)).toEqual([{ ...sheet, pdfPage: null }]);
+    expect(sheet.pdfPage).toBe(99);
   });
-
-  describe("validation fallback", () => {
-    it("falls back to 1 with a warning when pdfPage is invalid", () => {
-      const sheets = [
-        { sheetNumber: "S-101", pdfPage: 2 },
-        { sheetNumber: "S-102", pdfPage: null },
-        { sheetNumber: "S-103", pdfPage: -3 },
-        { sheetNumber: "S-104", pdfPage: "abc" },
-      ];
-      const result = assignPdfPages(sheets, 10);
-      // The three invalid pages fall back to 1, then the duplicate-page
-      // de-dup re-spreads the collisions onto the nearest free pages (3, 4).
-      expect(result.map(s => s.pdfPage)).toEqual([2, 1, 3, 4]);
-      expect(warnSpy).toHaveBeenCalled();
-      const firstCall = warnSpy.mock.calls[0][0];
-      expect(firstCall).toMatch(/3 of 4 sheet\(s\) had invalid or out-of-range pdfPage/);
-    });
-
-    it("clamps out-of-range pdfPage to 1, then de-dups it to the next free page", () => {
-      const sheets = [
-        { sheetNumber: "S-101", pdfPage: 1 },
-        { sheetNumber: "S-102", pdfPage: 99 }, // out of range → clamps to 1
-      ];
-      const result = assignPdfPages(sheets, 5);
-      // 99 clamps to 1, collides with S-101, so de-dup moves it to page 2.
-      expect(result.map(s => s.pdfPage)).toEqual([1, 2]);
-      expect(warnSpy).toHaveBeenCalled();
-    });
-
-    it("does not warn when every pdfPage is valid", () => {
-      const sheets = [
-        { sheetNumber: "S-101", pdfPage: 2 },
-        { sheetNumber: "S-102", pdfPage: 4 },
-      ];
-      assignPdfPages(sheets, 10);
-      expect(warnSpy).not.toHaveBeenCalled();
-    });
-
-    it("re-spreads + warns when a multi-page PDF resolves every sheet to page 1", () => {
-      const sheets = [
-        { sheetNumber: "S-101", pdfPage: null },
-        { sheetNumber: "S-102", pdfPage: null },
-        { sheetNumber: "S-103", pdfPage: null },
-      ];
-      // pageCount=10 ≠ sheets.length=3, so the deterministic override
-      // doesn't fire; every sheet falls back to 1, then the de-dup step
-      // re-spreads the collisions onto distinct pages so thumbnails don't
-      // all point at page 1.
-      const result = assignPdfPages(sheets, 10);
-      expect(result.map(s => s.pdfPage)).toEqual([1, 2, 3]);
-      // Two warnings fire: the invalid-page fallback and the duplicate
-      // re-spread — both tell the user to verify in the upload preview.
-      const allMessages = warnSpy.mock.calls.map(c => c[0]).join("\n");
-      expect(allMessages).toMatch(/invalid or out-of-range pdfPage/);
-      expect(allMessages).toMatch(/duplicate pdfPage values/);
-    });
+  it("retains drawing-index page mappings", () => {
+    expect(assignPdfPages([2,4,5,7,9].map(pdfPage => ({ pdfPage })), 10).map(s => s.pdfPage)).toEqual([2,4,5,7,9]);
   });
-
-  describe("edge cases", () => {
-    it("handles an empty sheets array", () => {
-      expect(assignPdfPages([], 5)).toEqual([]);
-      expect(warnSpy).not.toHaveBeenCalled();
-    });
-
-    it("treats non-array input as empty", () => {
-      expect(assignPdfPages(null, 5)).toEqual([]);
-      expect(assignPdfPages(undefined, 5)).toEqual([]);
-    });
-
-    it("handles unknown pageCount (0 or NaN) by trusting + validating LLM values", () => {
-      const sheets = [
-        { sheetNumber: "S-101", pdfPage: 3 },
-        { sheetNumber: "S-102", pdfPage: 7 },
-      ];
-      // Without a known pageCount we can't run the deterministic override
-      // OR the upper-bound clamp; we just validate type/sign.
-      expect(assignPdfPages(sheets, 0).map(s => s.pdfPage)).toEqual([3, 7]);
-      expect(assignPdfPages(sheets, NaN).map(s => s.pdfPage)).toEqual([3, 7]);
-    });
-
-    it("handles a single-sheet single-page PDF", () => {
-      const sheets = [{ sheetNumber: "S-101", pdfPage: 1 }];
-      const result = assignPdfPages(sheets, 1);
-      expect(result[0].pdfPage).toBe(1);
-    });
+  it("coerces numeric-string page values", () => {
+    expect(assignPdfPages([{ pdfPage: "3" }, { pdfPage: "5" }], 10).map(s => s.pdfPage)).toEqual([3,5]);
+  });
+  it.each([null, undefined, -3, "abc", 0, 1.5, 99])("does not invent provenance for invalid page %s", pdfPage => {
+    expect(assignPdfPages([{ pdfPage: 2 }, { pdfPage }], 10).map(s => s.pdfPage)).toEqual([2,null]);
+  });
+  it("handles empty and non-array inputs", () => {
+    expect(assignPdfPages([], 5)).toEqual([]);
+    expect(assignPdfPages(null, 5)).toEqual([]);
+    expect(assignPdfPages(undefined, 5)).toEqual([]);
+  });
+  it.each([0, NaN])("retains positive mappings when page count is unknown (%s)", count => {
+    expect(assignPdfPages([{ pdfPage: 3 }, { pdfPage: 7 }], count).map(s => s.pdfPage)).toEqual([3,7]);
+  });
+  it("keeps the single-page mapping", () => {
+    expect(assignPdfPages([{ pdfPage: 1 }], 1)).toEqual([{ pdfPage: 1 }]);
   });
 });

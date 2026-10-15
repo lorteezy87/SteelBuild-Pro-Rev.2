@@ -128,6 +128,9 @@ function vendorChunk(id) {
 if (process.env.VITEST) process.env.TZ = 'UTC'
 
 export default defineConfig({
+  // Edge Function CORS permits the configured development origin. Silently
+  // switching ports turns a busy dev server into an opaque browser AI failure.
+  server: { strictPort: true },
   logLevel: 'info',
   resolve: {
     alias: {

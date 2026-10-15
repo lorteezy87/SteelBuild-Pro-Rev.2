@@ -14,6 +14,7 @@ export interface RevisionUploadHandoffProps {
     sheets: unknown[];
     setMeta: Record<string, unknown> | null;
     scanned: boolean;
+    pageCount?: number;
     sourcePages: Record<string, number>;
     revisionLabel: string;
     issueDate: string;

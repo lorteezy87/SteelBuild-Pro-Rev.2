@@ -24,6 +24,7 @@ import {
 } from "@/components/drawings/drawingsUtils";
 import {
   buildDrawingCreatePayload,
+  buildDrawingMetadataUpdate,
   formatDeleteSetSuccessMessage,
   formatDrawingWriteError,
 } from "./drawingMutationHelpers";
@@ -142,8 +143,11 @@ export function useDrawingsPageController({
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, ...payload }: { id: string } & Record<string, unknown>) =>
-      entities.Drawing.update(id, payload as DrawingUpdate),
+    mutationFn: ({ id, ...payload }: { id: string } & Record<string, unknown>) => {
+      const current = drawings.find(drawing => drawing.id === id);
+      if (!current) throw new Error("Refresh the drawing register before editing this sheet.");
+      return entities.Drawing.update(id, buildDrawingMetadataUpdate(current, payload) as DrawingUpdate);
+    },
     onSuccess: async () => {
       await invalidate();
       toast.success("Sheet updated");
@@ -440,7 +444,8 @@ export function useDrawingsPageController({
             throw new Error(classification.reason || "Stage transition blocked");
           }
         }
-        return entities.Drawing.update(id, payload as DrawingUpdate);
+        if (!current) throw new Error("Refresh the drawing register before editing this sheet.");
+        return entities.Drawing.update(id, buildDrawingMetadataUpdate(current, payload) as DrawingUpdate);
       },
     );
     await invalidate();

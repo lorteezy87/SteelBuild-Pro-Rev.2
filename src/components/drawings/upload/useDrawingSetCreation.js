@@ -5,8 +5,8 @@ import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
 import { newUploadBatchId } from "@/lib/drawingUploadUtils";
+import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 import { logActivity } from "@/services/auditLogger";
-import { recordSheetSlipSheet } from "@/lib/drawingHub";
 import { toast } from "sonner";
 import {
   applyCrossSetSupersede,
@@ -21,7 +21,6 @@ import {
   buildDrawingRecord,
   buildInitialRevisionRecords,
   detectMultiSheetSamePageRegression,
-  planExistingSetSheetReplace,
 } from "../drawingSetUploadHelpers";
 
 // sonner renders toast text with white-space: normal, so "\n" would run the
@@ -74,19 +73,28 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
     const resolvedSetName = resolveUploadSetName(meta);
     const batchId = uploadBatchId || newUploadBatchId();
     const setNumber = (meta.setNumber || "").trim();
+    let parentSetId = null;
 
     try {
+      if (!activeProject?.id || selectedSheets.length === 0) throw new Error("Choose a project and at least one reviewed sheet.");
+      for (const sheet of selectedSheets) {
+        const page = validatePdfPage(sheet.pdfPage);
+        const count = fileResults.find(result => result.fileName === sheet.sourceFile)?.pageCount;
+        if (!sheet.sourceFileUrl || !String(sheet.sheetNumber || "").trim() || page === null || (count > 0 && page > count)) {
+          throw new Error(`Sheet "${sheet.sheetNumber || "unnamed"}" needs its source PDF and a confirmed in-range PDF page before saving.`);
+        }
+      }
       setProcessingStatus(prev => ({ ...prev, progress: 5, message: "Creating drawing set…" }));
 
-      let parentSetId = null;
-      let parentSetMetadata = null;
+      const existingNameError = () => new Error(
+        `A drawing set named "${resolvedSetName}" already exists. Choose a unique new set name and a new submittal. New Revision application is temporarily held pending the transactional service.`,
+      );
       const existing = await entities.DrawingSet.filter({
           project_id: activeProject?.id,
           set_name:   resolvedSetName,
       });
       if (Array.isArray(existing) && existing.length > 0) {
-        parentSetId = existing[0].id;
-        parentSetMetadata = existing[0].metadata;
+        throw existingNameError();
       }
 
       if (!parentSetId) {
@@ -96,34 +104,13 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
             is_deleted:  true,
         });
         if (Array.isArray(deleted) && deleted.length > 0) {
-          parentSetId = deleted[0].id;
-          parentSetMetadata = deleted[0].metadata;
-          await entities.DrawingSet.update(parentSetId, {
-            is_deleted: false,
-            deleted_at: null,
-          });
+          throw existingNameError();
         }
       }
 
       const newFileUrl = selectedSheets.find((s) => s.sourceFileUrl)?.sourceFileUrl || null;
 
-      if (parentSetId) {
-        try {
-          await entities.DrawingSet.update(parentSetId, {
-              upload_batch_id: batchId,
-              revision:        meta.revision || "",
-              issued_date:     meta.issueDate || null,
-              issued_by:       meta.issuedBy  || "",
-              discipline:      meta.discipline || "",
-              notes:           meta.notes || "",
-              ...(newFileUrl ? { file_url: newFileUrl } : {}),
-              ...(setNumber ? { metadata: withDrawingSetNumberMetadata(parentSetMetadata, setNumber) } : {}),
-              updated_at:      new Date().toISOString(),
-            });
-          } catch (updErr) {
-            throw new Error(`Could not update drawing set metadata: ${updErr?.message || "unknown error"}`);
-        }
-      }
+
 
       if (!parentSetId) {
         const { record: sanitizedSet } = sanitizeDrawingSetPayload({
@@ -155,23 +142,8 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
             msg.includes("uq_drawing_sets_project_set_name") ||
             msg.includes("23505");
           if (!isUniqueViolation) throw createErr;
-
-          console.warn(
-            `[DrawingSetUploadModal] race on set "${resolvedSetName}" — another session created it first; re-looking up.`,
-          );
-          const winner = await entities.DrawingSet.filter({
-            project_id: activeProject?.id,
-            set_name:   resolvedSetName,
-          });
-          if (Array.isArray(winner) && winner.length > 0) {
-            parentSetId = winner[0].id;
-            parentSetMetadata = winner[0].metadata;
-          } else {
-            throw new Error(
-              `A drawing set named "${resolvedSetName}" already exists on this project but could not be loaded. ` +
-              `Refresh the page and try again, or pick a different set name.`,
-            );
-          }
+          // Never attach this upload to another session's newly-created set.
+          throw existingNameError();
         }
 
         if (!parentSetId) {
@@ -190,7 +162,7 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
       for (const { sourceFile, sheetCount, pageCount } of detectMultiSheetSamePageRegression(selectedSheets, records, fileResults)) {
         console.warn(
           `[DrawingSetUploadModal] All ${sheetCount} sheets from "${sourceFile}" (a ${pageCount}-page PDF) have pdf_page=1. ` +
-          `This looks like the multi-sheet pdf_page bug regressing — check that the extractor schema includes pdfPage and that assignPdfPages ran.`,
+          `Review the physical PDF pages before confirming; shared pages can be legitimate and must not be reassigned by row order.`,
         );
       }
 
@@ -204,73 +176,8 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
       const insertedRows = [];
       const newlyCreatedRows = [];
 
-      let existingLive = [];
-      try {
-        const existingSheets = await entities.Drawing.filter({
-          project_id: activeProject?.id,
-          drawing_set_id: parentSetId,
-        });
-        existingLive = (existingSheets || []).filter((d) => !d.is_superseded);
-      } catch (listErr) {
-        console.warn("[drawings] could not list existing set sheets — falling back to insert-only:", listErr);
-      }
-
-      const replacePlan = existingLive.length
-        ? planExistingSetSheetReplace(existingLive, sanitizedRecords)
-        : { toUpdate: [], toCreate: sanitizedRecords, toSupersede: [] };
-
-      for (const { existing: liveSheet, record } of replacePlan.toUpdate) {
-        if (cancelledRef.current) break;
-        try {
-          try {
-            const slip = await recordSheetSlipSheet({
-              drawing: liveSheet,
-              newCode: record.revision_number || meta.revision || liveSheet.revision_number || "REV",
-              newFileUrl: record.file_url,
-              newPdfPage: record.pdf_page,
-              issuedAt: meta.issueDate || null,
-              notes: meta.notes || null,
-              userId: null,
-            });
-            if (slip?.skipped && slip.revisionId) {
-              await entities.DrawingRevision.update(slip.revisionId, {
-                file_url: record.file_url,
-                pdf_page: record.pdf_page,
-              });
-            }
-          } catch (histErr) {
-            console.warn(`[DrawingSetUploadModal] Slip-sheet history failed for "${record.sheet_number}":`, histErr);
-          }
-          const updated = await entities.Drawing.update(liveSheet.id, {
-            title: record.title,
-            revision_number: record.revision_number,
-            file_url: record.file_url,
-            pdf_page: record.pdf_page,
-            discipline: record.discipline,
-            upload_batch_id: batchId,
-            upload_status: record.upload_status,
-            ai_extraction_status: record.ai_extraction_status,
-            last_extracted_at: now,
-            drawing_set_id: parentSetId,
-            drawing_set_name: resolvedSetName,
-            is_superseded: false,
-          });
-          insertedRows.push(updated || { ...liveSheet, ...record });
-          createdRows++;
-        } catch (err) {
-          console.error("Failed to replace sheet:", record.sheet_number, err);
-          failedRows++;
-        }
-      }
-
-      for (const liveSheet of replacePlan.toSupersede) {
-        if (cancelledRef.current) break;
-        try {
-          await entities.Drawing.update(liveSheet.id, { is_superseded: true });
-        } catch (err) {
-          console.warn(`[DrawingSetUploadModal] Could not retire leftover sheet ${liveSheet.sheet_number}:`, err);
-        }
-      }
+      // New Set never adopts or rewrites a previously existing roster.
+      const replacePlan = { toCreate: sanitizedRecords };
 
       if (replacePlan.toCreate.length > 0 && !cancelledRef.current) {
         try {
@@ -398,13 +305,13 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         const needsReviewCount = sanitizedRecords.filter((r) => r.ai_extraction_status === "NeedsReview").length;
         void logActivity(
           "drawing",
-          existingLive.length ? "updated" : "created",
+          "created",
           { id: parentSetId, project_id: activeProject?.id, name: resolvedSetName },
           {
             projectId: activeProject?.id,
             projectName: activeProject?.name,
             description:
-              `${existingLive.length ? "Replaced" : "Imported"} ${createdRows} sheet${createdRows === 1 ? "" : "s"} in "${resolvedSetName}"` +
+              `Imported ${createdRows} sheet${createdRows === 1 ? "" : "s"} in "${resolvedSetName}"` +
               `${needsReviewCount ? ` (${needsReviewCount} flagged for review)` : ""}` +
               `${failedRows ? ` — ${failedRows} failed to save` : ""}`,
           },
@@ -420,7 +327,13 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
       if (onComplete) onComplete();
     } catch (err) {
       console.error("Create drawings error:", err);
-      setProcessError(`Failed to save drawings: ${err.message}`);
+      if (parentSetId) {
+        try { await invalidateAfterSave(null); }
+        catch (refreshError) { console.warn("Could not refresh incomplete drawing intake:", refreshError); }
+        setProcessError(`Drawing set "${resolvedSetName}" (${parentSetId}) has an incomplete import: ${err.message}. Inspect the register and revision tracking; do not re-upload under the same name or delete the source PDF automatically.`);
+      } else {
+        setProcessError(`Failed to save drawings: ${err.message}`);
+      }
     }
   };
 

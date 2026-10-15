@@ -114,6 +114,13 @@ beforeEach(() => {
 });
 
 describe("useDrawingSetCreation — cross-set supersede", () => {
+  it.each([0, 4])("refuses unconfirmed/out-of-range PDF page %s before creating a set", async (pdfPage) => {
+    const { handleCreate, state } = mount();
+    await handleCreate([{ ...SHEETS[0], pdfPage }]);
+    expect(m.setCreate).not.toHaveBeenCalled();
+    expect(m.bulkCreate).not.toHaveBeenCalled();
+    expect(state.setProcessError).toHaveBeenLastCalledWith(expect.stringMatching(/PDF page/i));
+  });
   it("supersedes the confirmed pages in the old set after the new rows are saved", async () => {
     const { handleCreate, state, qc, onComplete } = mount();
     await handleCreate(SHEETS, { supersedeIds: OLD_IDS });
@@ -198,8 +205,9 @@ describe("useDrawingSetCreation — cross-set supersede", () => {
     expect(onComplete).not.toHaveBeenCalled();
     expect(state.setStep).not.toHaveBeenCalledWith(5);
     expect(state.setProcessError).toHaveBeenLastCalledWith(
-      "Failed to save drawings: revision insert refused",
+      expect.stringMatching(/set-new.*incomplete.*revision insert refused.*do not re-upload/i),
     );
+    expect(m.invalidateEntities).toHaveBeenCalled();
   });
 
   it("never supersedes another set's pages when the user can't write drawings", async () => {
@@ -212,7 +220,7 @@ describe("useDrawingSetCreation — cross-set supersede", () => {
     expect(state.setStep).toHaveBeenLastCalledWith(5);
   });
 
-  it("uploading into an existing set: same-set rows go through the same-set replace, another set's page is superseded once", async () => {
+  it("refuses an existing set before replacing its source or retiring omitted sheets", async () => {
     const l2Live = [oldRow("l2-201", "S-201"), oldRow("l2-300", "S-300")];
     const l1Page = oldRow("l1-205", "S-205", "set-l1", "Main Steel – L1");
     rowsById = Object.fromEntries([...l2Live, l1Page].map((row) => [row.id, row]));
@@ -225,21 +233,34 @@ describe("useDrawingSetCreation — cross-set supersede", () => {
     // l2-201 is in the upload's own set: only the same-set replace may touch it.
     await handleCreate([uploadSheet("S-201", 1), uploadSheet("S-205", 2)], { supersedeIds: ["l1-205", "l2-201"] });
 
-    const callsFor = (id: string) => m.update.mock.calls.filter(([calledId]) => calledId === id);
-    expect(callsFor("l2-201")).toHaveLength(1);
-    expect(callsFor("l2-201")[0][1]).toMatchObject({ is_superseded: false, drawing_set_id: "set-l2" });
-    expect(callsFor("l2-300")).toEqual([["l2-300", { is_superseded: true }]]);
-    expect(callsFor("l1-205")).toHaveLength(1);
-    expect(callsFor("l1-205")[0][1]).toEqual({
-      is_superseded: true,
-      metadata: {
-        drawing_log: { row: "S-205" },
-        superseded_by: expect.objectContaining({ drawing_id: "new-S-205", drawing_set_id: "set-l2", drawing_set_name: "Main Steel – L2" }),
-      },
-    });
-    const result = lastSupersedeResult(state);
-    expect(result.superseded.map((item: { id: string }) => item.id)).toEqual(["l1-205"]);
-    expect(result.skipped).toEqual([expect.objectContaining({ id: "l2-201", skipReason: "now_in_this_set" })]);
+    expect(m.setUpdate).not.toHaveBeenCalled();
+    expect(m.update).not.toHaveBeenCalled();
+    expect(m.slip).not.toHaveBeenCalled();
+    expect(m.bulkCreate).not.toHaveBeenCalled();
+    expect(state.setStep).not.toHaveBeenCalledWith(5);
+    expect(state.setProcessError).toHaveBeenLastCalledWith(expect.stringMatching(/already exists.*New Revision/i));
+  });
+
+  it("does not restore a deleted set to reuse its name", async () => {
+    m.setFilter.mockImplementation(async (conditions: Record<string, unknown>) =>
+      conditions.is_deleted ? [{ id: "deleted-set", is_deleted: true }] : []);
+    const { handleCreate, state } = mount();
+    await handleCreate(SHEETS);
+    expect(m.setUpdate).not.toHaveBeenCalled();
+    expect(m.setCreate).not.toHaveBeenCalled();
+    expect(m.bulkCreate).not.toHaveBeenCalled();
+    expect(state.setProcessError).toHaveBeenLastCalledWith(expect.stringMatching(/already exists/i));
+  });
+
+  it("does not adopt another upload's set after a unique-name race", async () => {
+    m.setFilter.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "race-winner" }]);
+    m.setCreate.mockRejectedValueOnce(new Error("23505 duplicate key"));
+    const { handleCreate, state } = mount();
+    await handleCreate(SHEETS);
+    expect(m.setUpdate).not.toHaveBeenCalled();
+    expect(m.update).not.toHaveBeenCalled();
+    expect(m.bulkCreate).not.toHaveBeenCalled();
+    expect(state.setProcessError).toHaveBeenLastCalledWith(expect.stringMatching(/already exists/i));
   });
 
   it("does not start the phase once the upload was cancelled", async () => {

@@ -336,12 +336,20 @@ Sites artifact and promotion procedure above. Whole-app enterprise readiness,
 provider delivery, backup restore and authenticated workflow acceptance remain
 separate evidence requirements.
 
-**Current Detailing repairs (2026-10-15).** Drawing intake is reported to fail
-with `llm-proxy edge function failed: Failed to send a request to the Edge Function`.
-The Submittals create/edit dialog can also exceed the viewport and hide its
-heading and Create/Save/Cancel controls. Investigation and repair are in progress;
-neither issue is closed by the version 20 release. See the current entry at the
-top of [`TECH_DEBT.md`](./TECH_DEBT.md).
+**Current Detailing repairs (2026-10-15; source candidate only).** The repair
+branch bounds dialogs to the viewport, uses complete Submittals reads, preserves
+explicit PDF-page mappings and retains per-page manual intake after AI failure.
+New Set cannot adopt an existing/deleted set or retire its omitted sheets.
+In-place Apply Revision is temporarily held before any database mutation; use a
+uniquely named New Drawing Set and a new submittal for revised work. Existing
+sheet metadata edits cannot replace source, page or revision identity. Incomplete
+new imports identify their set and refresh the register, rather than advising a
+blind re-upload. These are safety mitigations, not a deployed transaction fix.
+The existing SQL transaction candidate remains uninstalled; protected direct
+writes, atomic creation/retry recovery and authenticated hosted acceptance remain
+release gates. The cause of the live signed-in `llm-proxy` transport failure is
+still unproven. None of these branch changes is part of the version 20 deployment.
+See [`TECH_DEBT.md`](./TECH_DEBT.md) for the remaining blockers.
 
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor
