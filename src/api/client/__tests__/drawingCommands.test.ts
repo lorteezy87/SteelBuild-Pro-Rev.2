@@ -61,6 +61,24 @@ beforeEach(() => {
   rpc.mockImplementation(async (name: string) => ({ data: name === 'get_drawing_command_capabilities' ? flags : resultFixture(), error: null }));
 });
 
+it('owner fence invalidated during capabilities prevents a mutation RPC', async () => {
+  let current = true;
+  rpc.mockImplementation(async () => { current = false; return { data: flags, error: null }; });
+  await expect(applyDrawingCommand(draftFixture(), { assertCurrent: () => {
+    if (!current) throw new DrawingCommandPreflightError('identity_changed');
+  } })).rejects.toMatchObject({ dispatched: false, code: 'identity_changed' });
+  expect(rpc).toHaveBeenCalledTimes(1);
+});
+
+it('receipt fence invalidated during Auth prevents stale lookup', async () => {
+  let current = true;
+  getUser.mockImplementation(async () => { current = false; return { data: { user: { id: actor } }, error: null }; });
+  await expect(getDrawingCommandReceipt(draftFixture(), { assertCurrent: () => {
+    if (!current) throw new DrawingCommandPreflightError('identity_changed');
+  } })).rejects.toMatchObject({ dispatched: false, code: 'identity_changed' });
+  expect(rpc).not.toHaveBeenCalled();
+});
+
 describe('strict response parsing', () => {
   it('matches complete reviewed project and accepts only server supplied hash', () => {
     const draft = draftFixture();

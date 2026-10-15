@@ -105,14 +105,21 @@ async function assertCurrentActor(actorId: string): Promise<void> {
   } catch { throw new DrawingCommandPreflightError('identity_changed'); }
 }
 
+/** Local cancellation only; never authority for SQL and never a claim of server rollback. */
+export interface DrawingCommandFence { readonly assertCurrent?: () => void }
+
 /** Preflight throws explicitly; only an attempted command RPC returns a write outcome. Never retries or falls back. */
-export async function applyDrawingCommand(draft: ReviewedDrawingCommand): Promise<DrawingCommandOutcome> {
+export async function applyDrawingCommand(draft: ReviewedDrawingCommand, fence: DrawingCommandFence = {}): Promise<DrawingCommandOutcome> {
+  fence.assertCurrent?.();
   const snapshot = await prepareDraft(draft);
+  fence.assertCurrent?.();
   const capabilities = await getDrawingCommandCapabilities(snapshot.owner.projectId);
+  fence.assertCurrent?.();
   if (!capabilities.new_set || !capabilities.revision || !capabilities.write_boundary || !capabilities.source_protection || !capabilities.receipt_lookup) {
     throw new DrawingCommandPreflightError('unavailable');
   }
   await assertCurrentActor(snapshot.owner.actorId);
+  fence.assertCurrent?.();
   try {
     const { data, error } = await supabase.rpc(snapshot.operation === 'create_set' ? 'create_drawing_set_from_review' : 'apply_drawing_set_revision', {
       p_request_id: snapshot.requestId, p_request: snapshot.payload as unknown as Json,
@@ -123,8 +130,10 @@ export async function applyDrawingCommand(draft: ReviewedDrawingCommand): Promis
 }
 
 /** Lookup uses the same complete reviewed JSON; server hash and actor namespace are authoritative. */
-export async function getDrawingCommandReceipt(draft: ReviewedDrawingCommand): Promise<DrawingCommandReceipt> {
+export async function getDrawingCommandReceipt(draft: ReviewedDrawingCommand, fence: DrawingCommandFence = {}): Promise<DrawingCommandReceipt> {
+  fence.assertCurrent?.();
   const snapshot = await prepareDraft(draft);
+  fence.assertCurrent?.();
   const { data, error } = await supabase.rpc('get_drawing_command_receipt', {
     p_request_id: snapshot.requestId, p_operation: snapshot.operation, p_request: snapshot.payload as unknown as Json,
   });
