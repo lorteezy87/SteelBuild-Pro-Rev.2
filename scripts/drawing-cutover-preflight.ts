@@ -62,16 +62,17 @@ const catalogSchema = z.object({
     privileges: z.array(privilege.extend({ delete: z.boolean(), truncate: z.boolean(), trigger: z.boolean() })) }).passthrough()),
   columns: z.array(z.object({ table: z.string(), name: z.string(), type: z.string(), default: z.string().nullable(),
     notNull: z.boolean(), identity: z.string(), generated: z.string(), acl, privileges: z.array(privilege) }).passthrough()),
-  roles: z.array(z.object({ name: z.string(), inherits: z.boolean(), superuser: z.boolean(), bypassRls: z.boolean(), config: z.array(z.string()) })),
+  roles: z.array(z.object({ name: z.string(), inherits: z.boolean(), superuser: z.boolean(), bypassRls: z.boolean(),
+    createRole: z.boolean(), createDb: z.boolean(), replication: z.boolean(), config: z.array(z.string()) })),
   roleMemberships: z.array(z.object({ member: z.string(), role: z.string(), inherit: z.boolean(), set: z.boolean() })),
-  functions: z.array(hashed.extend({ schema: z.string(), name: z.string(), securityDefiner: z.boolean(), volatility: z.string(),
+  functions: z.array(hashed.extend({ schema: z.string(), name: z.string(), owner: z.string(), securityDefiner: z.boolean(), volatility: z.string(),
     returns: z.string().nullable(), sourceMentionsProtected: z.boolean(), hasMutationTokens: z.boolean(), dynamicSql: z.boolean(),
     calls: z.array(z.string()), config: z.array(z.string()), acl,
     privileges: z.array(z.object({ role: z.string(), execute: z.boolean(), schemaUsage: z.boolean() })) })),
   policies: z.array(hashed.extend({ table: z.string(), permissive: z.boolean(), command: z.string() })),
   triggers: z.array(hashed.extend({ table: z.string(), enabled: z.string(), function: z.string(), definition: z.string() })),
   constraints: z.array(hashed), indexes: z.array(hashed), views: z.array(hashed),
-  schemas: z.array(z.record(z.unknown())), defaultPrivileges: z.array(z.record(z.unknown())),
+  schemas: z.array(z.object({ identity: z.string(), owner: z.string(), acl: z.string().nullable() })), defaultPrivileges: z.array(z.record(z.unknown())),
   settings: z.array(z.object({ database: z.string().nullable(), role: z.string().nullable(), config: z.array(z.string()) })),
   counts: z.record(z.number().int().nonnegative()),
 });
@@ -82,6 +83,7 @@ const reviewSchema = z.object({
   callers: z.array(callerReview), siblingCallers: z.array(callerReview.extend({ commit: z.string().regex(/^[a-f0-9]{40}$/) })),
   definitions: z.array(z.object({ identity: z.string(), definitionHash: z.string().regex(/^[a-f0-9]{64}$/),
     decision: z.enum(['approved-command', 'reviewed-non-drawing', 'internal-only']), evidence: z.string().min(12) })),
+  guardBindings: z.array(z.object({ table: z.string(), triggerIdentity: z.string(), functionIdentity: z.string() })),
   // Explicit review evidence, never booleans inferred from object/function names.
   boundaryEvidence: z.string().min(12), sourceProtectionEvidence: z.string().min(12), erasureExportEvidence: z.string().min(12),
   storageEvidence: z.string().min(12), authEvidence: z.string().min(12),
@@ -139,6 +141,24 @@ export function validateDrawingCutoverPreflight(snapshot: unknown, expectedRef: 
   let changed = true;
   while (changed) { changed = false; for (const m of catalog.roleMemberships) if (accessible.has(m.member)
     && (m.inherit || m.set) && !accessible.has(m.role)) { accessible.add(m.role); changed = true; } }
+  // ACL revocation does not remove an owner's ALTER/GRANT authority. Keep each
+  // API principal separate so anon/authenticated cannot inherit service_role's
+  // intentional platform bypass exception through a SET-able membership.
+  for (const root of API_ROLES) {
+    const reachable = new Set([root]);
+    changed = true;
+    while (changed) { changed = false; for (const m of catalog.roleMemberships) if (reachable.has(m.member)
+      && (m.inherit || m.set) && !reachable.has(m.role)) { reachable.add(m.role); changed = true; } }
+    for (const role of reachable) {
+      const entry = catalog.roles.find(r => r.name === role);
+      if (!entry) finding('INCOMPLETE_SNAPSHOT', `Missing reachable role attributes for ${root}.`, role);
+      else if (entry.superuser || entry.createRole || entry.createDb || entry.replication
+        || (entry.bypassRls && !(root === 'service_role' && role === 'service_role')))
+        finding('API_REACHABLE_ROLE_UNSAFE', `${root} can reach a role with administrative or RLS-bypass attributes.`, role);
+    }
+    for (const owned of [...catalog.tables, ...catalog.schemas, ...catalog.functions]) if (reachable.has(owned.owner))
+      finding('API_REACHABLE_OWNER', `${root} can reach owner ${owned.owner}; revoked DML/EXECUTE ACLs do not remove ownership authority.`, owned.identity);
+  }
   for (const table of catalog.tables.filter(t => CORE_TABLES.includes(t.identity) || t.identity.startsWith('steelbuild_drawing_revision.'))) {
     if (table.privileges.some(p => API_ROLES.includes(p.role) && (p.insert || p.update || p.delete || p.truncate || p.trigger || p.references))
       || table.acl.some(a => accessible.has(a.grantee) && ['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'TRIGGER', 'REFERENCES'].includes(a.privilege)))
@@ -152,17 +172,26 @@ export function validateDrawingCutoverPreflight(snapshot: unknown, expectedRef: 
         || (a.privilege === 'UPDATE' && (!permitted || a.grantee !== 'authenticated')))))
       finding('PROTECTED_COLUMN_WRITE', 'Protected column is writable through a direct, PUBLIC or inherited privilege.', `${column.table}.${column.name}`);
   }
+  const effectiveSetting = (role: string, key: string): string | null => {
+    const prefix = `${key}=`;
+    const configValue = (config: readonly string[]) => config.find(v => v.startsWith(prefix))?.slice(prefix.length);
+    const scoped = (database: string | null, principal: string | null) => configValue(catalog.settings
+      .find(s => s.database === database && s.role === principal)?.config ?? []);
+    // PostgreSQL precedence: database < role < database-and-role. Preserve an
+    // explicit empty value; it disables a pre-request hook rather than falling back.
+    return scoped(catalog.database, role) ?? scoped(null, role)
+      ?? configValue(catalog.roles.find(r => r.name === role)?.config ?? [])
+      ?? scoped(catalog.database, null) ?? null;
+  };
   for (const role of ['anon', 'authenticated', 'authenticator']) {
     const entry = catalog.roles.find(r => r.name === role);
-    const databaseRole = catalog.settings.find(s => s.database === catalog.database && s.role === role);
-    const timeout = (databaseRole?.config.find(v => v.startsWith('statement_timeout='))
-      ?? entry?.config.find(v => v.startsWith('statement_timeout=')))?.slice('statement_timeout='.length) ?? null;
+    const timeout = effectiveSetting(role, 'statement_timeout');
     report.apiDeadlines.push({ role, statementTimeout: timeout });
     if (!entry || entry.superuser || entry.bypassRls) finding('API_ROLE_UNSAFE', 'API role missing or bypasses RLS.', role);
     if (!timeout || !/^(?:\d+(?:\.\d+)?)(?:ms|s|min|h|d)?$/.test(timeout) || Number.parseFloat(timeout) <= 0)
       finding('API_DEADLINE_UNBOUNDED', 'Missing/unbounded installed API deadline; no shared role setting may be changed implicitly.', role);
   }
-  if (!catalog.roles.find(r => r.name === 'authenticator')?.config.includes('pgrst.db_pre_request=steelbuild_security.check_request_mfa'))
+  if (effectiveSetting('authenticator', 'pgrst.db_pre_request') !== 'steelbuild_security.check_request_mfa')
     finding('MFA_HOOK_UNREVIEWED', 'Expected installed PostgREST MFA hook is absent.');
   const reviewResult = reviewSchema.safeParse(parsed.data.review);
   const review = reviewResult.success ? reviewResult.data : null;
@@ -172,6 +201,20 @@ export function validateDrawingCutoverPreflight(snapshot: unknown, expectedRef: 
   if (review && review.catalogSha256 !== hash) finding('CATALOG_DRIFT', 'Review fingerprint does not match this exact catalog serialization.');
   const approved = (identity: string, definitionHash: string, decision?: string) => review?.definitions.some(d =>
     d.identity === identity && d.definitionHash === definitionHash && (!decision || d.decision === decision)) ?? false;
+  const canonicalSignature = (signature: string) => signature.replace(/,\s*/g, ',');
+  const guardQueue = [...catalog.triggers.map(t => t.function), 'steelbuild_security.check_request_mfa()'];
+  const checkedGuards = new Set<string>();
+  while (guardQueue.length) {
+    const identity = guardQueue.pop()!;
+    const key = canonicalSignature(identity);
+    if (checkedGuards.has(key)) continue;
+    checkedGuards.add(key);
+    const guard = catalog.functions.find(f => canonicalSignature(f.identity) === key);
+    if (!guard) { finding('GUARD_FUNCTION_MISSING', 'A captured guard or helper dependency has no captured function body/hash.', identity); continue; }
+    if (!approved(guard.identity, guard.definitionHash))
+      finding('GUARD_FUNCTION_NOT_REVIEWED', 'Guard/helper implementation requires approval for this exact definition hash.', guard.identity);
+    guardQueue.push(...guard.calls);
+  }
   // Volatile definers can dispatch through helpers/extensions without recognizable DML.
   // Classify all callable ones conservatively, not only names or bodies that mention drawings.
   const dangerous = new Set(catalog.functions.filter(f => f.volatility === 'v' || f.dynamicSql
@@ -196,7 +239,6 @@ export function validateDrawingCutoverPreflight(snapshot: unknown, expectedRef: 
     if (!f.config.some(v => v.startsWith('search_path='))) finding('DEFINER_SEARCH_PATH', 'Callable privileged writer has no fixed search_path.', f.identity);
   }
   for (const command of COMMANDS) {
-    const canonicalSignature = (signature: string) => signature.replace(/,\s*/g, ',');
     const installed = catalog.functions.find(f => canonicalSignature(f.identity) === canonicalSignature(command.signature));
     if (!installed || !approved(installed.identity, installed.definitionHash, 'approved-command'))
       finding('COMMAND_NOT_REVIEWED', 'Required exact command definition has not been reviewed as installed.', command.signature);
@@ -206,8 +248,13 @@ export function validateDrawingCutoverPreflight(snapshot: unknown, expectedRef: 
   for (const definition of [...catalog.policies, ...catalog.triggers, ...catalog.views, ...catalog.indexes, ...catalog.constraints]) {
     if (!approved(definition.identity, definition.definitionHash)) finding('DEFINITION_NOT_REVIEWED', 'Policy/trigger/view hash needs explicit review, including restrictive policies and source-bound callers.', definition.identity);
   }
-  for (const table of CORE_TABLES) if (!catalog.triggers.some(t => t.table === table && ['O','A'].includes(t.enabled)))
-    finding('SOURCE_PROTECTION_MISSING', 'No enabled guard captured for this protected table.', table);
+  for (const table of CORE_TABLES) {
+    const bindings = review?.guardBindings.filter(b => b.table === table) ?? [];
+    if (!bindings.length || bindings.some(binding => !catalog.triggers.some(t => t.table === table
+      && t.identity === binding.triggerIdentity && ['O','A'].includes(t.enabled)
+      && canonicalSignature(t.function) === canonicalSignature(binding.functionIdentity))))
+      finding('SOURCE_GUARD_BINDING_MISSING', 'The exact reviewed source-guard declaration/function binding must be present and enabled; an arbitrary trigger is insufficient.', table);
+  }
   for (const path of DRAWING_CALLER_PATHS) if (!review?.callers.some(c => c.path === path)) finding('CALLER_UNRESOLVED', 'Runtime writer/consumer must be migrated, read-only, metadata-only, RPC-only or explicitly held.', path);
   if (SIBLING_PATHS.some(path => !review?.siblingCallers.some(c => c.path === path)))
     finding('SIBLING_CALLERS_UNRESOLVED', 'Pinned sibling split writers require a coordinated caller/owner decision; names/hashes never imply compatibility.');

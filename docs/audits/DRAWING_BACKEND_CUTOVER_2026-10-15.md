@@ -4,12 +4,12 @@ Task 1 source/capture inventory, not an installed backend or production release.
 
 ## Captured evidence and limits
 
-The committed SELECT-only collector is `supabase/tests/drawing-set-revision-transaction/preflight.sql`. Both captures ran through approved Supabase `execute_sql` with their explicit project refs. Complete JSON lives in the ignored `.superpowers/sdd/2026-10-15-drawing-backend-cutover/` workspace; full preflight reports are adjacent. These artifacts contain catalogs, definition SHA-256 hashes, policies, ACLs, defaults and role settings, not customer rows, auth factors, object names, credentials or function bodies.
+The committed SELECT-only collector is `supabase/tests/drawing-set-revision-transaction/preflight.sql`. Both captures ran through approved Supabase `execute_sql` with their explicit project refs. Complete JSON lives in the ignored `.superpowers/sdd/2026-10-15-drawing-backend-cutover/` workspace; latest files are `catalog-production-r1-final.json` and `catalog-staging-r1-final.json`, with adjacent `preflight-*-report-r1-final.json` reports. Original captures remain historical evidence. These artifacts contain catalogs, definition SHA-256 hashes, policies, ACLs, defaults and role settings, not customer rows, auth factors, object names, credentials or function bodies.
 
 | Target | Catalog UTC time | Capture file SHA-256 |
 | --- | --- | --- |
-| Production `kjrwqagyeswwoxpjkcko` | 2026-10-15T19:55:59.777290Z | `659bc51739f176bfaab2323d5ed599584252e31bc36d875bea217b9432e6eaed` |
-| Staging `ndyfjffsulfbwpmwdmic` | 2026-10-15T19:55:36.244836Z | `e1aabf5382864ff32a38bbb297660010dde58a2be816974c652e099e4d83cce5` |
+| Production `kjrwqagyeswwoxpjkcko` | 2026-10-15T20:23:24.328041Z | `ccb0302b92277b6377409101032ea11e37851e4de54de96dd9c76149ebbb102a` |
+| Staging `ndyfjffsulfbwpmwdmic` | 2026-10-15T20:23:17.841779Z | `6f8baa96f5e57e120f4608173bc4f4ad8a79cc144b51875f14334fc30b4f76d9` |
 
 The envelope `projectRef` records the target selected by the operator/tool. Offline JSON validation is **not cryptographic proof of project origin**. The database name `postgres` cannot distinguish these targets. Management `get_project` confirmed production; staging SQL succeeds but top-level `get_project` reports not found for this branch ref. Do not relabel production as staging. Production can never return `readyForStaging=true`, even if supplied as the expected ref.
 
@@ -17,7 +17,7 @@ The envelope `projectRef` records the target selected by the operator/tool. Offl
 | --- | ---: | ---: |
 | Tables / columns | 14 / 362 | 14 / 362 |
 | Core columns (drawings / sets / revisions) | 48 / 47 / 26 | 48 / 47 / 26 |
-| Functions / policies / triggers | 422 / 57 / 42 | 410 / 52 / 42 |
+| Functions / policies / triggers | 445 / 57 / 42 | 433 / 52 / 42 |
 | Constraints / indexes | 124 / 100 | 124 / 102 |
 | Roles / membership edges / default ACLs | 32 / 23 / 33 | 32 / 26 / 25 |
 
@@ -25,7 +25,11 @@ Staging adds `idx_drawing_holds_drawing_active` and `idx_submittal_rounds_submit
 
 All three core tables have RLS enabled, not FORCE RLS, and direct authenticated/service-role `INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES` privileges; anon has none. Column-level effective checks consequently also permit protected source writes. No API-root inherited role grant was found beyond the captured memberships, but the validator traverses both inherited and SET-able roles and checks PUBLIC/table/column ACLs independently. RLS does not replace this privilege boundary, and privileged administrators retain their PostgreSQL capabilities.
 
+Review round 1 added captured `createRole`, `createDb` and `replication` attributes and checks ownership independently of ACLs for every API-reachable captured table, schema and routine. Reachability is computed per API principal, including NOINHERIT/SET-able memberships. Superuser, role/database creation, replication and reachable BYPASSRLS attributes block readiness; only the platform `service_role` principal's own existing BYPASSRLS is intentional. An anon/authenticated route to that role still blocks. No API-reachable ownership or dangerous-role findings appeared in the fresh captures; this does not weaken the existing broad-grant blockers.
+
 Installed API deadlines on **both** targets: `anon=3s`, `authenticated=8s`, `authenticator=8s`; authenticator also has `lock_timeout=8s` and `pgrst.db_pre_request=steelbuild_security.check_request_mfa`. The management SQL session's 2-minute timeout is not the API timeout. The validator checks scoped database-role overrides and zero/unbounded function overrides too. Missing/unbounded deadlines block hosted testing; never alter shared roles silently. Future drawing commands still require their separately reviewed function-local 2-second lock timeout and bounded ordered NOWAIT locking.
+
+The timeout and MFA-hook checks now share effective-setting precedence: database-only settings, then role settings, then database-and-role settings. Empty hook overrides are preserved and rejected, not treated as a reason to fall back to the role's approved hook. The fresh captures retain the expected effective MFA hook and deadlines.
 
 ## Exact direct-operation matrix for Task 4
 
@@ -141,6 +145,8 @@ Both targets' app-files Storage policies permit org-scoped upload/read and objec
 
 The validator does not infer safe behavior from a name, hash, stability label or sibling SQL lineage. It conservatively inventories every callable volatile SECURITY DEFINER plus recognizable/dynamic/transitive potential writer and requires exact-hash review. Lexical call extraction over-approximates PL/pgSQL; it can classify read helpers as candidates. Extension/external dispatch needs source review because pg_depend does not prove PL/pgSQL dependencies. A missing review produces a stop finding, not a grant-revocation plan.
 
+Every captured trigger function, the MFA hook, and their captured helper dependency closure must exist and receive exact-definition-hash approval even when the function returns `trigger` or is not API-callable. Explicit `review.guardBindings` entries bind each core table to its reviewed trigger identity and guard function identity; declarations must match and be enabled. An arbitrary audit trigger is insufficient. The collector now also inventories Auth/Storage function hashes so `storage.protect_delete()` and `storage.update_updated_at_column()` and their helpers are captured rather than silently excluded. Both fresh catalogs contain the full captured guard closure: zero missing-body findings, with 52 guard/helper exact-hash reviews still unresolved because no cutover approval manifest has been supplied.
+
 At capture there are **105 production / 102 staging potential privileged paths unclassified by a cutover review**. These are not 105/102 confirmed vulnerabilities. The production-only Blueline private rows below have ACL EXECUTE but no effective API schema USAGE and are explicitly distinguished. Fully reviewed out-of-scope helpers may receive an exact-hash reviewed exclusion; never broad-revoke unrelated billing, piece, workspace or sibling RPCs. The three erasure trigger/dependent helpers above are not callable and are absent from this potential-callable list.
 
 | Potential privileged path (all currently unclassified for cutover) | Effective API exposure | Definition SHA-256 |
@@ -255,7 +261,7 @@ At capture there are **105 production / 102 staging potential privileged paths u
 
 Run `node --experimental-strip-types scripts/drawing-cutover-preflight.ts <saved-catalog.json> <expected-ref>`. It accepts exactly two positional arguments, has no apply flag, and imports no DB client. Exit 0 means reviewed staging preconditions only; exit 1 means readiness blocked; exit 2 means CLI/read/JSON error. Both real captures return exit1 and `readyForStaging=false`, as expected before Tasks 2–4 and caller coordination. This does not block implementing their source candidates.
 
-The exact saved-catalog schema is defined in the validator. Missing/malformed/empty required sections, count mismatches, missing core columns/role privilege samples, broad/inherited grants, unbounded deadlines, unclassified definers, missing commands/private source tables, unreviewed schema hashes and unresolved callers fail closed. Required reviews include pinned source commit, exact catalog serialization fingerprint, definition hashes with reviewed decisions and evidence, caller dispositions, coordinated pinned sibling callers, and explicit boundary/source/Storage/Auth/export-erasure evidence. A current function-name list or a bare capability flag is insufficient. A synthetic fully reviewed fixture proves the validator can return true; it is never treated as hosted evidence.
+The exact saved-catalog schema is defined in the validator. Missing/malformed/empty required sections, count mismatches, missing core columns/role privilege samples, broad/inherited grants, API-reachable ownership/admin attributes, overridden MFA hooks, unbounded deadlines, unclassified definers, missing commands/private source tables, missing/unreviewed guard/helper bodies, unreviewed schema hashes and unresolved callers fail closed. Required reviews include pinned source commit, exact catalog serialization fingerprint, definition hashes with reviewed decisions and evidence, explicit per-table `guardBindings`, caller dispositions, coordinated pinned sibling callers, and explicit boundary/source/Storage/Auth/export-erasure evidence. A current function-name list or a bare capability flag is insufficient. A synthetic fully reviewed fixture proves the validator can return true; it is never treated as hosted evidence. Historical captures without the newly required role attributes must be refreshed and are rejected as incomplete rather than having their missing authority flags assumed false.
 
 Remaining gates: implement/review atomic commands and source guards; prove exact disposable-PostgreSQL behavior and privilege denial; retire every reachable split writer; coordinate sibling callers/ownership; install only the complete staging package through reviewed backend release; perform authenticated source/PDF/page/receipt/export/erasure acceptance; prepare an exact production proposal. Production application/publication requires new exact-change approval and is outside this task.
 

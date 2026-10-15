@@ -7,7 +7,8 @@ WITH app_functions AS (
     format('%I.%I(%s)', n.nspname, p.proname, oidvectortypes(p.proargtypes)) AS identity,
     encode(sha256(convert_to(pg_get_functiondef(p.oid), 'UTF8')), 'hex') AS definition_hash
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-  WHERE p.prokind IN ('f','p') AND n.nspname NOT IN ('pg_catalog','information_schema','auth','storage')
+  -- Include Auth/Storage guard implementations and their helpers as hashes too.
+  WHERE p.prokind IN ('f','p') AND n.nspname NOT IN ('pg_catalog','information_schema')
     AND n.nspname !~ '^pg_'
     AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid='pg_proc'::regclass
       AND d.objid=p.oid AND d.deptype='e')
@@ -103,6 +104,7 @@ WITH app_functions AS (
     'constraints',coalesce((SELECT jsonb_agg(row) FROM constraint_rows),'[]'::jsonb),
     'indexes',coalesce((SELECT jsonb_agg(row) FROM index_rows),'[]'::jsonb),
     'roles',(SELECT jsonb_agg(jsonb_build_object('name',rolname,'inherits',rolinherit,'superuser',rolsuper,
+      'createRole',rolcreaterole,'createDb',rolcreatedb,'replication',rolreplication,
       'bypassRls',rolbypassrls,'config',ARRAY(SELECT v FROM unnest(rolconfig) v
         WHERE v ~ '^(statement_timeout|lock_timeout|pgrst\.(db_pre_request|db_schemas|db_max_rows))=')) ORDER BY rolname) FROM pg_roles),
     'roleMemberships',coalesce((SELECT jsonb_agg(jsonb_build_object('member',m.rolname,'role',r.rolname,

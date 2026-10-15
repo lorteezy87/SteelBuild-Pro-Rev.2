@@ -39,11 +39,13 @@ function snapshot() {
     ],
     roles: ['anon', 'authenticated', 'service_role', 'authenticator'].map(name => ({
       name, superuser: false, bypassRls: name === 'service_role', inherits: true,
+      createRole: false, createDb: false, replication: false,
       config: ['statement_timeout=8s', ...(name === 'authenticator'
         ? ['pgrst.db_pre_request=steelbuild_security.check_request_mfa'] : [])],
     })),
     roleMemberships: [] as { member: string; role: string; inherit: boolean; set: boolean }[],
     functions: [{ identity: 'public.rogue_writer()', definitionHash: HASH, schema: 'public', name: 'rogue_writer',
+      owner: 'postgres',
       securityDefiner: true, volatility: 'v', returns: 'void', sourceMentionsProtected: true,
       hasMutationTokens: true, dynamicSql: false, calls: [] as string[], config: ['search_path=public'], acl: [],
       privileges: ['anon', 'authenticated', 'service_role'].map(role => ({ role, execute: role === 'authenticated', schemaUsage: true })) }],
@@ -158,6 +160,13 @@ function reviewedSnapshot() {
     'hard_delete_organization(uuid, text)', 'reset_org_data(uuid, text)', 'erase_my_account(text)', 'erase_my_sole_member_workspaces(text)',
     'reconcile_submittal_round_evidence(uuid, uuid, timestamp with time zone, text, uuid, uuid[], text)',
   ].map(signature => ({ ...input.catalog.functions[0], identity: `public.${signature}`, name: signature.split('(')[0] }));
+  input.catalog.functions.push(...[
+    { identity: 'private.guard()', name: 'guard', returns: 'trigger', calls: ['private.guard_helper()'] },
+    { identity: 'private.guard_helper()', name: 'guard_helper', returns: 'boolean', calls: [] },
+    { identity: 'steelbuild_security.check_request_mfa()', name: 'check_request_mfa', returns: 'void', calls: ['steelbuild_security.satisfies_mfa()'] },
+    { identity: 'steelbuild_security.satisfies_mfa()', name: 'satisfies_mfa', returns: 'boolean', calls: [] },
+  ].map(fields => ({ ...input.catalog.functions[0], ...fields, schema: fields.identity.split('.')[0], volatility: 's',
+    privileges: ['anon', 'authenticated', 'service_role'].map(role => ({ role, execute: false, schemaUsage: false })) })));
   input.catalog.tables.push(...['steelbuild_drawing_revision.requests', 'steelbuild_drawing_revision.source_observations']
     .map(identity => ({ ...input.catalog.tables[0], identity, privileges: permissions() })));
   const record = (identity: string) => ({ identity, definitionHash: HASH });
@@ -167,7 +176,7 @@ function reviewedSnapshot() {
     })),
     policies: [{ ...record('storage.objects.source_protection'), table: 'storage.objects', permissive: false, command: '*' }],
     constraints: [record('public.drawings.source_check')], indexes: [record('public.drawings.source_unique')],
-    schemas: [{ identity: 'public' }],
+    schemas: [{ identity: 'public', owner: 'postgres', acl: null }, { identity: 'private', owner: 'postgres', acl: null }],
   });
   for (const [key, rows] of Object.entries(input.catalog)) if (Array.isArray(rows)) input.catalog.counts[key] = rows.length;
   const paths = ['src/api/client/entities.ts', 'src/lib/drawingHub/revisions.js', 'src/lib/drawingHub/proposals.js',
@@ -190,6 +199,9 @@ function reviewedSnapshot() {
     definitions: [...input.catalog.functions, ...input.catalog.triggers, ...input.catalog.policies,
       ...input.catalog.indexes, ...input.catalog.constraints].map(d => ({ identity: (d as { identity: string }).identity,
       definitionHash: HASH, decision: 'approved-command', evidence: 'Synthetic reviewed definition fixture' })),
+    guardBindings: ['public.drawings', 'public.drawing_sets', 'public.drawing_revisions'].map(table => ({
+      table, triggerIdentity: `${table}.boundary`, functionIdentity: 'private.guard()',
+    })),
     boundaryEvidence: 'Synthetic reviewed boundary', sourceProtectionEvidence: 'Synthetic source protections',
     erasureExportEvidence: 'Synthetic erasure and export', storageEvidence: 'Synthetic reviewed Storage', authEvidence: 'Synthetic reviewed Auth',
   } };
@@ -236,5 +248,83 @@ describe('reviewed package evidence', () => {
   it('requires all API effective function privileges, not a partial role sample', () => {
     const input = reviewedSnapshot(); input.catalog.functions[0].privileges.pop();
     expect(validateDrawingCutoverPreflight(input, STAGING).findings.some(f => f.code === 'INCOMPLETE_SNAPSHOT')).toBe(true);
+  });
+});
+
+function refreshEvidence(input: ReturnType<typeof reviewedSnapshot>) {
+  for (const [key, rows] of Object.entries(input.catalog)) if (Array.isArray(rows)) input.catalog.counts[key] = rows.length;
+  input.review.catalogSha256 = createHash('sha256').update(JSON.stringify(input.catalog)).digest('hex');
+  return input;
+}
+
+describe('review round 1 fail-closed boundaries', () => {
+  it('does not replace an explicitly reviewed source guard with any enabled trigger', () => {
+    const input = reviewedSnapshot();
+    const replacement = { identity: 'public.drawings.audit_only', definitionHash: HASH, table: 'public.drawings',
+      enabled: 'O', function: 'private.guard()', definition: 'BEFORE UPDATE audit_only' };
+    Object.assign(input.catalog, { triggers: [replacement,
+      ...input.catalog.triggers.filter(t => (t as { table: string }).table !== 'public.drawings')] });
+    input.review.definitions.push({ identity: replacement.identity, definitionHash: HASH,
+      decision: 'approved-command', evidence: 'Synthetic reviewed audit declaration' });
+    const report = validateDrawingCutoverPreflight(refreshEvidence(input), STAGING);
+    expect(report.readyForStaging).toBe(false);
+    expect(report.findings.some(f => f.code === 'SOURCE_GUARD_BINDING_MISSING')).toBe(true);
+  });
+  it.each(['private.guard()', 'private.guard_helper()'])('rejects a missing guard/dependency body %s', identity => {
+    const input = reviewedSnapshot();
+    input.catalog.functions = input.catalog.functions.filter(f => f.identity !== identity);
+    const report = validateDrawingCutoverPreflight(refreshEvidence(input), STAGING);
+    expect(report.readyForStaging).toBe(false);
+    expect(report.findings.some(f => f.code === 'GUARD_FUNCTION_MISSING' && f.identity === identity)).toBe(true);
+  });
+  it.each(['private.guard()', 'private.guard_helper()'])('rejects an unapproved changed guard/dependency hash %s', identity => {
+    const input = reviewedSnapshot();
+    input.catalog.functions.find(f => f.identity === identity)!.definitionHash = 'e'.repeat(64);
+    const report = validateDrawingCutoverPreflight(refreshEvidence(input), STAGING);
+    expect(report.readyForStaging).toBe(false);
+    expect(report.findings.some(f => f.code === 'GUARD_FUNCTION_NOT_REVIEWED' && f.identity === identity)).toBe(true);
+  });
+  it.each(['', 'other_schema.unreviewed_hook'])('rejects an effective database-role MFA hook override %j', hook => {
+    const input = reviewedSnapshot();
+    Object.assign(input.catalog, { settings: [{ database: 'postgres', role: 'authenticator', config: [`pgrst.db_pre_request=${hook}`] }] });
+    const report = validateDrawingCutoverPreflight(refreshEvidence(input), STAGING);
+    expect(report.readyForStaging).toBe(false);
+    expect(report.findings.some(f => f.code === 'MFA_HOOK_UNREVIEWED')).toBe(true);
+  });
+  it('retains the approved effective MFA hook when it overrides a database-only setting', () => {
+    const input = reviewedSnapshot();
+    Object.assign(input.catalog, { settings: [
+      { database: 'postgres', role: null, config: ['pgrst.db_pre_request=database_only_hook'] },
+      { database: 'postgres', role: 'authenticator', config: ['pgrst.db_pre_request=steelbuild_security.check_request_mfa'] },
+    ] });
+    expect(validateDrawingCutoverPreflight(refreshEvidence(input), STAGING).readyForStaging).toBe(true);
+  });
+  it.each(['table', 'schema', 'routine'])('rejects SET-able %s ownership even with revoked DML ACLs', kind => {
+    const input = reviewedSnapshot();
+    input.catalog.roles.push({ ...input.catalog.roles[0], name: 'settable_owner', inherits: false });
+    input.catalog.roleMemberships.push({ member: 'authenticated', role: 'settable_owner', inherit: false, set: true });
+    if (kind === 'table') input.catalog.tables[0].owner = 'settable_owner';
+    if (kind === 'schema') Object.assign(input.catalog, { schemas: [{ identity: 'public', owner: 'settable_owner', acl: null },
+      { identity: 'private', owner: 'postgres', acl: null }] });
+    if (kind === 'routine') input.catalog.functions[0].owner = 'settable_owner';
+    const report = validateDrawingCutoverPreflight(refreshEvidence(input), STAGING);
+    expect(report.readyForStaging).toBe(false);
+    expect(report.findings.some(f => f.code === 'API_REACHABLE_OWNER')).toBe(true);
+  });
+  it.each(['superuser', 'bypassRls', 'createRole', 'createDb', 'replication'] as const)(
+    'rejects dangerous %s attributes on a SET-able reachable role', attribute => {
+      const input = reviewedSnapshot();
+      input.catalog.roles.push({ ...input.catalog.roles[0], name: 'settable_admin', [attribute]: true });
+      input.catalog.roleMemberships.push({ member: 'authenticated', role: 'settable_admin', inherit: false, set: true });
+      const report = validateDrawingCutoverPreflight(refreshEvidence(input), STAGING);
+      expect(report.readyForStaging).toBe(false);
+      expect(report.findings.some(f => f.code === 'API_REACHABLE_ROLE_UNSAFE')).toBe(true);
+    });
+  it('rejects an authenticated route to the intentional service-role bypass', () => {
+    const input = reviewedSnapshot();
+    input.catalog.roleMemberships.push({ member: 'authenticated', role: 'service_role', inherit: false, set: true });
+    const report = validateDrawingCutoverPreflight(refreshEvidence(input), STAGING);
+    expect(report.readyForStaging).toBe(false);
+    expect(report.findings.some(f => f.code === 'API_REACHABLE_ROLE_UNSAFE')).toBe(true);
   });
 });
