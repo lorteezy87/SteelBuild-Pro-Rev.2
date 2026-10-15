@@ -19,6 +19,75 @@ export async function runBoundaryCases(db:Database){
     return authenticated(()=>roundExecute(db,c));
   }
   async function approval(set=ids.set){return (await db.query('select set_approval_status status from public.drawing_sets where id=$1',[set])).rows[0].status;}
+  for(const create of [false,true])for(const phase of ['receipt','revision_insert','before_row'])
+    await check(`immediateWriterCannotBorrowIntake ${create?'create':'revise'} ${phase}`,async()=>{
+      const payload=await (create?createRequest:request)(db);
+      const body=phase==='before_row'?"new.file_url:='unreviewed.pdf';return new;":
+        `update public.drawings set file_url='unreviewed.pdf' where id=${phase==='receipt'?'(select id from public.drawings where drawing_set_id=new.set_id order by id limit 1)':'new.drawing_id'};return new;`;
+      await db.exec(`create function public.immediate_source_writer() returns trigger language plpgsql security definer set search_path='' as $$ begin ${body}end $$;
+        create trigger zzz_immediate_source_writer ${phase==='before_row'?`before ${create?'insert':'update'} on public.drawings`:phase==='receipt'?'after insert on steelbuild_drawing_revision.requests':'after insert on public.drawing_revisions'}
+        for each row execute function public.immediate_source_writer()`);
+      await denied(db,()=>(create?createSet:execute)(db,payload),/COMMAND_REQUIRED|TRANSITION/);
+      assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,0);
+    });
+  await check('immediateDailyWriterCannotBorrowPublicationValues',async()=>{
+    await db.exec(`create function public.immediate_publication_writer() returns trigger language plpgsql security definer set search_path='' as $$ begin
+      update public.drawing_revisions set release_status='released_for_shop' where id='${ids.revision}';return new;end $$;
+      create trigger immediate_publication_writer after insert on public.drawing_activity for each row execute function public.immediate_publication_writer()`);
+    await denied(db,()=>db.query('select public.publish_drawing_revision($1,$2)',[ids.revision,'reviewed']),/COMMAND_REQUIRED|TRANSITION/);
+  });
+  await check('immediateCountWriterCannotInventDerivedCounts',async()=>{
+    await db.exec(`create function public.immediate_count_writer() returns trigger language plpgsql security definer set search_path='' as $$ begin
+      update public.drawing_sets set sheet_count=999 where id=new.set_id;return new;end $$;
+      create trigger immediate_count_writer after insert on steelbuild_drawing_revision.requests for each row execute function public.immediate_count_writer()`);
+    await denied(db,()=>request(db).then(p=>execute(db,p)),/COMMAND_REQUIRED|TRANSITION/);
+  });
+  await check('laterBeforeCountTriggerCannotCorruptParentSource',async()=>{
+    await db.exec(`create function public.corrupt_count_parent() returns trigger language plpgsql security definer set search_path='' as $$ begin
+      if pg_trigger_depth()>1 then new.file_url:='unreviewed.pdf';end if;return new;end $$;
+      create trigger zzzz_corrupt_count_parent before update on public.drawing_sets for each row execute function public.corrupt_count_parent()`);
+    await denied(db,()=>createRequest(db).then(p=>createSet(db,p)),/COMMAND_REQUIRED|TRANSITION/);
+  });
+  await check('beforeInsertCannotBorrowCountLaneToArchiveNewParent',async()=>{
+    await db.exec(`create function public.premature_recount() returns trigger language plpgsql security definer set search_path='' as $$ begin
+      perform public.recount_drawing_set(new.drawing_set_id);return new;end $$;
+      create trigger zzzz_premature_recount before insert on public.drawings for each row execute function public.premature_recount()`);
+    await denied(db,()=>createRequest(db).then(p=>createSet(db,p)),/COMMAND_REQUIRED|TRANSITION/);
+  });
+  await check('projectArchiveCannotBorrowRestorationAuthority',async()=>{
+    await db.exec(`create function public.archive_restore_writer() returns trigger language plpgsql security definer set search_path='' as $$ begin
+      update public.drawings set is_deleted=false,deleted_at=null where id=new.id;return new;end $$;
+      create trigger archive_restore_writer after update on public.drawings for each row when(new.is_deleted) execute function public.archive_restore_writer()`);
+    await denied(db,()=>db.query('select public.soft_delete_project($1)',[ids.project]),/COMMAND_REQUIRED|TRANSITION/);
+  });
+  await check('singleUseIntentsArePrivateAndLeaveNoAuthority',async()=>{
+    for(const role of ['anon','authenticated','service_role']){
+      assert.equal((await db.query("select has_table_privilege($1,'steelbuild_drawing_revision.write_intents','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed",[role])).rows[0].allowed,false);
+      assert.equal((await db.query("select has_function_privilege($1,'steelbuild_drawing_revision.write_row(uuid,regclass,text,jsonb,uuid)','EXECUTE') allowed",[role])).rows[0].allowed,false);
+    }
+    await authenticated(()=>request(db).then(p=>execute(db,p)));
+    const hold=(await authenticated(()=>db.query('select * from public.place_drawing_hold($1,$2)',[ids.drawing,'Exact transition']))).rows[0];
+    await authenticated(()=>db.query('select public.release_drawing_hold($1,$2)',[hold.id,'Resolved']));
+    assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.write_intents')).rows[0].n,0);
+    assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.command_context')).rows[0].n,0);
+  });
+  await check('metadataLaneCannotChangeSQLNullSourceIntoJSONNull',async()=>{
+    await db.query('update public.drawings set callouts=null where id=$1',[ids.drawing]);
+    await db.exec(`create function public.null_source_writer() returns void language sql security definer set search_path='' as $$
+      update public.drawings set callouts='null'::jsonb where id='${ids.drawing}' $$`);
+    await denied(db,()=>db.query('select public.null_source_writer()'),/COMMAND_REQUIRED|TRANSITION/);
+  });
+  for(const kind of ['view','rewrite','reloptions'])await check(`reviewedPackageDetects ${kind} definition drift`,async()=>{
+    await db.exec(`create view public.review_dependency as select true as allowed;
+      create table public.review_sink(allowed boolean);
+      create rule reviewed_insert as on insert to public.review_sink do instead nothing;
+      insert into steelbuild_drawing_revision.package_review values(true,1,repeat('a',40),steelbuild_drawing_revision.catalog_fingerprint(),repeat('b',64),true)`);
+    const before=(await db.query('select steelbuild_drawing_revision.catalog_fingerprint() hash')).rows[0].hash;
+    await db.exec(kind==='view'?'create or replace view public.review_dependency as select false as allowed':kind==='rewrite'?
+      'create or replace rule reviewed_insert as on insert to public.review_sink do instead select true':'alter view public.review_dependency set(security_invoker=true)');
+    assert.notEqual((await db.query('select steelbuild_drawing_revision.catalog_fingerprint() hash')).rows[0].hash,before);
+    assert.equal(((await authenticated(()=>db.query('select public.get_drawing_command_capabilities($1) result',[ids.project]))).rows[0].result as Record<string,unknown>).write_boundary,false);
+  });
   await check('governingWorkflowNewSetAndRevisionCanReachPublication',async()=>{
     for(const create of [false,true]){
       await db.exec('savepoint intake');
@@ -177,6 +246,7 @@ export async function runBoundaryCases(db:Database){
       "grant update(file_url) on public.drawings to public",
       "alter table public.drawings disable trigger aaa_drawing_command_boundary",
       "drop index public.ux_drawing_revisions_one_current",
+      "alter table public.drawing_revisions alter column release_status set default 'released_for_shop'",
       "alter function public.place_drawing_hold(uuid,text) set lock_timeout='0'",
       "alter role authenticated createrole",
       "create function public.unclassified_writer() returns void language sql security definer as 'update public.drawings set file_url=''forged.pdf'''",
@@ -407,7 +477,7 @@ export async function runBoundaryCases(db:Database){
     assert.deepEqual(result,{org_ids:[ids.org],project_ids:[ids.project]});
     assert.equal((await db.query('select count(*)::int n from public.projects where id=$1',[ids.project])).rows[0].n,0);
     assert.equal((await db.query('select count(*)::int n from public.organizations where id=$1',[ids.foreign])).rows[0].n,1);
-    for(const table of ['requests','source_observations','adopted_sources','command_context','project_archive_context','hold_bindings'])
+    for(const table of ['requests','source_observations','adopted_sources','command_context','write_intents','project_archive_context','hold_bindings'])
       assert.equal((await db.query(`select count(*)::int n from steelbuild_drawing_revision.${table}`)).rows[0].n,0);
     assert.equal((await db.query("select count(*)::int n from public.data_erasure_log where kind in ('project','organization')")).rows[0].n,2);
     await db.exec('set local role drawing_fixture_auth_admin');await db.query('delete from auth.users where id=$1',[ids.pm]);await db.exec('reset role');

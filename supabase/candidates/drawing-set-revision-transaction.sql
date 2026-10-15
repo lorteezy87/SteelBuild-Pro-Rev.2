@@ -12,6 +12,69 @@ CREATE TABLE steelbuild_drawing_revision.command_context (
 );
 ALTER TABLE steelbuild_drawing_revision.command_context ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON steelbuild_drawing_revision.command_context FROM PUBLIC,anon,authenticated,service_role;
+-- Only one exact guarded row transition is live while its DML executes. Hashes
+-- retain SQL NULL versus JSON null and keep private authority fixed-size.
+CREATE TABLE steelbuild_drawing_revision.write_intents (
+  context_id uuid PRIMARY KEY REFERENCES steelbuild_drawing_revision.command_context(id) ON DELETE CASCADE,
+  relation_id oid NOT NULL,row_id uuid NOT NULL,operation text NOT NULL CHECK(operation IN ('INSERT','UPDATE')),
+  old_sha256 text,new_sha256 text NOT NULL,consumed boolean NOT NULL DEFAULT false
+);
+ALTER TABLE steelbuild_drawing_revision.write_intents ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON steelbuild_drawing_revision.write_intents FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE FUNCTION steelbuild_drawing_revision.write_row(p_context uuid,p_table regclass,p_operation text,p_patch jsonb,p_id uuid DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET timezone='UTC' SET datestyle='ISO, YMD' SET lock_timeout='2s' AS $$
+DECLARE c steelbuild_drawing_revision.command_context;v_projection text;v_columns text;v_expected text;v_old text;v_actual text;
+  v_row jsonb;v_id uuid;v_project uuid;v_set uuid;v_count integer;
+BEGIN
+  SELECT * INTO c FROM steelbuild_drawing_revision.command_context WHERE id=p_context
+    AND transaction_id=txid_current() AND backend_pid=pg_backend_pid() AND actor_id=auth.uid();
+  IF c.id IS NULL OR p_table NOT IN ('public.drawings'::regclass,'public.drawing_sets'::regclass,'public.drawing_revisions'::regclass,'public.drawing_holds'::regclass)
+    OR p_operation NOT IN ('INSERT','UPDATE') OR jsonb_typeof(p_patch) IS DISTINCT FROM 'object' OR octet_length(p_patch::text)>1048576 THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_TRANSITION: Invalid private write intent' USING ERRCODE='42501'; END IF;
+  IF (SELECT count(*) FROM pg_attribute WHERE attrelid=p_table AND attnum>0 AND NOT attisdropped)>256
+    OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=p_table AND attnum>0 AND (attgenerated<>'' OR attidentity<>''))
+    OR EXISTS(SELECT 1 FROM jsonb_object_keys(p_patch) k WHERE NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=p_table AND attname=k AND attnum>0 AND NOT attisdropped)) THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_TRANSITION: Unsupported row shape' USING ERRCODE='54000'; END IF;
+  -- The existing server timestamp trigger uses now(). Source/lifecycle fields
+  -- receive no exception. INSERT defaults are evaluated once, before arming.
+  IF p_operation='UPDATE' AND EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=p_table AND NOT t.tgisinternal
+    AND t.tgenabled='O' AND t.tgfoid='public.update_updated_at()'::regprocedure) THEN
+    p_patch:=p_patch||jsonb_build_object('updated_at',now()); END IF;
+  SELECT string_agg(format('%I',a.attname),',' ORDER BY a.attnum),
+    string_agg(CASE WHEN p_patch ? a.attname THEN format('(jsonb_populate_record(NULL::%s,$1)).%I',p_table,a.attname)
+      WHEN p_operation='UPDATE' THEN format('t.%I',a.attname)
+      ELSE coalesce(pg_get_expr(d.adbin,d.adrelid),'NULL') END,',' ORDER BY a.attnum)
+    INTO v_columns,v_projection FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+    WHERE a.attrelid=p_table AND a.attnum>0 AND NOT a.attisdropped;
+  IF p_operation='UPDATE' THEN
+    EXECUTE format('select t::text,ROW(%s)::%s::text from %s t where id=$2',v_projection,p_table,p_table) INTO v_old,v_expected USING p_patch,p_id;
+    IF v_old IS NULL THEN RAISE EXCEPTION 'DRAWING_COMMAND_TRANSITION: Expected row missing' USING ERRCODE='40001'; END IF;
+  ELSE EXECUTE format('select ROW(%s)::%s::text',v_projection,p_table) INTO v_expected USING p_patch; END IF;
+  EXECUTE format('select to_jsonb($1::%s)',p_table) INTO v_row USING v_expected;
+  v_id:=(v_row->>'id')::uuid;v_project:=(v_row->>'project_id')::uuid;
+  IF p_table='public.drawing_sets'::regclass THEN v_set:=v_id;
+  ELSIF p_table='public.drawings'::regclass THEN v_set:=(v_row->>'drawing_set_id')::uuid;
+  ELSE SELECT drawing_set_id INTO v_set FROM public.drawings WHERE id=(v_row->>'drawing_id')::uuid AND project_id=v_project; END IF;
+  IF (v_project,v_set) IS DISTINCT FROM (c.project_id,c.set_id) OR (p_operation='UPDATE' AND v_id IS DISTINCT FROM p_id) THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_TRANSITION: Row outside admitted command' USING ERRCODE='42501'; END IF;
+  INSERT INTO steelbuild_drawing_revision.write_intents(context_id,relation_id,row_id,operation,old_sha256,new_sha256) VALUES(c.id,p_table,v_id,p_operation,
+    encode(sha256(convert_to(v_old,'UTF8')),'hex'),encode(sha256(convert_to(v_expected,'UTF8')),'hex'));
+  IF p_operation='INSERT' THEN
+    EXECUTE format('insert into %s(%s) select ($1::%s).*',p_table,v_columns,p_table) USING v_expected;
+  ELSE
+    SELECT string_agg(format('%I=($1::%s).%I',a.attname,p_table,a.attname),',' ORDER BY a.attnum) INTO v_projection
+      FROM pg_attribute a WHERE a.attrelid=p_table AND a.attnum>0 AND NOT a.attisdropped AND p_patch ? a.attname;
+    EXECUTE format('update %s set %s where id=$2',p_table,v_projection) USING v_expected,p_id;
+  END IF;
+  GET DIAGNOSTICS v_count=ROW_COUNT;
+  EXECUTE format('select t::text,to_jsonb(t) from %s t where id=$1',p_table) INTO v_actual,v_row USING v_id;
+  IF v_count<>1 OR v_actual IS DISTINCT FROM v_expected OR NOT EXISTS(SELECT 1 FROM steelbuild_drawing_revision.write_intents WHERE context_id=c.id AND consumed) THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_TRANSITION: Admitted row was not written exactly' USING ERRCODE='42501'; END IF;
+  DELETE FROM steelbuild_drawing_revision.write_intents WHERE context_id=c.id;
+  RETURN v_row;
+END $$;
+REVOKE ALL ON FUNCTION steelbuild_drawing_revision.write_row(uuid,regclass,text,jsonb,uuid) FROM PUBLIC,anon,authenticated,service_role;
 CREATE FUNCTION public.get_drawing_command_capabilities(p_project_id uuid) RETURNS jsonb
 LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$
   SELECT jsonb_build_object('contract_version',1,'new_set',false,'revision',false,
@@ -368,10 +431,11 @@ BEGIN
   INSERT INTO steelbuild_drawing_revision.command_context(transaction_id,backend_pid,actor_id,project_id,set_id,operation)
     VALUES(txid_current(),pg_backend_pid(),v_actor,v_project,v_set_id,p_operation) RETURNING id INTO v_context;
   IF v_create THEN
-    INSERT INTO public.drawing_sets(id,project_id,set_name,discipline,revision,issued_date,issued_by,notes,file_url,revision_history,metadata,set_approval_status)
-      VALUES(v_set_id,v_project,v_set.set_name,v_set.discipline,btrim(p_request->>'revision_label'),(p_request->>'issued_date')::date,
-        p_request->>'issued_by',p_request->>'notes',p_request->>'file_path','[]',
-        CASE WHEN nullif(btrim(p_request->>'set_number'),'') IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('drawing_set_number',btrim(p_request->>'set_number')) END,'pending_review');
+    PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawing_sets','INSERT',jsonb_build_object(
+      'id',v_set_id,'project_id',v_project,'set_name',v_set.set_name,'discipline',v_set.discipline,'revision',btrim(p_request->>'revision_label'),
+      'issued_date',(p_request->>'issued_date')::date,'issued_by',p_request->>'issued_by','notes',p_request->>'notes','file_url',p_request->>'file_path',
+      'revision_history','[]','metadata',CASE WHEN nullif(btrim(p_request->>'set_number'),'') IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('drawing_set_number',btrim(p_request->>'set_number')) END,
+      'set_approval_status','pending_review'));
     PERFORM steelbuild_drawing_revision.assert_access(v_project);
   END IF;
   FOR v_entry IN SELECT value FROM jsonb_array_elements(v_roster) LOOP
@@ -382,9 +446,10 @@ BEGIN
       IF EXISTS(SELECT 1 FROM public.drawings WHERE drawing_set_id=v_set_id AND NOT is_deleted AND deleted_at IS NULL
         AND upper(btrim(sheet_number))=upper(btrim(v_entry->>'sheet_number'))) THEN
         RAISE EXCEPTION 'DRAWING_REVISION_DUPLICATE: Sheet mark already exists' USING ERRCODE='23505'; END IF;
-      INSERT INTO public.drawings(project_id,drawing_set_id,drawing_set_name,sheet_number,title,discipline,revision_number,file_url,pdf_page,stage,set_approval_status,extracted_text,callouts,hyperlinks)
-      VALUES(v_project,v_set_id,v_set.set_name,btrim(v_entry->>'sheet_number'),btrim(v_entry->>'sheet_title'),coalesce(v_entry->>'discipline',v_set.discipline),
-        btrim(v_entry->>'revision_code'),v_entry->>'file_path',(v_entry->>'pdf_page')::integer,'Not Started','pending_review',v_extracted_text,v_callouts,NULL) RETURNING * INTO v_sheet;
+      SELECT * INTO v_sheet FROM jsonb_populate_record(NULL::public.drawings,steelbuild_drawing_revision.write_row(v_context,'public.drawings','INSERT',jsonb_build_object(
+        'project_id',v_project,'drawing_set_id',v_set_id,'drawing_set_name',v_set.set_name,'sheet_number',btrim(v_entry->>'sheet_number'),'title',btrim(v_entry->>'sheet_title'),
+        'discipline',coalesce(v_entry->>'discipline',v_set.discipline),'revision_number',btrim(v_entry->>'revision_code'),'file_url',v_entry->>'file_path',
+        'pdf_page',(v_entry->>'pdf_page')::integer,'stage','Not Started','set_approval_status','pending_review','extracted_text',v_extracted_text,'callouts',v_callouts,'hyperlinks',NULL)));
       v_old:=NULL; v_version:=1; v_added:=v_added+1;
     ELSE
       SELECT * INTO v_sheet FROM public.drawings WHERE id=(v_entry->>'drawing_id')::uuid;
@@ -392,9 +457,10 @@ BEGIN
       v_old:=v_current.id;
       SELECT coalesce(max(version_number),0)+1 INTO v_version FROM public.drawing_revisions WHERE drawing_id=v_sheet.id;
       -- Preserve every source attribute, including incomplete legacy fields.
-      UPDATE public.drawing_revisions SET is_current=false,archived_at=clock_timestamp(),updated_by=v_actor WHERE id=v_old;
+      PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawing_revisions','UPDATE',
+        jsonb_build_object('is_current',false,'archived_at',clock_timestamp(),'updated_by',v_actor),v_old);
       IF v_action='removed' THEN
-        UPDATE public.drawings SET is_superseded=true,updated_at=clock_timestamp() WHERE id=v_sheet.id;
+        PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawings','UPDATE',jsonb_build_object('is_superseded',true,'updated_at',clock_timestamp()),v_sheet.id);
         v_removed:=v_removed+1; CONTINUE;
       END IF;
       v_revised:=v_revised+1;
@@ -402,13 +468,15 @@ BEGIN
     v_code:=btrim(v_entry->>'revision_code'); v_page:=(v_entry->>'pdf_page')::integer;
     IF EXISTS(SELECT 1 FROM public.drawing_revisions WHERE drawing_id=v_sheet.id AND upper(btrim(revision_code))=upper(v_code)) THEN
       RAISE EXCEPTION 'DRAWING_REVISION_DUPLICATE: Existing revision code cannot replace a historical source' USING ERRCODE='23505'; END IF;
-    INSERT INTO public.drawing_revisions(project_id,drawing_id,revision_code,sheet_number,sheet_title,version_number,is_current,supersedes_revision_id,file_url,pdf_page,issued_at,revision_notes,release_status,created_by)
-      VALUES(v_project,v_sheet.id,v_code,v_sheet.sheet_number,btrim(v_entry->>'sheet_title'),v_version,true,v_old,v_entry->>'file_path',v_page,
-        (p_request->>'issued_date')::date,p_request->>'notes','received',v_actor) RETURNING id INTO v_new;
+    v_new:=(steelbuild_drawing_revision.write_row(v_context,'public.drawing_revisions','INSERT',jsonb_build_object(
+      'project_id',v_project,'drawing_id',v_sheet.id,'revision_code',v_code,'sheet_number',v_sheet.sheet_number,'sheet_title',btrim(v_entry->>'sheet_title'),
+      'version_number',v_version,'is_current',true,'supersedes_revision_id',v_old,'file_url',v_entry->>'file_path','pdf_page',v_page,
+      'issued_at',(p_request->>'issued_date')::date,'revision_notes',p_request->>'notes','release_status','received','created_by',v_actor))->>'id')::uuid;
     IF v_old IS NOT NULL THEN v_revision_map:=v_revision_map||jsonb_build_object(v_old::text,v_new); END IF;
-    UPDATE public.drawings SET title=btrim(v_entry->>'sheet_title'),revision_number=v_code,file_url=v_entry->>'file_path',pdf_page=v_page,
-      extracted_text=v_extracted_text,callouts=v_callouts,hyperlinks=NULL,
-      stage='Not Started',set_approval_status='pending_review',set_approved_date=NULL,ifc_status=NULL,updated_at=clock_timestamp() WHERE id=v_sheet.id;
+    PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawings','UPDATE',jsonb_build_object(
+      'title',btrim(v_entry->>'sheet_title'),'revision_number',v_code,'file_url',v_entry->>'file_path','pdf_page',v_page,
+      'extracted_text',v_extracted_text,'callouts',v_callouts,'hyperlinks',NULL,'stage','Not Started','set_approval_status','pending_review',
+      'set_approved_date',NULL,'ifc_status',NULL,'markup_scale',NULL,'scale_status',NULL,'updated_at',clock_timestamp()),v_sheet.id);
     v_source_pages:=v_source_pages||jsonb_build_array(jsonb_build_object('drawing_id',v_sheet.id,'revision_id',v_new,'file_path',v_entry->>'file_path','pdf_page',v_page));
   END LOOP;
 
@@ -441,10 +509,10 @@ BEGIN
     'issuedBy',v_set.issued_by,'sheetCount',v_set.sheet_count,'notes',v_set.notes,'approvalStatus',v_set.set_approval_status,
     'approvedDate',v_set.set_approved_date,'approvedBy',v_set.set_approved_by,'recordedAt',clock_timestamp(),'status','superseded'));
   END IF;
-  UPDATE public.drawing_sets SET revision=btrim(p_request->>'revision_label'),issued_date=(p_request->>'issued_date')::date,
-    issued_by=coalesce(p_request->>'issued_by',issued_by),notes=coalesce(p_request->>'notes',notes),file_url=p_request->>'file_path',
-    revision_history=v_history::text,sheet_count=v_count,set_approval_status='pending_review',set_approved_date=NULL,set_approved_by=NULL,
-    set_approval_notes=NULL,updated_at=clock_timestamp() WHERE id=v_set_id;
+  PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawing_sets','UPDATE',jsonb_build_object(
+    'revision',btrim(p_request->>'revision_label'),'issued_date',(p_request->>'issued_date')::date,'issued_by',coalesce(p_request->>'issued_by',v_set.issued_by),
+    'notes',coalesce(p_request->>'notes',v_set.notes),'file_url',p_request->>'file_path','revision_history',v_history::text,'sheet_count',v_count,
+    'set_approval_status','pending_review','set_approved_date',NULL,'set_approved_by',NULL,'set_approval_notes',NULL,'updated_at',clock_timestamp()),v_set_id);
   -- Governing submittal pointers and all historical approval/round records remain.
   -- The exact-revision coverage gate invalidates their relevance to the new source.
   PERFORM steelbuild_drawing_revision.assert_access(v_project);
@@ -460,6 +528,17 @@ BEGIN
       CASE WHEN o.callouts_is_sql_null THEN NULL ELSE coalesce(o.callouts,'null'::jsonb) END
     FROM jsonb_to_recordset(v_observations) AS o(drawing_id uuid,project_id uuid,drawing_set_id uuid,parent_file_url text,parent_pdf_page integer,
       parent_revision_number text,parent_updated_at timestamptz,observed_current_revision_id uuid,observed_current_revision_version integer,extracted_text text,callouts jsonb,callouts_is_sql_null boolean);
+  -- Receipt/observation triggers carry no source authority. Still verify the
+  -- complete admitted source result after those phases before returning success.
+  IF NOT EXISTS(SELECT 1 FROM public.drawing_sets WHERE id=v_set_id AND project_id=v_project AND NOT is_deleted AND deleted_at IS NULL
+      AND file_url=p_request->>'file_path' AND revision=btrim(p_request->>'revision_label') AND set_approval_status='pending_review')
+    OR EXISTS(SELECT 1 FROM jsonb_to_recordset(v_source_pages) p(drawing_id uuid,revision_id uuid,file_path text,pdf_page integer)
+    LEFT JOIN public.drawings d ON d.id=p.drawing_id LEFT JOIN public.drawing_revisions r ON r.id=p.revision_id
+    WHERE (d.project_id,d.drawing_set_id,d.file_url,d.pdf_page,r.project_id,r.drawing_id,r.file_url,r.pdf_page,r.is_current,r.release_status)
+      IS DISTINCT FROM (v_project,v_set_id,p.file_path,p.pdf_page,v_project,p.drawing_id,p.file_path,p.pdf_page,true,'received'::text)
+      OR d.is_deleted OR d.deleted_at IS NOT NULL OR coalesce(d.is_superseded,false) OR r.archived_at IS NOT NULL
+      OR (d.revision_number,d.sheet_number) IS DISTINCT FROM (r.revision_code,r.sheet_number)) THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_TRANSITION: Final source result changed' USING ERRCODE='42501'; END IF;
   PERFORM steelbuild_drawing_revision.assert_access(v_project);
   DELETE FROM steelbuild_drawing_revision.command_context WHERE id=v_context;
   RETURN v_result;

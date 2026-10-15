@@ -24,6 +24,7 @@ CREATE INDEX drawing_hold_binding_drawing ON steelbuild_drawing_revision.hold_bi
 -- never source, identity, approval or arbitrary lifecycle writes.
 CREATE TABLE steelbuild_drawing_revision.project_archive_context (
   transaction_id bigint NOT NULL,backend_pid integer NOT NULL,actor_id uuid NOT NULL,project_id uuid NOT NULL,
+  set_ids uuid[] NOT NULL CHECK(cardinality(set_ids)<=1000),sheet_ids uuid[] NOT NULL CHECK(cardinality(sheet_ids)<=1000),
   PRIMARY KEY(transaction_id,backend_pid,project_id)
 );
 ALTER TABLE steelbuild_drawing_revision.project_archive_context ENABLE ROW LEVEL SECURITY;
@@ -185,8 +186,9 @@ BEGIN
     END IF;
     INSERT INTO steelbuild_drawing_revision.command_context(transaction_id,backend_pid,actor_id,project_id,set_id,operation)
       VALUES(txid_current(),pg_backend_pid(),auth.uid(),NEW.project_id,v_set,'approval_sync') RETURNING id INTO v_context;
-    UPDATE public.drawing_sets SET set_approval_status=CASE WHEN v_approved THEN 'approved' ELSE 'pending_review' END
-      WHERE id=v_set AND set_approval_status IS DISTINCT FROM CASE WHEN v_approved THEN 'approved' ELSE 'pending_review' END;
+    IF EXISTS(SELECT 1 FROM public.drawing_sets WHERE id=v_set AND set_approval_status IS DISTINCT FROM CASE WHEN v_approved THEN 'approved' ELSE 'pending_review' END) THEN
+      PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawing_sets','UPDATE',
+        jsonb_build_object('set_approval_status',CASE WHEN v_approved THEN 'approved' ELSE 'pending_review' END),v_set); END IF;
     DELETE FROM steelbuild_drawing_revision.command_context WHERE id=v_context;
   END LOOP;
   PERFORM steelbuild_drawing_revision.assert_role(NEW.project_id,'pm');
@@ -207,8 +209,8 @@ BEGIN
   PERFORM steelbuild_drawing_revision.assert_distribution(s.project_id,s.id,p_release_status);
   INSERT INTO steelbuild_drawing_revision.command_context(transaction_id,backend_pid,actor_id,project_id,set_id,operation)
     VALUES(txid_current(),pg_backend_pid(),auth.uid(),s.project_id,s.id,'publish') RETURNING id INTO v_context;
-  UPDATE public.drawing_revisions SET release_status=p_release_status,updated_by=auth.uid(),updated_at=clock_timestamp()
-    WHERE id=r.id RETURNING * INTO r;
+  SELECT * INTO r FROM jsonb_populate_record(NULL::public.drawing_revisions,steelbuild_drawing_revision.write_row(v_context,'public.drawing_revisions','UPDATE',
+    jsonb_build_object('release_status',p_release_status,'updated_by',auth.uid(),'updated_at',clock_timestamp()),r.id));
   INSERT INTO public.drawing_activity(project_id,drawing_id,event_type,from_value,to_value,actor_id,metadata)
     VALUES(s.project_id,r.drawing_id,'revision_changed',v_prior,p_release_status,auth.uid(),jsonb_build_object('operation','publish','revision_id',r.id));
   PERFORM steelbuild_drawing_revision.assert_role(s.project_id,'pm');
@@ -231,10 +233,10 @@ BEGIN
   SELECT coalesce(nullif(btrim(full_name),''),email) INTO v_name FROM public.user_profiles WHERE id=auth.uid();
   INSERT INTO steelbuild_drawing_revision.command_context(transaction_id,backend_pid,actor_id,project_id,set_id,operation)
     VALUES(txid_current(),pg_backend_pid(),auth.uid(),s.project_id,s.id,'hold') RETURNING id INTO v_context;
-  INSERT INTO public.drawing_holds(project_id,drawing_id,reason,prior_stage,prior_release_status,placed_by_id,placed_by_name)
-    VALUES(s.project_id,d.id,btrim(p_reason),d.stage,r.release_status,auth.uid(),v_name) RETURNING * INTO h;
+  SELECT * INTO h FROM jsonb_populate_record(NULL::public.drawing_holds,steelbuild_drawing_revision.write_row(v_context,'public.drawing_holds','INSERT',
+    jsonb_build_object('project_id',s.project_id,'drawing_id',d.id,'reason',btrim(p_reason),'prior_stage',d.stage,'prior_release_status',r.release_status,'placed_by_id',auth.uid(),'placed_by_name',v_name)));
   INSERT INTO steelbuild_drawing_revision.hold_bindings VALUES(h.id,r.id,s.project_id,d.id,r.file_url,r.pdf_page,r.revision_code,r.release_status);
-  UPDATE public.drawing_revisions SET release_status='on_hold',updated_by=auth.uid(),updated_at=clock_timestamp() WHERE id=r.id;
+  PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawing_revisions','UPDATE',jsonb_build_object('release_status','on_hold','updated_by',auth.uid(),'updated_at',clock_timestamp()),r.id);
   INSERT INTO public.drawing_activity(project_id,drawing_id,event_type,from_value,to_value,actor_id,metadata)
     VALUES(s.project_id,d.id,'hold_placed',r.release_status,'on_hold',auth.uid(),jsonb_build_object('hold_id',h.id,'reason',h.reason,'revision_id',r.id));
   PERFORM steelbuild_drawing_revision.assert_role(s.project_id,'field');
@@ -258,8 +260,9 @@ BEGIN
   SELECT coalesce(nullif(btrim(full_name),''),email) INTO v_name FROM public.user_profiles WHERE id=auth.uid();
   INSERT INTO steelbuild_drawing_revision.command_context(transaction_id,backend_pid,actor_id,project_id,set_id,operation)
     VALUES(txid_current(),pg_backend_pid(),auth.uid(),s.project_id,s.id,'hold') RETURNING id INTO v_context;
-  UPDATE public.drawing_holds SET is_active=false,released_at=clock_timestamp(),released_by_id=auth.uid(),released_by_name=v_name,
-    release_notes=nullif(btrim(p_notes),''),updated_at=clock_timestamp() WHERE id=h.id RETURNING * INTO h;
+  SELECT * INTO h FROM jsonb_populate_record(NULL::public.drawing_holds,steelbuild_drawing_revision.write_row(v_context,'public.drawing_holds','UPDATE',
+    jsonb_build_object('is_active',false,'released_at',clock_timestamp(),'released_by_id',auth.uid(),'released_by_name',v_name,
+      'release_notes',nullif(btrim(p_notes),''),'updated_at',clock_timestamp()),h.id));
   IF b.hold_id IS NOT NULL AND r.id=b.drawing_revision_id AND r.release_status='on_hold' THEN
     r:=steelbuild_drawing_revision.assert_current(r.id,s.id);
     IF (b.project_id,b.drawing_id,b.file_url,b.pdf_page,b.revision_code) IS DISTINCT FROM (r.project_id,r.drawing_id,r.file_url,r.pdf_page,r.revision_code) THEN
@@ -269,7 +272,7 @@ BEGIN
     -- authority: the same exact revision returns to received, not released.
     r.release_status:=CASE WHEN steelbuild_drawing_revision.distribution_allowed(s.project_id,s.id,b.prior_release_status)
       THEN b.prior_release_status ELSE 'received' END;
-    UPDATE public.drawing_revisions SET release_status=r.release_status,updated_by=auth.uid(),updated_at=clock_timestamp() WHERE id=r.id;
+    PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawing_revisions','UPDATE',jsonb_build_object('release_status',r.release_status,'updated_by',auth.uid(),'updated_at',clock_timestamp()),r.id);
   END IF;
   INSERT INTO public.drawing_activity(project_id,drawing_id,event_type,from_value,to_value,actor_id,metadata)
     VALUES(s.project_id,h.drawing_id,'hold_released','on_hold',
@@ -292,9 +295,9 @@ BEGIN
     RAISE EXCEPTION 'DRAWING_COMMAND_REASON: Unlock requires a bounded reason' USING ERRCODE='22023'; END IF;
   INSERT INTO steelbuild_drawing_revision.command_context(transaction_id,backend_pid,actor_id,project_id,set_id,operation)
     VALUES(txid_current(),pg_backend_pid(),auth.uid(),s.project_id,s.id,'lock') RETURNING id INTO v_context;
-  UPDATE public.drawing_sets SET is_locked=p_locked,locked_at=CASE WHEN p_locked THEN clock_timestamp() END,
-    locked_by=CASE WHEN p_locked THEN auth.uid() END,locked_reason=CASE WHEN p_locked THEN nullif(btrim(p_reason),'') END,updated_at=clock_timestamp()
-    WHERE id=s.id RETURNING * INTO s;
+  SELECT * INTO s FROM jsonb_populate_record(NULL::public.drawing_sets,steelbuild_drawing_revision.write_row(v_context,'public.drawing_sets','UPDATE',
+    jsonb_build_object('is_locked',p_locked,'locked_at',CASE WHEN p_locked THEN clock_timestamp() END,'locked_by',CASE WHEN p_locked THEN auth.uid() END,
+      'locked_reason',CASE WHEN p_locked THEN nullif(btrim(p_reason),'') END,'updated_at',clock_timestamp()),s.id));
   INSERT INTO public.pma_audit_logs(project_id,entity_type,entity_id,action,new_values,changed_by)
     VALUES(s.project_id,'drawing_sets',s.id,'UPDATE',jsonb_build_object('operation',CASE WHEN p_locked THEN 'set_lock' ELSE 'set_unlock' END,'reason',p_reason),auth.uid()::text);
   PERFORM steelbuild_drawing_revision.assert_role(s.project_id,v_role);
@@ -304,15 +307,16 @@ END $$;
 
 CREATE OR REPLACE FUNCTION public.delete_drawing_set(p_set_id uuid) RETURNS integer
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
-DECLARE s public.drawing_sets;v_context uuid;v_count integer;
+DECLARE s public.drawing_sets;v_context uuid;v_count integer:=0;v_drawing uuid;
 BEGIN
   s:=steelbuild_drawing_revision.lock_set(p_set_id,'admin');
   INSERT INTO steelbuild_drawing_revision.command_context(transaction_id,backend_pid,actor_id,project_id,set_id,operation)
     VALUES(txid_current(),pg_backend_pid(),auth.uid(),s.project_id,s.id,'archive') RETURNING id INTO v_context;
-  UPDATE public.drawings SET is_deleted=true,deleted_at=clock_timestamp(),updated_at=clock_timestamp()
-    WHERE drawing_set_id=s.id AND NOT coalesce(is_deleted,false);
-  GET DIAGNOSTICS v_count=ROW_COUNT;
-  UPDATE public.drawing_sets SET is_deleted=true,deleted_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=s.id;
+  FOR v_drawing IN SELECT id FROM public.drawings WHERE drawing_set_id=s.id AND NOT coalesce(is_deleted,false) ORDER BY id LOOP
+    PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawings','UPDATE',jsonb_build_object('is_deleted',true,'deleted_at',clock_timestamp(),'updated_at',clock_timestamp()),v_drawing);
+    v_count:=v_count+1;
+  END LOOP;
+  PERFORM steelbuild_drawing_revision.write_row(v_context,'public.drawing_sets','UPDATE',jsonb_build_object('is_deleted',true,'deleted_at',clock_timestamp(),'updated_at',clock_timestamp()),s.id);
   PERFORM steelbuild_drawing_revision.assert_role(s.project_id,'admin');
   DELETE FROM steelbuild_drawing_revision.command_context WHERE id=v_context;
   RETURN v_count;
@@ -361,7 +365,7 @@ REVOKE ALL ON FUNCTION steelbuild_drawing_revision.archive_project_impl(uuid) FR
 
 CREATE OR REPLACE FUNCTION public.soft_delete_project(p_project_id uuid) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
-DECLARE v_org uuid;v_actor uuid:=auth.uid();v_sheets uuid[];
+DECLARE v_org uuid;v_actor uuid:=auth.uid();v_sheets uuid[];v_sets uuid[];
 BEGIN
   v_org:=steelbuild_drawing_revision.assert_role(p_project_id,'admin');
   -- Existing shared archival intentionally waits (at most 2s) behind intake's
@@ -382,6 +386,7 @@ BEGIN
     AND NOT EXISTS(SELECT 1 FROM public.drawing_sets s WHERE s.id=d.drawing_set_id AND s.project_id=p_project_id)) THEN
     RAISE EXCEPTION 'DRAWING_COMMAND_SOURCE_MISMATCH: Archive sheet parent is missing or foreign' USING ERRCODE='40001'; END IF;
   PERFORM id FROM public.drawing_sets WHERE project_id=p_project_id ORDER BY id FOR UPDATE NOWAIT;
+  SELECT coalesce(array_agg(id ORDER BY id),'{}') INTO v_sets FROM public.drawing_sets WHERE project_id=p_project_id;
   PERFORM id FROM public.drawings WHERE project_id=p_project_id ORDER BY id FOR UPDATE NOWAIT;
   SELECT coalesce(array_agg(id ORDER BY id),'{}') INTO v_sheets FROM public.drawings WHERE project_id=p_project_id;
   IF (SELECT count(*) FROM public.drawing_revisions WHERE drawing_id=ANY(v_sheets))>10000
@@ -390,7 +395,7 @@ BEGIN
   PERFORM id FROM public.drawing_revisions WHERE drawing_id=ANY(v_sheets) ORDER BY id FOR UPDATE NOWAIT;
   PERFORM id FROM public.drawing_holds WHERE drawing_id=ANY(v_sheets) ORDER BY id FOR UPDATE NOWAIT;
   PERFORM steelbuild_drawing_revision.assert_role(p_project_id,'admin');
-  INSERT INTO steelbuild_drawing_revision.project_archive_context VALUES(txid_current(),pg_backend_pid(),v_actor,p_project_id);
+  INSERT INTO steelbuild_drawing_revision.project_archive_context VALUES(txid_current(),pg_backend_pid(),v_actor,p_project_id,v_sets,v_sheets);
   PERFORM steelbuild_drawing_revision.archive_project_impl(p_project_id);
   -- The intentional tombstone makes user_has_project_access false on live.
   -- Current role/membership and MFA still must hold after all cascade waits.
@@ -410,54 +415,89 @@ END $$;
 -- this shared public entrypoint are broadened or rewritten.
 
 CREATE FUNCTION steelbuild_drawing_revision.guard_write() RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET timezone='UTC' SET datestyle='ISO, YMD' SET lock_timeout='2s' AS $$
 DECLARE v_old jsonb:=CASE WHEN TG_OP='INSERT' THEN '{}'::jsonb ELSE to_jsonb(OLD) END;
   v_new jsonb:=CASE WHEN TG_OP='DELETE' THEN '{}'::jsonb ELSE to_jsonb(NEW) END;
-  v_row jsonb;v_set uuid;v_project uuid;v_operation text;v_allowed text[];v_rect jsonb;v_key text;
+  v_row jsonb;v_set uuid;v_project uuid;v_operation text;v_context uuid;v_allowed text[];v_rect jsonb;v_key text;v_counts jsonb;
+  v_expected record;v_server_time boolean:=false;v_compare text;v_unchanged boolean;
 BEGIN
   v_row:=CASE WHEN TG_OP='DELETE' THEN v_old ELSE v_new END;v_project:=(v_row->>'project_id')::uuid;
   IF TG_TABLE_NAME='drawing_sets' THEN v_set:=(v_row->>'id')::uuid;
   ELSIF TG_TABLE_NAME='drawings' THEN v_set:=(v_row->>'drawing_set_id')::uuid;
   ELSE SELECT drawing_set_id INTO v_set FROM public.drawings WHERE id=(v_row->>'drawing_id')::uuid; END IF;
-  SELECT operation INTO v_operation FROM steelbuild_drawing_revision.command_context
+  SELECT operation,id INTO v_operation,v_context FROM steelbuild_drawing_revision.command_context
     WHERE transaction_id=txid_current() AND backend_pid=pg_backend_pid() AND actor_id=auth.uid() AND project_id=v_project AND set_id=v_set;
+  IF TG_WHEN='BEFORE' THEN
+    UPDATE steelbuild_drawing_revision.write_intents SET consumed=true WHERE context_id=v_context AND NOT consumed
+      AND relation_id=TG_RELID AND row_id=(v_row->>'id')::uuid AND operation=TG_OP
+      AND old_sha256 IS NOT DISTINCT FROM CASE WHEN TG_OP='UPDATE' THEN encode(sha256(convert_to(OLD::text,'UTF8')),'hex') END
+      AND new_sha256=encode(sha256(convert_to(NEW::text,'UTF8')),'hex');
+    IF FOUND THEN RETURN NEW; END IF;
+  ELSIF EXISTS(SELECT 1 FROM steelbuild_drawing_revision.write_intents WHERE context_id=v_context AND consumed
+    AND relation_id=TG_RELID AND row_id=(v_row->>'id')::uuid AND operation=TG_OP
+    AND old_sha256 IS NOT DISTINCT FROM CASE WHEN TG_OP='UPDATE' THEN encode(sha256(convert_to(OLD::text,'UTF8')),'hex') END
+    AND new_sha256=encode(sha256(convert_to(NEW::text,'UTF8')),'hex')) THEN RETURN NEW; END IF;
+  -- Only the existing timestamp trigger's actual server-generated value may
+  -- differ in the AFTER check. Source/identity/lifecycle receive no exception.
+  IF TG_WHEN='AFTER' AND TG_OP='UPDATE' AND NEW.updated_at=now()
+    AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=TG_RELID AND tgenabled='O' AND tgfoid='public.update_updated_at()'::regprocedure) THEN
+    v_server_time:=true; END IF;
   IF EXISTS(SELECT 1 FROM steelbuild_drawing_revision.project_archive_context
-    WHERE transaction_id=txid_current() AND backend_pid=pg_backend_pid() AND actor_id=auth.uid() AND project_id=v_project) THEN
+    WHERE transaction_id=txid_current() AND backend_pid=pg_backend_pid() AND actor_id=auth.uid() AND project_id=v_project
+      AND ((TG_TABLE_NAME='drawing_sets' AND (v_row->>'id')::uuid=ANY(set_ids))
+        OR (TG_TABLE_NAME='drawings' AND (v_row->>'id')::uuid=ANY(sheet_ids)))) THEN
     v_operation:='project_archive'; END IF;
   -- Preserve the existing Auth FK's ON DELETE SET NULL contract, not a new
   -- unlock route. Its parent must actually be gone and no other field changes.
-  IF TG_TABLE_NAME='drawing_sets' AND TG_OP='UPDATE' AND pg_trigger_depth()>1
+  IF TG_TABLE_NAME='drawing_sets' AND TG_OP='UPDATE' AND (pg_trigger_depth()>1 OR TG_WHEN='AFTER')
     AND v_old->>'locked_by' IS NOT NULL AND v_new->>'locked_by' IS NULL
-    AND v_new-'locked_by' IS NOT DISTINCT FROM v_old-'locked_by'
-    AND NOT EXISTS(SELECT 1 FROM auth.users WHERE id=(v_old->>'locked_by')::uuid) THEN RETURN NEW; END IF;
+    AND NOT EXISTS(SELECT 1 FROM auth.users WHERE id=(v_old->>'locked_by')::uuid) THEN
+    v_expected:=OLD;v_expected.locked_by:=NULL;
+    IF v_server_time THEN v_expected.updated_at:=now(); END IF;
+    IF NEW::text=v_expected::text THEN RETURN NEW; END IF;
+  END IF;
   -- Explicit privileged SQL administrators remain administrators. This cannot
   -- authorize API SET ROLE calls, including service_role SECURITY DEFINER paths.
   IF current_setting('role',true)='none' AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=session_user AND rolsuper) THEN
     IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
   END IF;
-  IF v_operation IN ('create_set','revise_set') THEN
-    IF TG_TABLE_NAME='drawings' AND TG_OP='UPDATE'
-      AND (v_new->'file_url',v_new->'pdf_page',v_new->'revision_number') IS DISTINCT FROM (v_old->'file_url',v_old->'pdf_page',v_old->'revision_number') THEN
-      NEW.markup_scale:=NULL;NEW.scale_status:=NULL;
+  IF TG_OP='UPDATE' AND TG_TABLE_NAME='drawing_sets' AND pg_trigger_depth()>1
+    AND (v_operation='project_archive' OR EXISTS(
+      SELECT 1 FROM steelbuild_drawing_revision.write_intents i JOIN public.drawings d ON d.id=i.row_id
+      WHERE i.context_id=v_context AND i.relation_id='public.drawings'::regclass AND i.consumed
+        AND d.drawing_set_id=v_set AND d.project_id=v_project
+        AND i.new_sha256=encode(sha256(convert_to(d::text,'UTF8')),'hex'))) THEN
+    SELECT jsonb_build_object('sheet_count',count(*),'processed_count',count(*) FILTER(WHERE ai_extraction_status='Processed'),
+      'needs_review_count',count(*) FILTER(WHERE ai_extraction_status='NeedsReview'),
+      'failed_count',count(*) FILTER(WHERE ai_extraction_status='Failed' OR upload_status='Failed')) INTO v_counts
+      FROM public.drawings WHERE drawing_set_id=v_set AND NOT is_deleted;
+    v_expected:=OLD;v_expected.sheet_count:=(v_counts->>'sheet_count')::integer;
+    v_expected.processed_count:=(v_counts->>'processed_count')::integer;
+    v_expected.needs_review_count:=(v_counts->>'needs_review_count')::integer;
+    v_expected.failed_count:=(v_counts->>'failed_count')::integer;v_expected.updated_at:=now();
+    IF NEW::text=v_expected::text THEN RETURN NEW; END IF;
+    IF (v_counts->>'sheet_count')::integer=0 THEN
+      v_expected:=OLD;v_expected.is_deleted:=true;v_expected.deleted_at:=now();v_expected.updated_at:=now();
+      IF NEW::text=v_expected::text THEN RETURN NEW; END IF;
     END IF;
-    RETURN NEW;
   END IF;
   IF TG_OP='UPDATE' THEN
     v_allowed:=CASE TG_TABLE_NAME
       WHEN 'drawings' THEN ARRAY['notes','reviewer','due_date','spec_section','priority_flag','fabrication_start_date','fabrication_finish_date','ready_for_install_date','final_delivery_date','markup_scale','scale_status']
       WHEN 'drawing_sets' THEN ARRAY['description','notes','due_date','eor_reviewer','area_sequence','material_impacted','long_lead_impact','titleblock_title_rect','titleblock_number_rect','titleblock_revision_rect']
       ELSE ARRAY[]::text[] END;
-    IF v_operation IN ('publish','hold') AND TG_TABLE_NAME='drawing_revisions' THEN v_allowed:=ARRAY['release_status','updated_by','updated_at'];
-    ELSIF v_operation='hold' AND TG_TABLE_NAME='drawing_holds' THEN v_allowed:=ARRAY['is_active','released_at','released_by_id','released_by_name','release_notes','updated_at'];
-    ELSIF v_operation='lock' AND TG_TABLE_NAME='drawing_sets' THEN v_allowed:=ARRAY['is_locked','locked_at','locked_by','locked_reason','updated_at'];
-    ELSIF v_operation='approval_sync' AND TG_TABLE_NAME='drawing_sets' THEN v_allowed:=ARRAY['set_approval_status'];
-    ELSIF v_operation IN ('archive','project_archive') AND TG_TABLE_NAME IN ('drawings','drawing_sets') THEN v_allowed:=ARRAY['is_deleted','deleted_at','updated_at'];
-    ELSIF v_operation='project_archive' THEN v_allowed:=ARRAY[]::text[]; END IF;
-    -- Count maintenance can only run under an admitted command, and only write
-    -- its derived counts/tombstone. Unknown privileged functions get no context.
-    IF v_operation IS NOT NULL AND TG_TABLE_NAME='drawing_sets' AND pg_trigger_depth()>1 THEN
-      v_allowed:=v_allowed||ARRAY['sheet_count','processed_count','needs_review_count','failed_count','is_deleted','deleted_at','updated_at']; END IF;
-    IF v_new-v_allowed IS NOT DISTINCT FROM v_old-v_allowed THEN
+    IF v_operation='project_archive' AND TG_TABLE_NAME IN ('drawings','drawing_sets') THEN
+      v_expected:=OLD;v_expected.is_deleted:=true;v_expected.deleted_at:=now();
+      IF v_server_time THEN v_expected.updated_at:=now(); END IF;
+      IF NEW::text=v_expected::text THEN RETURN NEW; END IF;
+    END IF;
+    IF v_operation IS NOT NULL THEN
+      RAISE EXCEPTION 'DRAWING_COMMAND_REQUIRED: No exact unused row transition' USING ERRCODE='42501'; END IF;
+    IF v_server_time THEN v_allowed:=v_allowed||ARRAY['updated_at']; END IF;
+    SELECT string_agg(format('($1::%s).%I IS NOT DISTINCT FROM ($2::%s).%I',TG_RELID::regclass,attname,TG_RELID::regclass,attname),' AND ' ORDER BY attnum)
+      INTO v_compare FROM pg_attribute WHERE attrelid=TG_RELID AND attnum>0 AND NOT attisdropped AND NOT attname=ANY(v_allowed);
+    EXECUTE 'select '||v_compare INTO v_unchanged USING OLD::text,NEW::text;
+    IF v_unchanged THEN
       IF v_operation IS NULL THEN
         PERFORM steelbuild_drawing_revision.assert_role(v_project,'pm');
         IF EXISTS(SELECT 1 FROM public.drawing_sets WHERE id=v_set AND (is_locked OR is_deleted OR deleted_at IS NOT NULL))
@@ -480,7 +520,6 @@ BEGIN
       END IF;
       RETURN NEW;
     END IF;
-  ELSIF TG_OP='INSERT' AND TG_TABLE_NAME='drawing_holds' AND v_operation='hold' THEN RETURN NEW;
   END IF;
   RAISE EXCEPTION 'DRAWING_COMMAND_REQUIRED: Protected drawing writes require an admitted command' USING ERRCODE='42501';
 END $$;
@@ -497,6 +536,11 @@ CREATE TRIGGER aaa_drawing_command_boundary BEFORE INSERT OR UPDATE OR DELETE ON
 CREATE TRIGGER aaa_drawing_command_boundary BEFORE INSERT OR UPDATE OR DELETE ON public.drawing_sets FOR EACH ROW EXECUTE FUNCTION steelbuild_drawing_revision.guard_write();
 CREATE TRIGGER aaa_drawing_command_boundary BEFORE INSERT OR UPDATE OR DELETE ON public.drawing_revisions FOR EACH ROW EXECUTE FUNCTION steelbuild_drawing_revision.guard_write();
 CREATE TRIGGER aaa_drawing_command_boundary BEFORE INSERT OR UPDATE OR DELETE ON public.drawing_holds FOR EACH ROW EXECUTE FUNCTION steelbuild_drawing_revision.guard_write();
+-- Validate final NEW after all BEFORE triggers, including count/archive lanes.
+CREATE TRIGGER zzz_drawing_command_transition AFTER INSERT OR UPDATE OR DELETE ON public.drawings FOR EACH ROW EXECUTE FUNCTION steelbuild_drawing_revision.guard_write();
+CREATE TRIGGER zzz_drawing_command_transition AFTER INSERT OR UPDATE OR DELETE ON public.drawing_sets FOR EACH ROW EXECUTE FUNCTION steelbuild_drawing_revision.guard_write();
+CREATE TRIGGER zzz_drawing_command_transition AFTER INSERT OR UPDATE OR DELETE ON public.drawing_revisions FOR EACH ROW EXECUTE FUNCTION steelbuild_drawing_revision.guard_write();
+CREATE TRIGGER zzz_drawing_command_transition AFTER INSERT OR UPDATE OR DELETE ON public.drawing_holds FOR EACH ROW EXECUTE FUNCTION steelbuild_drawing_revision.guard_write();
 CREATE TRIGGER drawing_command_no_truncate BEFORE TRUNCATE ON public.drawings FOR EACH STATEMENT EXECUTE FUNCTION steelbuild_drawing_revision.guard_truncate();
 CREATE TRIGGER drawing_command_no_truncate BEFORE TRUNCATE ON public.drawing_sets FOR EACH STATEMENT EXECUTE FUNCTION steelbuild_drawing_revision.guard_truncate();
 CREATE TRIGGER drawing_command_no_truncate BEFORE TRUNCATE ON public.drawing_revisions FOR EACH STATEMENT EXECUTE FUNCTION steelbuild_drawing_revision.guard_truncate();
@@ -581,13 +625,17 @@ BEGIN
   SELECT array_agg(oid) INTO v_schemas FROM pg_namespace WHERE nspname<>'information_schema' AND nspname!~'^pg_';
   SELECT array_agg(oid) INTO v_tables FROM pg_class WHERE relnamespace=ANY(v_schemas) AND relkind IN ('r','p','v','m','f');
   IF (SELECT count(*) FROM pg_proc WHERE pronamespace=ANY(v_schemas))>2500 OR cardinality(v_tables)>1000
+    OR (SELECT count(*) FROM pg_rewrite WHERE ev_class=ANY(v_tables))>4000
     OR (SELECT count(*) FROM pg_roles)>1000 OR (SELECT count(*) FROM pg_auth_members)>2000 THEN RETURN NULL; END IF;
   SELECT jsonb_build_object(
     'schemas',(SELECT jsonb_agg(to_jsonb(n) ORDER BY oid) FROM pg_namespace n WHERE oid=ANY(v_schemas)),
     'functions',(SELECT jsonb_agg(jsonb_build_object('identity',p.oid::regprocedure::text,'definition',pg_get_functiondef(p.oid),'owner',p.proowner,'acl',p.proacl) ORDER BY p.oid)
       FROM pg_proc p WHERE p.pronamespace=ANY(v_schemas) AND p.prokind<>'a'),
-    'tables',(SELECT jsonb_agg(jsonb_build_object('id',oid,'owner',relowner,'acl',relacl,'rls',relrowsecurity,'force',relforcerowsecurity,'kind',relkind) ORDER BY oid) FROM pg_class WHERE oid=ANY(v_tables)),
+    'tables',(SELECT jsonb_agg(jsonb_build_object('id',oid,'owner',relowner,'acl',relacl,'rls',relrowsecurity,'force',relforcerowsecurity,'kind',relkind,'options',reloptions) ORDER BY oid) FROM pg_class WHERE oid=ANY(v_tables)),
+    'views',(SELECT jsonb_agg(jsonb_build_object('relation',oid,'definition',pg_get_viewdef(oid,false)) ORDER BY oid) FROM pg_class WHERE oid=ANY(v_tables) AND relkind IN ('v','m')),
+    'rewrite',(SELECT jsonb_agg(to_jsonb(r)||jsonb_build_object('definition',pg_get_ruledef(r.oid,false)) ORDER BY r.oid) FROM pg_rewrite r WHERE ev_class=ANY(v_tables)),
     'columns',(SELECT jsonb_agg(to_jsonb(a) ORDER BY attrelid,attnum) FROM pg_attribute a WHERE attrelid=ANY(v_tables) AND attnum>0 AND NOT attisdropped),
+    'column_defaults',(SELECT jsonb_agg(to_jsonb(d)||jsonb_build_object('definition',pg_get_expr(adbin,adrelid)) ORDER BY adrelid,adnum) FROM pg_attrdef d WHERE adrelid=ANY(v_tables)),
     'constraints',(SELECT jsonb_agg(to_jsonb(c) ORDER BY oid) FROM pg_constraint c WHERE conrelid=ANY(v_tables)),
     'indexes',(SELECT jsonb_agg(to_jsonb(i)||jsonb_build_object('definition',pg_get_indexdef(indexrelid)) ORDER BY indexrelid) FROM pg_index i WHERE indrelid=ANY(v_tables)),
     'triggers',(SELECT jsonb_agg(jsonb_build_object('relation',tgrelid,'definition',pg_get_triggerdef(oid),'enabled',tgenabled) ORDER BY oid) FROM pg_trigger WHERE tgrelid=ANY(v_tables) AND NOT tgisinternal),
