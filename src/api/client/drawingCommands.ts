@@ -41,7 +41,8 @@ export function parseDrawingCommandResult(value: unknown, draft: ReviewedDrawing
     || (draft.operation === 'revise_set' && result.set_id !== draft.payload.set_id)
     || result.added !== count('added') || result.revised !== count('revised') || result.removed !== count('removed')
     || result.sheet_count !== roster.length - count('removed') || result.source_pages.length !== changed.length
-    || (draft.operation === 'create_set' && (result.zones_cloned !== 0 || result.links_cloned !== 0 || result.dependencies_cloned !== 0))) {
+    || result.sheet_count === 0 || result.revised + result.added + result.removed === 0
+    || (result.revised === 0 && (result.zones_cloned !== 0 || result.links_cloned !== 0 || result.dependencies_cloned !== 0))) {
     throw new DrawingCommandResponseError();
   }
   // SQL appends changed source pages in reviewed roster order, excluding same/removed.

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyDrawingCommand, getDrawingCommandCapabilities, getDrawingCommandReceipt, getDrawingRevisionSources, parseDrawingCommandResult } from '../drawingCommands';
 import { buildCreateSetRequest, buildReviseSetRequest } from '@/lib/drawingCommands/requestBuilders';
-import type { ReviewedDrawingCommand } from '@/lib/drawingCommands/types';
+import type { ReviewedDrawingCommand, ReviewedDrawingSheet } from '@/lib/drawingCommands/types';
 import { DrawingCommandPreflightError } from '@/lib/drawingCommands/errors';
 
 const { rpc, getUser, entity } = vi.hoisted(() => ({ rpc: vi.fn(), getUser: vi.fn(), entity: { create: vi.fn() } }));
@@ -28,6 +28,33 @@ const resultFixture = () => ({ applied: true, contract_version: 1, operation: 'c
   revised: 0, added: 1, removed: 0, sheet_count: 1, zones_cloned: 0, links_cloned: 0, dependencies_cloned: 0,
   source_pages: [{ drawing_id: drawing, revision_id: revision, file_path: path, pdf_page: 2 }] });
 
+// Construct exact typed requests directly: response safety must not rely on a builder rejecting a roster.
+const revisionDraftFixture = (sheets: readonly ReviewedDrawingSheet[]): ReviewedDrawingCommand => ({
+  ...draftFixture(), operation: 'revise_set', payload: {
+    project_id: project, set_id: set, expected_set_updated_at: '2026-10-15T12:00:00Z', expected_set_revision: 'A',
+    revision_label: 'B', issued_date: '2026-10-15', file_path: path,
+    source_objects: [{ path, token: 'a'.repeat(64) }], sheets,
+  },
+});
+const existingSheet = { drawing_id: drawing, expected_updated_at: '2026-10-15T12:00:00Z', expected_revision_id: org, sheet_number: 'S1' };
+const impossibleCountCases = () => {
+  const create = draftFixture();
+  if (create.operation !== 'create_set') throw new Error('fixture');
+  return [
+    { name: 'all removed with zero active sheets', draft: revisionDraftFixture([{ ...existingSheet, action: 'removed' }]),
+      result: { ...resultFixture(), operation: 'revise_set', added: 0, removed: 1, sheet_count: 0, source_pages: [] } },
+    { name: 'same only with zero changes', draft: revisionDraftFixture([{ ...existingSheet, action: 'same' }]),
+      result: { ...resultFixture(), operation: 'revise_set', added: 0, source_pages: [] } },
+    ...(['zones_cloned', 'links_cloned', 'dependencies_cloned'] as const).map((field) => ({
+      name: `revision ${field} without revised sheets`, draft: revisionDraftFixture(create.payload.sheets),
+      result: { ...resultFixture(), operation: 'revise_set', [field]: 1 },
+    })),
+    ...(['zones_cloned', 'links_cloned', 'dependencies_cloned'] as const).map((field) => ({
+      name: `new set ${field}`, draft: create, result: { ...resultFixture(), [field]: 1 },
+    })),
+  ];
+};
+
 beforeEach(() => {
   vi.resetAllMocks();
   getUser.mockResolvedValue({ data: { user: { id: actor } }, error: null });
@@ -53,6 +80,9 @@ describe('strict response parsing', () => {
   it('rejectsUnknownContractVersion', () => {
     expect(() => parseDrawingCommandResult({ ...resultFixture(), contract_version: 2 }, draftFixture())).toThrow();
   });
+  it.each(impossibleCountCases())('independently rejects impossible committed counts: $name', ({ draft, result }) => {
+    expect(() => parseDrawingCommandResult(result, draft)).toThrow();
+  });
   it('rejects duplicate IDs and reordered or foreign source pages', () => {
     const first = draftFixture();
     if (first.operation !== 'create_set') throw new Error('fixture');
@@ -70,6 +100,36 @@ describe('strict response parsing', () => {
 });
 
 describe('fail closed drawing transport', () => {
+  it.each(impossibleCountCases())('direct success remains uncertain for impossible committed counts: $name', async ({ draft, result }) => {
+    rpc.mockImplementation(async (name: string) => ({ data: name === 'get_drawing_command_capabilities' ? flags : result, error: null }));
+    expect((await applyDrawingCommand(draft)).kind).toBe('uncertain');
+  });
+  it.each(impossibleCountCases())('committed receipt rejects impossible committed counts: $name', async ({ draft, result }) => {
+    rpc.mockResolvedValue({ data: { state: 'committed', result }, error: null });
+    await expect(getDrawingCommandReceipt(draft)).rejects.toThrow();
+  });
+  it('preserves mixed rosters with real changes, active sheets and coordination cloned from revised sheets', async () => {
+    const create = draftFixture();
+    if (create.operation !== 'create_set') throw new Error('fixture');
+    const draft = revisionDraftFixture([
+      { ...existingSheet, action: 'same', drawing_id: actor, sheet_number: 'S0', expected_revision_id: null },
+      { ...create.payload.sheets[0], sheet_number: 'S2', pdf_page: 4 },
+      { ...create.payload.sheets[0], ...existingSheet, action: 'revised' },
+      { ...existingSheet, action: 'removed', drawing_id: org, sheet_number: 'S3', expected_revision_id: actor },
+    ]);
+    const result = { ...resultFixture(), operation: 'revise_set', revised: 1, removed: 1, sheet_count: 3,
+      zones_cloned: 1, links_cloned: 2, dependencies_cloned: 1,
+      source_pages: [
+        { drawing_id: set, revision_id: '88888888-8888-4888-8888-888888888888', file_path: path, pdf_page: 4 },
+        resultFixture().source_pages[0],
+      ],
+    };
+    expect(parseDrawingCommandResult(result, draft)).toEqual(result);
+    rpc.mockImplementation(async (name: string) => ({ data: name === 'get_drawing_command_capabilities' ? flags : result, error: null }));
+    expect(await applyDrawingCommand(draft)).toEqual({ kind: 'committed', result });
+    rpc.mockResolvedValue({ data: { state: 'committed', result }, error: null });
+    expect(await getDrawingCommandReceipt(draft)).toEqual({ state: 'committed', result });
+  });
   it('checks every capability before exactly one command dispatch with exact payload', async () => {
     const capabilities = await getDrawingCommandCapabilities(project);
     expect(capabilities.write_boundary).toBe(true);
