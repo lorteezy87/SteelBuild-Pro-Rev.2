@@ -132,13 +132,15 @@ export async function runCases(db:Database){
     assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,0);
     assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.source_observations')).rows[0].n,0);
   });
-  await check('captured source and round evidence remain intact while new source becomes unapproved',async()=>{
+  await check('revisionPreservesCapturedSources: round evidence and governing pointers remain while new source is unapproved',async()=>{
     await roundExecute(db,command(await parent(db,ids.submittal),submit));
     await roundExecute(db,command(await parent(db,ids.submittal),{status:'Approved',ball_in_court:'GC',metadata:{ofs_checklist:checklist}}));
     const evidence=(await snapshot(db))['public.submittal_round_revision_evidence'];
+    const governing=(await db.query('select current_submittal_id,submittal_status from public.drawing_sets where id=$1',[ids.set])).rows[0];
     const old=(await db.query('select to_jsonb(r)-array[\'is_current\',\'archived_at\',\'updated_at\',\'updated_by\'] row from public.drawing_revisions r where id=$1',[ids.revision])).rows[0].row;
     await allowed(db,await request(db));
     assert.deepEqual((await snapshot(db))['public.submittal_round_revision_evidence'],evidence);
+    assert.deepEqual((await db.query('select current_submittal_id,submittal_status from public.drawing_sets where id=$1',[ids.set])).rows[0],governing);
     assert.deepEqual((await db.query('select to_jsonb(r)-array[\'is_current\',\'archived_at\',\'updated_at\',\'updated_by\'] row from public.drawing_revisions r where id=$1',[ids.revision])).rows[0].row,old);
     const coverage=(await db.query('select public.get_submittal_revision_coverage($1) result',[ids.submittal])).rows[0].result as Record<string,unknown>;
     assert.equal(coverage.ok,false);

@@ -3,8 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
-import { initialize, candidateUrl, ids, actor, request, execute, path, zoneA, zoneB, type Database } from './fixture.ts';
+import { initialize, candidateUrl, ids, actor, request, execute, createRequest, createSet, receipt, path, zoneA, zoneB, type Database } from './fixture.ts';
 import { runCases, snapshot, tables } from './cases.ts';
+import { runCommandCases } from './commandCases.ts';
 
 assert.equal(process.env.DRAWING_UPLOAD_POSTGRES_TEST,'1','Explicit disposable fixture opt-in required');
 const connectionString=process.env.DRAWING_UPLOAD_POSTGRES_URL;
@@ -27,8 +28,8 @@ async function reset(){
   await initialize(db);await db.exec(candidate);
 }
 async function session(){const c=await connect();await actor(database(c));await c.query('begin;set local role authenticated');return c;}
-async function finish(c:pg.PoolClient,p:Awaited<ReturnType<typeof request>>,key=randomUUID()){
-  try{const result=await execute(database(c),p,key);await c.query('commit');return result;}
+async function finish(c:pg.PoolClient,p:Awaited<ReturnType<typeof request>>,key=randomUUID(),create=false){
+  try{const result=await (create?createSet:execute)(database(c),p,key);await c.query('commit');return result;}
   catch(error){await c.query('rollback');throw error;}finally{c.release();}
 }
 async function waiting(c:pg.PoolClient){
@@ -44,11 +45,18 @@ async function check(name:string,run:()=>Promise<void>){await reset();await run(
 try{
   assert.equal((await admin.query("select count(*)::int n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_%' and c.relkind='r'")).rows[0].n,0,'Disposable fixture database must start empty');
   await initialize(db);await db.exec(candidate);console.log(`${await runCases(db)} actual PostgreSQL behavioral checks passed`);
-  await check('same request waits then returns exact committed receipt once',async()=>{
-    const p=await request(db),key=randomUUID(),a=await session(),b=await session();
-    const first=await execute(database(a),p,key),second=finish(b,p,key);await waiting(b);await a.query('commit');a.release();
-    assert.deepEqual(await second,first);assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,1);
-    assert.equal((await admin.query('select count(*)::int n from public.drawing_revisions where drawing_id=$1',[ids.drawing])).rows[0].n,2);
+  console.log(`${await runCommandCases(db)} actual PostgreSQL atomic command checks passed`);
+  for(const create of [false,true])await check(`same ${create?'create':'revision'} request is immediately busy then returns committed receipt once`,async()=>{
+    const p=await (create?createRequest:request)(db),key=randomUUID(),a=await session();
+    const first=await (create?createSet:execute)(database(a),p,key),started=Date.now();
+    await assert.rejects(finish(await session(),p,key,create),/DRAWING_REVISION_BUSY/);
+    assert.ok(Date.now()-started<1500,'Shared request lock must never wait');
+    const reader=await session();assert.deepEqual(await receipt(database(reader),p,create?'create_set':'revise_set',key),{state:'pending'});await reader.query('commit');reader.release();
+    await a.query('commit');a.release();
+    assert.deepEqual(await finish(await session(),p,key,create),first);
+    const committedReader=await session();assert.deepEqual(await receipt(database(committedReader),p,create?'create_set':'revise_set',key),{state:'committed',result:first});await committedReader.query('commit');committedReader.release();
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,1);
+    assert.equal((await admin.query('select count(*)::int n from public.drawing_revisions r join public.drawings d on d.id=r.drawing_id where d.drawing_set_id=$1',[first.set_id])).rows[0].n,create?1:2);
   });
   await check('different requests cannot split the same set and stale loser fails after commit',async()=>{
     const p=await request(db),a=await session();await execute(database(a),p,randomUUID());
@@ -57,14 +65,44 @@ try{
     assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,1);
   });
   for(const field of ['is_member','is_pm','mfa_satisfied'])for(const replay of [false,true])
-    await check(`${field} revoked during advisory wait denies ${replay?'receipt replay':'new write'}`,async()=>{
+    await check(`${field} revoked after busy request denies ${replay?'receipt replay':'new write'}`,async()=>{
       const p=await request(db),key=randomUUID();if(replay)await finish(await session(),p,key);
       const before=await snapshot(db),lock=await connect();await lock.query('begin');
-      await lock.query('select pg_advisory_xact_lock(hashtextextended($1,0))',[`drawing-set-revision:${ids.pm}:${key}`]);
-      const c=await session(),outcome=finish(c,p,key).then(()=>null,e=>e);await waiting(c);
+      await lock.query('select pg_advisory_xact_lock(hashtextextended($1,0))',[`drawing-command:${ids.pm}:${key}`]);
+      const started=Date.now();await assert.rejects(finish(await session(),p,key),/BUSY/);assert.ok(Date.now()-started<1500);
       await admin.query(`update auth.test_access set ${field}=false where user_id=$1`,[ids.pm]);await lock.query('commit');lock.release();
-      assert.match((await outcome).message,/NOT_AUTHORIZED/);assert.deepEqual(await snapshot(db),before);
+      await assert.rejects(finish(await session(),p,key),/NOT_AUTHORIZED/);
+      const reader=await session();await assert.rejects(receipt(database(reader),p,'revise_set',key),/NOT_AUTHORIZED/);await reader.query('rollback');reader.release();
+      assert.deepEqual(await snapshot(db),before);
     });
+  await check('different operations share the occupied actor request key',async()=>{
+    const p=await createRequest(db),revise=await request(db),key=randomUUID(),a=await session();
+    await createSet(database(a),p,key);
+    await assert.rejects(finish(await session(),revise,key),/BUSY/);
+    const reader=await session();assert.deepEqual(await receipt(database(reader),revise,'revise_set',key),{state:'pending'});await reader.query('commit');reader.release();
+    await a.query('commit');a.release();await assert.rejects(finish(await session(),revise,key),/REQUEST_CONFLICT/);
+  });
+  await check('rolled back create becomes not_committed and same key can safely retry',async()=>{
+    const p=await createRequest(db),key=randomUUID(),before=await snapshot(db),a=await session();await createSet(database(a),p,key);
+    const reader=await session();assert.deepEqual(await receipt(database(reader),p,'create_set',key),{state:'pending'});await reader.query('commit');reader.release();
+    await a.query('rollback');a.release();assert.deepEqual(await snapshot(db),before);
+    const freeReader=await session();assert.deepEqual(await receipt(database(freeReader),p,'create_set',key),{state:'not_committed'});await freeReader.query('commit');freeReader.release();
+    await finish(await session(),p,key,true);assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,1);
+  });
+  await check('normalized set names serialize across distinct keys without adoption',async()=>{
+    const p=await createRequest(db),a=await session();await createSet(database(a),p,randomUUID());
+    const competing={...p,set_name:' REVIEWED NEW SET '};await assert.rejects(finish(await session(),competing,randomUUID(),true),/BUSY/);
+    await a.query('commit');a.release();await assert.rejects(finish(await session(),competing,randomUUID(),true),/DUPLICATE/);
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,1);
+  });
+  await check('legacy uniqueness race aborts new set without adopting the competing row',async()=>{
+    const p=await createRequest(db),writer=await connect();await writer.query('begin');
+    await writer.query('insert into public.drawing_sets(project_id,set_name) values($1,$2)',[ids.project,p.set_name]);
+    const consumer=await session(),outcome=finish(consumer,p,randomUUID(),true).then(()=>null,e=>e);await waiting(consumer);
+    await writer.query('commit');writer.release();assert.equal((await outcome).code,'23505');
+    assert.equal((await admin.query('select count(*)::int n from steelbuild_drawing_revision.requests')).rows[0].n,0);
+    assert.equal((await admin.query('select count(*)::int n from public.drawings d join public.drawing_sets s on s.id=d.drawing_set_id where s.set_name=$1',[p.set_name])).rows[0].n,0);
+  });
   for(const [name,sql,args] of [
     ['organization','select id from public.organizations where id=$1 for update',[ids.org]],
     ['project','select id from public.projects where id=$1 for update',[ids.project]],
@@ -108,6 +146,16 @@ try{
     const error=await result;assert.match(error.message,revoke?/NOT_AUTHORIZED/:/DRAWING_REVISION_BUSY/);
     if(!revoke)await lock.query('rollback');lock.release();assert.deepEqual(await snapshot(db),before);
   });
+  for(const target of ['drawing_sets','drawings','drawing_revisions','requests'])for(const field of ['is_member','is_pm','mfa_satisfied'])
+    await check(`create ${target} implicit wait rechecks revoked ${field}`,async()=>{
+      const schema=target==='requests'?'steelbuild_drawing_revision':'public';
+      await admin.query(`create function public.late_create_wait() returns trigger language plpgsql as $$ begin perform pg_advisory_xact_lock(777000112);return new;end $$;
+        create trigger late_create_wait before insert on ${schema}.${target} for each row execute function public.late_create_wait()`);
+      const p=await createRequest(db),before=await snapshot(db),lock=await connect();await lock.query('begin;select pg_advisory_xact_lock(777000112)');
+      const consumer=await session(),outcome=finish(consumer,p,randomUUID(),true).then(()=>null,e=>e);await waiting(consumer);
+      await admin.query(`update auth.test_access set ${field}=false where user_id=$1`,[ids.pm]);await lock.query('commit');lock.release();
+      assert.match((await outcome).message,/NOT_AUTHORIZED/);assert.deepEqual(await snapshot(db),before);
+    });
   await check('input and coordination boundary workload stays within runtime budget',async()=>{
     await admin.query('begin');
     await admin.query(`insert into public.drawings(id,project_id,drawing_set_id,sheet_number,title,revision_number,file_url,pdf_page)

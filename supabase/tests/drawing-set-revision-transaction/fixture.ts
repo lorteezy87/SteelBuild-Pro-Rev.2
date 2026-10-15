@@ -8,6 +8,9 @@ export async function initialize(db:Database){
   await baseInitialize(db);
   await db.exec(await readFile(migrationUrl,'utf8'));
   const baseline=await readFile(new URL('../../migrations/20260101000010_baseline_schema.sql',import.meta.url),'utf8');
+  const nameIndex=baseline.match(/CREATE UNIQUE INDEX "uq_drawing_sets_project_set_name"[^;]+;/)?.[0];
+  if(!nameIndex)throw new Error('Missing set-name uniqueness fixture');
+  await db.exec(nameIndex);
   for(const table of ['drawing_zones','drawing_links','drawing_zone_dependencies','drawing_activity','drawing_zone_activity','drawing_watchers','alerts']){
     const start=baseline.indexOf(`CREATE TABLE IF NOT EXISTS "public"."${table}" (`);
     await db.exec(baseline.slice(start,baseline.indexOf('\n);',start)+3));
@@ -63,4 +66,17 @@ export async function request(db:Database):Promise<Record<string,unknown>>{
 }
 export async function execute(db:Database,payload:Record<string,unknown>,key='dddddddd-dddd-4ddd-8ddd-dddddddddddd'){
   return (await db.query('select public.apply_drawing_set_revision($1::uuid,$2::jsonb) result',[key,JSON.stringify(payload)])).rows[0]?.result as Record<string,unknown>;
+}
+export async function createRequest(db:Database):Promise<Record<string,unknown>>{
+  const revision=await request(db);
+  const incoming:Record<string,unknown>={...(revision.sheets as Record<string,unknown>[])[0],action:'added'};
+  delete incoming.drawing_id;delete incoming.expected_updated_at;delete incoming.expected_revision_id;
+  return {project_id:ids.project,set_name:'Reviewed new set',set_number:null,revision_label:'B',discipline:null,
+    issued_date:null,issued_by:null,notes:null,file_path:path,source_objects:revision.source_objects,sheets:[incoming]};
+}
+export async function createSet(db:Database,payload:Record<string,unknown>,key='dddddddd-dddd-4ddd-8ddd-dddddddddddd'){
+  return (await db.query('select public.create_drawing_set_from_review($1::uuid,$2::jsonb) result',[key,JSON.stringify(payload)])).rows[0].result as Record<string,unknown>;
+}
+export async function receipt(db:Database,payload:Record<string,unknown>,operation='create_set',key='dddddddd-dddd-4ddd-8ddd-dddddddddddd'){
+  return (await db.query('select public.get_drawing_command_receipt($1::uuid,$2::text,$3::jsonb) result',[key,operation,JSON.stringify(payload)])).rows[0].result as Record<string,unknown>;
 }

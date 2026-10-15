@@ -7,6 +7,7 @@ CREATE TABLE steelbuild_drawing_revision.requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   request_id uuid NOT NULL,
+  operation text NOT NULL CHECK(operation IN ('create_set','revise_set')),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   set_id uuid NOT NULL REFERENCES public.drawing_sets(id) ON DELETE CASCADE,
   payload_sha256 text NOT NULL CHECK(payload_sha256 ~ '^[0-9a-f]{64}$'),
@@ -97,12 +98,44 @@ END $$;
 REVOKE ALL ON FUNCTION public.get_drawing_revision_sources(uuid,text[]) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.get_drawing_revision_sources(uuid,text[]) TO authenticated;
 
-CREATE FUNCTION public.apply_drawing_set_revision(p_request_id uuid,p_request jsonb) RETURNS jsonb
+-- Receipt lookup takes the same non-waiting transaction lock as both writers.
+-- A free lock plus an absent receipt is the only evidence for not_committed.
+CREATE FUNCTION public.get_drawing_command_receipt(p_request_id uuid,p_operation text,p_request jsonb) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET timezone='UTC' SET lock_timeout='2s' AS $$
+DECLARE v_project uuid; v_org uuid; v_hash text; v_receipt steelbuild_drawing_revision.requests; v_locked boolean;
+BEGIN
+  IF current_setting('transaction_isolation')<>'read committed' THEN
+    RAISE EXCEPTION 'DRAWING_REVISION_ISOLATION: READ COMMITTED is required' USING ERRCODE='40001'; END IF;
+  IF p_request_id IS NULL OR p_operation IS NULL OR p_operation NOT IN ('create_set','revise_set')
+    OR jsonb_typeof(p_request) IS DISTINCT FROM 'object' OR octet_length(p_request::text)>1048576
+    OR jsonb_typeof(p_request->'project_id') IS DISTINCT FROM 'string' THEN
+    RAISE EXCEPTION 'DRAWING_REVISION_INVALID: Bounded command identity required' USING ERRCODE='22023'; END IF;
+  v_project:=(p_request->>'project_id')::uuid;
+  v_org:=steelbuild_drawing_revision.assert_access(v_project);
+  v_hash:=encode(sha256(convert_to(jsonb_build_object('operation',p_operation,'request',p_request)::text,'UTF8')),'hex');
+  v_locked:=pg_try_advisory_xact_lock(hashtextextended('drawing-command:'||auth.uid()::text||':'||p_request_id::text,0));
+  IF steelbuild_drawing_revision.assert_access(v_project) IS DISTINCT FROM v_org THEN
+    RAISE EXCEPTION 'DRAWING_REVISION_STALE: Project workspace changed' USING ERRCODE='40001'; END IF;
+  IF NOT v_locked THEN RETURN jsonb_build_object('state','pending'); END IF;
+  SELECT * INTO v_receipt FROM steelbuild_drawing_revision.requests WHERE actor_id=auth.uid() AND request_id=p_request_id;
+  IF v_receipt.request_id IS NOT NULL AND
+    (v_receipt.operation,v_receipt.project_id,v_receipt.payload_sha256) IS DISTINCT FROM (p_operation,v_project,v_hash) THEN
+    RAISE EXCEPTION 'DRAWING_REVISION_REQUEST_CONFLICT: Request key already used for different content' USING ERRCODE='22023'; END IF;
+  IF steelbuild_drawing_revision.assert_access(v_project) IS DISTINCT FROM v_org THEN
+    RAISE EXCEPTION 'DRAWING_REVISION_STALE: Project workspace changed' USING ERRCODE='40001'; END IF;
+  IF v_receipt.request_id IS NOT NULL THEN RETURN jsonb_build_object('state','committed','result',v_receipt.result); END IF;
+  RETURN jsonb_build_object('state','not_committed');
+END $$;
+REVOKE ALL ON FUNCTION public.get_drawing_command_receipt(uuid,text,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.get_drawing_command_receipt(uuid,text,jsonb) TO authenticated;
+
+CREATE FUNCTION steelbuild_drawing_revision.apply_command(p_request_id uuid,p_operation text,p_request jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET timezone='UTC' SET lock_timeout='2s' AS $$
 DECLARE
   v_actor uuid:=auth.uid(); v_org uuid; v_project uuid; v_set_id uuid; v_hash text;
   v_set public.drawing_sets; v_sheet public.drawings; v_current public.drawing_revisions;
-  v_receipt steelbuild_drawing_revision.requests; v_object storage.objects;
+  v_receipt jsonb; v_object storage.objects; v_create boolean:=p_operation='create_set';
+  v_required text[]; v_allowed text[];
   v_zone public.drawing_zones; v_link public.drawing_links; v_edge public.drawing_zone_dependencies;
   v_roster jsonb; v_entry jsonb; v_sources jsonb; v_expected jsonb; v_history jsonb;
   v_paths text[]; v_roster_ids uuid[]; v_sheet_ids uuid[];
@@ -116,48 +149,59 @@ DECLARE
 BEGIN
   IF current_setting('transaction_isolation')<>'read committed' THEN
     RAISE EXCEPTION 'DRAWING_REVISION_ISOLATION: READ COMMITTED is required' USING ERRCODE='40001'; END IF;
+  IF p_operation IS NULL OR p_operation NOT IN ('create_set','revise_set') THEN
+    RAISE EXCEPTION 'DRAWING_REVISION_INVALID: Unknown operation' USING ERRCODE='22023'; END IF;
+  v_required:=CASE WHEN v_create THEN ARRAY['project_id','set_name','set_number','revision_label','discipline','issued_date','issued_by','notes','file_path','source_objects','sheets']
+    ELSE ARRAY['project_id','set_id','expected_set_updated_at','expected_set_revision','revision_label','issued_date','file_path','source_objects','sheets'] END;
+  v_allowed:=v_required||ARRAY['issued_by','notes'];
   IF p_request_id IS NULL OR jsonb_typeof(p_request) IS DISTINCT FROM 'object'
     OR octet_length(p_request::text)>1048576
-    OR NOT p_request ?& ARRAY['project_id','set_id','expected_set_updated_at','expected_set_revision','revision_label','issued_date','file_path','source_objects','sheets']
-    OR EXISTS(SELECT 1 FROM jsonb_object_keys(p_request) k WHERE k<>ALL(ARRAY['project_id','set_id','expected_set_updated_at','expected_set_revision','revision_label','issued_date','issued_by','notes','file_path','source_objects','sheets'])) THEN
+    OR NOT p_request ?& v_required
+    OR EXISTS(SELECT 1 FROM jsonb_object_keys(p_request) k WHERE k<>ALL(v_allowed)) THEN
     RAISE EXCEPTION 'DRAWING_REVISION_INVALID: Exact bounded reviewed request is required' USING ERRCODE='22023'; END IF;
-  IF EXISTS(SELECT 1 FROM unnest(ARRAY['project_id','set_id','expected_set_updated_at','revision_label','issued_date','file_path']) k
+  IF EXISTS(SELECT 1 FROM unnest(CASE WHEN v_create THEN ARRAY['project_id','set_name','revision_label','file_path']
+      ELSE ARRAY['project_id','set_id','expected_set_updated_at','revision_label','issued_date','file_path'] END) k
       WHERE jsonb_typeof(p_request->k) IS DISTINCT FROM 'string')
-    OR jsonb_typeof(p_request->'expected_set_revision') NOT IN ('string','null') THEN
+    OR (NOT v_create AND jsonb_typeof(p_request->'expected_set_revision') NOT IN ('string','null'))
+    OR (v_create AND EXISTS(SELECT 1 FROM unnest(ARRAY['set_number','discipline','issued_date','issued_by','notes']) k WHERE jsonb_typeof(p_request->k) NOT IN ('string','null'))) THEN
     RAISE EXCEPTION 'DRAWING_REVISION_INVALID: Header fields must use their exact JSON types' USING ERRCODE='22023'; END IF;
-  v_project:=(p_request->>'project_id')::uuid; v_set_id:=(p_request->>'set_id')::uuid;
+  v_project:=(p_request->>'project_id')::uuid; v_set_id:=CASE WHEN v_create THEN gen_random_uuid() ELSE (p_request->>'set_id')::uuid END;
   v_org:=steelbuild_drawing_revision.assert_access(v_project);
   v_roster:=p_request->'sheets'; v_sources:=p_request->'source_objects';
   IF jsonb_typeof(v_roster) IS DISTINCT FROM 'array' OR jsonb_typeof(v_sources) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'DRAWING_REVISION_INVALID: Reviewed roster and source snapshots must be arrays' USING ERRCODE='22023'; END IF;
   IF jsonb_array_length(v_roster) NOT BETWEEN 1 AND 250 OR jsonb_array_length(v_sources) NOT BETWEEN 1 AND 250
     OR nullif(btrim(p_request->>'revision_label'),'') IS NULL OR length(p_request->>'revision_label')>80
-    OR nullif(p_request->>'expected_set_updated_at','') IS NULL OR nullif(p_request->>'issued_date','') IS NULL
-    OR (p_request->>'issued_date') !~ '^\d{4}-\d{2}-\d{2}$'
+    OR (NOT v_create AND (nullif(p_request->>'expected_set_updated_at','') IS NULL OR nullif(p_request->>'issued_date','') IS NULL))
+    OR ((p_request->>'issued_date') IS NOT NULL AND (p_request->>'issued_date') !~ '^\d{4}-\d{2}-\d{2}$')
+    OR (v_create AND (nullif(btrim(p_request->>'set_name'),'') IS NULL OR length(p_request->>'set_name')>500 OR length(p_request->>'set_number')>120))
     OR (p_request ? 'issued_by' AND jsonb_typeof(p_request->'issued_by') NOT IN ('string','null'))
     OR (p_request ? 'notes' AND jsonb_typeof(p_request->'notes') NOT IN ('string','null')) THEN
     RAISE EXCEPTION 'DRAWING_REVISION_INVALID: Complete bounded header and roster are required' USING ERRCODE='22023'; END IF;
   PERFORM (p_request->>'issued_date')::date;
-  v_hash:=encode(sha256(convert_to(p_request::text,'UTF8')),'hex');
-  -- Only this wait occurs before row locks. All subsequent explicit locks use
-  -- NOWAIT, avoiding parent/child inversions with account/project erasure.
-  PERFORM pg_advisory_xact_lock(hashtextextended('drawing-set-revision:'||v_actor::text||':'||p_request_id::text,0));
+  v_hash:=encode(sha256(convert_to(jsonb_build_object('operation',p_operation,'request',p_request)::text,'UTF8')),'hex');
+  v_receipt:=public.get_drawing_command_receipt(p_request_id,p_operation,p_request);
+  IF v_receipt->>'state'='pending' THEN
+    RAISE EXCEPTION 'DRAWING_REVISION_BUSY: Command is in progress; retry the same request' USING ERRCODE='55P03'; END IF;
+  IF v_receipt->>'state'='committed' THEN RETURN v_receipt->'result'; END IF;
   v_org:=steelbuild_drawing_revision.assert_access(v_project);
   PERFORM id FROM public.organizations WHERE id=v_org FOR SHARE NOWAIT;
   PERFORM id FROM public.projects WHERE id=v_project AND org_id=v_org FOR SHARE NOWAIT;
   IF NOT FOUND THEN RAISE EXCEPTION 'DRAWING_REVISION_STALE: Project workspace changed during review' USING ERRCODE='40001'; END IF;
   PERFORM id FROM auth.users WHERE id=v_actor FOR KEY SHARE NOWAIT;
+  IF v_create THEN
+    IF NOT pg_try_advisory_xact_lock(hashtextextended('drawing-set-name:'||v_project::text||':'||upper(btrim(p_request->>'set_name')),0)) THEN
+      RAISE EXCEPTION 'DRAWING_REVISION_BUSY: Set name is being used; retry the same request' USING ERRCODE='55P03'; END IF;
+    IF EXISTS(SELECT 1 FROM public.drawing_sets WHERE project_id=v_project AND upper(btrim(set_name))=upper(btrim(p_request->>'set_name')))
+      OR EXISTS(SELECT 1 FROM public.drawings WHERE project_id=v_project AND drawing_set_id IS NULL AND upper(btrim(drawing_set_name))=upper(btrim(p_request->>'set_name'))) THEN
+      RAISE EXCEPTION 'DRAWING_REVISION_DUPLICATE: Set name is already used, including archived history' USING ERRCODE='23505'; END IF;
+    v_set.id:=v_set_id;v_set.project_id:=v_project;v_set.set_name:=btrim(p_request->>'set_name');v_set.discipline:=p_request->>'discipline';
+    v_sheet_ids:='{}';v_history:='[]';
+  ELSE
   SELECT * INTO v_set FROM public.drawing_sets WHERE id=v_set_id AND project_id=v_project FOR UPDATE NOWAIT;
   IF v_set.id IS NULL OR v_set.is_deleted OR v_set.deleted_at IS NOT NULL OR coalesce(v_set.is_locked,false) THEN
     RAISE EXCEPTION 'DRAWING_REVISION_SET_UNAVAILABLE: Active unlocked set required' USING ERRCODE='40001'; END IF;
   PERFORM steelbuild_drawing_revision.assert_access(v_project);
-  SELECT * INTO v_receipt FROM steelbuild_drawing_revision.requests WHERE actor_id=v_actor AND request_id=p_request_id;
-  IF v_receipt.request_id IS NOT NULL THEN
-    IF (v_receipt.project_id,v_receipt.set_id,v_receipt.payload_sha256) IS DISTINCT FROM (v_project,v_set_id,v_hash) THEN
-      RAISE EXCEPTION 'DRAWING_REVISION_REQUEST_CONFLICT: Request key already used for different content' USING ERRCODE='22023'; END IF;
-    PERFORM steelbuild_drawing_revision.assert_access(v_project);
-    RETURN v_receipt.result;
-  END IF;
   IF v_set.updated_at IS DISTINCT FROM (p_request->>'expected_set_updated_at')::timestamptz
     OR v_set.revision IS DISTINCT FROM p_request->>'expected_set_revision'
     OR upper(btrim(coalesce(v_set.revision,'')))=upper(btrim(p_request->>'revision_label')) THEN
@@ -182,11 +226,13 @@ BEGIN
   PERFORM r.id FROM public.drawing_revisions r WHERE r.drawing_id=ANY(v_sheet_ids) ORDER BY r.id FOR UPDATE NOWAIT;
   IF EXISTS(SELECT 1 FROM public.drawing_revisions WHERE drawing_id=ANY(v_sheet_ids) AND project_id<>v_project) THEN
     RAISE EXCEPTION 'DRAWING_REVISION_STALE: Revision project mismatch' USING ERRCODE='40001'; END IF;
+  END IF;
+  PERFORM steelbuild_drawing_revision.assert_access(v_project);
   FOR v_entry IN SELECT value FROM jsonb_array_elements(v_roster) LOOP
     IF jsonb_typeof(v_entry) IS DISTINCT FROM 'object'
       OR NOT v_entry ?& ARRAY['action','sheet_number']
       OR EXISTS(SELECT 1 FROM jsonb_object_keys(v_entry) k WHERE k<>ALL(ARRAY['action','drawing_id','expected_updated_at','expected_revision_id','sheet_number','sheet_title','revision_code','file_path','pdf_page','reviewed','discipline','extraction']))
-      OR v_entry->>'action' NOT IN ('same','revised','added','removed')
+      OR v_entry->>'action' NOT IN ('same','revised','added','removed') OR (v_create AND v_entry->>'action'<>'added')
       OR jsonb_typeof(v_entry->'action') IS DISTINCT FROM 'string' OR jsonb_typeof(v_entry->'sheet_number') IS DISTINCT FROM 'string'
       OR nullif(btrim(v_entry->>'sheet_number'),'') IS NULL OR length(v_entry->>'sheet_number')>120 THEN
       RAISE EXCEPTION 'DRAWING_REVISION_INVALID: Explicit valid sheet action and identity required' USING ERRCODE='22023'; END IF;
@@ -301,6 +347,13 @@ BEGIN
     RAISE EXCEPTION 'DRAWING_REVISION_HOLD: Resolve the active hold before removing a sheet' USING ERRCODE='22023'; END IF;
   PERFORM steelbuild_drawing_revision.assert_access(v_project);
 
+  IF v_create THEN
+    INSERT INTO public.drawing_sets(id,project_id,set_name,discipline,revision,issued_date,issued_by,notes,file_url,revision_history,metadata,set_approval_status)
+      VALUES(v_set_id,v_project,v_set.set_name,v_set.discipline,btrim(p_request->>'revision_label'),(p_request->>'issued_date')::date,
+        p_request->>'issued_by',p_request->>'notes',p_request->>'file_path','[]',
+        CASE WHEN nullif(btrim(p_request->>'set_number'),'') IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('drawing_set_number',btrim(p_request->>'set_number')) END,'pending_review');
+    PERFORM steelbuild_drawing_revision.assert_access(v_project);
+  END IF;
   FOR v_entry IN SELECT value FROM jsonb_array_elements(v_roster) LOOP
     v_action:=v_entry->>'action'; IF v_action='same' THEN CONTINUE; END IF;
     v_extracted_text:=CASE WHEN v_entry->'extraction'->'text'->>'state'='harvested' THEN v_entry->'extraction'->'text'->>'value' ELSE NULL END;
@@ -309,9 +362,9 @@ BEGIN
       IF EXISTS(SELECT 1 FROM public.drawings WHERE drawing_set_id=v_set_id AND NOT is_deleted AND deleted_at IS NULL
         AND upper(btrim(sheet_number))=upper(btrim(v_entry->>'sheet_number'))) THEN
         RAISE EXCEPTION 'DRAWING_REVISION_DUPLICATE: Sheet mark already exists' USING ERRCODE='23505'; END IF;
-      INSERT INTO public.drawings(project_id,drawing_set_id,drawing_set_name,sheet_number,title,discipline,revision_number,file_url,pdf_page,stage,set_approval_status,extracted_text,callouts)
+      INSERT INTO public.drawings(project_id,drawing_set_id,drawing_set_name,sheet_number,title,discipline,revision_number,file_url,pdf_page,stage,set_approval_status,extracted_text,callouts,hyperlinks)
       VALUES(v_project,v_set_id,v_set.set_name,btrim(v_entry->>'sheet_number'),btrim(v_entry->>'sheet_title'),coalesce(v_entry->>'discipline',v_set.discipline),
-        btrim(v_entry->>'revision_code'),v_entry->>'file_path',(v_entry->>'pdf_page')::integer,'Not Started','pending_review',v_extracted_text,v_callouts) RETURNING * INTO v_sheet;
+        btrim(v_entry->>'revision_code'),v_entry->>'file_path',(v_entry->>'pdf_page')::integer,'Not Started','pending_review',v_extracted_text,v_callouts,NULL) RETURNING * INTO v_sheet;
       v_old:=NULL; v_version:=1; v_added:=v_added+1;
     ELSE
       SELECT * INTO v_sheet FROM public.drawings WHERE id=(v_entry->>'drawing_id')::uuid;
@@ -334,7 +387,7 @@ BEGIN
         (p_request->>'issued_date')::date,p_request->>'notes','received',v_actor) RETURNING id INTO v_new;
     IF v_old IS NOT NULL THEN v_revision_map:=v_revision_map||jsonb_build_object(v_old::text,v_new); END IF;
     UPDATE public.drawings SET title=btrim(v_entry->>'sheet_title'),revision_number=v_code,file_url=v_entry->>'file_path',pdf_page=v_page,
-      extracted_text=v_extracted_text,callouts=v_callouts,
+      extracted_text=v_extracted_text,callouts=v_callouts,hyperlinks=NULL,
       stage='Not Started',set_approval_status='pending_review',set_approved_date=NULL,ifc_status=NULL,updated_at=clock_timestamp() WHERE id=v_sheet.id;
     v_source_pages:=v_source_pages||jsonb_build_array(jsonb_build_object('drawing_id',v_sheet.id,'revision_id',v_new,'file_path',v_entry->>'file_path','pdf_page',v_page));
   END LOOP;
@@ -363,9 +416,11 @@ BEGIN
   SELECT count(*) INTO v_count FROM public.drawings WHERE drawing_set_id=v_set_id AND NOT is_deleted AND deleted_at IS NULL AND NOT coalesce(is_superseded,false);
   IF v_count=0 OR v_revised+v_added+v_removed=0 THEN
     RAISE EXCEPTION 'DRAWING_REVISION_INVALID: A revision needs a change and at least one active sheet' USING ERRCODE='22023'; END IF;
+  IF NOT v_create THEN
   v_history:=v_history||jsonb_build_array(jsonb_build_object('revisionLabel',v_set.revision,'fileUrl',v_set.file_url,'issueDate',v_set.issued_date,
     'issuedBy',v_set.issued_by,'sheetCount',v_set.sheet_count,'notes',v_set.notes,'approvalStatus',v_set.set_approval_status,
     'approvedDate',v_set.set_approved_date,'approvedBy',v_set.set_approved_by,'recordedAt',clock_timestamp(),'status','superseded'));
+  END IF;
   UPDATE public.drawing_sets SET revision=btrim(p_request->>'revision_label'),issued_date=(p_request->>'issued_date')::date,
     issued_by=coalesce(p_request->>'issued_by',issued_by),notes=coalesce(p_request->>'notes',notes),file_url=p_request->>'file_path',
     revision_history=v_history::text,sheet_count=v_count,set_approval_status='pending_review',set_approved_date=NULL,set_approved_by=NULL,
@@ -373,11 +428,11 @@ BEGIN
   -- Governing submittal pointers and all historical approval/round records remain.
   -- The exact-revision coverage gate invalidates their relevance to the new source.
   PERFORM steelbuild_drawing_revision.assert_access(v_project);
-  v_result:=jsonb_build_object('applied',true,'request_id',p_request_id,'project_id',v_project,'set_id',v_set_id,
+  v_result:=jsonb_build_object('applied',true,'contract_version',1,'operation',p_operation,'payload_sha256',v_hash,'request_id',p_request_id,'project_id',v_project,'set_id',v_set_id,
     'revised',v_revised,'added',v_added,'removed',v_removed,'sheet_count',v_count,
     'zones_cloned',v_zones,'links_cloned',v_links,'dependencies_cloned',v_edges,'source_pages',v_source_pages);
-  INSERT INTO steelbuild_drawing_revision.requests(actor_id,request_id,project_id,set_id,payload_sha256,result)
-    VALUES(v_actor,p_request_id,v_project,v_set_id,v_hash,v_result) RETURNING id INTO v_receipt_id;
+  INSERT INTO steelbuild_drawing_revision.requests(actor_id,request_id,operation,project_id,set_id,payload_sha256,result)
+    VALUES(v_actor,p_request_id,p_operation,v_project,v_set_id,v_hash,v_result) RETURNING id INTO v_receipt_id;
   INSERT INTO steelbuild_drawing_revision.source_observations(receipt_id,drawing_id,project_id,drawing_set_id,
     parent_file_url,parent_pdf_page,parent_revision_number,parent_updated_at,observed_current_revision_id,observed_current_revision_version,extracted_text,callouts)
     SELECT v_receipt_id,o.drawing_id,o.project_id,o.drawing_set_id,o.parent_file_url,o.parent_pdf_page,o.parent_revision_number,
@@ -390,6 +445,17 @@ BEGIN
 EXCEPTION WHEN lock_not_available OR deadlock_detected THEN
   RAISE EXCEPTION 'DRAWING_REVISION_BUSY: Concurrent work is changing these records; retry the same request' USING ERRCODE='55P03';
 END $$;
+REVOKE ALL ON FUNCTION steelbuild_drawing_revision.apply_command(uuid,text,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+CREATE FUNCTION public.apply_drawing_set_revision(p_request_id uuid,p_request jsonb) RETURNS jsonb
+LANGUAGE sql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
+  SELECT steelbuild_drawing_revision.apply_command(p_request_id,'revise_set',p_request)
+$$;
 REVOKE ALL ON FUNCTION public.apply_drawing_set_revision(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.apply_drawing_set_revision(uuid,jsonb) TO authenticated;
+CREATE FUNCTION public.create_drawing_set_from_review(p_request_id uuid,p_request jsonb) RETURNS jsonb
+LANGUAGE sql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
+  SELECT steelbuild_drawing_revision.apply_command(p_request_id,'create_set',p_request)
+$$;
+REVOKE ALL ON FUNCTION public.create_drawing_set_from_review(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.create_drawing_set_from_review(uuid,jsonb) TO authenticated;
 COMMIT;
