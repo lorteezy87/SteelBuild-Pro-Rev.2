@@ -32,6 +32,8 @@ export async function initialize(db:Database){
   }
   await db.exec(`
     grant usage on schema public to anon,authenticated,service_role;
+    revoke all on function public.soft_delete_project(uuid) from public,anon,authenticated,service_role;
+    grant execute on function public.soft_delete_project(uuid) to authenticated;
     alter table public.drawing_activity drop constraint chk_drawing_activity_event_type;
     alter table public.drawing_activity add constraint chk_drawing_activity_event_type check(event_type in ('created','stage_changed','revision_changed','approval_changed','deleted','restored','ai_status_changed','superseded','hold_placed','hold_released'));
     alter table public.drawings add column scale_status text check(scale_status in ('undetected','ambiguous','auto','manual'));

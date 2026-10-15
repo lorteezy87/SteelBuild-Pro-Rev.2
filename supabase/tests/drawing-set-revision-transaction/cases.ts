@@ -10,7 +10,7 @@ export const tables=['public.drawing_sets','public.drawings','public.drawing_rev
   'steelbuild_drawing_revision.adopted_sources','steelbuild_workflow.round_context','steelbuild_workflow.round_requests','storage.objects',
   'public.organizations','public.projects','public.organization_members','public.data_erasure_log','public.rfis','public.drawing_holds',
   'public.drawing_signoffs','public.submittal_comment_dispositions','public.drawing_watchers','public.user_profiles','public.pma_audit_logs',
-  'steelbuild_drawing_revision.command_context','steelbuild_drawing_revision.hold_bindings','steelbuild_drawing_revision.package_review'];
+  'steelbuild_drawing_revision.command_context','steelbuild_drawing_revision.project_archive_context','steelbuild_drawing_revision.hold_bindings','steelbuild_drawing_revision.package_review'];
 export async function snapshot(db:Database){
   const result:Record<string,unknown>={};
   for(const table of tables)result[table]=(await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]') value from ${table} t`)).rows[0].value;

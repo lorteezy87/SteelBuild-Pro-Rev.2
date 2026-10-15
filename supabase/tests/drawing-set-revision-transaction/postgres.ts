@@ -82,8 +82,29 @@ try{
     const archiver=await session(),archival=finishDaily(archiver,'select public.soft_delete_project($1)',[ids.project]).then(r=>r,e=>e);await waiting(archiver);
     assert.equal((await admin.query('select is_deleted from public.projects where id=$1',[ids.project])).rows[0].is_deleted,false);
     await caller.query('commit');caller.release();const archived=await archival;
-    assert.equal(archived instanceof Error,false);assert.equal((await admin.query('select is_deleted from public.projects where id=$1',[ids.project])).rows[0].is_deleted,true);
+    assert.equal(archived instanceof Error,false,archived instanceof Error?archived.stack:undefined);assert.equal((await admin.query('select is_deleted from public.projects where id=$1',[ids.project])).rows[0].is_deleted,true);
     await assert.rejects(finishDaily(await session(),'select public.publish_drawing_revision($1,$2)',[ids.revision,'released_for_shop']),/NOT_AUTHORIZED/);
+  });
+  for(const field of ['is_member','is_pm','mfa_satisfied'])for(const stage of ['organization','project','final cascade'])
+    await check(`project archive ${stage} wait rechecks ${field}`,async()=>{
+      const late=stage==='final cascade';
+      if(late)await admin.query(`create function public.project_archive_wait() returns trigger language plpgsql as $$ begin perform pg_advisory_xact_lock(777000116);return new;end $$;
+        create trigger project_archive_wait before update on public.projects for each row execute function public.project_archive_wait()`);
+      const before=await snapshot(db),blocker=await connect();await blocker.query('begin');
+      if(late)await blocker.query('select pg_advisory_xact_lock(777000116)');
+      else if(stage==='organization')await blocker.query('select id from public.organizations where id=$1 for update',[ids.org]);
+      else await blocker.query('select id from public.projects where id=$1 for update',[ids.project]);
+      const caller=await session(),outcome=finishDaily(caller,'select public.soft_delete_project($1)',[ids.project]).then(()=>null,e=>e);
+      await waiting(caller);await admin.query(`update auth.test_access set ${field}=false where user_id=$1`,[ids.pm]);
+      await blocker.query('commit');blocker.release();
+      assert.match((await outcome).message,/NOT_AUTHORIZED/);assert.deepEqual(await snapshot(db),before);
+    });
+  await check('project archive admission wait is bounded and leaves no cascade or authority',async()=>{
+    const before=await snapshot(db),blocker=await connect();await blocker.query('begin');
+    await blocker.query('select id from public.projects where id=$1 for update',[ids.project]);
+    const started=Date.now();await assert.rejects(finishDaily(await session(),'select public.soft_delete_project($1)',[ids.project]),/BUSY/);
+    const elapsed=Date.now()-started;assert.ok(elapsed>=1500&&elapsed<4500,`Expected local 2s archive lock timeout, got ${elapsed}ms`);
+    await blocker.query('rollback');blocker.release();assert.deepEqual(await snapshot(db),before);
   });
   await check('revision winner prevents stale publication before and after commit',async()=>{
     const p=await request(db),before=await snapshot(db),consumer=await session();await execute(database(consumer),p,randomUUID());

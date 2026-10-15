@@ -19,6 +19,16 @@ CREATE INDEX drawing_hold_binding_revision ON steelbuild_drawing_revision.hold_b
 CREATE INDEX drawing_hold_binding_project ON steelbuild_drawing_revision.hold_bindings(project_id);
 CREATE INDEX drawing_hold_binding_drawing ON steelbuild_drawing_revision.hold_bindings(drawing_id);
 
+-- Existing whole-project archival also owns legacy sheets without a set.
+-- This private context grants only project-scoped tombstones/count maintenance,
+-- never source, identity, approval or arbitrary lifecycle writes.
+CREATE TABLE steelbuild_drawing_revision.project_archive_context (
+  transaction_id bigint NOT NULL,backend_pid integer NOT NULL,actor_id uuid NOT NULL,project_id uuid NOT NULL,
+  PRIMARY KEY(transaction_id,backend_pid,project_id)
+);
+ALTER TABLE steelbuild_drawing_revision.project_archive_context ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON steelbuild_drawing_revision.project_archive_context FROM PUBLIC,anon,authenticated,service_role;
+
 CREATE FUNCTION steelbuild_drawing_revision.assert_role(p_project uuid,p_role text) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_org uuid;
@@ -308,6 +318,97 @@ BEGIN
   RETURN v_count;
 END $$;
 
+-- Pin the shared implementation before replacing its public body. Keeping the
+-- public OID avoids pre-bound callers retaining an unwrapped implementation.
+DO $$ BEGIN
+  IF encode(sha256(convert_to(pg_get_functiondef('public.soft_delete_project(uuid)'::regprocedure),'UTF8')),'hex')
+    IS DISTINCT FROM '5de294eee2834ac7c1a1ede50301e4e560cd0316d0470981aa47d19c17672930' THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_PREREQUISITE: Unreviewed project archive body'; END IF;
+END $$;
+
+-- Captured 2026-10-15 on both fixed refs; body retained exactly. The original
+-- fixed child list and skip-WP behavior remain, but the GUC is not authority.
+CREATE FUNCTION steelbuild_drawing_revision.archive_project_impl(p_project_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$
+declare
+  v_deleted_at timestamptz := now(); v_table text; v_updated int;
+  v_child_tables text[] := array[
+    'rfis','change_orders','deliveries','work_packages','documents','drawings','drawing_sets','expenses','inspections',
+    'punchlist_items','safety_incidents','scope_items','sov_items','contacts','meetings','model_elements','submittals',
+    'submittal_rounds','submittal_sheet_responses','submittal_comment_dispositions','comments','document_folders',
+    'daily_logs','photos','quality_control_records','budget_hour_items','risks','email_messages','linked_folders','document_import_queue'
+  ];
+begin
+  perform set_config('app.skip_wp_progress_refresh', '1', true);
+  if not public.user_has_project_role_at_least(p_project_id, 'admin') then
+    raise exception 'Not authorized to delete project %', p_project_id using errcode = '42501';
+  end if;
+  foreach v_table in array v_child_tables loop
+    if to_regclass('public.' || v_table) is not null then
+      execute format('update public.%I set is_deleted = true, deleted_at = $1 where project_id = $2 and is_deleted = false', v_table)
+        using v_deleted_at, p_project_id;
+    end if;
+  end loop;
+  update public.projects set is_deleted = true, deleted_at = v_deleted_at
+   where id = p_project_id and coalesce(is_deleted, false) = false;
+  get diagnostics v_updated = row_count;
+  if v_updated = 0 then
+    raise exception 'Project % not found or already archived', p_project_id using errcode = 'P0002';
+  end if;
+end;
+$function$;
+REVOKE ALL ON FUNCTION steelbuild_drawing_revision.archive_project_impl(uuid) FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION public.soft_delete_project(p_project_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
+DECLARE v_org uuid;v_actor uuid:=auth.uid();v_sheets uuid[];
+BEGIN
+  v_org:=steelbuild_drawing_revision.assert_role(p_project_id,'admin');
+  -- Existing shared archival intentionally waits (at most 2s) behind intake's
+  -- organization/project locks. The subsequent drawing locks remain NOWAIT.
+  PERFORM id FROM public.organizations WHERE id=v_org FOR SHARE;
+  IF NOT FOUND OR steelbuild_drawing_revision.assert_role(p_project_id,'admin') IS DISTINCT FROM v_org THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_NOT_AUTHORIZED: Organization changed during archive admission' USING ERRCODE='42501'; END IF;
+  PERFORM id FROM public.projects WHERE id=p_project_id AND org_id=v_org FOR UPDATE;
+  IF NOT FOUND OR steelbuild_drawing_revision.assert_role(p_project_id,'admin') IS DISTINCT FROM v_org THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_NOT_AUTHORIZED: Project changed during archive admission' USING ERRCODE='42501'; END IF;
+  PERFORM id FROM auth.users WHERE id=v_actor FOR KEY SHARE NOWAIT;
+  IF (SELECT count(*) FROM public.drawing_sets WHERE project_id=p_project_id)>1000
+    OR (SELECT count(*) FROM public.drawings WHERE project_id=p_project_id)>1000 THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_LIMIT: Project archive drawing roster exceeds bounds' USING ERRCODE='54000'; END IF;
+  -- NULL-set legacy sheets are included by project. Missing/nonlocal set
+  -- parents cannot silently authorize mutations in another project.
+  IF EXISTS(SELECT 1 FROM public.drawings d WHERE d.project_id=p_project_id AND d.drawing_set_id IS NOT NULL
+    AND NOT EXISTS(SELECT 1 FROM public.drawing_sets s WHERE s.id=d.drawing_set_id AND s.project_id=p_project_id)) THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_SOURCE_MISMATCH: Archive sheet parent is missing or foreign' USING ERRCODE='40001'; END IF;
+  PERFORM id FROM public.drawing_sets WHERE project_id=p_project_id ORDER BY id FOR UPDATE NOWAIT;
+  PERFORM id FROM public.drawings WHERE project_id=p_project_id ORDER BY id FOR UPDATE NOWAIT;
+  SELECT coalesce(array_agg(id ORDER BY id),'{}') INTO v_sheets FROM public.drawings WHERE project_id=p_project_id;
+  IF (SELECT count(*) FROM public.drawing_revisions WHERE drawing_id=ANY(v_sheets))>10000
+    OR (SELECT count(*) FROM public.drawing_holds WHERE drawing_id=ANY(v_sheets))>1000 THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_LIMIT: Project archive history/hold bound exceeded' USING ERRCODE='54000'; END IF;
+  PERFORM id FROM public.drawing_revisions WHERE drawing_id=ANY(v_sheets) ORDER BY id FOR UPDATE NOWAIT;
+  PERFORM id FROM public.drawing_holds WHERE drawing_id=ANY(v_sheets) ORDER BY id FOR UPDATE NOWAIT;
+  PERFORM steelbuild_drawing_revision.assert_role(p_project_id,'admin');
+  INSERT INTO steelbuild_drawing_revision.project_archive_context VALUES(txid_current(),pg_backend_pid(),v_actor,p_project_id);
+  PERFORM steelbuild_drawing_revision.archive_project_impl(p_project_id);
+  -- The intentional tombstone makes user_has_project_access false on live.
+  -- Current role/membership and MFA still must hold after all cascade waits.
+  IF auth.uid() IS DISTINCT FROM v_actor OR NOT EXISTS(SELECT 1 FROM auth.users WHERE id=v_actor)
+    OR NOT EXISTS(SELECT 1 FROM public.projects WHERE id=p_project_id AND org_id=v_org)
+    OR NOT EXISTS(SELECT 1 FROM public.organizations WHERE id=v_org)
+    OR NOT coalesce(public.user_is_org_member(v_org),false)
+    OR NOT coalesce(public.user_has_project_role_at_least(p_project_id,'admin'),false)
+    OR NOT coalesce(steelbuild_security.satisfies_mfa(),false) THEN
+    RAISE EXCEPTION 'DRAWING_COMMAND_NOT_AUTHORIZED: Archive authority changed' USING ERRCODE='42501'; END IF;
+  DELETE FROM steelbuild_drawing_revision.project_archive_context
+    WHERE transaction_id=txid_current() AND backend_pid=pg_backend_pid() AND actor_id=v_actor AND project_id=p_project_id;
+EXCEPTION WHEN lock_not_available OR deadlock_detected THEN
+  RAISE EXCEPTION 'DRAWING_COMMAND_BUSY: Concurrent work; retry project archive' USING ERRCODE='55P03';
+END $$;
+-- CREATE OR REPLACE preserves the original public OID/owner/ACL. No grants on
+-- this shared public entrypoint are broadened or rewritten.
+
 CREATE FUNCTION steelbuild_drawing_revision.guard_write() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
 DECLARE v_old jsonb:=CASE WHEN TG_OP='INSERT' THEN '{}'::jsonb ELSE to_jsonb(OLD) END;
@@ -320,6 +421,9 @@ BEGIN
   ELSE SELECT drawing_set_id INTO v_set FROM public.drawings WHERE id=(v_row->>'drawing_id')::uuid; END IF;
   SELECT operation INTO v_operation FROM steelbuild_drawing_revision.command_context
     WHERE transaction_id=txid_current() AND backend_pid=pg_backend_pid() AND actor_id=auth.uid() AND project_id=v_project AND set_id=v_set;
+  IF EXISTS(SELECT 1 FROM steelbuild_drawing_revision.project_archive_context
+    WHERE transaction_id=txid_current() AND backend_pid=pg_backend_pid() AND actor_id=auth.uid() AND project_id=v_project) THEN
+    v_operation:='project_archive'; END IF;
   -- Preserve the existing Auth FK's ON DELETE SET NULL contract, not a new
   -- unlock route. Its parent must actually be gone and no other field changes.
   IF TG_TABLE_NAME='drawing_sets' AND TG_OP='UPDATE' AND pg_trigger_depth()>1
@@ -347,7 +451,8 @@ BEGIN
     ELSIF v_operation='hold' AND TG_TABLE_NAME='drawing_holds' THEN v_allowed:=ARRAY['is_active','released_at','released_by_id','released_by_name','release_notes','updated_at'];
     ELSIF v_operation='lock' AND TG_TABLE_NAME='drawing_sets' THEN v_allowed:=ARRAY['is_locked','locked_at','locked_by','locked_reason','updated_at'];
     ELSIF v_operation='approval_sync' AND TG_TABLE_NAME='drawing_sets' THEN v_allowed:=ARRAY['set_approval_status'];
-    ELSIF v_operation='archive' AND TG_TABLE_NAME IN ('drawings','drawing_sets') THEN v_allowed:=ARRAY['is_deleted','deleted_at','updated_at']; END IF;
+    ELSIF v_operation IN ('archive','project_archive') AND TG_TABLE_NAME IN ('drawings','drawing_sets') THEN v_allowed:=ARRAY['is_deleted','deleted_at','updated_at'];
+    ELSIF v_operation='project_archive' THEN v_allowed:=ARRAY[]::text[]; END IF;
     -- Count maintenance can only run under an admitted command, and only write
     -- its derived counts/tombstone. Unknown privileged functions get no context.
     IF v_operation IS NOT NULL AND TG_TABLE_NAME='drawing_sets' AND pg_trigger_depth()>1 THEN

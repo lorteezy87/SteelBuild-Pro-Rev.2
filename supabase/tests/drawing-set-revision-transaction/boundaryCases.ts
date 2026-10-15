@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { actor, ids, request, execute, createRequest, createSet, type Database } from './fixture.ts';
 import { denied, snapshot } from './cases.ts';
 import { command, parent, submit, checklist, execute as roundExecute } from '../submittal-revision-evidence/cases.ts';
@@ -321,6 +322,96 @@ export async function runBoundaryCases(db:Database){
     assert.equal((await db.query('select is_deleted from public.drawing_sets where id=$1',[ids.set])).rows[0].is_deleted,true);
     assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.command_context')).rows[0].n,0);
     assert.ok(Number((await db.query("select count(*)::int n from public.pma_audit_logs where entity_type='drawing_sets' and entity_id=$1",[ids.set])).rows[0].n)>0);
+  });
+  await check('projectArchivePreservesAuthorizedCoreCascade',async()=>{
+    await db.query('update public.drawing_sets set is_locked=true where id=$1',[ids.set]);
+    const legacy=randomUUID();await db.query("insert into public.drawings(id,project_id,sheet_number,drawing_set_id) values($1,$2,'LEGACY',null)",[legacy,ids.project]);
+    await authenticated(()=>db.query('select public.soft_delete_project($1)',[ids.project]));
+    assert.equal((await db.query('select is_deleted from public.projects where id=$1',[ids.project])).rows[0].is_deleted,true);
+    assert.equal((await db.query('select is_deleted from public.drawings where id=$1',[ids.drawing])).rows[0].is_deleted,true);
+    assert.equal((await db.query('select is_deleted from public.drawings where id=$1',[legacy])).rows[0].is_deleted,true);
+    assert.equal((await db.query('select is_locked from public.drawing_sets where id=$1',[ids.set])).rows[0].is_locked,true);
+    assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.project_archive_context')).rows[0].n,0);
+    assert.equal((await db.query("select current_setting('app.skip_wp_progress_refresh',true) value")).rows[0].value,'1');
+  });
+  await check('projectArchiveWithoutSetsRetainsLegacyProjectSheets',async()=>{
+    await db.exec('update public.drawings set drawing_set_id=null;delete from public.drawing_sets');
+    await authenticated(()=>db.query('select public.soft_delete_project($1)',[ids.project]));
+    assert.equal((await db.query('select count(*)::int n from public.drawings where project_id=$1 and not is_deleted',[ids.project])).rows[0].n,0);
+  });
+  await check('projectArchiveRejectsForeignParentWithoutCrossProjectWrite',async()=>{
+    const foreignSet=randomUUID();await db.query("insert into public.drawing_sets(id,project_id,set_name) values($1,$2,'Foreign')",[foreignSet,ids.foreignProject]);
+    await db.query('update public.drawings set drawing_set_id=$1 where id=$2',[foreignSet,ids.drawing]);
+    await denied(db,()=>db.query('select public.soft_delete_project($1)',[ids.project]),/SOURCE_MISMATCH/);
+  });
+  await check('projectArchiveRejectsMissingLegacyParentAtomically',async()=>{
+    await db.exec('alter table public.drawings drop constraint drawings_drawing_set_id_fkey');
+    await db.query('update public.drawings set drawing_set_id=$1 where id=$2',[randomUUID(),ids.drawing]);
+    await denied(db,()=>db.query('select public.soft_delete_project($1)',[ids.project]),/SOURCE_MISMATCH/);
+  });
+  await check('projectArchiveWithoutAnyDrawingRowsStillArchives',async()=>{
+    await db.exec('delete from public.drawing_links;delete from public.drawing_zone_dependencies;delete from public.drawing_zones;delete from public.drawing_revisions;delete from public.drawings;delete from public.drawing_sets');
+    await authenticated(()=>db.query('select public.soft_delete_project($1)',[ids.project]));
+    assert.equal((await db.query('select is_deleted from public.projects where id=$1',[ids.project])).rows[0].is_deleted,true);
+    assert.equal((await db.query('select count(*)::int n from steelbuild_drawing_revision.project_archive_context')).rows[0].n,0);
+  });
+  await check('projectArchivePrivateImplementationAndContextAreNotAPIAuthority',async()=>{
+    for(const role of ['anon','authenticated','service_role']){
+      assert.equal((await db.query("select has_function_privilege($1,'steelbuild_drawing_revision.archive_project_impl(uuid)','EXECUTE') allowed",[role])).rows[0].allowed,false);
+      assert.equal((await db.query("select has_table_privilege($1,'steelbuild_drawing_revision.project_archive_context','INSERT,UPDATE,DELETE,TRUNCATE') allowed",[role])).rows[0].allowed,false);
+      assert.equal((await db.query("select has_function_privilege($1,'public.soft_delete_project(uuid)','EXECUTE') allowed",[role])).rows[0].allowed,role==='authenticated');
+    }
+    await db.query("update auth.test_access set app_role='pm' where user_id=$1",[ids.pm]);
+    await denied(db,()=>db.query('select public.soft_delete_project($1)',[ids.project]),/NOT_AUTHORIZED/);
+  });
+  for(const deferred of [false,true])await check(`projectArchiveCannotAuthorizeUnknownSourceWriter deferred=${deferred}`,async()=>{
+    await db.exec(`create function public.archive_source_writer() returns trigger language plpgsql security definer set search_path='' as $$ begin update public.drawings set file_url='forged.pdf' where id=new.id;return new;end $$;
+      create ${deferred?'constraint ':''}trigger archive_source_writer after update on public.drawings ${deferred?'deferrable initially deferred ':''}for each row execute function public.archive_source_writer()`);
+    const before=await snapshot(db);await db.exec('savepoint project_archive_probe;set local role authenticated');
+    if(deferred){await db.query('select public.soft_delete_project($1)',[ids.project]);await assert.rejects(()=>db.exec('set constraints all immediate'),/COMMAND_REQUIRED/);}
+    else await assert.rejects(()=>db.query('select public.soft_delete_project($1)',[ids.project]),/COMMAND_REQUIRED/);
+    await db.exec('rollback to savepoint project_archive_probe;reset role');assert.deepEqual(await snapshot(db),before);
+  });
+  await check('projectArchiveLateFailureRollsBackFullCascadeAndContext',async()=>{
+    await db.exec("create function public.fail_project_archive() returns trigger language plpgsql as $$ begin raise exception 'INJECTED_PROJECT_ARCHIVE';end $$;create trigger fail_project_archive before update on public.projects for each row execute function public.fail_project_archive()");
+    await denied(db,()=>db.query('select public.soft_delete_project($1)',[ids.project]),/INJECTED_PROJECT_ARCHIVE/);
+  });
+  await check('soleOwnerAccountErasureUsesActualArchiveAndErasureChain',async()=>{
+    // Load the existing shared functions verbatim; only their unrelated tail
+    // tables and owner-membership helper are synthetic fixture infrastructure.
+    for(const [file,name,signature,hash] of [
+      ['20260912062606_hard_delete_organization_cursor_and_note_folders.sql','hard_delete_organization','uuid,text','404a23ce644aa5cf979bd611538acba3d1abece441b88d2c1eec19d1a88e4d18'],
+      ['20261007090057_acquire_erasure_relation_locks_before_rows.sql','erase_my_sole_member_workspaces','text','460c1446c45aa2240e6a9946edb3117928a531d98170f232d44de6938fbe3e31'],
+    ]){
+      const source=await readFile(new URL(`../../migrations/${file}`,import.meta.url),'utf8');
+      const start=source.toLowerCase().indexOf(`create or replace function public.${name}(`);
+      assert.ok(start>=0);await db.exec(source.slice(start,source.indexOf('$function$;',start)+11));
+      assert.equal((await db.query("select encode(sha256(convert_to(pg_get_functiondef($1::regprocedure),'UTF8')),'hex') hash",[`public.${name}(${signature})`])).rows[0].hash,hash);
+    }
+    await db.exec(`alter table public.organization_members add column role text default 'owner';
+      create function public.user_org_role_at_least(p_org uuid,p_role text) returns boolean language sql stable security definer set search_path='' as $$
+        select exists(select 1 from public.organization_members where org_id=p_org and user_id=auth.uid() and role='owner') $$;
+      create table public.account_deletions(org_id uuid,org_name text,deleted_by uuid,projects_deleted integer,note text);
+      create table public.note_folders(id uuid primary key,org_id uuid,parent_folder_id uuid references public.note_folders(id) on delete restrict);`);
+    for(const table of ['billing_events','organization_invitations','note_folder_audit_events','note_folder_mutation_receipts','note_folder_migrations','vendors'])
+      await db.exec(`create table public.${table}(org_id uuid)`);
+    await db.query('insert into public.organizations(id,name) values($1,$2)',[ids.foreign,'Preserved other workspace']);
+    await db.query('update public.drawing_sets set is_locked=true,locked_by=$1 where id=$2',[ids.pm,ids.set]);
+    // Create actual private command/adoption records before erasure, then queue
+    // a real governing receipt to exercise its deferred completion flush.
+    await db.query('update public.drawing_sets set is_locked=false where id=$1',[ids.set]);
+    await authenticated(()=>request(db).then(p=>execute(db,p)));
+    await workflow(submit);await workflow({status:'Approved',ball_in_court:'GC',metadata:{ofs_checklist:checklist}});
+    await db.query('update public.drawing_sets set is_locked=true where id=$1',[ids.set]);
+    const result=(await authenticated(()=>db.query('select public.erase_my_sole_member_workspaces($1) result',['Synthetic account erasure regression']))).rows[0].result;
+    assert.deepEqual(result,{org_ids:[ids.org],project_ids:[ids.project]});
+    assert.equal((await db.query('select count(*)::int n from public.projects where id=$1',[ids.project])).rows[0].n,0);
+    assert.equal((await db.query('select count(*)::int n from public.organizations where id=$1',[ids.foreign])).rows[0].n,1);
+    for(const table of ['requests','source_observations','adopted_sources','command_context','project_archive_context','hold_bindings'])
+      assert.equal((await db.query(`select count(*)::int n from steelbuild_drawing_revision.${table}`)).rows[0].n,0);
+    assert.equal((await db.query("select count(*)::int n from public.data_erasure_log where kind in ('project','organization')")).rows[0].n,2);
+    await db.exec('set local role drawing_fixture_auth_admin');await db.query('delete from auth.users where id=$1',[ids.pm]);await db.exec('reset role');
+    assert.equal((await db.query('select count(*)::int n from auth.users where id=$1',[ids.pm])).rows[0].n,0);
   });
   for(const table of ['drawing_holds','drawing_revisions','drawing_activity','drawing_sets','pma_audit_logs'])await check(`dailyFailureRollsBackContextAndAudit ${table}`,async()=>{
     await db.exec(`create function public.fail_daily() returns trigger language plpgsql as $$ begin raise exception 'INJECTED_DAILY';end $$;
