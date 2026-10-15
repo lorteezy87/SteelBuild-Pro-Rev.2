@@ -1,6 +1,9 @@
 # Reviewed drawing backend cutover
 
-Date: 2026-10-15. Status: **proposed written design, awaiting user review**.
+Date: 2026-10-15. Status: **written design approved by the owner**.
+Approval: the owner explicitly approved this written design in this chat and
+requested the implementation plan. Implementation-plan review and execution
+selection remain pending. Production still requires separate exact-change approval.
 This is not a migration, implementation plan, staging acceptance result, or
 production approval. No hosted mutation accompanies this document.
 
@@ -268,6 +271,7 @@ results in this document.
 
 ## Review boundary
 
-This written design requires user review before the detailed implementation
-plan. The plan then requires review and an execution-method choice before code
-or hosted staging changes. Production approval remains a separate final gate.
+The owner has approved this written design. The
+[implementation plan](../plans/2026-10-15-drawing-backend-cutover.md) now requires
+review and an execution-method choice before code or hosted staging changes.
+Production approval remains a separate final gate.
