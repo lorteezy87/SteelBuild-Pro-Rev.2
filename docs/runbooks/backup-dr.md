@@ -7,7 +7,7 @@ Findings: [H24] (backups/PITR untested) · [H25] (Storage not backed up)
 Refs:
 - Supabase project: `kjrwqagyeswwoxpjkcko`
 - Production: `https://steelbuild-pro.com`
-- Cloudflare Worker: `steelbuild-pro-rev-2` (config `wrangler.jsonc`); staging Worker `steelbuild-pro-staging` (`wrangler.staging.jsonc`). **Vercel is retired** — the account is closed and `steelbuildpro-og` no longer exists.
+- Production Site: project pinned in `.openai/hosting.json`; staging Worker `steelbuild-pro-staging` (`wrangler.staging.jsonc`). The legacy `steelbuild-pro-rev-2` Worker is rollback-only and does not own the public domains. **Vercel is retired**.
 - Storage S3 endpoint: `https://kjrwqagyeswwoxpjkcko.storage.supabase.co/storage/v1/s3`
 
 ---
@@ -58,8 +58,8 @@ Use when the Supabase project itself is unrecoverable (deleted, region outage wi
 1. Create a **new Supabase project** (note the new project ref and new URL).
 2. Restore the latest backup / PITR snapshot into the new project (Supabase support or dashboard restore-to-new-project flow).
 3. **Re-point the app** at the new project:
-   - Update **`VITE_SUPABASE_URL`** (and the anon key if it changed) in the GitHub Actions secrets that the deploy job reads. These are build-time Vite variables baked into the bundle, so changing them requires a rebuild — editing a Cloudflare setting is not enough.
-   - **Redeploy** the frontend by pushing to `main`: the gated workflow runs `ci`, `secret-scan`, `supabase-drift` and `edge-typecheck`, then publishes the Worker. There is no dashboard redeploy path; `npm run deploy` from a laptop is refused by `scripts/require-ci-deploy.mjs`. To undo a bad publish, use `wrangler rollback <version-id>` (see `rollback.md`) rather than a redeploy.
+   - Update **`VITE_SUPABASE_URL`** (and the anon key if it changed) in the GitHub Actions secrets read by `prepare-sites-release`. These browser-safe build-time values are baked into the bundle, so changing them requires a rebuild.
+   - Push the reviewed recovery change to `main`. After all five required jobs pass, download and verify the resulting Sites artifact, promote that exact archive through the authorized Sites flow, and run exact-domain verification. Follow `sites-release.md`; a green GitHub run alone does not publish.
 4. **Redeploy every edge function** to the new project and **re-enter all edge secrets** (they do not travel with a DB restore):
    ```powershell
    # Deploy each function. Match each function's verify_jwt exactly —

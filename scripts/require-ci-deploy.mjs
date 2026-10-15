@@ -1,2 +1,2 @@
-console.error('Production publishing is restricted to the gated main GitHub Actions workflow. Push a reviewed PR and release through CI.');
+console.error('Production publishing requires a five-gate Sites artifact and an authorized Sites promotion. Follow docs/runbooks/sites-release.md.');
 process.exitCode = 1;

@@ -1,11 +1,16 @@
-# Vercel → Cloudflare Workers — Migration Runbook
+# Vercel → Cloudflare Workers — Migration Runbook (historical)
+
+> Superseded for production on 2026-10-15. ChatGPT Sites owns
+> `steelbuild-pro.com` and `www.steelbuild-pro.com`; follow
+> [`sites-release.md`](./sites-release.md). The staging and PR-preview Worker
+> guidance below remains relevant. Do not re-enable the production publisher.
 
 **SteelBuild Pro — hosting migration**
 Purpose: make Cloudflare Workers the production host for the web frontend, and retire everything else.
 
 > **The Vercel account is closed.** This is not a dual-run migration with a Vercel fallback — there is no Vercel to fall back to. The `deploy` and `deploy-staging` jobs have been deleted from `ci.yml`, along with `vercel.json`, `.vercelignore` and the Skew Protection helper, because they could only ever fail.
 
-> **Current state (2026-09-21):** `CLOUDFLARE_ENABLED=true` and production uses the gated Cloudflare workflow. The historical setup steps below describe the cutover. Current staging targets and readiness are in [staging-setup.md](staging-setup.md). `CLOUDFLARE_BASE_URL` was removed because health checks use the custom domain directly.
+> **Current state (2026-10-15):** production uses Sites. `CLOUDFLARE_ENABLED=false` is retained as a historical safety setting and no longer controls a production job. Optional PR previews now use `CLOUDFLARE_PREVIEWS_ENABLED`; current staging targets and readiness are in [staging-setup.md](staging-setup.md).
 
 Refs:
 - Cloudflare Worker: `steelbuild-pro-rev-2` · Repo: `lorteezy87/SteelBuild-Pro-Rev.2`

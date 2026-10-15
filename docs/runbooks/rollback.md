@@ -23,13 +23,12 @@ Stop promotion and begin rollback or forward-fix when any of these occur:
 
 ## Frontend deployment
 
-1. Stop promotion and preserve the failing SHA, CI run, Cloudflare version ID,
-   browser evidence, and Sentry release.
-2. In Cloudflare Workers, select the target Worker (`steelbuild-pro-rev-2` for
-   production, `steelbuild-pro-staging` for staging) and roll back to the recorded
-   last known-good version. Verify the Worker and version before confirming;
-   do not use a mutable branch name as the rollback record. See
-   [Cloudflare's rollback procedure](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/).
+1. Stop promotion and preserve the failing SHA, GitHub release run, artifact
+   checksum, Sites version/deployment IDs, browser evidence, and Sentry release.
+2. For production, select the recorded last known-good saved Sites version and
+   deploy that version. Do not rebuild an old branch. Verify it against the
+   retained gated artifact using `sites-production-verify.yml`. For staging,
+   roll back the `steelbuild-pro-staging` Worker to its recorded version.
 3. Verify `/`, manifest, deep-link fallback, health endpoint, login, and one
    read-only project route.
 4. Confirm the service worker receives the current network-first shell. If a
