@@ -7,7 +7,7 @@ app="$output/SteelBuild Pro.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 npm run build
 cp macos/SteelBuildPro/Info.plist "$app/Contents/Info.plist"
-cp -R dist "$app/Contents/Resources/web"
+ditto dist "$app/Contents/Resources/web"
 cp ios/App/App/PrivacyInfo.xcprivacy "$app/Contents/Resources/PrivacyInfo.xcprivacy"
 iconset="$output/AppIcon.iconset"
 mkdir -p "$iconset"
