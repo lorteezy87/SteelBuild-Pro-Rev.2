@@ -18,7 +18,7 @@ on:
         type: boolean
   push:
     branches: [claude/mac-ipad-build-20261016]
-    paths: ['.github/workflows/macos-release.yml']
+    paths: ['.github/workflows/macos-release.yml', 'scripts/macos-*.sh', 'scripts/macos-*.mjs']
 
 permissions:
   contents: read
