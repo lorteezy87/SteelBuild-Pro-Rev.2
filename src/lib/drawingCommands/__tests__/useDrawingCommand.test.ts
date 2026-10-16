@@ -5,7 +5,7 @@ import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { useDrawingCommand } from '../useDrawingCommand';
 import { completeDrawingCommand, loadDrawingCommands, saveDrawingCommand } from '../journal';
 import { setActiveOrgId } from '@/lib/activeOrg';
-import { deferred, draftFixture, nextId, owner, resultFixture } from './fixtures';
+import { createTestDrawingLocks, deferred, draftFixture, nextId, owner, resultFixture } from './fixtures';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import type { DrawingCommandOutcome } from '../types';
 
@@ -15,6 +15,7 @@ const flags = { contract_version: 1, new_set: true, revision: true, write_bounda
 let authChanged: (event: AuthChangeEvent, session: Session | null) => void;
 beforeEach(() => {
   vi.restoreAllMocks(); vi.resetAllMocks(); vi.stubGlobal('indexedDB', new IDBFactory());
+  vi.stubGlobal('navigator', { locks: createTestDrawingLocks() });
   setActiveOrgId(owner.orgId);
   getUser.mockResolvedValue({ data: { user: { id: owner.actorId } }, error: null });
   onAuthStateChange.mockImplementation((callback: typeof authChanged) => { authChanged = callback; return { data: { subscription: { unsubscribe: vi.fn() } } }; });
@@ -113,6 +114,59 @@ it('already dispatched may commit after cancellation, preserving the journal for
 });
 
 it('lateOldReplyCannotDeleteNewDraft from another tab', async () => {
+  const followUp = deferred<void>();
+  const onCommitted = vi.fn(() => followUp.promise);
+  const hook = renderHook(() => useDrawingCommand(owner, { onCommitted }));
+  await waitFor(() => expect(hook.result.current.state).toBe('reviewing'));
+  await act(async () => { await hook.result.current.prepare(draftFixture()); });
+  let attempt!: Promise<DrawingCommandOutcome>;
+  act(() => { attempt = hook.result.current.apply(); });
+  await waitFor(() => expect(onCommitted).toHaveBeenCalledTimes(1));
+  await completeDrawingCommand(owner, draftFixture().requestId); // Another tab acknowledged this exact request.
+  const newerDraft = draftFixture(nextId);
+  await saveDrawingCommand(newerDraft);
+  await act(async () => { followUp.resolve(undefined); await attempt; });
+  expect(await loadDrawingCommands(owner)).toContainEqual(newerDraft);
+});
+
+it.each(['capabilities', 'final-auth'] as const)('another tab dismissing during %s prevents old first dispatch', async (boundary) => {
+  const oldTab = await ready();
+  await act(async () => { await oldTab.result.current.prepare(draftFixture()); });
+  const otherTab = await ready(); // Separate journal connections, same IDB factory and origin lock manager.
+  rpc.mockImplementation(async (name: string) => name === 'get_drawing_command_receipt' ? { data: { state: 'not_committed' }, error: null }
+    : name === 'get_drawing_command_capabilities' ? { data: flags, error: null }
+      : { data: null, error: { code: '40001', message: 'DRAWING_REVISION_STALE: changed' } });
+  await act(async () => { await otherTab.result.current.apply(); });
+  expect(otherTab.result.current.state).toBe('rejected');
+  rpc.mockClear();
+  const paused = deferred<{ data: unknown; error: null }>();
+  rpc.mockImplementation(async (name: string) => {
+    if (name === 'get_drawing_command_receipt') return { data: { state: 'not_committed' }, error: null };
+    if (name === 'get_drawing_command_capabilities') {
+      if (boundary === 'capabilities') return paused.promise;
+      getUser.mockImplementationOnce(() => paused.promise);
+      return { data: flags, error: null };
+    }
+    return { data: resultFixture(), error: null };
+  });
+  let attempt!: Promise<unknown>;
+  act(() => { attempt = oldTab.result.current.apply().catch((error: unknown) => error); });
+  await waitFor(() => expect(rpc).toHaveBeenCalledWith('get_drawing_command_capabilities', { p_project_id: owner.projectId }));
+  if (boundary === 'final-auth') await waitFor(() => expect(getUser.mock.results.some(({ value }) => value === paused.promise)).toBe(true));
+  await act(async () => {
+    expect(await otherTab.result.current.dismissRejected()).toBe(true);
+    await otherTab.result.current.prepare(draftFixture(nextId));
+  });
+  expect(await loadDrawingCommands(owner)).toEqual([draftFixture(nextId)]);
+  await act(async () => {
+    paused.resolve({ data: boundary === 'capabilities' ? flags : { user: { id: owner.actorId } }, error: null });
+    await attempt;
+  });
+  expect(rpc.mock.calls.some(([name]) => name === 'create_drawing_set_from_review')).toBe(false);
+  expect(await loadDrawingCommands(owner)).toEqual([draftFixture(nextId)]);
+});
+
+it('an already dispatched command holds its reservation against exact completion in another tab', async () => {
   const hook = await ready();
   await act(async () => { await hook.result.current.prepare(draftFixture()); });
   const reply = deferred<{ data: unknown; error: null }>();
@@ -121,11 +175,13 @@ it('lateOldReplyCannotDeleteNewDraft from another tab', async () => {
   let attempt!: Promise<DrawingCommandOutcome>;
   act(() => { attempt = hook.result.current.apply(); });
   await waitFor(() => expect(rpc.mock.calls.some(([name]) => name === 'create_drawing_set_from_review')).toBe(true));
-  await completeDrawingCommand(owner, draftFixture().requestId); // Another tab acknowledged this exact request.
-  const newerDraft = draftFixture(nextId);
-  await saveDrawingCommand(newerDraft);
-  await act(async () => { reply.resolve({ data: resultFixture(), error: null }); await attempt; });
-  expect(await loadDrawingCommands(owner)).toContainEqual(newerDraft);
+  let completed = false;
+  const completion = completeDrawingCommand(owner, draftFixture().requestId).then(() => { completed = true; });
+  expect(await loadDrawingCommands(owner)).toEqual([draftFixture()]);
+  expect(completed).toBe(false);
+  await act(async () => { reply.resolve({ data: resultFixture(), error: null }); await attempt; await completion; });
+  expect(completed).toBe(true);
+  expect(await loadDrawingCommands(owner)).toEqual([]);
 });
 
 it('retry after cache/schedule failure acknowledges same receipt without another write', async () => {

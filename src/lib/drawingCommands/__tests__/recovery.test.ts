@@ -2,13 +2,14 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
 import { reconcileDrawingCommand } from '../recovery';
 import { loadDrawingCommands, saveDrawingCommand } from '../journal';
-import { draftFixture, owner, resultFixture } from './fixtures';
+import { createTestDrawingLocks, draftFixture, owner, resultFixture } from './fixtures';
 
 const { rpc, getUser } = vi.hoisted(() => ({ rpc: vi.fn(), getUser: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc, auth: { getUser } } }));
 const flags = { contract_version: 1, new_set: true, revision: true, write_boundary: true, source_protection: true, receipt_lookup: true };
 beforeEach(async () => {
   vi.resetAllMocks(); vi.stubGlobal('indexedDB', new IDBFactory());
+  vi.stubGlobal('navigator', { locks: createTestDrawingLocks() });
   getUser.mockResolvedValue({ data: { user: { id: owner.actorId } }, error: null });
   rpc.mockImplementation(async (name: string) => ({ error: null, data: name === 'get_drawing_command_receipt'
     ? { state: 'not_committed' } : name === 'get_drawing_command_capabilities' ? flags : resultFixture() }));
@@ -46,6 +47,13 @@ it('revokedUserCannotReplay', async () => {
   getUser.mockResolvedValue({ data: { user: null }, error: { message: 'revoked' } });
   await expect(reconcileDrawingCommand(draftFixture())).rejects.toMatchObject({ code: 'identity_changed', dispatched: false });
   expect(rpc).not.toHaveBeenCalled();
+});
+
+it.each(['missing', 'failed'])('%s lock availability refuses a previously saved replay before mutation', async (failure) => {
+  vi.stubGlobal('navigator', failure === 'missing' ? {} : { locks: { request: vi.fn().mockRejectedValue(new Error('unusable')) } });
+  await expect(reconcileDrawingCommand(draftFixture())).rejects.toMatchObject({ dispatched: false, code: 'unavailable' });
+  expect(rpc.mock.calls.filter(([name]) => name === 'create_drawing_set_from_review')).toHaveLength(0);
+  expect(await loadDrawingCommands(owner)).toEqual([draftFixture()]);
 });
 
 it('permission revocation after not_committed lookup prevents replay Auth preflight', async () => {

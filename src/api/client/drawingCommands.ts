@@ -106,7 +106,11 @@ async function assertCurrentActor(actorId: string): Promise<void> {
 }
 
 /** Local cancellation only; never authority for SQL and never a claim of server rollback. */
-export interface DrawingCommandFence { readonly assertCurrent?: () => void }
+export interface DrawingCommandFence {
+  readonly assertCurrent?: () => void;
+  /** Optional durable-reservation coordinator. Call send exactly once while holding its owner lock. */
+  readonly dispatch?: (send: () => Promise<DrawingCommandOutcome>) => Promise<DrawingCommandOutcome>;
+}
 
 /** Preflight throws explicitly; only an attempted command RPC returns a write outcome. Never retries or falls back. */
 export async function applyDrawingCommand(draft: ReviewedDrawingCommand, fence: DrawingCommandFence = {}): Promise<DrawingCommandOutcome> {
@@ -120,6 +124,27 @@ export async function applyDrawingCommand(draft: ReviewedDrawingCommand, fence: 
   }
   await assertCurrentActor(snapshot.owner.actorId);
   fence.assertCurrent?.();
+  let dispatched = false;
+  let guardActive = true;
+  const send = (): Promise<DrawingCommandOutcome> => {
+    if (!guardActive || dispatched) throw new DrawingCommandPreflightError('unavailable');
+    fence.assertCurrent?.();
+    dispatched = true;
+    return sendDrawingCommand(snapshot);
+  };
+  try {
+    const outcome = await (fence.dispatch ? fence.dispatch(send) : send());
+    if (!dispatched) throw new DrawingCommandPreflightError('unavailable');
+    return outcome;
+  } catch (error) {
+    // RPC errors are classified inside sendDrawingCommand. A guard failure is never SQL rejection evidence.
+    if (dispatched) return classifyDrawingCommandError(undefined);
+    if (error instanceof DrawingCommandPreflightError) throw error;
+    throw new DrawingCommandPreflightError('unavailable');
+  } finally { guardActive = false; }
+}
+
+async function sendDrawingCommand(snapshot: ReviewedDrawingCommand): Promise<DrawingCommandOutcome> {
   try {
     const { data, error } = await supabase.rpc(snapshot.operation === 'create_set' ? 'create_drawing_set_from_review' : 'apply_drawing_set_revision', {
       p_request_id: snapshot.requestId, p_request: snapshot.payload as unknown as Json,

@@ -34,6 +34,40 @@ function ownerKey(owner: DrawingCommandOwner): string[] {
   return [owner.actorId, owner.orgId, owner.projectId];
 }
 
+export interface LockedDrawingCommandJournal {
+  /** Exact key, bound to this lock's owner. This capability expires when the callback finishes. */
+  readonly complete: (requestId: string) => Promise<void>;
+}
+
+/** Same-origin cross-tab exclusion. No fallback: an IDB read followed by unlocked dispatch leaves a deletion race. */
+export async function withDrawingCommandLock<T>(owner: DrawingCommandOwner, run: (journal: LockedDrawingCommandJournal) => Promise<T>): Promise<T> {
+  const key = ownerKey(owner);
+  const snapshot = Object.freeze({ actorId: key[0], orgId: key[1], projectId: key[2] });
+  const name = `${databaseName}:${JSON.stringify(key)}`;
+  let entered = false;
+  let requestActive = true;
+  try {
+    const locks = globalThis.navigator?.locks;
+    if (!locks || typeof locks.request !== 'function') throw new DrawingCommandJournalError('journal_unavailable');
+    const result = await locks.request(name, { mode: 'exclusive' }, async (lock) => {
+      if (!requestActive || !lock || lock.mode !== 'exclusive' || lock.name !== name) throw new DrawingCommandJournalError('journal_unavailable');
+      entered = true;
+      let active = true;
+      const assertActive = () => {
+        if (!active || !requestActive) throw new DrawingCommandJournalError('journal_unavailable');
+      };
+      try {
+        return await run({ complete: (requestId) => deleteDrawingCommand(snapshot, requestId, assertActive) });
+      } finally { active = false; }
+    });
+    if (!entered) throw new DrawingCommandJournalError('journal_unavailable');
+    return result;
+  } catch (error) {
+    if (!entered) throw new DrawingCommandJournalError('journal_unavailable');
+    throw error;
+  } finally { requestActive = false; }
+}
+
 function openJournal(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(databaseName, 1);
@@ -81,7 +115,7 @@ async function transaction<T>(mode: IDBTransactionMode, run: (store: IDBObjectSt
 export async function saveDrawingCommand(draft: ReviewedDrawingCommand): Promise<void> {
   const snapshot = decodeDrawingCommand(draft);
   const key = ownerKey(snapshot.owner);
-  await transaction<void>('readwrite', (store, done, fail) => {
+  await withDrawingCommandLock(snapshot.owner, () => transaction<void>('readwrite', (store, done, fail) => {
     const existing = store.index('owner').get(key);
     existing.onsuccess = () => {
       try {
@@ -92,7 +126,7 @@ export async function saveDrawingCommand(draft: ReviewedDrawingCommand): Promise
         done(undefined);
       } catch (error) { fail(error); }
     };
-  });
+  }));
 }
 
 export async function loadDrawingCommands(owner: DrawingCommandOwner): Promise<ReviewedDrawingCommand[]> {
@@ -112,9 +146,15 @@ export async function loadDrawingCommands(owner: DrawingCommandOwner): Promise<R
 
 /** Caller must have acknowledged this request. Never delete by project or by whichever draft is latest. */
 export async function completeDrawingCommand(owner: DrawingCommandOwner, requestId: string): Promise<void> {
+  await withDrawingCommandLock(owner, (journal) => journal.complete(requestId));
+}
+
+/** Private deletion primitive; every caller supplies a live lock capability and it is rechecked before mutation. */
+async function deleteDrawingCommand(owner: DrawingCommandOwner, requestId: string, assertActive: () => void): Promise<void> {
+  assertActive();
   const key = ownerKey(owner);
   if (!z.string().uuid().safeParse(requestId).success) throw new DrawingCommandJournalError('journal_corrupt');
-  await transaction<void>('readwrite', (store, done) => { store.delete([...key, requestId]); done(undefined); });
+  await transaction<void>('readwrite', (store, done) => { assertActive(); store.delete([...key, requestId]); done(undefined); });
 }
 
 /** A stale tab must not resurrect an explicitly resolved reservation. */

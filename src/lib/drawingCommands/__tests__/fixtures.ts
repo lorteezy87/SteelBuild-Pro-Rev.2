@@ -24,3 +24,19 @@ export function deferred<T>() {
   const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
 }
+
+/** Small FIFO model of the exclusive same-origin Web Lock API used by this journal. IDB remains independent/transactional. */
+export function createTestDrawingLocks() {
+  const tails = new Map<string, Promise<void>>();
+  return {
+    async request<T>(name: string, options: LockOptions, callback: (lock: Lock) => T | PromiseLike<T>): Promise<T> {
+      if (options.mode !== 'exclusive') throw new Error('Expected an exclusive lock');
+      const previous = tails.get(name) ?? Promise.resolve();
+      const released = deferred<void>();
+      tails.set(name, released.promise);
+      await previous;
+      try { return await callback({ name, mode: 'exclusive' }); }
+      finally { released.resolve(undefined); }
+    },
+  };
+}

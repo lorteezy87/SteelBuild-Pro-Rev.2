@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { getActiveOrgGeneration, getActiveOrgId, subscribeActiveOrgChange } from '@/lib/activeOrg';
 import { getDrawingCommandReceipt, type DrawingCommandFence } from '@/api/client/drawingCommands';
 import { DrawingCommandPreflightError } from './errors';
-import { assertDrawingCommandReserved, completeDrawingCommand, decodeDrawingCommand, DrawingCommandJournalError, loadDrawingCommands, saveDrawingCommand } from './journal';
+import { assertDrawingCommandReserved, completeDrawingCommand, decodeDrawingCommand, DrawingCommandJournalError, loadDrawingCommands, saveDrawingCommand, withDrawingCommandLock } from './journal';
 import { reconcileDrawingCommand } from './recovery';
 import type { DrawingCommandFailure, DrawingCommandOutcome, DrawingCommandOwner, DrawingCommandResult, ReviewedDrawingCommand } from './types';
 
@@ -184,17 +184,20 @@ export function useDrawingCommand(owner: DrawingCommandOwner | null, options: Dr
     scope.busy = true;
     try {
       await assertActor(fence);
-      await assertDrawingCommandReserved(draft);
-      fence.assertCurrent();
-      const receipt = await getDrawingCommandReceipt(draft, fence);
+      const receipt = await withDrawingCommandLock(draft.owner, async (journal) => {
+        await assertDrawingCommandReserved(draft);
+        fence.assertCurrent();
+        const checked = await getDrawingCommandReceipt(draft, fence);
+        fence.assertCurrent();
+        if (checked.state === 'not_committed') await journal.complete(draft.requestId);
+        return checked;
+      });
       fence.assertCurrent();
       if (receipt.state === 'committed') {
         await acknowledge(draft, { kind: 'committed', result: receipt.result }, fence);
         return false;
       }
       if (receipt.state === 'pending') return false;
-      await completeDrawingCommand(draft.owner, draft.requestId);
-      fence.assertCurrent();
       ++lifetime.current; // Any older callback from this hook visit is now stale.
       scope.rejected = false;
       publish({ state: 'reviewing', draft: null, error: null, outcome: null });

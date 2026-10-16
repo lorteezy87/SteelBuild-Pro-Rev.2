@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyDrawingCommand, getDrawingCommandCapabilities, getDrawingCommandReceipt, getDrawingRevisionSources, parseDrawingCommandResult } from '../drawingCommands';
 import { buildCreateSetRequest, buildReviseSetRequest } from '@/lib/drawingCommands/requestBuilders';
-import type { ReviewedDrawingCommand, ReviewedDrawingSheet } from '@/lib/drawingCommands/types';
+import type { DrawingCommandOutcome, ReviewedDrawingCommand, ReviewedDrawingSheet } from '@/lib/drawingCommands/types';
 import { DrawingCommandPreflightError } from '@/lib/drawingCommands/errors';
 
 const { rpc, getUser, entity } = vi.hoisted(() => ({ rpc: vi.fn(), getUser: vi.fn(), entity: { create: vi.fn() } }));
@@ -77,6 +77,40 @@ it('receipt fence invalidated during Auth prevents stale lookup', async () => {
     if (!current) throw new DrawingCommandPreflightError('identity_changed');
   } })).rejects.toMatchObject({ dispatched: false, code: 'identity_changed' });
   expect(rpc).not.toHaveBeenCalled();
+});
+
+it('guard storage failure before send remains explicitly undispatched', async () => {
+  await expect(applyDrawingCommand(draftFixture(), { dispatch: async () => { throw new Error('storage unavailable'); } }))
+    .rejects.toMatchObject({ dispatched: false, code: 'unavailable' });
+  expect(rpc.mock.calls.filter(([name]) => name === 'create_drawing_set_from_review')).toHaveLength(0);
+});
+
+it.each([
+  new DrawingCommandPreflightError('identity_changed'),
+  { code: '40001', message: 'DRAWING_REVISION_STALE: guard is not SQL evidence' },
+])('a guard failure after send never claims rollback or dispatched=false: %j', async (guardError) => {
+  const outcome = await applyDrawingCommand(draftFixture(), { dispatch: async (send) => {
+    await send();
+    throw guardError;
+  } });
+  expect(outcome.kind).toBe('uncertain');
+  expect(rpc.mock.calls.filter(([name]) => name === 'create_drawing_set_from_review')).toHaveLength(1);
+});
+
+it('duplicate send cannot dispatch twice', async () => {
+  const outcome = await applyDrawingCommand(draftFixture(), { dispatch: async (send) => { await send(); return send(); } });
+  expect(outcome.kind).toBe('uncertain');
+  expect(rpc.mock.calls.filter(([name]) => name === 'create_drawing_set_from_review')).toHaveLength(1);
+});
+
+it('a send closure cannot escape its dispatch guard lifetime', async () => {
+  let escaped!: () => Promise<DrawingCommandOutcome>;
+  await expect(applyDrawingCommand(draftFixture(), { dispatch: async (send) => {
+    escaped = send;
+    return { kind: 'uncertain', error: { code: 'unused', message: 'unused' } };
+  } })).rejects.toMatchObject({ dispatched: false, code: 'unavailable' });
+  expect(() => escaped()).toThrow();
+  expect(rpc.mock.calls.filter(([name]) => name === 'create_drawing_set_from_review')).toHaveLength(0);
 });
 
 describe('strict response parsing', () => {

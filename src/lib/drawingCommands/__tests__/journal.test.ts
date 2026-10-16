@@ -1,10 +1,37 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { IDBDatabase, IDBFactory, IDBObjectStore } from 'fake-indexeddb';
-import { completeDrawingCommand, loadDrawingCommands, saveDrawingCommand } from '../journal';
-import { draftFixture, nextId, owner } from './fixtures';
+import { completeDrawingCommand, loadDrawingCommands, saveDrawingCommand, withDrawingCommandLock } from '../journal';
+import { createTestDrawingLocks, draftFixture, nextId, owner } from './fixtures';
 import type { ReviewedDrawingCommand } from '../types';
 
-beforeEach(() => { vi.restoreAllMocks(); vi.stubGlobal('indexedDB', new IDBFactory()); });
+beforeEach(() => {
+  vi.restoreAllMocks(); vi.stubGlobal('indexedDB', new IDBFactory());
+  vi.stubGlobal('navigator', { locks: createTestDrawingLocks() });
+});
+
+it.each(['missing', 'failed'])('%s Web Locks blocks preparation and completion without erasing a saved record', async (failure) => {
+  const draft = draftFixture();
+  await saveDrawingCommand(draft);
+  vi.stubGlobal('navigator', failure === 'missing' ? {} : { locks: { request: vi.fn().mockRejectedValue(new Error('unusable')) } });
+  await expect(saveDrawingCommand(draft)).rejects.toMatchObject({ code: 'journal_unavailable' });
+  await expect(completeDrawingCommand(owner, draft.requestId)).rejects.toMatchObject({ code: 'journal_unavailable' });
+  expect(await loadDrawingCommands(owner)).toEqual([draft]);
+});
+
+it('an exact completion capability cannot outlive its owner lock', async () => {
+  const draft = draftFixture();
+  await saveDrawingCommand(draft);
+  let escaped!: (requestId: string) => Promise<void>;
+  await withDrawingCommandLock(owner, async (journal) => { escaped = journal.complete; });
+  await expect(escaped(draft.requestId)).rejects.toMatchObject({ code: 'journal_unavailable' });
+  expect(await loadDrawingCommands(owner)).toEqual([draft]);
+});
+
+it('an unusable lock manager that never grants its callback cannot prepare a journal', async () => {
+  vi.stubGlobal('navigator', { locks: { request: vi.fn().mockResolvedValue(undefined) } });
+  await expect(saveDrawingCommand(draftFixture())).rejects.toMatchObject({ code: 'journal_unavailable' });
+  expect(await loadDrawingCommands(owner)).toEqual([]);
+});
 
 it('reloadReusesExactKeyAndPayload through independent connections and structured clones', async () => {
   const originalDraft = draftFixture();
