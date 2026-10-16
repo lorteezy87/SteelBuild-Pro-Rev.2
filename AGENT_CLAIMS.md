@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-16 | codex-drawing-command-transport-source | Parent Task13 finite command/receipt and returned-record read-only proof; sequential child of codex-drawing-backend-cutover | src/lib/drawingCommands/responses.ts; src/lib/drawingCommands/__tests__/responses.test.ts; src/api/client/drawingCommands.ts; src/api/client/__tests__/drawingCommands.test.ts; e2e/drawingCutoverCommandTransport.ts; scripts/__tests__/drawingCutoverCommandTransport.test.ts; docs/audits/DRAWING_BACKEND_STAGING_ACCEPTANCE_2026-10-15.md | Pure shared parsers, exact reviewed API envelope matching and bounded identity/source readback validation only; all live transport/setup/readiness stops remain closed. No UI handoff, hosted mutation, fixture creation, SQL, workflow or deployment changes. |
+
 
 
 
