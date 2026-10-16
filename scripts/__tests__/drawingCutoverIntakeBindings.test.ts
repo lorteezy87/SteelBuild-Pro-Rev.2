@@ -90,6 +90,62 @@ describe('finite drawing intake binding book', () => {
     const value = fixture(); change(value); expect(() => validate(value)).toThrow();
   });
 
+  // Fixtures use letters so different spellings can represent one database UUID.
+  const letterId = (n: number) => `abcdef00-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  function letterFixture() {
+    return JSON.parse(JSON.stringify(fixture()).replaceAll('20000000', 'abcdef00')) as ReturnType<typeof fixture>;
+  }
+  it.each(['requests', 'organizations', 'actors', 'projects', 'entities'] as const)('rejects case-variant duplicate UUID identities in %s', kind => {
+    const value = letterFixture();
+    if (kind === 'requests') value.intakeBindings.commands.manualIntake.requestId = letterId(40).toUpperCase();
+    if (kind === 'organizations') {
+      const duplicate = JSON.parse(JSON.stringify(value).replaceAll(letterId(3), letterId(2).toUpperCase()));
+      expect(() => validate(duplicate)).toThrow('INTAKE_BINDINGS_INVALID'); return;
+    }
+    if (kind === 'actors') value.actors[1].id = letterId(10).toUpperCase();
+    if (kind === 'projects') {
+      value.projects[1].id = letterId(4).toUpperCase();
+      value.intakeBindings.projects.A2.id = letterId(4).toUpperCase();
+    }
+    if (kind === 'entities') value.entities.push({ ...value.entities[1], id: letterId(31).toUpperCase() });
+    expect(() => validate(value)).toThrow('INTAKE_BINDINGS_INVALID');
+  });
+
+  it('rejects case-variant duplicate existing drawing IDs even with distinct marks and histories', () => {
+    const value = letterFixture();
+    value.entities.push({ table: 'drawing_revisions', id: letterId(33), projectId: letterId(4) });
+    const sheets = value.intakeBindings.commands.revision.payload.sheets;
+    sheets.push({ ...structuredClone(sheets[0]), sheet_number: 'S2', drawing_id: letterId(31).toUpperCase(), expected_revision_id: letterId(33) });
+    expect(() => validate(value)).toThrow('INTAKE_BINDINGS_INVALID');
+  });
+
+  it('rejects case-variant duplicate history IDs even with distinct drawings and marks', () => {
+    const value = letterFixture();
+    value.entities.push({ table: 'drawings', id: letterId(33), projectId: letterId(4) });
+    const sheets = value.intakeBindings.commands.revision.payload.sheets;
+    sheets.push({ ...structuredClone(sheets[0]), sheet_number: 'S2', drawing_id: letterId(33), expected_revision_id: letterId(32).toUpperCase() });
+    expect(() => validate(value)).toThrow('INTAKE_BINDINGS_INVALID');
+  });
+
+  it('preserves non-conflicting reviewed UUID spelling and exact Storage paths, tokens and literals', () => {
+    const value = JSON.parse(JSON.stringify(letterFixture()).replaceAll('synthetic.pdf', 'Synthetic_CASE.pdf')) as ReturnType<typeof fixture>;
+    const book = value.intakeBindings;
+    book.projects.A1 = { id: letterId(4).toUpperCase(), orgId: letterId(2).toUpperCase(), createdBy: letterId(13).toUpperCase() };
+    book.commands.newSet.requestId = letterId(40).toUpperCase();
+    book.commands.revision.payload.set_id = letterId(30).toUpperCase();
+    book.commands.revision.payload.sheets[0].drawing_id = letterId(31).toUpperCase();
+    book.commands.revision.payload.sheets[0].expected_revision_id = letterId(32).toUpperCase();
+    const result = validate(value).intakeBindings!;
+    expect(result.projects.A1).toEqual({ id: 'ABCDEF00-0000-4000-8000-000000000004', orgId: 'ABCDEF00-0000-4000-8000-000000000002', createdBy: 'ABCDEF00-0000-4000-8000-000000000013' });
+    expect(result.commands.newSet.requestId).toBe('ABCDEF00-0000-4000-8000-000000000040');
+    expect(result.commands.newSet.payload.project_id).toBe('abcdef00-0000-4000-8000-000000000004');
+    expect(result.commands.newSet.payload.file_path).toBe('abcdef00-0000-4000-8000-000000000002/uploads/abcdef00-0000-4000-8000-000000000004/Synthetic_CASE.pdf');
+    expect(result.commands.newSet.payload.source_objects[0].token).toBe('a'.repeat(64));
+    expect(result.commands.newSet.payload.notes).toBe("Robert'); DROP TABLE drawings;--");
+    expect(result.commands.revision.payload.set_id).toBe('ABCDEF00-0000-4000-8000-000000000030');
+    expect(result.commands.revision.payload.sheets[0]).toMatchObject({ drawing_id: 'ABCDEF00-0000-4000-8000-000000000031', expected_revision_id: 'ABCDEF00-0000-4000-8000-000000000032', sheet_number: 'S1' });
+  });
+
   it('selects explicit A1 independent of manifest order and refuses legacy inference', () => {
     const value = fixture(); value.projects.reverse(); value.actors.reverse(); value.organizations.reverse();
     const result = validate(value);

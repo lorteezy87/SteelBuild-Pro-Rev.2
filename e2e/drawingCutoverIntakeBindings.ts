@@ -63,40 +63,48 @@ function freeze<T>(value: T): T {
   return value;
 }
 
+// Comparison keys only for schema-validated UUID fields. Keep reviewed spellings
+// in output, and never apply these keys to Storage paths, tokens or other text.
+const uuidKey = (uuid: string) => uuid.toLowerCase();
+const sameUuid = (left: string, right: string) => uuidKey(left) === uuidKey(right);
+const uniqueUuids = (uuids: readonly string[]) => new Set(uuids.map(uuidKey)).size === uuids.length;
+
 function checkFixtureBindings(book: DrawingIntakeBindings, fixture: FixtureManifest): void {
   const unique = (values: readonly string[]) => new Set(values).size === values.length;
-  requireBinding(fixture.organizations.length === 2 && unique(fixture.organizations)
-    && fixture.projects.length === 4 && unique(fixture.projects.map(p => p.id))
-    && fixture.actors.length === 7 && unique(fixture.actors.map(a => a.id)) && unique(fixture.actors.map(a => a.alias)));
+  requireBinding(fixture.organizations.length === 2 && uniqueUuids(fixture.organizations)
+    && fixture.projects.length === 4 && uniqueUuids(fixture.projects.map(p => p.id))
+    && fixture.actors.length === 7 && uniqueUuids(fixture.actors.map(a => a.id)) && unique(fixture.actors.map(a => a.alias)));
   const pm = fixture.actors.find(a => a.alias === 'pm');
   const admin = fixture.actors.find(a => a.alias === 'admin');
   const foreign = fixture.actors.find(a => a.alias === 'foreign');
-  requireBinding(pm && admin && foreign && pm.orgId === admin.orgId && admin.orgId !== foreign.orgId
-    && fixture.organizations.includes(admin.orgId) && fixture.organizations.includes(foreign.orgId));
-  requireBinding(unique(Object.values(book.projects).map(p => p.id)));
+  requireBinding(pm && admin && foreign && sameUuid(pm.orgId, admin.orgId) && !sameUuid(admin.orgId, foreign.orgId)
+    && fixture.organizations.some(id => sameUuid(id, admin.orgId)) && fixture.organizations.some(id => sameUuid(id, foreign.orgId)));
+  requireBinding(uniqueUuids(Object.values(book.projects).map(p => p.id)));
   for (const [alias, project] of Object.entries(book.projects)) {
     const owner = alias === 'A1' || alias === 'A2' ? admin : foreign;
-    requireBinding(project.orgId === owner.orgId && project.createdBy === owner.id
-      && fixture.projects.some(p => p.id === project.id && p.orgId === project.orgId && p.createdBy === project.createdBy));
+    requireBinding(sameUuid(project.orgId, owner.orgId) && sameUuid(project.createdBy, owner.id)
+      && fixture.projects.some(p => sameUuid(p.id, project.id) && sameUuid(p.orgId, project.orgId) && sameUuid(p.createdBy, project.createdBy)));
   }
-  requireBinding(unique(fixture.entities.map(e => e.id)) && unique(fixture.storage.map(s => s.path)));
+  requireBinding(uniqueUuids(fixture.entities.map(e => e.id)) && unique(fixture.storage.map(s => s.path)));
   const projectId = book.projects.A1.id;
-  const entity = (table: string, id: string) => fixture.entities.some(e => e.table === table && e.id === id && e.projectId === projectId);
+  const declaredProject = fixture.projects.find(p => sameUuid(p.id, projectId));
+  requireBinding(declaredProject);
+  const entity = (table: string, id: string) => fixture.entities.some(e => e.table === table && sameUuid(e.id, id) && sameUuid(e.projectId, projectId));
   const plans = Object.values(book.commands);
-  requireBinding(unique(plans.map(p => p.requestId)));
+  requireBinding(uniqueUuids(plans.map(p => p.requestId)));
   const tokens = new Map<string, string>();
   for (const plan of plans) {
-    requireBinding(plan.payload.project_id === projectId);
+    requireBinding(sameUuid(plan.payload.project_id, projectId));
     for (const source of plan.payload.source_objects) {
-      requireBinding(fixture.storage.some(s => s.path === source.path && s.projectId === projectId)
-        && source.path.startsWith(`${book.projects.A1.orgId}/uploads/${projectId}/`)
+      requireBinding(fixture.storage.some(s => s.path === source.path && sameUuid(s.projectId, projectId))
+        && source.path.startsWith(`${declaredProject.orgId}/uploads/${declaredProject.id}/`)
         && (!tokens.has(source.path) || tokens.get(source.path) === source.token));
       // A SQL metadata token is not the separately declared content-byte SHA256.
       tokens.set(source.path, source.token);
     }
     for (const sheet of plan.payload.sheets) {
       if (sheet.action === 'added' || sheet.action === 'revised') {
-        const source = fixture.storage.find(s => s.projectId === projectId && s.path === sheet.file_path);
+        const source = fixture.storage.find(s => sameUuid(s.projectId, projectId) && s.path === sheet.file_path);
         requireBinding(source && Number.isInteger(source.pages) && source.pages > 0 && source.pages <= 250 && sheet.pdf_page <= source.pages);
       }
       if (sheet.action !== 'added') requireBinding(entity('drawings', sheet.drawing_id)
@@ -104,8 +112,11 @@ function checkFixtureBindings(book: DrawingIntakeBindings, fixture: FixtureManif
     }
   }
   requireBinding(entity('drawing_sets', book.commands.revision.payload.set_id));
+  // The application builder rejects duplicate strings; database UUID identity
+  // must also remain unique when roster lookups accept alternate letter casing.
+  const drawings = book.commands.revision.payload.sheets.flatMap(s => s.action === 'added' ? [] : [s.drawing_id]);
   const revisions = book.commands.revision.payload.sheets.flatMap(s => s.action !== 'added' && s.expected_revision_id !== null ? [s.expected_revision_id] : []);
-  requireBinding(unique(revisions));
+  requireBinding(uniqueUuids(drawings) && uniqueUuids(revisions));
   const newNames = [book.commands.newSet.payload.set_name, book.commands.manualIntake.payload.set_name];
   requireBinding(newNames.every(name => /^E2E[ _-]/.test(name)) && unique(newNames.map(name => name.trim().toUpperCase())));
   requireBinding(book.commands.manualIntake.payload.sheets.every(s => s.action === 'added'
