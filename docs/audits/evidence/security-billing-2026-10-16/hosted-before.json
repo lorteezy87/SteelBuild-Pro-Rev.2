@@ -1,0 +1,150 @@
+{
+  "observedDate": "2026-10-16",
+  "projectRef": "kjrwqagyeswwoxpjkcko",
+  "production": [
+    {
+      "slug": "llm-proxy",
+      "version": 44,
+      "verify_jwt": false,
+      "bundle_sha256": "7a390459cf3236e90686cfa7ca197a35b25afb21d3ac7e66d52e9fdc5c2cad35",
+      "mfa_guard": false,
+      "files": [
+        "functions/llm-proxy/index.ts",
+        "functions/llm-proxy/providers/types.ts",
+        "functions/llm-proxy/providers/anthropic.ts",
+        "functions/llm-proxy/providers/openai.ts",
+        "functions/llm-proxy/providers/cost.ts",
+        "functions/llm-proxy/router.ts",
+        "functions/llm-proxy/quota.ts",
+        "functions/_shared/cors.ts",
+        "functions/_shared/reportError.ts",
+        "functions/llm-proxy/requestLimits.ts",
+        "functions/llm-proxy/requestBoundary.ts"
+      ]
+    },
+    {
+      "slug": "email-send",
+      "version": 31,
+      "verify_jwt": true,
+      "bundle_sha256": "a04ba904e6c1ba10343a5cbfd7a15e6166e6caaefd52c133ed5a819cd0065041",
+      "mfa_guard": false,
+      "files": [
+        "functions/email-send/index.ts",
+        "functions/_shared/cors.ts",
+        "functions/_shared/reportError.ts",
+        "functions/_shared/attachments.ts",
+        "functions/email-send/recipients.ts"
+      ]
+    },
+    {
+      "slug": "project-export",
+      "version": 31,
+      "verify_jwt": true,
+      "bundle_sha256": "b17a52220b4afed0a970670a982fc8f732a802232451f6c074a7cac9b0de4f47",
+      "mfa_guard": false,
+      "files": [
+        "functions/project-export/index.ts",
+        "functions/project-export/readTablePaged.ts",
+        "functions/project-export/exportShape.ts",
+        "functions/_shared/cors.ts",
+        "functions/_shared/reportError.ts"
+      ]
+    },
+    {
+      "slug": "command-center-read",
+      "version": 14,
+      "verify_jwt": false,
+      "bundle_sha256": "2ac1111bcc3473ab7383ebb6de81e3b755098f877ab2028afea0766c5d3df7d3",
+      "mfa_guard": false,
+      "files": [
+        "supabase/functions/command-center-read/index.ts",
+        "supabase/functions/_shared/cors.ts",
+        "supabase/functions/command-center-read/contract.ts",
+        "supabase/functions/command-center-read/normalize.ts",
+        "src/lib/recordLinks.ts"
+      ]
+    },
+    {
+      "slug": "command-center-session-handoff",
+      "version": 15,
+      "verify_jwt": false,
+      "bundle_sha256": "713e0cbf081757c8ae5452425ab5623a6feb2ad659be0ee9cc0ec96a855d40f2",
+      "mfa_guard": false,
+      "files": [
+        "functions/command-center-session-handoff/index.ts",
+        "functions/_shared/cors.ts",
+        "functions/command-center-session-handoff/handoff.ts"
+      ]
+    },
+    {
+      "slug": "stripe-billing",
+      "version": 31,
+      "verify_jwt": false,
+      "bundle_sha256": "e5fa0e2edd0d1fe16420894f9c70aeb8d4127f2b49a4e69e2b08a6eb8c38b4d4",
+      "mfa_guard": false,
+      "files": [
+        "functions/stripe-billing/index.ts",
+        "functions/_shared/cors.ts",
+        "functions/_shared/reportError.ts",
+        "functions/stripe-billing/webhookLogic.ts",
+        "functions/stripe-billing/configGuard.ts"
+      ]
+    },
+    {
+      "slug": "account-delete",
+      "version": 4,
+      "verify_jwt": true,
+      "bundle_sha256": "5cc29c4bf484a3fc5e30b7d32622c5ab5e4d58a5c49d36ac1bc0ae3a0838499d",
+      "mfa_guard": false,
+      "files": [
+        "index.ts"
+      ]
+    }
+  ],
+  "stagingProjectRef": "ndyfjffsulfbwpmwdmic",
+  "staging": [
+    {
+      "slug": "llm-proxy",
+      "version": 49,
+      "verify_jwt": false,
+      "bundle_sha256": "2650f914d535519f270e98af093a2d4c05a52d9d5b6f04f803c1288bd83840c8"
+    },
+    {
+      "slug": "email-send",
+      "version": 35,
+      "verify_jwt": true,
+      "bundle_sha256": "4a111eac1b74eee0546a110dface466387c34edc9267fbd09ce904f8f7c62250"
+    },
+    {
+      "slug": "stripe-billing",
+      "version": 35,
+      "verify_jwt": false,
+      "bundle_sha256": "afe08952db9ee89924598469b590c3f8f24b49033b649be483c203cb1d8a059c"
+    },
+    {
+      "slug": "project-export",
+      "version": 38,
+      "verify_jwt": true,
+      "bundle_sha256": "ebb70893ddf1a66ebd021fa50fcb2701a4230498f65dc05072d74006648b9b22"
+    },
+    {
+      "slug": "command-center-session-handoff",
+      "version": 19,
+      "verify_jwt": false,
+      "bundle_sha256": "7b0477aa5a037dd5b1c0d54eb60ba8d376acbf777b68f7b1bf34f2afba1c491f"
+    },
+    {
+      "slug": "command-center-read",
+      "version": 18,
+      "verify_jwt": false,
+      "bundle_sha256": "7f1f88dbf387e4e3dfe18014e31ee102ed5007dbba857dd8a2c2932db77efacc"
+    },
+    {
+      "slug": "account-delete",
+      "version": 8,
+      "verify_jwt": true,
+      "bundle_sha256": "dbca5bd15f6bca6a3858824577eda302b3426b9d735f45b9ccf714183dbdd4f8"
+    }
+  ],
+  "status": "inventory only; no hosted state changed"
+}

@@ -1,0 +1,289 @@
+{
+  "schemaVersion": 1,
+  "candidateSourceCommit": "8dbce73babd86f9a99619dcc7584a96e72b632da",
+  "baseCommit": "fd8c0f0b1",
+  "projectRef": "kjrwqagyeswwoxpjkcko",
+  "functions": [
+    {
+      "slug": "llm-proxy",
+      "verify_jwt": false,
+      "productionBeforeVersion": 44,
+      "sourceClosureSha256": "0c330ee7569909be9abf3d923ff016e8b7f40cf44f58e5be0e5b2f2383c57c72",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+        },
+        {
+          "path": "supabase/functions/_shared/mfa.ts",
+          "sha256": "1869fd00681dc8b6185b378b8c7469757e8ecdf3f61042cc8140938d085bcac8"
+        },
+        {
+          "path": "supabase/functions/_shared/reportError.ts",
+          "sha256": "c52c8cdc67b7691ade134297f224d0d61aebb5266be555e6599a0257c60e1f40"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/index.ts",
+          "sha256": "cc4085e9bbfc71ea940bbfdc41cea9a89520fd36bb86846de964dc6f51148f90"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/providers/anthropic.ts",
+          "sha256": "7096ffe78447f2dfc4ba572074ac0616bec6dc53984e3879188c33845d8a02c3"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/providers/cost.ts",
+          "sha256": "395e3f8a83287050ac75864e806894ed481cc033999d3541b4eb618dcd448a32"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/providers/openai.ts",
+          "sha256": "eed8d0486c4138a1bdb9c1c4e6566c72a86af8f0fd89a90c1d8100e4fa8f4e44"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/providers/types.ts",
+          "sha256": "ef9f2145a878d412007157fcd63c0a9ebd58a2d38b18c4ec905cfee8819dcfec"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/quota.ts",
+          "sha256": "030bc879f02ee926e24f2e7f772a40148677d9172cd61d5b916d19f9fc96a77d"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/requestBoundary.ts",
+          "sha256": "4d7b326d9ef83d1820c1c02341e067c977004fd27acd3aaafc7f4b5e9ff0aec8"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/requestLimits.ts",
+          "sha256": "053927bfd102d97d011b6ddab9f203f6a292724d5d0e8a9fd94d6460e61104f6"
+        },
+        {
+          "path": "supabase/functions/llm-proxy/router.ts",
+          "sha256": "93d7a65cb553e1026cfbc6d01cd31785698ee7bcf4e90b808557e2d88c5bbeac"
+        }
+      ],
+      "externalImports": [
+        "jsr:@supabase/functions-js/edge-runtime.d.ts",
+        "npm:@sentry/deno"
+      ]
+    },
+    {
+      "slug": "email-send",
+      "verify_jwt": true,
+      "productionBeforeVersion": 31,
+      "sourceClosureSha256": "ce28b5b76c2815ad496310d8d58dc645cacfe2b00cb521a81a578e3457791454",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/attachments.ts",
+          "sha256": "66cac7aef3e0f9bb151bed3827db2c5ce17a748e6e675be1e56b0c0d4f4378f3"
+        },
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+        },
+        {
+          "path": "supabase/functions/_shared/mfa.ts",
+          "sha256": "1869fd00681dc8b6185b378b8c7469757e8ecdf3f61042cc8140938d085bcac8"
+        },
+        {
+          "path": "supabase/functions/_shared/reportError.ts",
+          "sha256": "c52c8cdc67b7691ade134297f224d0d61aebb5266be555e6599a0257c60e1f40"
+        },
+        {
+          "path": "supabase/functions/email-send/index.ts",
+          "sha256": "8c3cc94345082622b6b5cb6bbd0a1ae785d8c85e981b83b33320a2c95cf59818"
+        },
+        {
+          "path": "supabase/functions/email-send/recipients.ts",
+          "sha256": "54b5c808f69c89b7ade9cd23d1f389a11909201eb16e72469d2d61649e877091"
+        }
+      ],
+      "externalImports": [
+        "jsr:@supabase/functions-js/edge-runtime.d.ts",
+        "npm:@sentry/deno"
+      ]
+    },
+    {
+      "slug": "project-export",
+      "verify_jwt": true,
+      "productionBeforeVersion": 31,
+      "sourceClosureSha256": "d2ac8cd1559d46e0899f55b22794b24d64bf947160c8e73cbd918f80a10cbb81",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+        },
+        {
+          "path": "supabase/functions/_shared/mfa.ts",
+          "sha256": "1869fd00681dc8b6185b378b8c7469757e8ecdf3f61042cc8140938d085bcac8"
+        },
+        {
+          "path": "supabase/functions/_shared/reportError.ts",
+          "sha256": "c52c8cdc67b7691ade134297f224d0d61aebb5266be555e6599a0257c60e1f40"
+        },
+        {
+          "path": "supabase/functions/project-export/exportShape.ts",
+          "sha256": "162811736b717c75101fafa24a9c4ed742360d78d6b38d3c79747dd9eadfb746"
+        },
+        {
+          "path": "supabase/functions/project-export/index.ts",
+          "sha256": "807fac3499f01cdf36232d7f7a4dc077ecaf351cdd57fe1021b266158736f3af"
+        },
+        {
+          "path": "supabase/functions/project-export/readTablePaged.ts",
+          "sha256": "4d487ed8f9b5e1638928f5c0996ad8885946403c8ae13ccda47dfabdbdabe3b9"
+        }
+      ],
+      "externalImports": [
+        "jsr:@supabase/functions-js/edge-runtime.d.ts",
+        "npm:@sentry/deno",
+        "npm:@supabase/supabase-js@^2.47"
+      ]
+    },
+    {
+      "slug": "command-center-read",
+      "verify_jwt": false,
+      "productionBeforeVersion": 14,
+      "sourceClosureSha256": "b742646f718ca437dc70f9fc5f24205eec3215502ace718046c49f58a8444e32",
+      "files": [
+        {
+          "path": "src/lib/recordLinks.ts",
+          "sha256": "1b529fb20cfeccfe893cb7684117c31bf8590430933185209f50f9809001842c"
+        },
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+        },
+        {
+          "path": "supabase/functions/_shared/mfa.ts",
+          "sha256": "1869fd00681dc8b6185b378b8c7469757e8ecdf3f61042cc8140938d085bcac8"
+        },
+        {
+          "path": "supabase/functions/command-center-read/contract.ts",
+          "sha256": "6f27119683622f01268f9af3940d5c09bc50d74bfadd7845b378444f526ba662"
+        },
+        {
+          "path": "supabase/functions/command-center-read/index.ts",
+          "sha256": "3232908bf8356382752b315be5913b7fba1ef0d7772f8ea431a773a50d11e010"
+        },
+        {
+          "path": "supabase/functions/command-center-read/normalize.ts",
+          "sha256": "9089616f80719067778ebe4d5ceda03306b97813435be40ad7e861530b4565e9"
+        }
+      ],
+      "externalImports": [
+        "npm:@supabase/supabase-js@2.105.4"
+      ]
+    },
+    {
+      "slug": "command-center-session-handoff",
+      "verify_jwt": false,
+      "productionBeforeVersion": 15,
+      "sourceClosureSha256": "f217849cbdbcf8716500ae417017da18b099139249b6d2b6d16a622b8fe3b0f3",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+        },
+        {
+          "path": "supabase/functions/_shared/mfa.ts",
+          "sha256": "1869fd00681dc8b6185b378b8c7469757e8ecdf3f61042cc8140938d085bcac8"
+        },
+        {
+          "path": "supabase/functions/command-center-session-handoff/handoff.ts",
+          "sha256": "d10e5b1dc1e352fddb208d76064c2cd076ed341b9af809068a62eab044b2312a"
+        },
+        {
+          "path": "supabase/functions/command-center-session-handoff/index.ts",
+          "sha256": "bb0b2b89ecb6b10fb7eab14e925a367f285422a0c43fa3419f6998123e9a4c27"
+        }
+      ],
+      "externalImports": [
+        "npm:@supabase/supabase-js@2.105.4"
+      ]
+    },
+    {
+      "slug": "stripe-billing",
+      "verify_jwt": false,
+      "productionBeforeVersion": 31,
+      "sourceClosureSha256": "7b050e3550d53cbffb8de3849f919bec8cac30f02ed89260f8eb9e7d3124f84d",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+        },
+        {
+          "path": "supabase/functions/_shared/mfa.ts",
+          "sha256": "1869fd00681dc8b6185b378b8c7469757e8ecdf3f61042cc8140938d085bcac8"
+        },
+        {
+          "path": "supabase/functions/_shared/reportError.ts",
+          "sha256": "c52c8cdc67b7691ade134297f224d0d61aebb5266be555e6599a0257c60e1f40"
+        },
+        {
+          "path": "supabase/functions/stripe-billing/checkout.ts",
+          "sha256": "5e27f3591505a22e3b043273823498fa67be34e659879d448b9d28139a37f2dd"
+        },
+        {
+          "path": "supabase/functions/stripe-billing/checkoutStatus.ts",
+          "sha256": "1faac36dca7c8e0e155d181cf56e46a4dcc92a770ef1f36f7f612fd7a6dd41c0"
+        },
+        {
+          "path": "supabase/functions/stripe-billing/configGuard.ts",
+          "sha256": "b7c1d5628bd5d2cfe5439776254f19375d9a208df44200e595fbbaaff4addc1a"
+        },
+        {
+          "path": "supabase/functions/stripe-billing/index.ts",
+          "sha256": "d833425401c0321d913b2cf848d5f4be9460097d0b88509dbb338c9cfcb785d2"
+        },
+        {
+          "path": "supabase/functions/stripe-billing/webhookLogic.ts",
+          "sha256": "a8f7080f4b440c79f1c45b03c3014a676aaf6d69ef0ad60e93e345aef4afec3c"
+        }
+      ],
+      "externalImports": [
+        "https://esm.sh/@supabase/supabase-js@2",
+        "https://esm.sh/stripe@17?target=deno",
+        "npm:@sentry/deno"
+      ]
+    },
+    {
+      "slug": "account-delete",
+      "verify_jwt": true,
+      "productionBeforeVersion": 4,
+      "sourceClosureSha256": "f62d232c4ead1c78fb5935d56d21503594f98e1ae46e07474d2a681082e384f0",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+        },
+        {
+          "path": "supabase/functions/_shared/mfa.ts",
+          "sha256": "1869fd00681dc8b6185b378b8c7469757e8ecdf3f61042cc8140938d085bcac8"
+        },
+        {
+          "path": "supabase/functions/account-delete/cleanup.ts",
+          "sha256": "7766c00b32b67cd1d603ca446b8cbd4f0ab0ac85f725363f5e1f8ce9e9b33752"
+        },
+        {
+          "path": "supabase/functions/account-delete/handlers.ts",
+          "sha256": "5a0b279160ce04b19917890b35ea3048b4e0c256ddd7d98a80b00bcee59800ab"
+        },
+        {
+          "path": "supabase/functions/account-delete/index.ts",
+          "sha256": "0d1a286fb4cd1e83e7c069bc13ac5c0e3de4d2e65d1234849ba724509b0e8efe"
+        },
+        {
+          "path": "supabase/functions/account-delete/plan.ts",
+          "sha256": "a72535b9b268d79c895ba0e1aca307e3959dec4b0be5f43d35a3ca318ba310ea"
+        },
+        {
+          "path": "supabase/functions/account-delete/storage.ts",
+          "sha256": "fca5aa3c3346f11d91c4174e93504defae8f715ff7c436deb8ef6c856f84364b"
+        }
+      ],
+      "externalImports": [
+        "jsr:@supabase/functions-js/edge-runtime.d.ts",
+        "npm:@supabase/supabase-js@^2.47"
+      ]
+    }
+  ],
+  "authorization": "Prepared for review only. No deployment performed."
+}
