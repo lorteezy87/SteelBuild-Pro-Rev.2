@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { entities, integrations } from "@/api/supabaseClient";
+import { entities } from "@/api/supabaseClient";
+import { UploadDrawingFile } from "@/api/client/uploads";
+import { useDrawingSourceSnapshots } from "./upload/useDrawingSourceSnapshots";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 import {
@@ -66,6 +68,11 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
     disposition: "superseded",
   });
   const [pdfFile, setPdfFile] = useState(initialPdfFile);
+  const sourceSnapshots = useDrawingSourceSnapshots(activeProject?.id);
+  const activeReview = React.useRef({ projectId: activeProject?.id, file: pdfFile, generation: 0 });
+  activeReview.current.projectId = activeProject?.id;
+  activeReview.current.file = pdfFile;
+  useEffect(() => () => { activeReview.current.generation++; }, []);
   const [matchedSheets, setMatchedSheets] = useState([]);
   const [supersedeUnlisted, setSupersedeUnlisted] = useState(false);
   const [processingMsg, setProcessingMsg] = useState("");
@@ -92,12 +99,15 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
       return;
     }
     setFlowError("");
+    if (nextFile !== pdfFile) {
+      activeReview.current.generation++;
+      sourceSnapshots.reset();
+      setMatchedSheets([]);
+      setExtraction({ setMeta: null, scanned: false });
+      attestationState.resetAttestations();
+    }
     setPdfFile(nextFile);
   };
-  useEffect(() => {
-    if (initialPdfFile && pdfFile && pdfFile !== initialPdfFile) attestationState.resetAttestations();
-  }, [initialPdfFile, pdfFile, attestationState.resetAttestations]);
-
   const handleExtract = async () => {
     try {
       if (!pdfFile || !isPdfFile(pdfFile) || pdfFile.size > MAX_PDF_SIZE_MB * 1024 * 1024) {
@@ -108,7 +118,17 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
       setStep("processing");
       setProcessingMsg("Uploading PDF...");
       setProcessingPct(10);
-      const res = await integrations.Core.UploadFile({ file: pdfFile, workflow: "drawings" });
+      sourceSnapshots.reset();
+      const projectId = activeProject?.id;
+      const file = pdfFile;
+      const generation = ++activeReview.current.generation;
+      const assertActive = () => {
+        if (activeReview.current.projectId !== projectId || activeReview.current.file !== file || activeReview.current.generation !== generation) {
+          throw new Error("The drawing source review changed. Start a fresh source review.");
+        }
+      };
+      const res = await UploadDrawingFile({ file, projectId, pathId: crypto.randomUUID(), assertActive });
+      assertActive();
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
       setExtraction({ setMeta: null, scanned: false });
@@ -128,6 +148,7 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
       if (samePreflightPdf && initialReview) {
         setExtraction({ setMeta: initialReview.setMeta ?? null, scanned: initialReview.scanned === true, pageCount: initialReview.pageCount ?? null });
       }
+      assertActive();
       setProcessingMsg("Comparing sheets...");
       setProcessingPct(80);
 
@@ -169,11 +190,21 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
           callouts:    s.callouts,
         })),
       );
-      matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
+      assertActive();
+      const snapshots = await sourceSnapshots.capture([res.path]);
+      assertActive();
+      matched.forEach(m => {
+        if (m.newSheet) {
+          m.newSheet.fileUrl = res.path;
+          m.newSheet.sourceFileUrl = res.path;
+          m.newSheet.sourceSnapshot = snapshots[0];
+        }
+      });
       setMatchedSheets(matched);
       setSupersedeUnlisted(false);
       setProcessingPct(100);
       await new Promise(r => setTimeout(r, 400));
+      assertActive();
       setStep("comparison");
     } catch (error) {
       console.error("Revision extraction failed:", error);
@@ -185,6 +216,14 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
   const handleApply = async () => {
     try {
       setFlowError("");
+      if (matchedSheets.some(match => match.newSheet?.sourceReviewRequired)) {
+        setFlowError("The PDF page or file changed. Complete a fresh source review before confirming this revision.");
+        return;
+      }
+      if (!sourceSnapshots.ready) {
+        setFlowError("The PDF page or file changed. Start a fresh source review before confirming this revision.");
+        return;
+      }
       const invalidSource = matchedSheets.some(match => {
         if (!match.newSheet) return false;
         const page = validatePdfPage(match.newSheet.pdfPage);
@@ -192,6 +231,11 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
       });
       if (invalidSource) {
         setFlowError("Every incoming sheet needs its source PDF and a confirmed in-range PDF page. Return to Document Control to review the source.");
+        return;
+      }
+      const paths = [...new Set(matchedSheets.filter(match => match.newSheet).map(match => match.newSheet.sourceFileUrl))];
+      if (!await sourceSnapshots.verify(paths)) {
+        setFlowError("The source identity is unavailable or changed. Start a fresh source review before confirming this revision.");
         return;
       }
       const ambiguous = (matchedSheets || []).filter((m) => m.change === "ambiguous");
@@ -252,7 +296,27 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
     }
   };
 
+  const setReviewedMatchedSheets = (next) => {
+    const updated = typeof next === "function" ? next(matchedSheets) : next;
+    const sourceEdited = updated.some((match, index) => {
+      const previous = matchedSheets[index]?.newSheet;
+      const incoming = match.newSheet;
+      return incoming && previous && (incoming.pdfPage !== previous.pdfPage || incoming.sourceFileUrl !== previous.sourceFileUrl || incoming.fileUrl !== previous.fileUrl);
+    });
+    if (sourceEdited) {
+      const fileEdited = updated.some((match, index) => match.newSheet && matchedSheets[index]?.newSheet
+        && (match.newSheet.sourceFileUrl !== matchedSheets[index].newSheet.sourceFileUrl || match.newSheet.fileUrl !== matchedSheets[index].newSheet.fileUrl));
+      if (fileEdited) sourceSnapshots.invalidate();
+      attestationState.resetAttestations();
+      setExtraction(previous => ({ setMeta: null, scanned: false, pageCount: fileEdited ? null : previous.pageCount ?? null }));
+      setMatchedSheets(updated.map((match, index) => match.newSheet ? { ...match, newSheet: { ...match.newSheet, sourceSnapshot: matchedSheets[index]?.newSheet?.sourceSnapshot, extractedText: null, callouts: null, hyperlinks: null, reviewed: false, sourceReviewRequired: true } } : match));
+      setFlowError("The PDF page or file changed. Start a fresh source review.");
+    } else setMatchedSheets(updated);
+  };
+
   const reset = () => {
+    activeReview.current.generation++;
+    sourceSnapshots.reset();
     setStep(preSelectedSet ? "revMeta" : "selectSet");
     setSelectedSet(preSelectedSet || null);
     setRevMeta({ revisionLabel: "", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "", disposition: "superseded" });
@@ -308,7 +372,7 @@ export default function RevisionUploadModal({ open, onClose, activeProject, preS
           {step === "processing" && <StepProcessing message={processingMsg} progress={processingPct} />}
           {step === "comparison" && (
             <DocControlAttestationProvider value={attestationState}>
-              <StepSheetComparison selectedSet={selectedSet} revMeta={revMeta} extraction={extraction} activeProject={activeProject} matchedSheets={matchedSheets} setMatchedSheets={setMatchedSheets} supersedeUnlisted={supersedeUnlisted} setSupersedeUnlisted={setSupersedeUnlisted} onBack={() => setStep("dropPDF")} onConfirm={handleApply} />
+              <StepSheetComparison selectedSet={selectedSet} revMeta={revMeta} extraction={extraction} activeProject={activeProject} matchedSheets={matchedSheets} setMatchedSheets={setReviewedMatchedSheets} supersedeUnlisted={supersedeUnlisted} setSupersedeUnlisted={setSupersedeUnlisted} onBack={() => setStep("dropPDF")} onConfirm={handleApply} />
             </DocControlAttestationProvider>
           )}
         </div>

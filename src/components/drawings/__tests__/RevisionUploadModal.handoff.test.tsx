@@ -10,10 +10,13 @@ const m = vi.hoisted(() => ({
   createDrawing: vi.fn(async (_record: Record<string, unknown>) => ({ id: "new-drawing" })),
   updateSet: vi.fn(async (_id: string, _patch: Record<string, unknown>) => ({})),
   ensureCurrentRevision: vi.fn(async () => null),
-  upload: vi.fn(async (_request: { file: File }) => ({ file_url: "https://example.test/revision.pdf" })),
+  upload: vi.fn(async (_request: { file: File }) => ({ path: '11111111-1111-4111-8111-111111111111/uploads/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.pdf', file_url: 'signed-url-must-not-be-persisted' })),
+  readSources: vi.fn(),
   extract: vi.fn(async () => []),
   slip: vi.fn(),
 }));
+vi.mock('@/api/client/uploads', () => ({ UploadDrawingFile: m.upload }));
+vi.mock('@/api/client/drawingCommands', () => ({ getDrawingRevisionSources: m.readSources }));
 
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
@@ -41,7 +44,11 @@ vi.mock("../revisionUploadSteps/DropPdfStep", () => ({ default: ({ onExtract, se
   <button onClick={onExtract}>Extract PDF</button>
   <button onClick={() => setFile(new File(["different"], "other.pdf", { type: "application/pdf" }))}>Choose different PDF</button>
 </> }));
-vi.mock("../revisionUploadSteps/SheetComparisonStep", () => ({ default: ({ onConfirm, setSupersedeUnlisted }: { onConfirm: () => void; setSupersedeUnlisted: (value: boolean) => void }) => <>
+vi.mock("../revisionUploadSteps/SheetComparisonStep", () => ({ default: ({ onConfirm, setSupersedeUnlisted, matchedSheets, setMatchedSheets, extraction }: { onConfirm: () => void; setSupersedeUnlisted: (value: boolean) => void; matchedSheets: Array<{ newSheet?: Record<string, unknown> }>; setMatchedSheets: (value: unknown) => void; extraction: { pageCount?: number } }) => <>
+  <span>{String(matchedSheets[0]?.newSheet?.sourceFileUrl)}</span>
+  <span data-testid="physical-page-count">{String(extraction.pageCount)}</span>
+  <span data-testid="page-text">{String(matchedSheets[0]?.newSheet?.extractedText)}</span>
+  <button onClick={() => setMatchedSheets(matchedSheets.map(match => ({ ...match, newSheet: { ...match.newSheet, pdfPage: 2 } })))}>Change PDF page</button>
   <button onClick={() => setSupersedeUnlisted(true)}>Retire missing sheets</button>
   <button onClick={onConfirm}>Apply revision</button>
 </> }));
@@ -68,7 +75,7 @@ function openReviewedRevision(initialAttestations = {}, setRevision = "1", pdfPa
         open
         onClose={() => {}}
         onComplete={onComplete}
-        activeProject={{ id: "p1", name: "Desert Ridge Phase 2" }}
+        activeProject={{ id: "22222222-2222-4222-8222-222222222222", name: "Desert Ridge Phase 2" }}
         preSelectedSet={{ id: "set1", set_name: "SHOP A", revision: setRevision, revision_history: "[]" }}
         drawingSets={[]}
         initialPdfFile={preflightFile}
@@ -89,6 +96,7 @@ async function reachComparison() {
 describe("reviewed revision handoff containment", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    m.readSources.mockResolvedValue([{ path: '11111111-1111-4111-8111-111111111111/uploads/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.pdf', token: 'a'.repeat(64) }]);
     vi.mocked(entities.Drawing.filterAll).mockResolvedValue([]);
   });
   function expectNoWrites() {
@@ -142,6 +150,31 @@ describe("reviewed revision handoff containment", () => {
     await screen.findByRole("button", { name: "Apply revision" });
     expect(m.upload.mock.calls[0][0]).toMatchObject({ file: preflightFile });
     expect(m.extract).not.toHaveBeenCalled();
+    expectNoWrites();
+  });
+  it('captures source identity before rendering comparison and keeps the project path', async () => {
+    openReviewedRevision();
+    await reachComparison();
+    expect(m.readSources).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/11111111.*uploads/)).toBeTruthy();
+    expect(m.upload.mock.calls[0][0]).toMatchObject({ projectId: '22222222-2222-4222-8222-222222222222' });
+  });
+  it('holds changed source tokens at confirmation instead of adopting a fresh snapshot', async () => {
+    openReviewedRevision();
+    await reachComparison();
+    m.readSources.mockResolvedValue([{ path: '11111111-1111-4111-8111-111111111111/uploads/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.pdf', token: 'b'.repeat(64) }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply revision' }));
+    expect(await screen.findByText(/source identity.*changed/i)).toBeTruthy();
+    expectNoWrites();
+  });
+  it('page edits invalidate source-bound review before confirmation', async () => {
+    openReviewedRevision();
+    await reachComparison();
+    fireEvent.click(screen.getByRole('button', { name: 'Change PDF page' }));
+    expect(screen.getByTestId('physical-page-count').textContent).toBe('1');
+    expect(screen.getByTestId('page-text').textContent).toBe('null');
+    fireEvent.click(screen.getByRole('button', { name: 'Apply revision' }));
+    expect(await screen.findByText(/fresh source review/i)).toBeTruthy();
     expectNoWrites();
   });
 });

@@ -12,11 +12,16 @@ const {
   sanitizeFilenameMock,
   remapQuotaErrorMock,
   quotaExceededUserMessageMock,
+  downloadMock, projectMock, getUserMock,
 } = vi.hoisted(() => {
   const upload = vi.fn();
+  const download = vi.fn();
   return {
+    downloadMock: download,
+    projectMock: vi.fn(),
+    getUserMock: vi.fn(),
     uploadMock: upload,
-    fromMock: vi.fn(() => ({ upload })),
+    fromMock: vi.fn(() => ({ upload, download })),
     getActiveOrgIdMock: vi.fn(),
     assertUploadAllowedMock: vi.fn(),
     sanitizeFilenameMock: vi.fn((name: string) => name),
@@ -27,6 +32,8 @@ const {
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
+    auth: { getUser: getUserMock },
+    from: () => ({ select: () => ({ eq: () => ({ single: projectMock }) }) }),
     storage: {
       from: fromMock,
     },
@@ -35,6 +42,7 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/lib/activeOrg", () => ({
   getActiveOrgId: getActiveOrgIdMock,
+  getActiveOrgGeneration: () => 0,
 }));
 
 vi.mock("@/lib/uploadValidation", () => ({
@@ -52,6 +60,10 @@ import { UploadFile } from "@/api/client/uploads";
 describe("UploadFile", () => {
   beforeEach(() => {
     uploadMock.mockReset();
+    uploadMock.mockImplementation(async (path: string) => ({ data: { path }, error: null }));
+    downloadMock.mockReset();
+    projectMock.mockResolvedValue({ data: { id: PROJECT, org_id: ORG }, error: null });
+    getUserMock.mockResolvedValue({ data: { user: { id: ACTOR } }, error: null });
     fromMock.mockClear();
     getActiveOrgIdMock.mockReset();
     assertUploadAllowedMock.mockReset();
@@ -112,7 +124,7 @@ describe("UploadFile", () => {
       .mockResolvedValueOnce({ data: { path: `${ORG}/uploads/ok.pdf` }, error: null });
 
     const file = new File(["hello"], "rev.pdf", { type: "application/pdf" });
-    const result = await UploadFile({ file, workflow: "drawings" } as never);
+    const result = await UploadFile({ file, workflow: "default" } as never);
 
     expect(uploadMock).toHaveBeenCalledTimes(2);
     expect(result.path).toBe(`${ORG}/uploads/ok.pdf`);
@@ -124,12 +136,12 @@ describe("UploadFile", () => {
       .mockResolvedValueOnce({ data: null, error: netFail })
       .mockResolvedValueOnce({ data: { path: `${ORG}/uploads/ok.pdf` }, error: null });
 
-    await UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never);
+    await UploadFile({ file: new File(["x"], "a.pdf"), workflow: "default" } as never);
 
     expect(uploadMock.mock.calls[0][0]).toBe(uploadMock.mock.calls[1][0]);
   });
 
-  it("treats a Duplicate on a RETRY as success — the first attempt did land", async () => {
+  it("nonDrawingUploadUnchanged: retains duplicate retry behavior", async () => {
     // The path carries a timestamp and random suffix, so nothing but our own
     // earlier attempt can occupy it. A collision here means the request DID
     // reach storage and only the response was lost.
@@ -138,7 +150,7 @@ describe("UploadFile", () => {
       .mockResolvedValueOnce({ data: null, error: netFail })
       .mockResolvedValueOnce({ data: null, error: { statusCode: "409", error: "Duplicate", message: "The resource already exists" } });
 
-    const result = await UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never);
+    const result = await UploadFile({ file: new File(["x"], "a.pdf"), workflow: "default" } as never);
 
     expect(uploadMock).toHaveBeenCalledTimes(2);
     expect(result.path).toBe(uploadMock.mock.calls[0][0]);
@@ -160,7 +172,7 @@ describe("UploadFile", () => {
     });
 
     await expect(
-      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
+      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "default" } as never),
     ).rejects.toBeTruthy();
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(remapQuotaErrorMock).toHaveBeenCalled();
@@ -171,7 +183,7 @@ describe("UploadFile", () => {
     uploadMock.mockResolvedValue({ data: null, error: { statusCode: "413", message: "Payload too large" } });
 
     await expect(
-      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
+      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "default" } as never),
     ).rejects.toBeTruthy();
     expect(uploadMock).toHaveBeenCalledTimes(1);
   });
@@ -185,8 +197,76 @@ describe("UploadFile", () => {
     uploadMock.mockResolvedValue({ data: null, error: { name: "StorageUnknownError", message: "quota has been exceeded" } });
 
     await expect(
-      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "drawings" } as never),
+      UploadFile({ file: new File(["x"], "a.pdf"), workflow: "default" } as never),
     ).rejects.toThrow(/storage is full/i);
     expect(uploadMock).toHaveBeenCalledTimes(1);
+  });
+
+  const PROJECT = "22222222-2222-4222-8222-222222222222";
+  const PATH_ID = "33333333-3333-4333-8333-333333333333";
+  const ACTOR = "44444444-4444-4444-8444-444444444444";
+  const drawingArgs = () => ({ file: new File(["original"], "a.pdf", { type: "application/pdf" }), workflow: "drawings" as const, projectId: PROJECT, pathId: PATH_ID });
+
+  it("drawingPathIncludesCurrentProject", async () => {
+    getActiveOrgIdMock.mockReturnValue(ORG);
+    uploadMock.mockImplementation(async (path: string) => ({ data: { path }, error: null }));
+    const result = await UploadFile(drawingArgs());
+    const [path, , uploadOptions] = uploadMock.mock.calls[0];
+    expect(path).toBe([ORG, 'uploads', PROJECT, PATH_ID + '.pdf'].join('/'));
+    expect(uploadOptions.upsert).toBe(false);
+    expect(result.path).toBe(path);
+  });
+
+  it("foreignProjectRefused", async () => {
+    getActiveOrgIdMock.mockReturnValue(ORG);
+    projectMock.mockResolvedValue({ data: { id: PROJECT, org_id: ACTOR }, error: null });
+    await expect(UploadFile(drawingArgs())).rejects.toThrow(/project.*workspace/i);
+    expect(uploadMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['different', 'unreadable'])("duplicateResponseDoesNotProveBytes: %s", async mode => {
+    getActiveOrgIdMock.mockReturnValue(ORG);
+    uploadMock.mockResolvedValueOnce({ data: null, error: netFail })
+      .mockResolvedValueOnce({ data: null, error: { statusCode: '409' } });
+    downloadMock.mockResolvedValue(mode === 'different'
+      ? { data: new Blob(['replaced']), error: null }
+      : { data: null, error: { message: 'denied' } });
+    await expect(UploadFile(drawingArgs())).rejects.toThrow(/fresh review|new upload/i);
+    expect(uploadMock.mock.calls[0][0]).toBe(uploadMock.mock.calls[1][0]);
+  });
+
+  it("accepts retry409 only after downloading and hashing the original bytes", async () => {
+    getActiveOrgIdMock.mockReturnValue(ORG);
+    uploadMock.mockResolvedValueOnce({ data: null, error: netFail })
+      .mockResolvedValueOnce({ data: null, error: { statusCode: '409' } });
+    downloadMock.mockResolvedValue({ data: new Blob(['original']), error: null });
+    const result = await UploadFile(drawingArgs());
+    expect(downloadMock).toHaveBeenCalledWith([ORG, 'uploads', PROJECT, PATH_ID + '.pdf'].join('/'));
+    expect(result.path).toBe([ORG, 'uploads', PROJECT, PATH_ID + '.pdf'].join('/'));
+  });
+
+  it.each([{ projectId: undefined }, { projectId: '../foreign' }, { pathId: '../bad' }])("refuses invalid drawing path inputs %j", async patch => {
+    getActiveOrgIdMock.mockReturnValue(ORG);
+    await expect(UploadFile({ ...drawingArgs(), ...patch } as never)).rejects.toThrow(/project|path/i);
+    expect(uploadMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses an actor switch while storage response is in flight', async () => {
+    getActiveOrgIdMock.mockReturnValue(ORG);
+    uploadMock.mockImplementation(async (path: string) => {
+      getUserMock.mockResolvedValue({ data: { user: { id: PROJECT } }, error: null });
+      return { data: { path }, error: null };
+    });
+    await expect(UploadFile(drawingArgs())).rejects.toThrow(/user.*changed/i);
+  });
+
+  it('refuses an org switch while project ownership is being checked', async () => {
+    getActiveOrgIdMock.mockReturnValue(ORG);
+    projectMock.mockImplementation(async () => {
+      getActiveOrgIdMock.mockReturnValue(ACTOR);
+      return { data: { id: PROJECT, org_id: ORG }, error: null };
+    });
+    await expect(UploadFile(drawingArgs())).rejects.toThrow(/workspace changed/i);
+    expect(uploadMock).not.toHaveBeenCalled();
   });
 });

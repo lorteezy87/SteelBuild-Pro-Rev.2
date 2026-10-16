@@ -1,5 +1,8 @@
-import { entities, integrations } from "@/api/supabaseClient";
-import { EMPTY_SET_META, parseFilename } from "@/lib/pdfSheetExtractor";
+import { useEffect, useRef } from "react";
+import { entities } from "@/api/supabaseClient";
+import { UploadDrawingFile } from "@/api/client/uploads";
+import { EMPTY_SET_META } from "@/lib/pdfSheetExtractor";
+import { useDrawingSourceSnapshots } from "./useDrawingSourceSnapshots";
 import { withTimeout, newUploadBatchId } from "@/lib/drawingUploadUtils";
 import { validateAndExtract, makeProgressSteps, mergeAiSetMetadata } from "../drawingSetUploadHelpers";
 
@@ -7,6 +10,19 @@ const UPLOAD_TIMEOUT_MS  = 90_000;
 const EXTRACT_TIMEOUT_MS = 300_000;
 
 export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
+  const sourceSnapshots = useDrawingSourceSnapshots(activeProject?.id);
+  const selectedFiles = useRef(files);
+  const selectedProject = useRef(activeProject?.id);
+  selectedProject.current = activeProject?.id;
+  useEffect(() => {
+    if (selectedFiles.current.length !== files.length || files.some((file, index) => file !== selectedFiles.current[index])) {
+      selectedFiles.current = files;
+      sourceSnapshots.reset();
+      state.cancelledRef.current = true;
+      state.setSheets([]);
+      state.setFileResults([]);
+    }
+  });
   const {
     setProcessError, setStep, setUploadBatchId, setProcessingStatus,
     setMeta, setAiFilledFields, setSheets, setFileResults, cancelledRef,
@@ -14,6 +30,9 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
 
   const handleUploadAndProcess = async () => {
     cancelledRef.current = false;
+    sourceSnapshots.reset();
+    setSheets([]);
+    setFileResults([]);
     setProcessError(null);
     setStep(3);
     const batchId = newUploadBatchId();
@@ -60,12 +79,14 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
         let fileUrl;
         try {
           const res = await withTimeout(
-            integrations.Core.UploadFile({ file, workflow: "drawings" }),
+            UploadDrawingFile({ file, projectId: activeProject?.id, pathId: crypto.randomUUID(), assertActive: () => {
+              if (cancelledRef.current || selectedProject.current !== activeProject?.id) throw new Error("Drawing upload project or review changed.");
+            } }),
             UPLOAD_TIMEOUT_MS,
             "File upload"
           );
-          fileUrl = res?.file_url || res?.url;
-          if (!fileUrl) throw new Error("Upload succeeded but no file URL was returned");
+          fileUrl = res?.path;
+          if (!fileUrl) throw new Error("Upload succeeded but no source path was returned");
         } catch (err) {
           results.push({ fileName: file.name, sheetCount: 0, status: "failed", error: err.message });
           continue;
@@ -113,15 +134,15 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
             "AI extraction"
           );
         } catch (err) {
-          const parsed = parseFilename(file.name);
           extractResult = {
             setMeta: { ...EMPTY_SET_META },
             sheets: [{
-              sheetNumber: parsed.sheetNumber,
-              sheetTitle: parsed.sheetNumber ? "" : file.name.replace(/\.pdf$/i, ""),
+              sheetNumber: "",
+              sheetTitle: "",
               discipline: meta.discipline, sheetType: "General",
-              revision: parsed.revision || "0", scale: "", date: "",
-              _note: `Extraction failed: ${err.message}.` + (parsed.sheetNumber ? ` Sheet # "${parsed.sheetNumber}" extracted from filename.` : " Please fill in manually."),
+              revision: "", scale: "", date: "", pdfPage: null,
+              extractedText: null, callouts: null,
+              _note: `Extraction unavailable: ${err.message}. Enter and review the sheet number, revision code and physical PDF page manually.`,
             }],
             scanned: false,
             extractFailed: true,
@@ -180,6 +201,14 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
         return;
       }
 
+      // One bounded source read before rendering review. Preserve these tokens
+      // on the file and each sheet; confirmation must compare, never recapture.
+      const snapshots = await sourceSnapshots.capture(results.filter(result => result.status === "success").map(result => result.fileUrl));
+      if (cancelledRef.current) return;
+      const snapshotByPath = new Map(snapshots.map(snapshot => [snapshot.path, snapshot]));
+      const reviewedSheets = allSheets.map(sheet => ({ ...sheet, sourceSnapshot: snapshotByPath.get(sheet.sourceFileUrl) }));
+      const reviewedResults = results.map(result => ({ ...result, sourceSnapshot: snapshotByPath.get(result.fileUrl) ?? null }));
+
       const defaultIssueDate = new Date().toISOString().split("T")[0];
       setMeta(prev => {
         const { merged, aiFilled: prevAiFilled } = mergeAiSetMetadata(prev, aggregateSetMeta, defaultIssueDate);
@@ -195,8 +224,8 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
         message: `Found ${allSheets.length} sheets across ${results.filter(r => r.status === "success").length} file(s)`,
       });
 
-      setSheets(allSheets);
-      setFileResults(results);
+      setSheets(reviewedSheets);
+      setFileResults(reviewedResults);
       await new Promise(r => setTimeout(r, 600));
 
       if (!cancelledRef.current) setStep(4);
@@ -207,5 +236,24 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
     }
   };
 
-  return { handleUploadAndProcess };
+  // Task 8 wires this setter into ReviewStep. Page edits retain the PDF token
+  // but require explicit review of the new page with no inherited evidence.
+  const setReviewedSheets = (next) => {
+    const previous = state.sheets || [];
+    const updated = typeof next === "function" ? next(previous) : next;
+    let changed = false;
+    const reviewed = updated.map((sheet, index) => {
+      const prior = previous[index];
+      if (!prior) return sheet;
+      const fileChanged = sheet.sourceFileUrl !== prior.sourceFileUrl || sheet.sourceFile !== prior.sourceFile;
+      if (!fileChanged && sheet.pdfPage === prior.pdfPage) return sheet;
+      changed = true;
+      if (fileChanged) sourceSnapshots.invalidate();
+      return { ...sheet, sourceSnapshot: prior.sourceSnapshot, extractedText: null, callouts: null, hyperlinks: null, reviewed: false, sourceReviewRequired: true };
+    });
+    if (changed) state.resetAttestations?.();
+    setSheets(reviewed);
+  };
+
+  return { handleUploadAndProcess, sourceSnapshots, setReviewedSheets };
 }

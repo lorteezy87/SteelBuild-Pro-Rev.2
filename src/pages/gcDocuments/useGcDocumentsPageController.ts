@@ -5,7 +5,8 @@
 
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { entities, integrations } from "@/api/supabaseClient";
+import { entities } from "@/api/supabaseClient";
+import { UploadDrawingFile } from "@/api/client/uploads";
 import type { Insert, Update } from "@/api/supabaseClient";
 import { invalidateEntities } from "@/services/cacheRegistry";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
@@ -66,8 +67,8 @@ export function useGcDocumentsPageController({
 
       let filePath = uploadedPath;
       if (file && !filePath) {
-        const uploaded = await integrations.Core.UploadFile({ file, workflow: "drawings" });
-        filePath = uploaded.path || uploaded.file_url;
+        const uploaded = await UploadDrawingFile({ file, projectId, pathId: crypto.randomUUID() });
+        filePath = uploaded.path;
         if (!filePath) throw new Error("The GC PDF upload returned no storage path. Nothing was logged.");
       }
 

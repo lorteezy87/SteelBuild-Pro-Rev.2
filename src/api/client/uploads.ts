@@ -7,16 +7,29 @@
  */
 
 import { supabase } from '@/lib/supabase';
-import { getActiveOrgId } from '@/lib/activeOrg';
+import { getActiveOrgId, getActiveOrgGeneration } from '@/lib/activeOrg';
 import { assertUploadAllowed, sanitizeFilename } from '@/lib/uploadValidation';
 import { quotaExceededUserMessage, remapQuotaError } from '@/lib/quotaExceeded';
 import { isTransientNetworkError, withTransientRetry } from '@/lib/transientRetry';
-import type { UploadFileArgs, UploadFileResult } from './supabaseTypes';
+import type { DrawingUploadFileArgs, UploadFileArgs, UploadFileResult } from './supabaseTypes';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const sourceConflict = () => new Error('The uploaded PDF bytes could not be verified. Start a fresh review with a new upload.');
+
+async function sha256(blob: Blob): Promise<string> {
+  const bytes = await blob.arrayBuffer();
+  const hash = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** Drawing callers must choose a project and retain one UUID for the selected file. */
+export const UploadDrawingFile = (args: DrawingUploadFileArgs): Promise<UploadFileResult> =>
+  UploadFile({ ...args, workflow: 'drawings' });
 
 /**
  * Storage's "object already exists" refusal, across the shapes supabase-js and
- * the storage API use for it. Only ever consulted on a retry — see the call
- * site for why a collision there means our own earlier attempt landed.
+ * the storage API use for it. Consulted only on retries; drawing sources
+ * additionally require authenticated byte verification at the call site.
  */
 function isAlreadyExistsError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
@@ -31,10 +44,10 @@ function isAlreadyExistsError(err: unknown): boolean {
 /**
  * Upload a file to Supabase Storage (private bucket).
  * Returns { file_url, file_name, path }
- * file_url is a signed URL valid for 1 hour. For long-term storage,
- * persist `path` to the database and call getSignedUrl(path) on demand.
+ * Both path and the legacy file_url alias contain the storage key. Persist
+ * `path` to the database and call getSignedUrl(path) on demand.
  */
-export const UploadFile = async ({ file, workflow, assertActive = () => {}, client = supabase }: UploadFileArgs): Promise<UploadFileResult> => {
+export const UploadFile = async ({ file, workflow, projectId, pathId, assertActive = () => {}, client = supabase }: UploadFileArgs): Promise<UploadFileResult> => {
   if (!file) throw new Error('No file provided');
   // Fail-closed content/size guard (#21). With a `workflow` this enforces the
   // tighter per-workflow allowlist; without one the `default` backstop still
@@ -59,8 +72,37 @@ export const UploadFile = async ({ file, workflow, assertActive = () => {}, clie
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orgId)) {
     throw new Error('Unable to resolve a valid workspace context for upload.');
   }
+  const drawing = workflow === 'drawings';
+  const orgGeneration = getActiveOrgGeneration();
+  const assertDrawingActive = () => {
+    assertActive();
+    if (getActiveOrgId() !== orgId || getActiveOrgGeneration() !== orgGeneration) {
+      throw new Error('Workspace changed during drawing upload. Start a fresh review.');
+    }
+  };
+  let actorId: string | undefined;
+  const assertDrawingActor = async () => {
+    assertDrawingActive();
+    const { data, error } = await client.auth.getUser();
+    assertDrawingActive();
+    if (error || !data.user || (actorId && actorId !== data.user.id)) {
+      throw new Error('Signed-in user changed during drawing upload. Start a fresh review.');
+    }
+    actorId = data.user.id;
+  };
+  if (drawing) {
+    if (!projectId || !UUID.test(projectId) || !pathId || !UUID.test(pathId) || ext !== 'pdf') {
+      throw new Error('A valid project and UUID path are required for a drawing PDF.');
+    }
+    await assertDrawingActor();
+    const { data, error } = await client.from('projects').select('id,org_id').eq('id', projectId).single();
+    assertDrawingActive();
+    if (error || !data || data.id !== projectId || data.org_id !== orgId) {
+      throw new Error('The drawing project is unavailable in the current workspace.');
+    }
+  }
   const dir = `${orgId}/uploads`;
-  const path = `${dir}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const path = drawing ? `${dir}/${projectId}/${pathId}.pdf` : `${dir}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
   // Browsers report application/octet-stream for many construction file types.
   // Map extensions → proper MIME types so Supabase storage accepts them.
@@ -116,24 +158,38 @@ export const UploadFile = async ({ file, workflow, assertActive = () => {}, clie
   // excluded explicitly so the "storage is full" message reaches the user on
   // the first attempt instead of three backoffs later.
   //
-  // `path` is deliberately NOT regenerated per attempt. It already carries a
-  // timestamp and random suffix, so nothing else can occupy it — which means a
-  // Duplicate on a RETRY proves the earlier attempt actually reached storage
-  // and we simply never saw the response. Treating that as success is correct,
-  // and re-rolling the path each time would instead leave an orphan behind.
+  // Keep the same path through retries. Drawing collisions require actual
+  // authenticated byte readback; metadata or a signed URL proves no bytes.
+  // Other workflows retain their existing duplicate retry behavior.
   const data = await withTransientRetry(
     async (attempt) => {
       // A reconnect retry may outlive the outbox identity that supplied the
       // blob. Check again after backoff before the singleton client reads auth.
       assertActive();
+      if (drawing) await assertDrawingActor();
       const res = await client.storage
         .from('app-files')
         .upload(path, file, { contentType, upsert: false });
       assertActive();
+      if (drawing) await assertDrawingActor();
       if (res.error) {
-        if (attempt > 1 && isAlreadyExistsError(res.error)) return { path };
+        if (attempt > 1 && isAlreadyExistsError(res.error)) {
+          if (drawing) {
+            try {
+              await assertDrawingActor();
+              const downloaded = await client.storage.from('app-files').download(path);
+              assertDrawingActive();
+              if (downloaded.error || !downloaded.data || downloaded.data.size !== file.size) throw sourceConflict();
+              const [localHash, remoteHash] = await Promise.all([sha256(file), sha256(downloaded.data)]);
+              await assertDrawingActor();
+              if (localHash !== remoteHash) throw sourceConflict();
+            } catch { throw sourceConflict(); }
+          }
+          return { path };
+        }
         remapQuotaError(res.error);
       }
+      if (drawing && res.data?.path !== path) throw sourceConflict();
       return res.data;
     },
     { shouldRetry: (err) => isTransientNetworkError(err) && !quotaExceededUserMessage(err) },
