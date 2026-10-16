@@ -15,7 +15,7 @@
 
 import { useMemo } from "react";
 import { Users, Mail, Link2, X, Shield, UserPlus } from "lucide-react";
-import { isNativePlatform } from "@/lib/native/platform";
+import { isStoreShell } from "@/lib/native/platform";
 import "@/styles/command.css";
 import {
   PageHero, KpiStrip, DecisionPanel, Pill, FilterBar, DataTable, useCommandSkin,
@@ -133,7 +133,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
 
   // Sign-in-only native build: hide the "Upgrade" (→ billing) upsells; the
   // limit messages themselves still show. Plans are managed on the web.
-  const native = isNativePlatform();
+  const native = isStoreShell();
 
   useCommandSkin();
 

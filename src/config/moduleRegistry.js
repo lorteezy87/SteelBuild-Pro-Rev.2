@@ -2,7 +2,7 @@
  * moduleRegistry.js - Central navigation and module configuration
  */
 
-import { isNativePlatform } from "@/lib/native/platform";
+import { isStoreShell } from "@/lib/native/platform";
 
 // Web-only pages in the sign-in-only App Store build. Billing: plans are sold
 // on the web (guideline 3.1.1). Integrations: connector setup is web admin
@@ -12,11 +12,11 @@ const NATIVE_HIDDEN_PAGES = new Set(["Billing", "Integrations"]);
 
 /** True when `page` is kept out of the native app (see NATIVE_HIDDEN_PAGES). */
 export function isHiddenOnNative(page) {
-  return NATIVE_HIDDEN_PAGES.has(page) && isNativePlatform();
+  return NATIVE_HIDDEN_PAGES.has(page) && isStoreShell();
 }
 
 function hideNativePages(groups) {
-  if (!isNativePlatform()) return groups;
+  if (!isStoreShell()) return groups;
   return groups
     .map((g) => ({ ...g, items: (g.items || []).filter((it) => !NATIVE_HIDDEN_PAGES.has(it.page)) }))
     .filter((g) => (g.items || []).length > 0);

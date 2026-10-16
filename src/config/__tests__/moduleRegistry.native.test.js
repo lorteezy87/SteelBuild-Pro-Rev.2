@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 async function navPagesWhenNative(nativeValue) {
-  vi.doMock('@/lib/native/platform', () => ({ isNativePlatform: () => nativeValue }));
+  vi.doMock('@/lib/native/platform', () => ({ isNativePlatform: () => nativeValue, isStoreShell: () => nativeValue }));
   const mod = await import('@/config/moduleRegistry');
   return [...mod.NAV_GROUPS, ...mod.SIDEBAR_GROUPS].flatMap((g) => (g.items || []).map((i) => i.page));
 }
@@ -34,14 +34,14 @@ describe('moduleRegistry native nav gating', () => {
   });
 
   it('isHiddenOnNative flags only the web-only pages, and only natively', async () => {
-    vi.doMock('@/lib/native/platform', () => ({ isNativePlatform: () => true }));
+    vi.doMock('@/lib/native/platform', () => ({ isNativePlatform: () => true, isStoreShell: () => true }));
     const native = await import('@/config/moduleRegistry');
     expect(native.isHiddenOnNative('Billing')).toBe(true);
     expect(native.isHiddenOnNative('Integrations')).toBe(true);
     expect(native.isHiddenOnNative('Settings')).toBe(false);
 
     vi.resetModules();
-    vi.doMock('@/lib/native/platform', () => ({ isNativePlatform: () => false }));
+    vi.doMock('@/lib/native/platform', () => ({ isNativePlatform: () => false, isStoreShell: () => false }));
     const web = await import('@/config/moduleRegistry');
     expect(web.isHiddenOnNative('Billing')).toBe(false);
     expect(web.isHiddenOnNative('Integrations')).toBe(false);

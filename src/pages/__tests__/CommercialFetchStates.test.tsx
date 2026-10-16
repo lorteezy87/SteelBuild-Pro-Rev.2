@@ -38,7 +38,7 @@ vi.mock("@/components/shared/OrgContext", () => ({
 vi.mock("@/hooks/usePlan", () => ({
   usePlan: () => ({ plan: { name: "Test", limits: { members: 10 } } }),
 }));
-vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => false }));
+vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => false, isStoreShell: () => false }));
 vi.mock("@/components/settings/DangerZone.jsx", () => ({ default: (): null => null }));
 vi.mock("@/lib/org/repository", () => ({
   listOrgMembers: mocks.members,

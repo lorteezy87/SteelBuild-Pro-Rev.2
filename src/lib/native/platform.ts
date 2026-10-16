@@ -17,3 +17,11 @@ export function isNativePlatform(): boolean {
     return false
   }
 }
+
+/** App Store presentation rules without claiming an iOS plugin bridge on Mac. */
+export function isStoreShell(): boolean {
+  if (isNativePlatform()) return true
+  return typeof window !== 'undefined'
+    && window.location.protocol === 'steelbuild:'
+    && window.location.hostname === 'localhost'
+}

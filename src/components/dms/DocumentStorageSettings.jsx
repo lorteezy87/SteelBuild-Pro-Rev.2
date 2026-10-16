@@ -21,7 +21,7 @@ import {
   buildUnavailableSyncStatusPatch,
 } from "@/lib/dms/sharepointSyncHonesty";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
-import { isNativePlatform } from "@/lib/native/platform";
+import { isStoreShell } from "@/lib/native/platform";
 
 // ── Provider config ───────────────────────────────────────────────────
 const PROVIDERS = [
@@ -241,7 +241,7 @@ export default function DocumentStorageSettings({ projectId }) {
               {/* The native app lists only providers that work today: disabled
                   "Coming soon" options read as unfinished features in App
                   Review (guideline 2.1). */}
-              {(isNativePlatform() ? PROVIDERS.filter((p) => p.enabled) : PROVIDERS).map((p) => (
+              {(isStoreShell() ? PROVIDERS.filter((p) => p.enabled) : PROVIDERS).map((p) => (
                 <ProviderButton
                   key={p.value}
                   label={p.label}
