@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { ACTORS, STAGE_REF, validateSetupPlan, validateFoundationReceipt, type SetupPlan, type FoundationReceipt } from '../../../e2e/drawing-cutover-setup.ts';
+import type { SetupPlan, FoundationReceipt } from '../../../e2e/drawing-cutover-setup.ts';
 import type { Database } from './fixture.ts';
 
+// Dependency-free synthetic bindings. Root Vitest compares both with the actual
+// shared constants and validates these exact fixtures against the real contracts.
+export const ENTITLEMENT_STAGE_REF = 'ndyfjffsulfbwpmwdmic';
+export const ENTITLEMENT_ACTORS = ['pm', 'viewer', 'field', 'admin', 'foreign', 'removed', 'mfa'] as const;
 const fragmentUrl = new URL('./staging-setup-entitlements.sql', import.meta.url);
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -12,20 +16,20 @@ const childTables = ['public.billing_events', 'public.note_folder_audit_events',
   'private.billing_checkout_intents', 'private.stripe_billing_sync_state', 'steelbuild_drawing_revision.adopted_sources',
   'public.account_deletions', 'public.client_events', 'public.data_erasure_log'] as const;
 
-/** Synthetic credential-free inputs, validated by the actual reviewed Task 2 contracts. */
+/** Synthetic credential-free inputs; shared-validator conformance runs in root Vitest. */
 export function entitlementInputs(now = Date.now()): { plan: SetupPlan; receipt: FoundationReceipt } {
   const plan: SetupPlan = {
-    context: { version: 1, projectRef: STAGE_REF, candidateSha: '1'.repeat(40), runId: id(1), workflowRunId: '123',
+    context: { version: 1, projectRef: ENTITLEMENT_STAGE_REF, candidateSha: '1'.repeat(40), runId: id(1), workflowRunId: '123',
       workflowRunAttempt: '1', phase: 'setup-bootstrap', checkpointSequence: 0, recipientSha256: '2'.repeat(64) },
     createdAt: new Date(now - 60_000).toISOString(), expiresAt: new Date(now + 600_000).toISOString(),
-    roster: ACTORS.map(alias => ({ alias, email: `${alias}@example.invalid` })),
+    roster: ENTITLEMENT_ACTORS.map(alias => ({ alias, email: `${alias}@example.invalid` })),
     organizations: [{ alias: 'A', name: 'Synthetic A', slug: 'synthetic-a' }, { alias: 'B', name: 'Synthetic B', slug: 'synthetic-b' }],
     projects: (['A1', 'A2', 'B1', 'B2'] as const).map(alias => ({ alias, organization: alias[0] as 'A' | 'B', name: `Synthetic ${alias}`, number: `TEST-${alias}` })),
     keyReview: { publicKeySha256: '3'.repeat(64), setupKeySha256: '4'.repeat(64), setupKeyIdentifier: 'synthetic-key', ownerAttestationSha256: '5'.repeat(64) },
     prerequisites: { scenarioSourceSha256: '6'.repeat(64), sourceJobsSha256: '6'.repeat(64), immutableBuildSha256: '6'.repeat(64),
       packageSha256: '6'.repeat(64), ownershipSha256: '6'.repeat(64), sideEffectsSha256: '', healthSha256: '6'.repeat(64),
       noEmailSha256: '6'.repeat(64), settingsAuthoritySha256: '6'.repeat(64) },
-    prerequisiteDetails: { sideEffects: { version: 1, projectRef: STAGE_REF, candidateSha: '1'.repeat(40),
+    prerequisiteDetails: { sideEffects: { version: 1, projectRef: ENTITLEMENT_STAGE_REF, candidateSha: '1'.repeat(40),
       reviewedAt: new Date(now - 120_000).toISOString(), expiresAt: new Date(now + 660_000).toISOString(), installedClosureSha256: '7'.repeat(64),
       activeCostCodeTemplates: [
         { id: id(90), cost_code_number: '01', description: 'Synthetic decimal', category: 'Labor',
@@ -36,7 +40,7 @@ export function entitlementInputs(now = Date.now()): { plan: SetupPlan; receipt:
   };
   plan.prerequisites.sideEffectsSha256 = hash(JSON.stringify(plan.prerequisiteDetails!.sideEffects));
   const receipt: FoundationReceipt = { context: { ...plan.context, checkpointSequence: 32 }, planSha256: hash(JSON.stringify(plan)),
-    status: 'AWAITING_ENTITLEMENT_REVIEW', actors: ACTORS.map((alias, n) => ({ alias, id: id(10 + n), emailSha256: hash(`${alias}@example.invalid`), authenticated: true })),
+    status: 'AWAITING_ENTITLEMENT_REVIEW', actors: ENTITLEMENT_ACTORS.map((alias, n) => ({ alias, id: id(10 + n), emailSha256: hash(`${alias}@example.invalid`), authenticated: true })),
     organizations: [], projects: [], memberships: [], operations: [], census: { observedAt: new Date(now - 1000).toISOString(),
       sideEffectsSha256: plan.prerequisites.sideEffectsSha256, observationSha256: '8'.repeat(64), children: [] } };
   for (const [n, alias] of (['A', 'B'] as const).entries()) {
@@ -54,9 +58,44 @@ export function entitlementInputs(now = Date.now()): { plan: SetupPlan; receipt:
     receipt.operations.push({ sequence, operationId, kind: 'intent', action: 'create-organization', organization: org.alias, actor: org.alias === 'A' ? 'admin' : 'foreign' },
       { sequence: sequence + 1, operationId, kind: 'result', outcome: 'SUCCEEDED', observedId: org.id });
   }
-  validateSetupPlan(JSON.stringify(plan), receipt.planSha256, plan.context, now);
-  validateFoundationReceipt(receipt, plan);
   return { plan, receipt };
+}
+
+/** The same malformed bytes feed root shared-validator checks and independent SQL refusals. */
+export function malformedTemplateInputs(inputs = entitlementInputs()) {
+  const templateCorruptions: [string, (templates: unknown[]) => void][] = [];
+  for (const field of ['cost_code_number', 'category', 'id', 'description'])
+    for (const value of [123, null, true]) templateCorruptions.push([
+      `${field} ${JSON.stringify(value)}`, templates => { Object.assign(templates[0] as object, { [field]: value }); },
+    ]);
+  for (const [field, values] of [
+    ['is_active', [null, 123, 'true', false]],
+    ['sort_order', [null, '1', true, 1.5, -2147483649, 2147483648]],
+    ['default_budget_amount', [123, true, '', '01', '1e3', `-${'9'.repeat(30)}.${'9'.repeat(30)}`, '9'.repeat(31), `0.${'9'.repeat(31)}`]],
+    ['id', ['invalid', id(90).replaceAll('-', '')]],
+    ['cost_code_number', ['', 'x'.repeat(101)]],
+    ['category', ['', 'x'.repeat(101)]],
+    ['description', ['x'.repeat(501)]],
+  ] as const) for (const value of values) templateCorruptions.push([
+    `${field} invalid ${JSON.stringify(value)}`, templates => { Object.assign(templates[0] as object, { [field]: value }); },
+  ]);
+  for (const value of [null, 123, true, 'template', []]) templateCorruptions.push([
+    `non-object ${JSON.stringify(value)}`, templates => { templates[0] = value; },
+  ]);
+  templateCorruptions.push(
+    ['missing category', templates => { delete (templates[0] as Record<string, unknown>).category; }],
+    ['unknown field', templates => { Object.assign(templates[0] as object, { extra: true }); }],
+    ['duplicate ID', templates => { Object.assign(templates[1] as object, { id: id(90) }); }],
+    ['duplicate number', templates => { Object.assign(templates[1] as object, { cost_code_number: '01' }); }],
+  );
+  return templateCorruptions.map(([name, change]) => {
+    const { plan, receipt } = structuredClone(inputs), effects = plan.prerequisiteDetails!.sideEffects;
+    change(effects.activeCostCodeTemplates);
+    plan.prerequisites.sideEffectsSha256 = hash(JSON.stringify(effects));
+    receipt.census!.sideEffectsSha256 = plan.prerequisites.sideEffectsSha256;
+    receipt.planSha256 = hash(JSON.stringify(plan));
+    return { name, plan, receipt };
+  });
 }
 
 async function snapshot(db: Database) {
@@ -168,41 +207,10 @@ export async function runSetupEntitlementCases(db: Database): Promise<number> {
       if (v.plan.prerequisiteDetails) await bind(v);
       else await db.query("select set_config('drawing_setup.plan',$1,true),set_config('drawing_setup.plan_sha256',$2,true),set_config('drawing_setup.receipt',$3,true),set_config('drawing_setup.receipt_sha256',$4,true)", [JSON.stringify(v.plan), hash(JSON.stringify(v.plan)), JSON.stringify(v.receipt), hash(JSON.stringify(v.receipt))]);
     });
-    // Malformed values stay confined to this synthetic matrix. Refresh every
-    // byte binding and still execute SQL after proving the shared validator rejects.
-    const templateCorruptions: [string, (templates: unknown[]) => void][] = [];
-    for (const field of ['cost_code_number', 'category', 'id', 'description'])
-      for (const value of [123, null, true]) templateCorruptions.push([
-        `${field} ${JSON.stringify(value)}`, templates => { Object.assign(templates[0] as object, { [field]: value }); },
-      ]);
-    for (const [field, values] of [
-      ['is_active', [null, 123, 'true', false]],
-      ['sort_order', [null, '1', true, 1.5, -2147483649, 2147483648]],
-      ['default_budget_amount', [123, true, '', '01', '1e3', `-${'9'.repeat(30)}.${'9'.repeat(30)}`, '9'.repeat(31), `0.${'9'.repeat(31)}`]],
-      ['id', ['invalid', id(90).replaceAll('-', '')]],
-      ['cost_code_number', ['', 'x'.repeat(101)]],
-      ['category', ['', 'x'.repeat(101)]],
-      ['description', ['x'.repeat(501)]],
-    ] as const) for (const value of values) templateCorruptions.push([
-      `${field} invalid ${JSON.stringify(value)}`, templates => { Object.assign(templates[0] as object, { [field]: value }); },
-    ]);
-    for (const value of [null, 123, true, 'template', []]) templateCorruptions.push([
-      `non-object ${JSON.stringify(value)}`, templates => { templates[0] = value; },
-    ]);
-    templateCorruptions.push(
-      ['missing category', templates => { delete (templates[0] as Record<string, unknown>).category; }],
-      ['unknown field', templates => { Object.assign(templates[0] as object, { extra: true }); }],
-      ['duplicate ID', templates => { Object.assign(templates[1] as object, { id: id(90) }); }],
-      ['duplicate number', templates => { Object.assign(templates[1] as object, { cost_code_number: '01' }); }],
-    );
-    for (const [name, change] of templateCorruptions) await rejection(`strict template ${name}`, async () => {
-      const v = structuredClone(inputs), effects = v.plan.prerequisiteDetails!.sideEffects;
-      change(effects.activeCostCodeTemplates);
-      v.plan.prerequisites.sideEffectsSha256 = hash(JSON.stringify(effects));
-      v.receipt.census!.sideEffectsSha256 = v.plan.prerequisites.sideEffectsSha256;
-      v.receipt.planSha256 = hash(JSON.stringify(v.plan));
-      assert.throws(() => validateSetupPlan(JSON.stringify(v.plan), v.receipt.planSha256, v.plan.context));
-      await bind(v);
+    // Root Vitest proves shared-validator rejection for these same fixtures.
+    // SQL independently refuses every raw mutation with refreshed byte bindings.
+    for (const { name, plan, receipt } of malformedTemplateInputs(inputs)) await rejection(`strict template ${name}`, async () => {
+      await bind({ plan, receipt });
     }, /DRAWING_SETUP_(TEMPLATE_SHAPE|DUPLICATE_TEMPLATE)/);
     await db.exec('savepoint late_test');
     try {

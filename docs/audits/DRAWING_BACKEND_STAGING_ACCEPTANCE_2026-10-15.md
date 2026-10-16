@@ -1,5 +1,44 @@
 # Drawing backend staging acceptance — incomplete
 
+## Parent Task 13 CI integration repair — source verification only
+
+The isolated SQL helper now imports the root setup contracts as types only, so
+Node 24 erases that dependency instead of loading the root Zod installation.
+Its synthetic stage/ordered actor bindings are compared with the actual shared
+constants in root Vitest. Root tests also run the real setup-plan and foundation
+receipt validators against the SQL helper's valid inputs and the exact same 46
+malformed template fixtures that the SQL runner independently refuses. The
+original 59 other entitlement checks, refreshed hashes, full refusal snapshots,
+outer rollback and shared-role checks remain in place. No SQL, package, lockfile,
+workflow, runtime validator or readiness guard changed.
+
+Local verification passed all 84 focused root staging tests on Node 24.11.0 /
+Windows, including the existing Windows-only recovery case. A separate owned
+TEMP snapshot, with only the nested locked dependencies installed and no root
+or ancestor Zod, reproduced the pre-fix import failure and then passed all 105
+entitlement checks plus all 234 prior drawing checks. Those local disposable
+results establish package independence and preserved assertions, not hosted
+PostgreSQL concurrency or staging acceptance.
+
+Gitleaks 8.24.3 was acquired from its official release and its Windows archive
+SHA256 matched that release's checksum manifest before execution. Its inherited
+`generic-api-key` detector now has one rule-specific AND exception for the entire
+public RFC 6238 Appendix B SHA-1 vector in exactly
+`scripts/__tests__/drawingCutoverStaging.test.ts`. The existing global allowlist
+and other default rules remain intact. Actual-binary controls proved that a
+different synthetic credential in that path, the public vector outside that
+path, and another default rule in the same path still produce findings. The
+reviewed first-parent/no-merges history range lost exactly its four known benign
+findings. No finding values or fingerprints are included in this evidence.
+
+This bounded repair does not establish hosted PostgreSQL 17 concurrency, a full
+exact-source CI pass or authenticated staging acceptance. The earlier Windows
+full-suite aggregate crash remains unresolved by these focused checks. Parent
+Task 13 and all real readiness stops remain incomplete; root must obtain fresh
+exact-SHA dedicated and required PostgreSQL jobs and full CI after independent
+source review. No hosted settings, credentials, accounts, SQL, dispatch or
+deployment were used by this repair.
+
 This is a source-only safety-harness checkpoint, not a hosted acceptance result.
 No fixture credentials, authenticated requests, SQL installation/activation,
 fixture setup, workflow dispatch, deployment or production mutation was performed

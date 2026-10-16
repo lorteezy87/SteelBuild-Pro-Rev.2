@@ -48,3 +48,16 @@ regexes = [
   # by scripts/__tests__/deployHeaders.test.ts.
   '''sha256-SdpQPirsfaDzrN8U8jHoh6GEOGeyWnx7ajMxLnTt8fg=''',
 ]
+
+# RFC 6238 Appendix B's public SHA-1 vector (Base32 encoded) is used by the
+# synthetic MFA tests. Restrict this exception to that entire vector AND exact
+# test path on generic-api-key; inherit its detector and all other default rules.
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Public RFC 6238 SHA-1 vector in the reviewed synthetic MFA tests"
+condition = "AND"
+regexTarget = "secret"
+regexes = [ '''^GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ$''' ]
+paths = [ '''^scripts/__tests__/drawingCutoverStaging\.test\.ts$''' ]

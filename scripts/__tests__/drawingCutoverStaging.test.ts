@@ -14,6 +14,7 @@ import * as setup from '../../e2e/drawing-cutover-setup.ts';
 import type { SetupContext, SetupPlan, PrivateRecoveryPayload, ArtifactBinding, FoundationReceipt, SetupResume } from '../../e2e/drawing-cutover-setup.ts';
 import type { SetupTransports, SetupCheckpoint, SetupObservation, SetupSession, SetupActor, SetupIntent } from '../../e2e/drawing-cutover-setup.ts';
 import { runSetupEntitlementCases } from '../../supabase/tests/drawing-set-revision-transaction/setupEntitlementCases.ts';
+import * as entitlementFixtures from '../../supabase/tests/drawing-set-revision-transaction/setupEntitlementCases.ts';
 import { selectDrawingIntakeProject } from '../../e2e/drawingCutoverIntakeBindings.ts';
 
 const sha = '1'.repeat(40);
@@ -45,6 +46,40 @@ function inputs() {
 }
 
 describe('drawing staging executable safety boundary', () => {
+  it('isolated entitlement fixtures conform to the actual shared actor, plan and receipt contracts', () => {
+    const now = Date.parse('2026-10-16T12:00:00Z');
+    const { plan, receipt } = entitlementFixtures.entitlementInputs(now);
+    expect(entitlementFixtures.ENTITLEMENT_STAGE_REF).toBe(setup.STAGE_REF);
+    expect(entitlementFixtures.ENTITLEMENT_ACTORS).toEqual(setup.ACTORS);
+    expect(plan.roster.map(actor => actor.alias)).toEqual(setup.ACTORS);
+    expect(receipt.actors.map(actor => actor.alias)).toEqual(setup.ACTORS);
+    expect(setup.validateSetupPlan(JSON.stringify(plan), receipt.planSha256, plan.context, now)).toEqual(plan);
+    expect(setup.validateFoundationReceipt(receipt, plan)).toEqual(receipt);
+    expect(plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates.map(template => ({
+      amount: template.default_budget_amount, order: template.sort_order,
+    }))).toEqual([{ amount: '9007199254740993.01', order: -2147483648 }, { amount: null, order: 2147483647 }]);
+  });
+  it('all 46 isolated malformed template fixtures fail the real shared plan validator with fresh bindings', () => {
+    const now = Date.parse('2026-10-16T12:00:00Z');
+    const baseline = entitlementFixtures.entitlementInputs(now), original = structuredClone(baseline);
+    const cases = entitlementFixtures.malformedTemplateInputs(baseline);
+    expect(cases).toHaveLength(46);
+    expect(new Set(cases.map(fixture => fixture.name)).size).toBe(46);
+    for (const { name, plan, receipt } of cases) {
+      const effectsHash = setup.digest(JSON.stringify(plan.prerequisiteDetails!.sideEffects));
+      expect(plan.prerequisites.sideEffectsSha256, name).toBe(effectsHash);
+      expect(receipt.census!.sideEffectsSha256, name).toBe(effectsHash);
+      expect(receipt.planSha256, name).toBe(setup.digest(JSON.stringify(plan)));
+      expect(() => setup.validateSetupPlan(JSON.stringify(plan), receipt.planSha256, plan.context, now), name).toThrow();
+    }
+    const second = structuredClone(cases[1]);
+    cases[0].plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates.splice(0);
+    cases[0].receipt.actors.splice(0);
+    expect(cases[1]).toEqual(second);
+    expect(baseline).toEqual(original);
+    expect(entitlementFixtures.malformedTemplateInputs(baseline)[1]).toEqual(second);
+    expect(setup.validateFoundationReceipt(baseline.receipt, baseline.plan)).toEqual(original.receipt);
+  });
   it('legacy CLI preflight stays optional but cannot infer an acceptance scenario project', () => {
     const config = prepareRun(inputs());
     expect(config.phase).toBe('preflight');
