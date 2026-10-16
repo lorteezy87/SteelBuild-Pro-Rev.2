@@ -22,6 +22,8 @@ import json
 from pathlib import Path
 receipt = json.loads(Path('apple-platform-output/mac-launch.json').read_text())
 assert receipt['rendered'] and receipt['textLength'] > 100, 'Mac WebView did not render the application.'
+assert receipt['origin'] == 'steelbuild://localhost', 'Unexpected Mac WebView origin.'
+assert receipt['signInVisible'], 'Mac did not present the sign-in flow.'
 PYMAC
   screencapture -x apple-platform-output/mac-launch.png || true
 else
