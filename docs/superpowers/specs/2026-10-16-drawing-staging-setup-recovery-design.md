@@ -1,12 +1,14 @@
 # Drawing staging setup and recovery
 
-Date: 2026-10-16. Status: **PENDING OWNER REVIEW**.
+Date: 2026-10-16. Status: **WRITTEN DESIGN APPROVED BY THE OWNER**.
+
+Approval: the owner explicitly approved this addendum in this chat and requested its implementation plan, retaining subagent-driven execution. Implementation-plan review and the execution gates below remain separate. The owner's request to publish upon completion is recorded for the final whole-cutover release stage, not as a claim that this foundation is complete or permission to bypass exact shared-database change checks.
 
 Architectural addendum to the approved [drawing backend cutover design](2026-10-15-drawing-backend-cutover-design.md), not an implementation plan, execution authorization or acceptance result. Original constraints and frozen drawing contracts remain unchanged. Production `kjrwqagyeswwoxpjkcko` stays read-only until separate exact-change approval; only persistent staging `ndyfjffsulfbwpmwdmic` is proposed. Drawing Control UX simplification follows the cutover/staging work.
 
 ## Purpose and authority
 
-Provide a narrowly bounded synthetic fixture foundation with private recovery, without customer access, provider sends or hidden administrative application writes. The owner approved these choices, not this unwritten subsystem's implementation:
+Provide a narrowly bounded synthetic fixture foundation with private recovery, without customer access, provider sends or hidden administrative application writes. The owner separately approved these setup choices before approving this written design:
 
 - Exactly two newly created, receipt-verified staging organizations may change `free` to `pro` after side-effect review. No existing organizations, Stripe, subscriptions, charges or production changes.
 - A dedicated local encryption keypair; only its public recipient enters workflows; encrypted recovery artifacts have short, explicit retention.
