@@ -10,7 +10,7 @@ const { nativeState } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/native/platform", () => ({
-  isNativePlatform: () => nativeState.enabled,
+  isNativePlatform: () => nativeState.enabled, isStoreShell: () => nativeState.enabled,
 }));
 
 vi.mock("@/components/landing/MarketingLanding", () => ({
