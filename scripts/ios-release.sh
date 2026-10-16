@@ -108,7 +108,7 @@ from pathlib import Path
 path = Path('ios/App/App.xcodeproj/project.pbxproj')
 text = path.read_text()
 matches = []
-for match in re.finditer(r'/\\* Release \\*/ = \\{', text):
+for match in re.finditer(r'/\* Release \*/ = \{', text):
     end = text.find('\n\t\t};', match.start())
     if end != -1:
         block = text[match.start():end]
@@ -119,7 +119,7 @@ if len(matches) != 1:
 start, end = matches[0]
 block = text[start:end]
 block, style_count = re.subn(
-    r'(?m)^(\\s*)CODE_SIGN_STYLE = Automatic;$',
+    r'(?m)^(\s*)CODE_SIGN_STYLE = Automatic;$',
     lambda m: (
         f'{m.group(1)}CODE_SIGN_IDENTITY = "Apple Distribution";\n'
         f'{m.group(1)}CODE_SIGN_STYLE = Manual;\n'
@@ -128,7 +128,7 @@ block, style_count = re.subn(
     block,
 )
 block, team_count = re.subn(
-    r'(?m)^(\\s*)DEVELOPMENT_TEAM = .*;$',
+    r'(?m)^(\s*)DEVELOPMENT_TEAM = .*;$',
     lambda m: f'{m.group(1)}DEVELOPMENT_TEAM = {os.environ["IOS_TEAM_ID"]};',
     block,
 )
