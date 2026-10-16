@@ -1,0 +1,146 @@
+name: Drawing cutover staging evidence
+run-name: Drawing staging ${{ inputs.phase }} for ${{ inputs.candidate_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact reviewed main ancestor with four passing source jobs
+        required: true
+        type: string
+      phase:
+        description: No setup, SQL apply, activation, deployment or production operation
+        required: true
+        type: choice
+        options: [preflight, acceptance]
+      fixture_manifest_sha256:
+        description: Independently reviewed exact private fixture manifest digest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: drawing-cutover-staging
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      candidate_sha: ${{ steps.source.outputs.candidate_sha }}
+    steps:
+      - id: source
+        uses: actions/github-script@v9
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          PHASE: ${{ inputs.phase }}
+          MANIFEST_SHA: ${{ inputs.fixture_manifest_sha256 }}
+        with:
+          script: |
+            if (context.ref !== 'refs/heads/main' || context.eventName !== 'workflow_dispatch') throw new Error('MAIN_DISPATCH_REQUIRED');
+            const sha = process.env.CANDIDATE_SHA;
+            if (!/^[a-f0-9]{40}$/.test(sha || '') || !/^[a-f0-9]{64}$/.test(process.env.MANIFEST_SHA || '') || !['preflight', 'acceptance'].includes(process.env.PHASE)) throw new Error('EXACT_INPUTS_REQUIRED');
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({ ...context.repo, basehead: `${sha}...${context.sha}` });
+            if (comparison.merge_base_commit?.sha !== sha) throw new Error('MAIN_ANCESTOR_REQUIRED');
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, { ...context.repo, workflow_id: 'ci.yml', head_sha: sha, per_page: 100 });
+            const required = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Commercial SQL + concurrent PostgreSQL acceptance'];
+            let verified = false;
+            for (const run of runs) {
+              if (run.head_sha !== sha || run.event !== 'push' || run.status !== 'completed') continue;
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: run.id, per_page: 100 });
+              if (required.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) { verified = true; break; }
+            }
+            if (!verified) throw new Error('EXACT_SOURCE_CHECKS_REQUIRED');
+            core.setOutput('candidate_sha', sha);
+
+  build:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    environment: staging-backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      artifact_id: ${{ steps.bundle.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.candidate_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - name: Build exact source for fixed staging
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+          VITE_APP_VERSION: ${{ needs.verify.outputs.candidate_sha }}
+        run: |
+          node --input-type=module -e "import {validatePublicStage} from './scripts/drawing-cutover-staging.ts'; try {validatePublicStage(process.env.VITE_SUPABASE_URL,process.env.VITE_SUPABASE_ANON_KEY)} catch {console.error('PUBLIC_STAGING_BUILD_BINDING_REQUIRED');process.exit(1)}"
+          npm run build
+          node --input-type=module -e "import {sealBuild} from './scripts/drawing-cutover-staging.ts'; sealBuild(process.env.VITE_APP_VERSION)"
+      - id: bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: drawing-cutover-build-${{ needs.verify.outputs.candidate_sha }}-${{ github.run_id }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  evidence:
+    needs: [verify, build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    environment: staging-backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.candidate_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      # Complete tooling before injecting actor/manifest secrets; no install hooks.
+      - run: npm ci --ignore-scripts
+      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - uses: actions/download-artifact@v7
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: dist
+          merge-multiple: true
+      - name: Verify immutable build handoff
+        env:
+          CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
+        run: node --input-type=module -e "import {verifyBuild} from './scripts/drawing-cutover-staging.ts'; verifyBuild(process.env.CANDIDATE_SHA)"
+      - name: Guarded evidence (INCOMPLETE fails; no setup authority)
+        env:
+          DRAWING_CUTOVER_ENABLED: 'true'
+          DRAWING_CUTOVER_CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
+          DRAWING_CUTOVER_PHASE: ${{ inputs.phase }}
+          DRAWING_CUTOVER_MANIFEST_SHA256: ${{ inputs.fixture_manifest_sha256 }}
+          DRAWING_CUTOVER_FIXTURE_JSON: ${{ secrets.STAGING_DRAWING_FIXTURE_MANIFEST }}
+          DRAWING_CUTOVER_ACTORS: ${{ secrets.STAGING_DRAWING_ACTORS }}
+          E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+        run: |
+          node --input-type=module -e "import {writePrivateManifestFromEnvironment} from './scripts/drawing-cutover-staging.ts'; try {writePrivateManifestFromEnvironment()} catch {console.error('PRIVATE_FIXTURE_REFUSED');process.exit(1)}"
+          node scripts/drawing-cutover-staging.ts --target=staging --expected-ref=ndyfjffsulfbwpmwdmic --candidate-sha="$DRAWING_CUTOVER_CANDIDATE_SHA" --phase="$DRAWING_CUTOVER_PHASE" --fixture=e2e/.auth/drawing-cutover/fixture.json
+          if [ "$DRAWING_CUTOVER_PHASE" = acceptance ]; then
+            node node_modules/@playwright/test/cli.js test --config playwright.drawing-cutover.config.ts
+          fi
+      - name: Retain only schema-sanitized evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: drawing-cutover-evidence-${{ needs.verify.outputs.candidate_sha }}-${{ github.run_id }}
+          path: |
+            test-results/drawing-cutover/preflight.json
+            test-results/drawing-cutover/summary.json
+          if-no-files-found: error
+          retention-days: 7
