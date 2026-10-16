@@ -4,29 +4,30 @@ set -euo pipefail
 platform=${1:?Expected ipad or mac}
 [[ "$platform" == ipad || "$platform" == mac ]] || exit 2
 mkdir -p apple-platform-output
-npm run build
-npx cap sync ios
-common=(-project ios/App/App.xcodeproj -scheme App -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=)
 if [[ "$platform" == mac ]]; then
-  # Destination discovery reads the project before command-line overrides are applied.
+  bash scripts/macos-build.sh > apple-platform-output/mac-build.log 2>&1
+  receipt="$HOME/Library/Containers/com.steelbuildpro.app/Data/tmp/steelbuild-launch-evidence.json"
+  mkdir -p "$(dirname "$receipt")"
+  app="apple-platform-output/SteelBuild Pro.app"
+  "$app/Contents/MacOS/SteelBuildPro" --validation-evidence "$receipt" > apple-platform-output/mac-launch.log 2>&1 &
+  app_pid=$!
+  trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+  for attempt in $(seq 1 45); do
+    [[ -f "$receipt" ]] && break
+    sleep 2
+  done
+  cp "$receipt" apple-platform-output/mac-launch.json
   python3 - <<'PYMAC'
+import json
 from pathlib import Path
-p = Path('ios/App/App.xcodeproj/project.pbxproj')
-s = p.read_text()
-marker = 'TARGETED_DEVICE_FAMILY = "1,2";'
-assert s.count(marker) == 2
-s = s.replace(marker, marker + '\n\t\t\t\tSUPPORTS_MACCATALYST = YES;\n\t\t\t\tDERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;\n\t\t\t\tSUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";')
-p.write_text(s)
+receipt = json.loads(Path('apple-platform-output/mac-launch.json').read_text())
+assert receipt['rendered'] and receipt['textLength'] > 100, 'Mac WebView did not render the application.'
 PYMAC
-  xcodebuild "${common[@]}" -destination 'generic/platform=macOS,variant=Mac Catalyst' \
-    -archivePath "$RUNNER_TEMP/SteelBuild-Mac.xcarchive" \
-    SUPPORTS_MACCATALYST=YES DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER=NO \
-    archive > apple-platform-output/mac-build.log 2>&1
-  app="$RUNNER_TEMP/SteelBuild-Mac.xcarchive/Products/Applications/App.app"
-  test -d "$app"
-  /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist" > apple-platform-output/mac-bundle.txt
-  ditto -c -k --sequesterRsrc --keepParent "$app" apple-platform-output/SteelBuild-Pro-Mac-unsigned.zip
+  screencapture -x apple-platform-output/mac-launch.png || true
 else
+  npm run build
+  npx cap sync ios
+  common=(-project ios/App/App.xcodeproj -scheme App -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=)
   xcodebuild "${common[@]}" -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
     -derivedDataPath "$RUNNER_TEMP/SteelBuild-iPad" build > apple-platform-output/ipad-build.log 2>&1
   app="$RUNNER_TEMP/SteelBuild-iPad/Build/Products/Release-iphonesimulator/App.app"
@@ -62,7 +63,7 @@ from pathlib import Path
 platform = sys.argv[1]
 Path(f'apple-platform-output/{platform}-evidence.json').write_text(json.dumps({
     'commit': os.environ['GITHUB_SHA'], 'platform': platform,
-    'build': 'passed', 'signed': False, 'uploaded': False,
-    'scope': 'simulator launch only; protected workflows untested' if platform == 'ipad' else 'Catalyst archive only; runtime and store signing untested'
+    'build': 'passed', 'storeSigned': False, 'uploaded': False,
+    'scope': 'simulator launch only; protected workflows untested' if platform == 'ipad' else 'Mac development build and public shell launch only; protected workflows and store signing untested'
 }, indent=2) + '\n')
 PY
