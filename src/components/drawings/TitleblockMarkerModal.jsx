@@ -129,7 +129,6 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   const [drawing, setDrawing] = useState(null);
   const [dragRect, setDragRect] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [reExtractProgress, setReExtractProgress] = useState(null);
   // Live read-back per box: null = not tested yet, { text } = what the box
   // reads on the DISPLAYED page ("" = no extractable text there). This is the
   // user's instant answer to "is my box right / can the PDF be read at all"
@@ -293,85 +292,12 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     setDrawing(null);
   };
 
-  const loadPdfCached = async (fileUrl, cache) => {
-    if (cache.has(fileUrl)) return cache.get(fileUrl);
-    const signed = await resolveFileUrl(fileUrl);
-    if (!signed) return null;
-    const resp = await fetch(signed);
-    const buf = await resp.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    cache.set(fileUrl, pdf);
-    return pdf;
-  };
-
-  const reextractOne = async (drawingRow, pdfCache) => {
-    if (!drawingRow?.file_url) return null;
-    if (!titleRect && !numberRect && !revisionRect) return null;
-    let pdf;
-    try {
-      pdf = await loadPdfCached(drawingRow.file_url, pdfCache);
-    } catch (err) {
-      console.warn(`[TitleblockMarker] PDF load failed for ${drawingRow.file_url}:`, err?.message);
-      return null;
-    }
-    if (!pdf) return null;
-    let bestTitle = "";
-    let bestNumber = "";
-    let bestRevision = "";
-    try {
-      const targetPage =
-        Number.isFinite(drawingRow.pdf_page) && drawingRow.pdf_page >= 1
-          ? Math.min(drawingRow.pdf_page, pdf.numPages)
-          : null;
-
-      const readPage = async (page) => {
-        if (titleRect && !bestTitle) {
-          bestTitle = (await extractTextFromRect(page, titleRect)) || "";
-        }
-        if (numberRect && !bestNumber) {
-          bestNumber = (await extractTextFromRect(page, numberRect)) || "";
-        }
-        if (revisionRect && !bestRevision) {
-          bestRevision = normalizeTitleblockRevision(await extractTextFromRect(page, revisionRect));
-        }
-      };
-
-      if (targetPage) {
-        const page = await pdf.getPage(targetPage);
-        await readPage(page);
-      } else {
-        const maxPages = Math.min(pdf.numPages, 5);
-        for (let p = 1; p <= maxPages; p++) {
-          const page = await pdf.getPage(p);
-          await readPage(page);
-          if (bestTitle && bestNumber && (!revisionRect || bestRevision)) break;
-        }
-      }
-
-      if (bestTitle || bestNumber || bestRevision) {
-        console.info(
-          `[TitleblockMarker] OCR sheet=${drawingRow.sheet_number} page=${targetPage ?? "walk"}: ` +
-          `title="${bestTitle}" number="${bestNumber}" rev="${bestRevision}"`,
-        );
-      }
-    } catch (err) {
-      console.warn(`[TitleblockMarker] OCR failed for sheet ${drawingRow.id}:`, err?.message);
-      return null;
-    }
-    const patch = {};
-    if (bestTitle) patch.title = bestTitle;
-    if (bestNumber) patch.sheet_number = bestNumber.toUpperCase().replace(/\s+/g, "");
-    if (bestRevision) patch.revision_number = bestRevision;
-    return { patch: Object.keys(patch).length ? patch : null, revText: bestRevision };
-  };
-
   const handleSave = async () => {
     if (!set?.id) {
       toast.error("This set has no ID — cannot save template.");
       return;
     }
     setSaving(true);
-    setReExtractProgress(null);
     try {
       await entities.DrawingSet.update(set.id, {
         titleblock_title_rect: titleRect,
@@ -379,96 +305,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         titleblock_revision_rect: revisionRect,
       });
 
-      let updated = 0;
-      let unchanged = 0;
-      let failed = 0;
-      let total = 0;
-      let revReadable = 0; // sheets where the Rev box produced any text
-      try {
-        const sheets = await entities.Drawing.filter({
-          project_id: set.project_id,
-          drawing_set_id: set.id,
-        });
-        total = sheets.length;
-        if (total > 0) {
-          setReExtractProgress({ done: 0, total });
-          const pdfCache = new Map();
-          try {
-            for (let i = 0; i < sheets.length; i++) {
-              const sheet = sheets[i];
-              try {
-                const { patch, revText } = (await reextractOne(sheet, pdfCache)) || {};
-                if (revText) revReadable++;
-                if (patch) {
-                  const titleSame = !patch.title || patch.title === (sheet.title || "");
-                  const numberSame = !patch.sheet_number || patch.sheet_number === (sheet.sheet_number || "");
-                  const revSame = !patch.revision_number || patch.revision_number === (sheet.revision_number || "");
-                  if (titleSame && numberSame && revSame) {
-                    unchanged++;
-                  } else {
-                    await entities.Drawing.update(sheet.id, patch);
-                    updated++;
-                  }
-                } else {
-                  unchanged++;
-                }
-              } catch (err) {
-                failed++;
-                const msg = String(err?.message || err || "");
-                const isUniqueConflict =
-                  msg.includes("uq_drawings_set_sheet_revision") ||
-                  msg.includes("duplicate key value");
-
-                console.warn(
-                  `[TitleblockMarker] re-extract failed for sheet ${sheet?.id}` +
-                    (isUniqueConflict
-                      ? ` (sheet_number collision — pdf_page=${sheet?.pdf_page} likely points at the wrong page; re-upload the set or fix pdf_page in Edit Sheet)`
-                      : ""),
-                  err,
-                );
-              }
-              setReExtractProgress({ done: i + 1, total });
-            }
-          } finally {
-            for (const pdf of pdfCache.values()) {
-              try { await pdf.destroy(); } catch { /* ignore */ }
-            }
-            pdfCache.clear();
-          }
-        }
-      } catch (err) {
-        console.warn("[TitleblockMarker] could not list sheets to re-extract:", err);
-      }
-
-      if (total === 0) {
-        toast.success("Titleblock template saved");
-      } else if (revisionRect && revReadable === 0) {
-        // The Rev box read NOTHING on any sheet. Say so explicitly — a green
-        // "N unchanged" here hides the real situation from the user.
-        toast.warning(
-          `Template saved, but the Rev box read no text on any of the ${total} sheet${total === 1 ? "" : "s"}. ` +
-          `Either the box misses the REV cell, or these PDFs have outlined/scanned text that can't be read. ` +
-          `If the drawings were revised, upload the revised PDF via New Revision — that sets the revision and replaces the sheet files.`,
-          { duration: 12000 },
-        );
-      } else if (updated === total && failed === 0) {
-        toast.success(
-          `Titleblock saved + ${updated} sheet${updated === 1 ? "" : "s"} updated`,
-        );
-      } else if (revisionRect && updated === 0 && failed === 0 && revReadable > 0) {
-        // Rev was readable but matched what's already stored — the attached
-        // PDFs still carry these revision values.
-        toast.message(
-          `Template saved · all ${total} sheet${total === 1 ? "" : "s"} already match what the PDFs say. ` +
-          `If the drawings were revised since, the revised files haven't been uploaded — use New Revision.`,
-          { duration: 10000 },
-        );
-      } else {
-        toast.success(
-          `Titleblock saved · ${updated} updated, ${unchanged} unchanged${failed ? `, ${failed} failed` : ""}`,
-        );
-      }
-
+      toast.success("Titleblock template saved. Applying extracted title, sheet number or revision to existing sheets is held; use the reviewed upload workflow.");
       onSaved?.({
         titleblock_title_rect: titleRect,
         titleblock_number_rect: numberRect,
@@ -479,8 +316,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
       toast.error(`Save failed: ${err?.message || "Unknown error"}`);
     } finally {
       setSaving(false);
-      setReExtractProgress(null);
-    }
+      }
   };
 
   const handleClear = () => {
@@ -676,9 +512,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
               title={canSave ? "Save template to drawing set" : "Draw title and sheet # first"}
             >
               {saving
-                ? (reExtractProgress
-                    ? `Updating sheets… ${reExtractProgress.done}/${reExtractProgress.total}`
-                    : "Saving…")
+                ? "Saving template…"
                 : "Save Template"}
             </button>
           </div>

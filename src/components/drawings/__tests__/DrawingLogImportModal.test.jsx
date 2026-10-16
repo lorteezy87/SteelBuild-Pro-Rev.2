@@ -27,7 +27,7 @@ const createSet = vi.fn().mockResolvedValue({ id: "set-new", set_name: "ANCHOR B
 
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
-    Drawing: { filter: (...a) => drawingFilter(...a), create: (...a) => createDrawing(...a) },
+    Drawing: { filter: (...a) => drawingFilter(...a), filterAll: (...a) => drawingFilter(...a), create: (...a) => createDrawing(...a) },
     DrawingSet: { filter: (...a) => setFilter(...a), create: (...a) => createSet(...a) },
   },
 }));
@@ -57,7 +57,7 @@ function renderModal() {
 describe("DrawingLogImportModal — import flow", () => {
   beforeEach(() => { vi.clearAllMocks(); drawingFilter.mockResolvedValue([]); setFilter.mockResolvedValue([]); });
 
-  it("uploads a log, shows the staged sheets, and commits them on import", async () => {
+  it("logImportCannotRewriteSource: reviews parsed rows and reports held source rows", async () => {
     const user = userEvent.setup();
     renderModal();
 
@@ -73,18 +73,11 @@ describe("DrawingLogImportModal — import flow", () => {
 
     // 3. commit → a category set is created, then the sheets
     await user.click(screen.getByRole("button", { name: /Import 2 sheets/i }));
-    await waitFor(() => expect(createDrawing).toHaveBeenCalledTimes(2), { timeout: 4000 });
-    expect(createSet).toHaveBeenCalled();
-
-    // the created sheets carry their parsed fields + the category set
-    // (creates run via Promise.allSettled — match by sheet, not call order)
-    const sheets = createDrawing.mock.calls.map((c) => c[0]);
-    const abp1 = sheets.find((s) => s.sheet_number === "101ABP1");
-    expect(abp1).toMatchObject({
-      project_id: "p1",
-      drawing_set_name: "ANCHOR BOLT & ERECTION DRAWINGS",
-      submitted_date: "2025-11-14",
-    });
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/2 source rows.*held/i));
+    expect(screen.getByRole("alert")).toHaveTextContent("101ABP1");
+    expect(screen.getByRole("alert")).toHaveTextContent("101ABP2");
+    expect(createDrawing).not.toHaveBeenCalled();
+    expect(createSet).not.toHaveBeenCalled();
   });
 
   it("surfaces a parse error for a file with no Drawing No column", async () => {

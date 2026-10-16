@@ -18,10 +18,13 @@ import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 let registerState: { data: DrawingRegisterRow[] | undefined; isLoading: boolean; error: Error | null };
 let holdsState: { data: DrawingHoldRow[] | undefined; isLoading: boolean; error: Error | null };
 const holdClient = vi.hoisted(() => ({
+  rpc: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
   updateRevision: vi.fn(),
 }));
+
+vi.mock("@/lib/supabase", () => ({ supabase: { rpc: holdClient.rpc } }));
 
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
@@ -69,6 +72,7 @@ const sheet = (over: Partial<DrawingRegisterRow>): DrawingRegisterRow => ({
 } as DrawingRegisterRow);
 
 beforeEach(() => {
+  holdClient.rpc.mockReset().mockResolvedValue({ data: { id: "h1" }, error: null });
   // Holds answered with zero rows — the live shape today.
   holdsState = { data: [], isLoading: false, error: null };
   holdClient.create.mockReset().mockResolvedValue({ id: "h1" });
@@ -119,7 +123,9 @@ describe("HoldsPanel sheet picker", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Hold reason" }), "Unresolved connection detail");
     await userEvent.click(screen.getAllByRole("button", { name: /^Place hold$/ }).at(-1)!);
 
-    await waitFor(() => expect(holdClient.create).toHaveBeenCalled());
+    await waitFor(() => expect(holdClient.rpc).toHaveBeenCalledWith("place_drawing_hold", { p_drawing_id: "d1", p_reason: "Unresolved connection detail" }));
+    expect(holdClient.create).not.toHaveBeenCalled();
+    expect(holdClient.updateRevision).not.toHaveBeenCalled();
     await waitFor(() => expect(queryClient.getQueryData(["drawing-set-gate", "p1", "set-1"])).toBeUndefined());
     expect(queryClient.getQueryData(["drawing-set-gate", "p2", "set-2"])).toEqual(oldClear);
   });
@@ -142,7 +148,9 @@ describe("HoldsPanel sheet picker", () => {
     await userEvent.click(screen.getByRole("button", { name: /Release hold on S-101/ }));
     await userEvent.click(screen.getByRole("button", { name: "Confirm release" }));
 
-    await waitFor(() => expect(holdClient.update).toHaveBeenCalled());
+    await waitFor(() => expect(holdClient.rpc).toHaveBeenCalledWith("release_drawing_hold", { p_hold_id: "h1", p_notes: null }));
+    expect(holdClient.update).not.toHaveBeenCalled();
+    expect(holdClient.updateRevision).not.toHaveBeenCalled();
     await waitFor(() => expect(queryClient.getQueryData(["drawing-set-gate", "p1", "set-1"])).toBeUndefined());
   });
 });

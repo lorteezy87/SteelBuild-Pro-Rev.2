@@ -11,16 +11,15 @@
  * constraint and the register's status filter but nothing wrote — this
  * feature is what finally produces it). Releasing restores the snapshot.
  * drawing_holds stays the durable source of truth; the release_status
- * sync is best-effort and surfaced as a warning if it fails.
+ * and revision lifecycle are committed together by the server command.
  */
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { entities } from "@/api/supabaseClient";
-import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { supabase } from "@/lib/supabase";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { usePermissions } from "@/services/permissions";
-import { useAuth } from "@/lib/AuthContext";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { DRAWING_HOLDS_QUERY_KEY, useDrawingHolds } from "@/hooks/useDrawingHolds";
@@ -28,7 +27,6 @@ import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 
-const ON_HOLD_STATUS = "on_hold";
 
 /** Stable identity so the `register` memos don't re-run on every render. */
 const EMPTY_REGISTER: DrawingRegisterRow[] = [];
@@ -103,7 +101,6 @@ export function HoldsPanel({ projectId }: { projectId: string | null }) {
   const registerKnown = registerData !== undefined;
   const register = registerData ?? EMPTY_REGISTER;
   const { can } = usePermissions();
-  const { user } = useAuth();
   const canHold = can("hold", "drawing");
   const queryClient = useQueryClient();
 
@@ -145,7 +142,6 @@ export function HoldsPanel({ projectId }: { projectId: string | null }) {
     setReason("");
   };
 
-  const actorName = user?.full_name || user?.email || null;
 
   const placeMutation = useMutation({
     mutationFn: async () => {
@@ -155,32 +151,13 @@ export function HoldsPanel({ projectId }: { projectId: string | null }) {
       const option = options.find((candidate) => candidate.drawingId === selectedDrawingId);
       if (!option) throw new Error("That sheet already has an active hold");
 
-      await entities.DrawingHold.create(
-        withProjectId({
-          drawing_id: selectedDrawingId,
-          reason: trimmedReason,
-          prior_release_status: option.currentStatus,
-          placed_by_id: user?.id ?? null,
-          placed_by_name: actorName,
-        }, projectId) as never,
-      );
-
-      // Best-effort: mark the current revision on_hold so the register's
-      // existing status pill reflects it. The hold row is the source of truth.
-      let statusSynced = true;
-      if (option.currentRevisionId && option.currentStatus !== ON_HOLD_STATUS) {
-        try {
-          await entities.DrawingRevision.update(option.currentRevisionId, { release_status: ON_HOLD_STATUS } as never);
-        } catch {
-          statusSynced = false;
-        }
-      }
-      return { sheetNumber: option.sheetNumber, statusSynced };
+      const { error } = await supabase.rpc("place_drawing_hold", { p_drawing_id: selectedDrawingId, p_reason: trimmedReason });
+      if (error) throw error;
+      return { sheetNumber: option.sheetNumber };
     },
-    onSuccess: ({ sheetNumber, statusSynced }) => {
+    onSuccess: ({ sheetNumber }) => {
       invalidate();
       toast.success(`Hold placed on ${sheetNumber || "sheet"}`);
-      if (!statusSynced) toast.warning("Hold recorded, but the register status could not be updated to on-hold.");
       resetPlaceForm();
     },
     onError: (mutationError) => {
@@ -191,31 +168,13 @@ export function HoldsPanel({ projectId }: { projectId: string | null }) {
 
   const releaseMutation = useMutation({
     mutationFn: async (hold: DrawingHoldRow) => {
-      await entities.DrawingHold.update(hold.id, {
-        is_active: false,
-        released_at: new Date().toISOString(),
-        released_by_id: user?.id ?? null,
-        released_by_name: actorName,
-        release_notes: releaseNotes.trim() || null,
-      } as never);
-
-      // Restore the snapshot on whatever revision is current NOW (a new
-      // revision may have landed while the hold was active).
-      let statusSynced = true;
-      const row = registerByDrawingId.get(hold.drawing_id);
-      if (row?.current_revision_id && row.current_status === ON_HOLD_STATUS && hold.prior_release_status) {
-        try {
-          await entities.DrawingRevision.update(row.current_revision_id, { release_status: hold.prior_release_status } as never);
-        } catch {
-          statusSynced = false;
-        }
-      }
-      return { sheetNumber: sheetLabel(row, hold.drawing_id), statusSynced };
+      const { error } = await supabase.rpc("release_drawing_hold", { p_hold_id: hold.id, p_notes: releaseNotes.trim() || null });
+      if (error) throw error;
+      return { sheetNumber: sheetLabel(registerByDrawingId.get(hold.drawing_id), hold.drawing_id) };
     },
-    onSuccess: ({ sheetNumber, statusSynced }) => {
+    onSuccess: ({ sheetNumber }) => {
       invalidate();
       toast.success(`Hold released on ${sheetNumber}`);
-      if (!statusSynced) toast.warning("Hold released, but the register status could not be restored.");
       setReleasingId(null);
       setReleaseNotes("");
     },

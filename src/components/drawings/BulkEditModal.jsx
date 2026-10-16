@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle } from "@/components/shared/PhoenixModal";
-import { STAGES, DISCIPLINES, mono } from "./drawingsConfig";
+import { mono } from "./drawingsConfig";
 
 /**
  * BulkEditModal — Apply field updates to multiple selected drawings at once.
@@ -23,13 +23,8 @@ const labelStyle = {
 const selectStyle = { ...inputStyle, cursor: "pointer" };
 
 const INITIAL = {
-  revision_number: "",
-  submitted_date: "",
   due_date: "",
-  return_date: "",
   reviewer: "",
-  discipline: "",
-  stage: "",
   spec_section: "",
   priority_flag: false,
   notes: "",
@@ -55,7 +50,7 @@ export default function BulkEditModal({ open, onClose, onApply, selectedCount })
       }
     }
     // Normalize empty date strings to null for Supabase
-    for (const dateKey of ["submitted_date", "due_date", "return_date"]) {
+    for (const dateKey of ["due_date"]) {
       if (dateKey in payload && !payload[dateKey]) {
         payload[dateKey] = null;
       }
@@ -112,36 +107,8 @@ export default function BulkEditModal({ open, onClose, onApply, selectedCount })
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {/* ── Revision ── */}
-        <FieldRow
-          label="Revision #"
-          fieldKey="revision_number"
-          enabled={enabled}
-          toggle={toggle}
-        >
-          <input
-            style={inputStyle}
-            value={form.revision_number}
-            onChange={(e) => set("revision_number", e.target.value)}
-            placeholder="e.g. 2, A, etc."
-            disabled={!enabled.revision_number}
-          />
-        </FieldRow>
 
         {/* ── Dates ── */}
-        <FieldRow
-          label="Submitted Date"
-          fieldKey="submitted_date"
-          enabled={enabled}
-          toggle={toggle}
-        >
-          <input
-            type="date"
-            style={inputStyle}
-            value={form.submitted_date}
-            onChange={(e) => set("submitted_date", e.target.value)}
-            disabled={!enabled.submitted_date}
-          />
-        </FieldRow>
 
         <FieldRow
           label="Due Date"
@@ -158,20 +125,6 @@ export default function BulkEditModal({ open, onClose, onApply, selectedCount })
           />
         </FieldRow>
 
-        <FieldRow
-          label="Date Received"
-          fieldKey="return_date"
-          enabled={enabled}
-          toggle={toggle}
-        >
-          <input
-            type="date"
-            style={inputStyle}
-            value={form.return_date}
-            onChange={(e) => set("return_date", e.target.value)}
-            disabled={!enabled.return_date}
-          />
-        </FieldRow>
 
         {/* ── People ── */}
         <FieldRow
@@ -190,47 +143,7 @@ export default function BulkEditModal({ open, onClose, onApply, selectedCount })
         </FieldRow>
 
         {/* ── Dropdowns ── */}
-        <FieldRow
-          label="Discipline"
-          fieldKey="discipline"
-          enabled={enabled}
-          toggle={toggle}
-        >
-          <select
-            style={selectStyle}
-            value={form.discipline}
-            onChange={(e) => set("discipline", e.target.value)}
-            disabled={!enabled.discipline}
-          >
-            <option value="">— select —</option>
-            {DISCIPLINES.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </FieldRow>
 
-        <FieldRow
-          label="Stage"
-          fieldKey="stage"
-          enabled={enabled}
-          toggle={toggle}
-        >
-          <select
-            style={selectStyle}
-            value={form.stage}
-            onChange={(e) => set("stage", e.target.value)}
-            disabled={!enabled.stage}
-          >
-            <option value="">— select —</option>
-            {STAGES.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </FieldRow>
 
         {/* ── Other ── */}
         <FieldRow

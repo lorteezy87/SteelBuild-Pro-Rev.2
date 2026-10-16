@@ -176,7 +176,7 @@ export default function DrawingViewer() {
       if (!setIdForActive) return null;
       const { data, error } = await supabase
         .from("drawing_sets")
-        .select("id, set_name, metadata, is_locked, locked_at, locked_by, locked_reason")
+        .select("id, set_name, metadata, is_locked, locked_at, locked_by, locked_reason, updated_at")
         .eq("id", setIdForActive)
         .maybeSingle();
       if (error) throw error;
@@ -482,7 +482,7 @@ export default function DrawingViewer() {
           onCompareRevisions={() => setCompareOpen(true)}
           onUnlock={async (reason) => {
             try {
-              await unlockSetSvc({ setId: activeDrawingSet.id, reason });
+              await unlockSetSvc({ setId: activeDrawingSet.id, reason, expectedUpdatedAt: activeDrawingSet.updated_at });
               // The lock columns are nulled on unlock, so the reason only
               // survives in the audit trail — record the override here.
               logActivity(

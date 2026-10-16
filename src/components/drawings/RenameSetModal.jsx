@@ -25,11 +25,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
   if (!open) return null;
 
   const submit = () => {
-    const trimmed = (name || "").trim();
-    if (!trimmed) { setErr("Set name is required."); return; }
-    if (trimmed === (initialName || "").trim()) { onClose(); return; }
-    setErr(null);
-    onSave(trimmed);
+    setErr("Set rename is held until a reviewed atomic command is available.");
   };
 
   return (
@@ -84,7 +80,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
             disabled={saving}
           />
           <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6, letterSpacing: "0.08em" }}>
-            All child sheets in this set will be updated to use the new name.
+            A reviewed atomic rename command is required.
           </div>
 
           {err && (

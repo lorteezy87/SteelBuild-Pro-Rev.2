@@ -1,41 +1,18 @@
-/**
- * DrawingLogImportModal — import a detailer Drawing Log (Complete / Submittal)
- * spreadsheet into the drawing register (Phase 4).
- *
- * §30 staged review: parse the .xls/.xlsx (SheetJS) → parseDrawingLog →
- * classify create/update vs the project's existing sheets by number → the user
- * reviews + approves → commit. New sheets are created (metadata-only register
- * entries; PDFs attachable later) into drawing sets resolved by the log's
- * CATEGORY (lookup-or-create, with the (project, set_name) unique-constraint
- * race handled). Existing sheets are ENRICHED — revision, approval date, and
- * detailer/checker in metadata — never clobbered (title / set / file / stage
- * are left as-is). Reuses the drawingEnums sanitizers + ModelElement-style
- * batched writes. RLS: field+.
- */
+/** Read-only drawing-log review. Parsed source/lifecycle fields require reviewed upload. */
 
 import React, { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, FileStack } from "lucide-react";
-import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
-import { invalidateEntity } from "@/services/cacheRegistry";
-import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { parseDrawingLog, classifyDrawingRows } from "@/lib/importDrawingLog";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 const ACCENT = "var(--accent, #3B82F6)";
 
-const isUniqueViolation = (e) => {
-  const m = String(e?.message || e || "").toLowerCase();
-  return m.includes("duplicate key") || m.includes("unique constraint") || m.includes("23505");
-};
-const lc = (v) => String(v || "").trim().toLowerCase();
-
 export default function DrawingLogImportModal({ open, projectId, projectName, onClose, onImported }) {
-  const qc = useQueryClient();
   const trapRef = useFocusTrap(open);
   const fileInput = useRef(null);
 
@@ -49,15 +26,9 @@ export default function DrawingLogImportModal({ open, projectId, projectName, on
 
   const { data: existingDrawings = [] } = useQuery({
     queryKey: ["drawings", projectId, "log-import"],
-    queryFn: () => entities.Drawing.filter({ project_id: projectId }),
+    queryFn: () => entities.Drawing.filterAll({ project_id: projectId }),
     enabled: !!open && !!projectId,
   });
-  const { data: existingSets = [] } = useQuery({
-    queryKey: ["drawing_sets", projectId, "log-import"],
-    queryFn: () => entities.DrawingSet.filter({ project_id: projectId }),
-    enabled: !!open && !!projectId,
-  });
-
   if (!open) return null;
 
   const reset = () => {
@@ -105,97 +76,9 @@ export default function DrawingLogImportModal({ open, projectId, projectName, on
     const kept = staged.rows.filter((r) => !excluded.has(r.sheet_number));
     if (kept.length === 0) { setErr("Every sheet is excluded — nothing to import."); return; }
 
-    setStep("committing"); setErr(null);
-    try {
-      // 1. Resolve a drawing set per category (lookup existing by name, else create).
-      const setCache = new Map(); // lc(category) -> { id, name }
-      for (const s of existingSets) if (s.set_name) setCache.set(lc(s.set_name), { id: s.id, name: s.set_name });
-
-      const ensureSet = async (category) => {
-        const name = category || "Imported Drawings";
-        const hit = setCache.get(lc(name));
-        if (hit) return hit;
-        const { record } = sanitizeDrawingSetPayload({
-          project_id: projectId, project_name: projectName, set_name: name,
-          status: "Active", discipline: name,
-        });
-        let resolved;
-        try {
-          const created = await entities.DrawingSet.create(record);
-          resolved = { id: created.id, name: created.set_name };
-        } catch (e) {
-          if (!isUniqueViolation(e)) throw e;
-          const all = await entities.DrawingSet.filter({ project_id: projectId });
-          const winner = all.find((s) => lc(s.set_name) === lc(name));
-          if (!winner) throw e;
-          resolved = { id: winner.id, name: winner.set_name };
-        }
-        setCache.set(lc(name), resolved);
-        return resolved;
-      };
-
-      const existingById = new Map(existingDrawings.map((d) => [d.id, d]));
-      const creates = kept.filter((r) => r.action === "create");
-      const updates = kept.filter((r) => r.action === "update" && r.existing_id);
-
-      // 2. Create new sheets, grouped by their category set.
-      let created = 0;
-      let failed = 0;
-      for (let i = 0; i < creates.length; i += 10) {
-        const chunk = creates.slice(i, i + 10);
-        const results = await Promise.allSettled(chunk.map(async (r) => {
-          const set = await ensureSet(r.category);
-          const { record } = sanitizeDrawingPayload({
-            project_id: projectId, project_name: projectName,
-            sheet_number: r.sheet_number, title: r.title,
-            revision_number: r.revision_number || "0",
-            submitted_date: r.submitted_date || null,
-            drawing_set_id: set.id, drawing_set_name: set.name,
-            discipline: r.category || null,
-            metadata: logMeta(r),
-          });
-          return entities.Drawing.create(record);
-        }));
-        created += results.filter((x) => x.status === "fulfilled").length;
-        failed += results.filter((x) => x.status === "rejected").length;
-      }
-
-      // 3. Enrich existing sheets — revision/date + metadata only; never clobber.
-      let updated = 0;
-      for (let i = 0; i < updates.length; i += 10) {
-        const chunk = updates.slice(i, i + 10);
-        const results = await Promise.allSettled(chunk.map((r) => {
-          const prior = existingById.get(r.existing_id);
-          const patch = {
-            revision_number: r.revision_number || prior?.revision_number || "0",
-            ...(r.submitted_date ? { submitted_date: r.submitted_date } : {}),
-            metadata: { ...(prior?.metadata || {}), drawing_log: logMeta(r).drawing_log },
-          };
-          return entities.Drawing.update(r.existing_id, sanitizeDrawingPayload(patch).record);
-        }));
-        updated += results.filter((x) => x.status === "fulfilled").length;
-        failed += results.filter((x) => x.status === "rejected").length;
-      }
-
-      setLastResult({ created, updated, failed });
-      await invalidateEntity(qc, "drawing", projectId);
-      await invalidateEntity(qc, "drawingSet", projectId);
-      await invalidateEntity(qc, "submittal", projectId);
-      const summary = `${created} sheet${created === 1 ? "" : "s"} added` + (updated ? `, ${updated} enriched` : "");
-      if (created + updated === 0) {
-        setErr(`No rows were saved. ${failed} row${failed === 1 ? "" : "s"} failed.`);
-        setStep("preview");
-        return;
-      }
-      if (failed > 0) toast.warning(`${summary}, ${failed} failed`);
-      else toast.success(summary);
-      onImported?.({ created, updated, failed });
-      setStep("done");
-      setTimeout(() => { reset(); onClose(); }, 1800);
-    } catch (e) {
-      setErr(e?.message || String(e));
-      setStep("preview");
-    }
+    // This log format contains source identity, issue dates and protected drawing_log JSON.
+    // None is an allowed direct metadata field; do not partially reinterpret or apply a row.
+    setErr(`${kept.length} source rows held: ${kept.map(row => row.sheet_number).join(", ")}. Log import cannot create or rewrite drawing source, revisions, issue dates or routing. Use the reviewed New Set / Revision Upload workflow. No rows were saved.`);
   };
 
   const rows = staged?.rows || [];
@@ -246,10 +129,8 @@ export default function DrawingLogImportModal({ open, projectId, projectName, on
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
                 Upload your detailer Drawing Complete or Submittal Log (.xls). Each sheet's number, title,
-                revision, date-sent-for-approval, fab/field date, and detailer/checker are read. New sheets
-                are added to drawing sets by the log's category; sheets already in the app are enriched with
-                the log's revision + dates (their drawings, set, and stage are left untouched). You approve
-                everything on the next screen.
+                revision, date-sent-for-approval, fab/field date, and detailer/checker are read. This preview cannot create sheets or apply source, revision or lifecycle fields.
+                Use the reviewed drawing upload workflow to apply those changes.
               </p>
               <div
                 onClick={() => fileInput.current?.click()}
@@ -273,7 +154,7 @@ export default function DrawingLogImportModal({ open, projectId, projectName, on
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 <StatChip label="New sheets" value={staged.stats.create} tone="var(--status-success)" />
-                <StatChip label="Enrich existing" value={staged.stats.update} tone={ACCENT} />
+                <StatChip label="Existing sheets" value={staged.stats.update} tone={ACCENT} />
                 <StatChip label="Skipped" value={skipped.length} tone="var(--text-muted)" />
               </div>
 
@@ -349,22 +230,6 @@ export default function DrawingLogImportModal({ open, projectId, projectName, on
       </div>
     </>
   );
-}
-
-/** Log metadata bundle stored under metadata.drawing_log. */
-function logMeta(r) {
-  return {
-    drawing_log: {
-      detailer: r.detailer || null,
-      checker: r.checker || null,
-      sheet_size: r.sheet_size || null,
-      issued_date: r.issued_date || null,
-      category: r.category || null,
-      remark: r.remark || null,
-      rev_remark: r.rev_remark || null,
-      source: "drawing_log",
-    },
-  };
 }
 
 const th = { textAlign: "left", padding: "8px 10px", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", borderBottom: "1px solid var(--divider)" };
