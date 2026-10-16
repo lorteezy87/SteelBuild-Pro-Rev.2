@@ -55,11 +55,9 @@ import {
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
   deleteZone as deleteZoneSvc,
-  createNewRevisionAndCarryZones,
   unlockSet as unlockSetSvc,
 } from "@/lib/drawingHub";
 import { logActivity } from "@/services/auditLogger";
-import { invalidateEntity } from "@/services/cacheRegistry";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -264,6 +262,7 @@ export default function DrawingViewer() {
   // useZoneData only owns the data side.
   const {
     currentRevision,
+    trackingError,
     zones,
     refetchZones,
     pendingProposalCount,
@@ -296,44 +295,9 @@ export default function DrawingViewer() {
   });
   const zonePanelSheet = deriveZonePanelSheet(currentRevision, activeDrawing);
 
-  // Handler: user clicked "+ Rev" — mint a new revision, carry
-  // zones + links over, flip is_current, and force a refetch so
-  // the viewer lands on the fresh revision immediately.
-  const handleNewRevision = useCallback(async () => {
-    if (!activeDrawing) return;
-    const newCode = window.prompt(
-      `New revision code for sheet ${activeDrawing.sheet_number || activeDrawing.drawing_number || "—"}\n(e.g. "B", "1", "IFC-2"):`,
-      "",
-    );
-    if (!newCode || !newCode.trim()) return;
-    const carryLinks = window.confirm(
-      "Carry the current zone links (RFIs, work packages, etc.) forward too?\n\nOK = yes, copy every active link.\nCancel = no, start fresh on the new revision.",
-    );
-    try {
-      const res = await createNewRevisionAndCarryZones({
-        drawing: activeDrawing,
-        newCode: newCode.trim(),
-        newName: null,
-        includeLinks: carryLinks,
-      });
-      toast.success(
-        `Revision ${res.revision.revision_code} created — ${res.zonesCloned} zones${
-          res.linksCloned ? ` + ${res.linksCloned} links` : ""
-        } carried forward`,
-      );
-      // Invalidate every drawing-hub query so the viewer repaints
-      // against the new current revision immediately.
-      qc.invalidateQueries({ queryKey: ["drawing-revision-current"] });
-      qc.invalidateQueries({ queryKey: ["drawing-zones"] });
-      qc.invalidateQueries({ queryKey: ["drawing-zones-summaries"] });
-      // createNewRevisionAndCarryZones flipped is_current, so the register +
-      // hub "Rev" column must refresh too (drawing_revision fans out to
-      // ["drawing-revisions"] + ["drawing-register"]).
-      invalidateEntity(qc, "drawing_revision", activeDrawing.project_id);
-    } catch (err) {
-      toast.error(`Couldn't create revision: ${err?.message || "unknown error"}`);
-    }
-  }, [activeDrawing, qc]);
+  const handleNewRevision = useCallback(() => {
+    toast.info("Manual revision bumps are held. Use the reviewed Revision Upload workflow from the drawing set.");
+  }, []);
 
   // Handler: user finished drawing a new zone. Payload carries the
   // shape discriminator — "rect" with a bbox (MVP) or "polygon" with
@@ -540,6 +504,7 @@ export default function DrawingViewer() {
         />
 
         {/* Viewer toolbar */}
+        {trackingError && <div role="status" className="px-4 py-2 text-sm">{trackingError.message}</div>}
         <ViewerToolbar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}

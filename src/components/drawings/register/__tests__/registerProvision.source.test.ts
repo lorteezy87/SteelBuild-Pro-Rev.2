@@ -101,116 +101,28 @@ beforeEach(() => {
   backend.raceWinner = null;
 });
 
-describe("Register first revision source routing", () => {
-  it("preserves the authorized parent sheet code, PDF, and page when the register has no revision", async () => {
-    await setUpTracking();
-    expect(backend.inserted).toHaveLength(1);
-    expect(backend.inserted[0]).toMatchObject({
-      drawing_id: "drawing-1", project_id: "project-1",
-      revision_code: "B", file_url: backend.sheet?.file_url, pdf_page: 7,
-      release_status: "received", version_number: 1,
-    });
-    expect(backend.queries).toContainEqual({
-      table: "drawings",
-      filters: { id: "drawing-1", project_id: "project-1", is_deleted: false, deleted_at: null },
-    });
+describe("Register tracking lookup", () => {
+  it("holds implicit setup even when the parent has complete source metadata", async () => {
+    await expect(setUpTracking()).rejects.toThrow(/tracking required/i);
+    expect(backend.inserted).toHaveLength(0);
+    expect(backend.queries.map(q => q.table)).toEqual(["drawing_revisions"]);
   });
-
-  it("requires source completion instead of creating a placeholder when the parent PDF is absent", async () => {
-    backend.sheet!.file_url = null;
-    await expect(setUpTracking()).rejects.toThrow(/source|PDF/i);
+  it("returns an existing current revision unchanged", async () => {
+    backend.current = { id: "historical", project_id: "project-1", drawing_id: "drawing-1", is_current: true, archived_at: null, file_url: null };
+    await expect(setUpTracking()).resolves.toEqual(backend.current);
     expect(backend.inserted).toHaveLength(0);
   });
-
-  it("does not create a revision when the authorized parent read returns no sheet", async () => {
-    backend.sheet = null;
-    await expect(setUpTracking()).rejects.toThrow(/sheet|access/i);
-    expect(backend.inserted).toHaveLength(0);
-  });
-
-  it("returns an existing current revision unchanged, including an incomplete historical snapshot", async () => {
-    backend.current = { id: "historical-revision", project_id: "project-1", drawing_id: "drawing-1", is_current: true, archived_at: null, revision_code: "v1", file_url: null, pdf_page: null };
-    const result = await setUpTracking();
-    expect(result).toEqual(backend.current);
-    expect(backend.inserted).toHaveLength(0);
-    expect(backend.queries).toEqual([{ table: "drawing_revisions", filters: {
-      project_id: "project-1", drawing_id: "drawing-1", is_current: true, archived_at: null,
-    } }]);
-  });
-
-  it.each([
-    { project_id: "other-project" }, { project_id: null }, { drawing_id: "" },
-  ])("rejects an invalid register identity before any read: %j", async (identity) => {
+  it.each([{ project_id: "other" }, { project_id: null }, { drawing_id: "" }])("rejects invalid project identity %j", async identity => {
     await expect(setUpTracking({ ...registerRow, ...identity })).rejects.toThrow(/project/i);
     expect(backend.queries).toHaveLength(0);
   });
-
-  it.each([
-    { is_deleted: true }, { deleted_at: "2026-10-09T00:00:00Z" },
-    { is_superseded: true }, { project_id: "other-project" }, { id: "other-drawing" },
-  ])("rejects archived or mismatched parent source: %j", async (changes) => {
-    Object.assign(backend.sheet!, changes);
-    await expect(setUpTracking()).rejects.toThrow(/sheet|archived/i);
+  it("preserves lookup errors without falling back to create", async () => {
+    backend.currentError = { code: "PGRST116", message: "ambiguous rows" };
+    await expect(setUpTracking()).rejects.toEqual(backend.currentError);
     expect(backend.inserted).toHaveLength(0);
   });
-
-  it.each([
-    [{ revision_number: null }, /revision code/], [{ revision_number: "  " }, /revision code/],
-    [{ file_url: "  " }, /source PDF/], [{ pdf_page: null }, /PDF page/],
-    [{ pdf_page: 0 }, /PDF page/], [{ pdf_page: -1 }, /PDF page/],
-    [{ pdf_page: 1.5 }, /PDF page/], [{ pdf_page: Number.NaN }, /PDF page/],
-  ] as const)("requires explicit source completion for %j", async (changes, message) => {
-    Object.assign(backend.sheet!, changes);
-    await expect(setUpTracking()).rejects.toThrow(message);
-    expect(backend.inserted).toHaveLength(0);
-  });
-
-  it("reuses only the same project's active current winner after a unique-constraint race", async () => {
-    backend.insertError = { code: "23505", message: "duplicate key" };
-    backend.raceWinner = { id: "winner", project_id: "project-1", drawing_id: "drawing-1", is_current: true, archived_at: null, file_url: null, pdf_page: null };
-    await expect(setUpTracking()).resolves.toEqual(backend.raceWinner);
-    const revisionReads = backend.queries.filter((query) => query.table === "drawing_revisions" && Object.keys(query.filters).length > 0);
-    expect(revisionReads).toHaveLength(2);
-    for (const read of revisionReads) expect(read.filters).toEqual({ project_id: "project-1", drawing_id: "drawing-1", is_current: true, archived_at: null });
-    expect(backend.inserted).toHaveLength(1);
-  });
-
-  it("preserves unique-conflict errors when there is no active winner", async () => {
-    backend.insertError = { code: "23505", message: "historical version conflict" };
-    await expect(setUpTracking()).rejects.toEqual(backend.insertError);
-  });
-
-  it("fails closed when a conflict reread returns an archived or foreign winner", async () => {
-    backend.insertError = { code: "23505", message: "duplicate key" };
-    backend.raceWinner = { id: "wrong-winner", project_id: "other-project", drawing_id: "drawing-1", is_current: true, archived_at: null };
-    await expect(setUpTracking()).rejects.toThrow(/no longer matches/);
-  });
-
-  it("reuses a persisted current row on retry after the insert response was lost", async () => {
-    backend.insertError = { code: "NETWORK", message: "response lost" };
-    backend.raceWinner = { id: "persisted", project_id: "project-1", drawing_id: "drawing-1", is_current: true, archived_at: null };
-    await expect(setUpTracking()).rejects.toEqual(backend.insertError);
-    await expect(setUpTracking()).resolves.toEqual(backend.raceWinner);
-    expect(backend.inserted).toHaveLength(1);
-  });
-
-  it("does not treat permission failures as a successful concurrent insert", async () => {
-    backend.insertError = { code: "42501", message: "access revoked" };
-    backend.raceWinner = { id: "winner" };
-    await expect(setUpTracking()).rejects.toEqual(backend.insertError);
-    expect(backend.queries).toHaveLength(3);
-  });
-
-  it.each(["current", "source"] as const)("preserves %s read errors without inserting", async (read) => {
-    const error = { code: "PGRST116", message: "ambiguous or failed read" };
-    if (read === "current") backend.currentError = error;
-    else backend.sourceError = error;
-    await expect(setUpTracking()).rejects.toEqual(error);
-    expect(backend.inserted).toHaveLength(0);
-  });
-
-  it("fails closed on an unexpected cross-project current result", async () => {
-    backend.current = { id: "foreign", project_id: "other-project", drawing_id: "drawing-1", is_current: true, archived_at: null };
+  it("rejects a foreign current row", async () => {
+    backend.current = { project_id: "other", drawing_id: "drawing-1", is_current: true, archived_at: null };
     await expect(setUpTracking()).rejects.toThrow(/no longer matches/);
     expect(backend.inserted).toHaveLength(0);
   });

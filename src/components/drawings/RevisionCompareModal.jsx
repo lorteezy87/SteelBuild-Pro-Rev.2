@@ -31,7 +31,6 @@ import { buildRfiPrefillFromDelta, createRfiAndLink } from "@/lib/rfiFromDelta";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { ensureCurrentRevision } from "@/lib/drawingHub";
-import { invalidateEntity } from "@/services/cacheRegistry";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 import {
   generateRevisionDiff,
@@ -276,12 +275,9 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
     if (cand.key !== "current") return cand.key; // already a drawing_revisions id
     const cur = revisionRows.find((r) => r.is_current);
     if (cur?.id) return cur.id;
-    const minted = await ensureCurrentRevision({ drawing, userId: user?.id || null });
-    // Provisioned a current revision on demand — refresh the register/hub
-    // revision caches so the new row shows without a manual reload.
-    if (minted?.__provisioned && drawing?.project_id) invalidateEntity(qc, "drawing_revision", drawing.project_id);
-    return minted?.id || null;
-  }, [revisionRows, drawing, user, qc]);
+    const current = await ensureCurrentRevision({ drawing });
+    return current?.id || null;
+  }, [revisionRows, drawing]);
 
   const runAiDiff = async (force = false) => {
     if (reviewBusy || !rastersReady || renderError || !oldSel || !newSel) return;
