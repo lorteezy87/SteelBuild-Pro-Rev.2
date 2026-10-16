@@ -84,7 +84,7 @@ describe('retired runtime writer inventory', () => {
     expect(callback).not.toBe('');
     const update = vi.fn();
     const compiled = ts.transpile('const mutation = ' + callback, { target: ts.ScriptTarget.ES2022 });
-    const mutation = new Function('entities', 'validateDetailingStateWrite', compiled + '; return mutation;')({ DrawingSet: { update } }, () => null);
+    const mutation = new Function('entities', 'validateDetailingStateWrite', compiled + '; return mutation;')({ DrawingSet: { update } }, (): null => null);
     await expect(mutation({ item: { _drawingSetId: 'set' }, next: 'released' })).rejects.toThrow(/held|governing|workflow/i);
     expect(update).not.toHaveBeenCalled();
   });

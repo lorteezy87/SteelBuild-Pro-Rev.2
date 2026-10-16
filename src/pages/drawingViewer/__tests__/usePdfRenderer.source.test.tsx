@@ -16,11 +16,11 @@ function setup(doc: object) {
   const hook = renderHook(props => {
     const value = usePdfRenderer(props);
     observed.push({ page: props.currentPage, ready: value.renderReady, viewport: value.currentViewport, links: value.linkHotspots });
-    return value;
+    return { ...value, linkHotspots: value.linkHotspots as Array<{ id: string }> };
   }, { initialProps: { pdfDoc: null as object | null, currentPage: 1, zoom: 1, rotation: 0, onRenderError } });
   const canvas = document.createElement('canvas');
   canvas.getContext = vi.fn() as typeof canvas.getContext;
-  act(() => { hook.result.current.canvasRef.current = canvas; });
+  act(() => { (hook.result.current.canvasRef as { current: HTMLCanvasElement | null }).current = canvas; });
   hook.rerender({ pdfDoc: doc, currentPage: 1, zoom: 1, rotation: 0, onRenderError });
   return { ...hook, onRenderError, observed, props: { pdfDoc: doc, currentPage: 1, zoom: 1, rotation: 0, onRenderError } };
 }

@@ -11,20 +11,22 @@ vi.mock('@/lib/supabase', () => ({ supabase: {
   from() {
     const filters: Record<string, unknown> = {};
     const q = { select: () => q, eq: (k: string, v: unknown) => { filters[k] = v; m.filters.push([k, v]); return q; },
-      order: async () => ({ data: [{ id: 'mark', drawing_revision_id: filters.drawing_revision_id, comment: String(filters.drawing_revision_id), markup_type: 'note' }], error: null }),
-      insert: async (v: unknown) => { m.writes('insert', v); return { error: null }; },
+      order: async () => ({ data: [{ id: 'mark', drawing_revision_id: filters.drawing_revision_id, comment: String(filters.drawing_revision_id), markup_type: 'note' }], error: null as null }),
+      insert: async (v: unknown) => { m.writes('insert', v); return { error: null as null }; },
       update: (v: unknown) => { m.writes('update', v); return q; },
       delete: () => { m.writes('delete'); return q; },
-      then: (resolve: (r: unknown) => unknown) => Promise.resolve(resolve({ error: null })) };
+      then: (resolve: (r: unknown) => unknown) => Promise.resolve(resolve({ error: null as null })) };
     return q;
   },
 } }));
 import { useMarkup } from '../useMarkup';
 import { setActiveOrgId } from '@/lib/activeOrg';
+// Legacy JS default-null parameters otherwise infer null-only under strictNullChecks.
+const useTypedMarkup = useMarkup as unknown as (options: { drawingId: string; projectId: string; drawingRevisionId: string | null; actorId: string; sourceKey: string }) => ReturnType<typeof useMarkup>;
 function setup(revision: string | null = 'r1') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const wrapper = ({ children }: React.PropsWithChildren) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  return renderHook(({ rev, actor }) => useMarkup({ drawingId: 'd', projectId: 'p', drawingRevisionId: rev, actorId: actor, sourceKey: 'source' }), { wrapper, initialProps: { rev: revision, actor: 'a' } });
+  return renderHook(({ rev, actor }) => useTypedMarkup({ drawingId: 'd', projectId: 'p', drawingRevisionId: rev, actorId: actor, sourceKey: 'source' }), { wrapper, initialProps: { rev: revision, actor: 'a' } });
 }
 beforeEach(() => { vi.clearAllMocks(); m.filters = []; m.actor = 'a'; m.unlock.mockResolvedValue(undefined); setActiveOrgId('org'); });
 it('filters and caches the actual revision and shows no history-less overlay', async () => {

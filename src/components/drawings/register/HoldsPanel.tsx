@@ -168,7 +168,10 @@ export function HoldsPanel({ projectId }: { projectId: string | null }) {
 
   const releaseMutation = useMutation({
     mutationFn: async (hold: DrawingHoldRow) => {
-      const { error } = await supabase.rpc("release_drawing_hold", { p_hold_id: hold.id, p_notes: releaseNotes.trim() || null });
+      // Generated RPC args omit SQL text nullability; retain the explicit NULL contract.
+      const { error } = await supabase.rpc("release_drawing_hold", {
+        p_hold_id: hold.id, p_notes: releaseNotes.trim() || null,
+      } as unknown as { p_hold_id: string; p_notes?: string });
       if (error) throw error;
       return { sheetNumber: sheetLabel(registerByDrawingId.get(hold.drawing_id), hold.drawing_id) };
     },

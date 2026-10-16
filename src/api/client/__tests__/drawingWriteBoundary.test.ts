@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const backend = vi.hoisted(() => ({ writes: vi.fn(), filters: [] as unknown[][], row: { id: 'd', markup_scale: 48 } as Record<string, unknown> | null }));
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc: vi.fn(), from(table: string) {
-  const query = { insert: (patch: unknown) => { backend.writes(table, patch); return query; }, update: (patch: unknown) => { backend.writes(table, patch); return query; }, delete: () => { backend.writes(table, 'delete'); return query; }, eq: (key: string, value: unknown) => { backend.filters.push(['eq', key, value]); return query; }, is: (key: string, value: unknown) => { backend.filters.push(['is', key, value]); return query; }, in: () => query, select: () => query, single: async () => ({ data: backend.row, error: null }), maybeSingle: async () => ({ data: backend.row, error: null }), then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: backend.row ? [backend.row] : [], error: null }).then(resolve) };
+  const query = { insert: (patch: unknown) => { backend.writes(table, patch); return query; }, update: (patch: unknown) => { backend.writes(table, patch); return query; }, delete: () => { backend.writes(table, 'delete'); return query; }, eq: (key: string, value: unknown) => { backend.filters.push(['eq', key, value]); return query; }, is: (key: string, value: unknown) => { backend.filters.push(['is', key, value]); return query; }, in: () => query, select: () => query, single: async () => ({ data: backend.row, error: null as null }), maybeSingle: async () => ({ data: backend.row, error: null as null }), then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: backend.row ? [backend.row] : [], error: null as null }).then(resolve) };
   return query;
 } } }));
 import { entities } from '../entities';
@@ -30,7 +30,7 @@ describe('core drawing API write boundary', () => {
   });
 });
 describe('source-bound calibration', () => {
-  const source = { id: 'd', project_id: 'p', file_url: 'old.pdf', pdf_page: 2, revision_number: 'A', updated_at: '2026-10-15T12:00:00.123456+00:00', markup_scale: null };
+  const source = { id: 'd', project_id: 'p', file_url: 'old.pdf', pdf_page: 2, revision_number: 'A', updated_at: '2026-10-15T12:00:00.123456+00:00', markup_scale: null as number | null };
   it('writes scale in one request with every source/version/prior-scale predicate', async () => {
     await entities.Drawing.updateCalibration('d', 48, source);
     expect(backend.writes).toHaveBeenCalledExactlyOnceWith('drawings', { markup_scale: 48 });
