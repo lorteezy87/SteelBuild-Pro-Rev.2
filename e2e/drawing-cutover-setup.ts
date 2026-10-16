@@ -122,7 +122,7 @@ const receiptSchema = z.object({
     memberDefaultProjectRole: z.null().optional() }).strict()).max(2),
   projects: z.array(z.object({ alias: projectAlias, id: uuid, orgId: uuid, createdBy: uuid }).strict()).max(4),
   memberships: z.array(z.object({ id: uuid, actor: alias, userId: uuid, orgId: uuid, projectId: uuid.optional(),
-    role: z.enum(['owner', 'member', 'pm', 'viewer', 'field']) }).strict()).max(12),
+    role: z.enum(['owner', 'member', 'pm', 'viewer', 'field']) }).strict()).max(16),
 }).strict();
 export type FoundationReceipt = z.infer<typeof receiptSchema>;
 const privateCredentialSchema = z.object({ alias, email: z.string().email().max(254), password: z.string().min(24).max(128),
@@ -257,7 +257,9 @@ export function validateFoundationReceipt(value: unknown, planValue: SetupPlan):
     requireCondition(actor && actor.id === member.userId && org, 'RECEIPT_MEMBER_BINDING');
     memberKeys.push(`${member.userId}:${member.orgId}:${member.projectId ?? 'organization'}`);
     if (member.actor === 'admin' || member.actor === 'foreign') {
-      requireCondition(!member.projectId && member.role === 'owner' && org.ownerId === member.userId, 'RECEIPT_OWNER_ROLE');
+      requireCondition(member.role === 'owner' && org.ownerId === member.userId, 'RECEIPT_OWNER_ROLE');
+      if (member.projectId) requireCondition(receipt.projects.some(p => p.id === member.projectId
+        && p.orgId === member.orgId && p.createdBy === member.userId), 'RECEIPT_PROJECT_OWNER');
     } else {
       requireCondition(org.alias === 'A', 'RECEIPT_MEMBER_ORG');
       if (member.projectId) requireCondition(receipt.projects.some(p => p.alias === 'A1' && p.id === member.projectId) && member.role === memberRoles[member.actor], 'RECEIPT_PROJECT_ROLE');
@@ -275,6 +277,12 @@ export function validateFoundationReceipt(value: unknown, planValue: SetupPlan):
       if (actor.authenticated) requireCondition(hasResult('authenticate-user', actor.alias, actor.id), 'RECEIPT_AUTH_RESULT');
     }
     for (const org of receipt.organizations) requireCondition(hasResult('create-organization', org.alias === 'A' ? 'admin' : 'foreign', org.id), 'RECEIPT_ORG_RESULT');
+  } else {
+    // Omitted means this phase has not recorded configuration yet; inherited
+    // bootstrap state remains in the separately bound resume payload.
+    for (const org of receipt.organizations.filter(o => o.memberDefaultProjectRole === null)) {
+      requireCondition(hasResult('configure-organization', org.alias === 'A' ? 'admin' : 'foreign', org.id), 'RECEIPT_CONFIGURATION_RESULT');
+    }
   }
   for (const result of succeeded) {
     const { action, actor, organization, project } = result.intent;
@@ -287,14 +295,23 @@ export function validateFoundationReceipt(value: unknown, planValue: SetupPlan):
       && Boolean(m.projectId) === (action === 'assign-project-role')), 'RECEIPT_MEMBERSHIP_RESULT');
     if (action === 'verify-mfa') requireCondition(receipt.actors.some(a => a.alias === 'mfa' && a.mfa?.factorId === result.observedId), 'RECEIPT_MFA_RESULT');
   }
-  for (const project of receipt.projects) requireCondition(hasResult('create-project', project.alias.startsWith('A') ? 'admin' : 'foreign', project.id), 'RECEIPT_PROJECT_RESULT');
+  for (const project of receipt.projects) {
+    requireCondition(hasResult('create-project', project.alias.startsWith('A') ? 'admin' : 'foreign', project.id), 'RECEIPT_PROJECT_RESULT');
+    // create_project itself inserts the creator's user_projects owner row.
+    // Capture its observed row ID; never invent a second assignment operation.
+    requireCondition(receipt.memberships.filter(m => m.projectId === project.id && m.orgId === project.orgId
+      && m.userId === project.createdBy && m.role === 'owner').length === 1, 'RECEIPT_PROJECT_OWNER_READBACK');
+  }
   for (const member of receipt.memberships.filter(m => m.role !== 'owner')) requireCondition(hasResult(member.projectId ? 'assign-project-role' : 'add-organization-member', member.actor, member.id), 'RECEIPT_MEMBERSHIP_RESULT');
   for (const actor of receipt.actors.filter(a => a.mfa)) requireCondition(hasResult('enroll-mfa', 'mfa', actor.mfa!.factorId) && hasResult('verify-mfa', 'mfa', actor.mfa!.factorId), 'RECEIPT_MFA_RESULT');
   if (receipt.status === 'AWAITING_ENTITLEMENT_REVIEW' || receipt.status === 'FOUNDATION_PREPARED') {
     requireCondition(receipt.actors.length === 7 && receipt.actors.every(a => a.authenticated) && receipt.organizations.length === 2, 'RECEIPT_FOUNDATION_INCOMPLETE');
     if (receipt.status === 'AWAITING_ENTITLEMENT_REVIEW') requireCondition(receipt.context.phase === 'setup-bootstrap'
       && receipt.projects.length === 0 && receipt.memberships.length === 2 && receipt.memberships.every(m => m.role === 'owner'), 'RECEIPT_BOOTSTRAP_INCOMPLETE');
-    else requireCondition(receipt.context.phase === 'setup-complete' && receipt.projects.length === 4 && receipt.memberships.length === 12
+    else requireCondition(receipt.context.phase === 'setup-complete' && receipt.projects.length === 4 && receipt.memberships.length === 16
+      && receipt.memberships.filter(m => !m.projectId).length === 7
+      && receipt.memberships.filter(m => m.projectId && m.role === 'owner').length === 4
+      && receipt.memberships.filter(m => m.projectId && m.role !== 'owner').length === 5
       && receipt.organizations.every(o => o.memberDefaultProjectRole === null) && receipt.actors.some(a => a.alias === 'mfa' && a.mfa?.verified), 'RECEIPT_COMPLETE_INCOMPLETE');
   }
   return value as FoundationReceipt;
@@ -306,16 +323,22 @@ export function validatePrivateRecoveryPayload(value: unknown, context: SetupCon
   planShape(raw.plan); validateFoundationReceipt(raw.receipt, raw.plan);
   requireCondition(canonicalSetupContext(parsed.receipt.context) === canonicalSetupContext(context), 'PRIVATE_RECOVERY_CONTEXT');
   requireCondition(unique(parsed.credentials.map(c => c.alias)) && unique(parsed.credentials.map(c => c.password)), 'PRIVATE_CREDENTIAL_DUPLICATE');
+  const enrolledFactorIds = parsed.receipt.operations.flatMap((operation, index) => {
+    const result = parsed.receipt.operations[index + 1];
+    return operation.kind === 'intent' && operation.action === 'enroll-mfa' && operation.actor === 'mfa'
+      && result?.kind === 'result' && result.outcome === 'SUCCEEDED' && result.observedId ? [result.observedId] : [];
+  });
+  const verifiedFactor = parsed.receipt.actors.find(a => a.alias === 'mfa')?.mfa;
+  const mfaCredential = parsed.credentials.find(c => c.alias === 'mfa')?.mfa;
+  if (enrolledFactorIds.length || verifiedFactor) {
+    requireCondition(mfaCredential && enrolledFactorIds.every(factorId => factorId === mfaCredential.factorId)
+      && (!verifiedFactor || verifiedFactor.factorId === mfaCredential.factorId), 'PRIVATE_MFA_RECOVERY_REQUIRED');
+  }
   for (const credential of parsed.credentials) {
     requireCondition(parsed.plan.roster.some(a => a.alias === credential.alias && a.email === credential.email), 'PRIVATE_CREDENTIAL_BINDING');
     if (credential.mfa) {
       requireCondition(credential.alias === 'mfa', 'PRIVATE_MFA_BINDING');
-      requireCondition(parsed.receipt.operations.some((operation, index) => operation.kind === 'intent' && operation.action === 'enroll-mfa'
-        && operation.actor === 'mfa' && parsed.receipt.operations[index + 1]?.kind === 'result'
-        && (parsed.receipt.operations[index + 1] as z.infer<typeof operationResultSchema>).outcome === 'SUCCEEDED'
-        && (parsed.receipt.operations[index + 1] as z.infer<typeof operationResultSchema>).observedId === credential.mfa!.factorId), 'PRIVATE_MFA_BINDING');
-      const observed = parsed.receipt.actors.find(a => a.alias === 'mfa')?.mfa;
-      if (observed) requireCondition(observed.factorId === credential.mfa.factorId, 'PRIVATE_MFA_BINDING');
+      requireCondition(enrolledFactorIds.includes(credential.mfa.factorId), 'PRIVATE_MFA_BINDING');
     }
   }
   // No clock check here: an expired checkpoint remains decryptable for recovery,

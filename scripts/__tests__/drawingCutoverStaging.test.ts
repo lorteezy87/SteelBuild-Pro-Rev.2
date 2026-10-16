@@ -366,6 +366,34 @@ function bootstrapRecoveryFixture(): PrivateRecoveryPayload {
   receipt.context = { ...receipt.context, checkpointSequence: receipt.operations.length };
   return payload;
 }
+function completeInitialRecoveryFixture(): PrivateRecoveryPayload {
+  const prior = bootstrapRecoveryFixture();
+  const plan: SetupPlan = { ...structuredClone(prior.plan), context: { ...prior.plan.context, phase: 'setup-complete', workflowRunId: '123457' },
+    prior: { receiptSha256: testHash(JSON.stringify(prior.receipt)), artifact: artifactFixture() } };
+  return { plan, receipt: { ...structuredClone(prior.receipt), context: { ...plan.context }, planSha256: testHash(JSON.stringify(plan)),
+    status: 'STOPPED', operations: [] }, credentials: structuredClone(prior.credentials) };
+}
+function appendSuccessfulOperation(receipt: FoundationReceipt,
+  fields: Omit<Extract<FoundationReceipt['operations'][number], { kind: 'intent' }>, 'sequence' | 'kind' | 'operationId'>, observedId: string): void {
+  const sequence = receipt.operations.length + 1; const operationId = id(1800 + sequence);
+  receipt.operations.push({ ...fields, sequence, operationId, kind: 'intent' },
+    { sequence: sequence + 1, operationId, kind: 'result', outcome: 'SUCCEEDED', observedId });
+  receipt.context.checkpointSequence = receipt.operations.length;
+}
+function resequenceReceipt(receipt: FoundationReceipt): void {
+  receipt.operations.forEach((operation, index) => { operation.sequence = index + 1; });
+  receipt.context.checkpointSequence = receipt.operations.length;
+}
+function enrolledRecoveryFixture(verified: boolean): PrivateRecoveryPayload {
+  const payload = completeInitialRecoveryFixture();
+  appendSuccessfulOperation(payload.receipt, { action: 'enroll-mfa', actor: 'mfa' }, id(1900));
+  payload.credentials.find(c => c.alias === 'mfa')!.mfa = { factorId: id(1900), secret: 'ABCDEFGHIJKLMNOP' };
+  if (verified) {
+    appendSuccessfulOperation(payload.receipt, { action: 'verify-mfa', actor: 'mfa' }, id(1900));
+    payload.receipt.actors.find(a => a.alias === 'mfa')!.mfa = { factorId: id(1900), verified: true };
+  }
+  return payload;
+}
 const psLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const recoveryWrapper = resolve('scripts/drawing-cutover-recovery-local.ps1');
 function runRecoveryPs(script: string): string {
@@ -554,6 +582,10 @@ describe('private staging recovery', () => {
       const org = receipt.organizations.find(o => o.alias === project.organization)!;
       const observed = { alias: project.alias, id: id(1400 + receipt.projects.length), orgId: org.id, createdBy: org.ownerId };
       receipt.projects.push(observed); operation({ action: 'create-project', actor: org.alias === 'A' ? 'admin' : 'foreign', organization: org.alias, project: project.alias }, observed.id);
+      // create_project inserts this owner row itself; it is an exact readback,
+      // not a separate assignment operation or an inferred real membership ID.
+      receipt.memberships.push({ id: id(1700 + receipt.projects.length), actor: org.alias === 'A' ? 'admin' : 'foreign', userId: org.ownerId,
+        orgId: org.id, projectId: observed.id, role: 'owner' });
     }
     const roles = { pm: 'pm', viewer: 'viewer', field: 'field', removed: 'field', mfa: 'pm' } as const;
     for (const alias of ['pm', 'viewer', 'field', 'removed', 'mfa'] as const) {
@@ -565,12 +597,74 @@ describe('private staging recovery', () => {
     operation({ action: 'enroll-mfa', actor: 'mfa' }, id(1600)); operation({ action: 'verify-mfa', actor: 'mfa' }, id(1600));
     receipt.context.checkpointSequence = receipt.operations.length;
     expect(setup.validateFoundationReceipt(receipt, plan).status).toBe('FOUNDATION_PREPARED');
+    expect(receipt.memberships.filter(m => !m.projectId)).toHaveLength(7);
+    expect(receipt.memberships.filter(m => m.projectId && m.role === 'owner')).toHaveLength(4);
+    expect(receipt.memberships.filter(m => m.projectId && m.role !== 'owner')).toHaveLength(5);
+    for (const change of [
+      (r: FoundationReceipt) => { r.memberships.splice(r.memberships.findIndex(m => m.projectId && m.role === 'owner'), 1); },
+      (r: FoundationReceipt) => { const owner = r.memberships.find(m => m.projectId && m.role === 'owner')!; r.memberships.push({ ...owner, id: id(1990) }); },
+      (r: FoundationReceipt) => { r.memberships.find(m => m.projectId && m.role === 'owner')!.projectId = id(1991); },
+      (r: FoundationReceipt) => { const owner = r.memberships.find(m => m.projectId && m.role === 'owner')!; owner.actor = 'foreign'; owner.userId = r.actors.find(a => a.alias === 'foreign')!.id; },
+      (r: FoundationReceipt) => { const owner = r.memberships.find(m => m.projectId && m.role === 'owner')!; r.memberships.push({ ...owner, id: id(1992), actor: 'pm', userId: r.actors.find(a => a.alias === 'pm')!.id }); },
+      (r: FoundationReceipt) => { const owners = r.memberships.filter(m => m.projectId && m.role === 'owner'); owners[0].projectId = owners[1].projectId; },
+    ]) { const invalid = structuredClone(receipt); change(invalid); expect(() => setup.validateFoundationReceipt(invalid, plan)).toThrow(); }
+    const missingPartialOwner = structuredClone(receipt); missingPartialOwner.status = 'STOPPED';
+    missingPartialOwner.memberships.splice(missingPartialOwner.memberships.findIndex(m => m.projectId && m.role === 'owner'), 1);
+    expect(() => setup.validateFoundationReceipt(missingPartialOwner, plan)).toThrow();
+    for (const project of receipt.projects) {
+      const missingCreate = structuredClone(receipt);
+      const index = missingCreate.operations.findIndex(op => op.kind === 'intent' && op.action === 'create-project' && op.project === project.alias);
+      missingCreate.operations.splice(index, 2); resequenceReceipt(missingCreate);
+      expect(() => setup.validateFoundationReceipt(missingCreate, plan)).toThrow();
+    }
+    for (const org of receipt.organizations) {
+      const invalid = structuredClone(receipt);
+      const index = invalid.operations.findIndex(op => op.kind === 'intent' && op.action === 'configure-organization' && op.organization === org.alias);
+      invalid.operations.splice(index, 2); resequenceReceipt(invalid);
+      expect(() => setup.validateFoundationReceipt(invalid, plan)).toThrow();
+    }
     const payload: PrivateRecoveryPayload = { plan, receipt, credentials: structuredClone(prior.credentials) };
     payload.credentials.find(c => c.alias === 'mfa')!.mfa = { factorId: id(1600), secret: 'ABCDEFGHIJKLMNOP' };
     const recovery = await import('../drawing-cutover-recovery.ts');
     expect(recovery.decryptRecovery(recovery.encryptRecovery(payload, recoveryKeys.publicKey, receipt.context), recoveryKeys.privateKey, receipt.context)).toEqual(payload);
+    const missingCompleteSecret = structuredClone(payload); delete missingCompleteSecret.credentials.find(c => c.alias === 'mfa')!.mfa;
+    expect(() => recovery.encryptRecovery(missingCompleteSecret, recoveryKeys.publicKey, receipt.context)).toThrow();
     receipt.memberships.find(m => m.role === 'viewer')!.projectId = receipt.projects.find(p => p.alias === 'A2')!.id;
     expect(() => setup.validateFoundationReceipt(receipt, plan)).toThrow();
+  });
+  it.each(['A', 'B'] as const)('fix1 configured %s default requires its exact successful journal pair', organization => {
+    const payload = completeInitialRecoveryFixture();
+    expect(setup.validateFoundationReceipt(payload.receipt, payload.plan).status).toBe('STOPPED');
+    for (const org of payload.receipt.organizations) {
+      org.memberDefaultProjectRole = null;
+      appendSuccessfulOperation(payload.receipt, { action: 'configure-organization', actor: org.alias === 'A' ? 'admin' : 'foreign', organization: org.alias }, org.id);
+    }
+    expect(setup.validateFoundationReceipt(payload.receipt, payload.plan).status).toBe('STOPPED');
+    const removed = payload.receipt.operations.findIndex(op => op.kind === 'intent' && op.action === 'configure-organization' && op.organization === organization);
+    payload.receipt.operations.splice(removed, 2); resequenceReceipt(payload.receipt);
+    expect(() => setup.validateFoundationReceipt(payload.receipt, payload.plan)).toThrow();
+  });
+  it.each([false, true])('fix1 MFA recovery secret is required after enrollment, verified=%s', verified => {
+    const payload = enrolledRecoveryFixture(verified);
+    expect(setup.validatePrivateRecoveryPayload(payload, payload.receipt.context).receipt.status).toBe('STOPPED');
+    const noSecret = { ...payload, credentials: payload.credentials.map(c => c.alias === 'mfa' ? { ...c, mfa: { factorId: c.mfa!.factorId } } : c) };
+    expect(() => setup.validatePrivateRecoveryPayload(noSecret, payload.receipt.context)).toThrow();
+    delete payload.credentials.find(c => c.alias === 'mfa')!.mfa;
+    expect(() => setup.validatePrivateRecoveryPayload(payload, payload.receipt.context)).toThrow();
+  });
+  it('fix1 MFA factor mismatch refuses and ambiguous missing-secret enrollment stays UNKNOWN', () => {
+    const payload = enrolledRecoveryFixture(true);
+    payload.credentials.find(c => c.alias === 'mfa')!.mfa!.factorId = id(1999);
+    expect(() => setup.validatePrivateRecoveryPayload(payload, payload.receipt.context)).toThrow();
+    const ambiguous = enrolledRecoveryFixture(false);
+    delete ambiguous.credentials.find(c => c.alias === 'mfa')!.mfa;
+    const result = ambiguous.receipt.operations[1]; if (result.kind !== 'result') throw new Error('TEST_RESULT_REQUIRED');
+    result.outcome = 'UNKNOWN'; ambiguous.receipt.status = 'UNKNOWN_COMMIT_STATE';
+    expect(setup.validatePrivateRecoveryPayload(ambiguous, ambiguous.receipt.context).receipt.status).toBe('UNKNOWN_COMMIT_STATE');
+    ambiguous.receipt.status = 'FOUNDATION_PREPARED';
+    expect(() => setup.validatePrivateRecoveryPayload(ambiguous, ambiguous.receipt.context)).toThrow();
+    const initial = completeInitialRecoveryFixture();
+    expect(setup.validatePrivateRecoveryPayload(initial, initial.receipt.context).receipt.status).toBe('STOPPED');
   });
   it('verifiedRecoveryRejectsArchiveCiphertextConfusionAndCheckpointNamesNeverRelabel', async () => {
     const recovery = await import('../drawing-cutover-recovery.ts'); const payload = bootstrapRecoveryFixture(); const context = payload.receipt.context;
