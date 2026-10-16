@@ -24,30 +24,58 @@ test('nested floating controls remain above the dialog and accept input', async 
 
 test('manual intake can review all PDF pages after an extraction failure', async ({ page }, testInfo) => {
   const errors: string[] = [];
+  const warnings: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() === 'warning') warnings.push(message.text());
+  });
   const externalRequests: string[] = [];
   await page.route('**/*', async route => {
-    if (new URL(route.request().url()).hostname === '127.0.0.1') await route.continue();
+    if (new URL(route.request().url()).origin === 'http://127.0.0.1:4186') await route.continue();
     else { externalRequests.push(route.request().url()); await route.abort(); }
   });
   await page.goto('/dev/detailing-dialogs.html?view=intake&theme=dark');
+  await expect(page).toHaveURL('http://127.0.0.1:4186/dev/detailing-dialogs.html?view=intake&theme=dark');
+  await expect(page).toHaveTitle('SteelBuild Pro — Detailing dialog verification');
   await expect(page.getByRole('heading', { name: 'Manual drawing intake verification' })).toBeVisible();
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('manual-intake-initial.png') });
   const create = page.getByRole('button', { name: /Create 3 Entries/ });
   await expect(create).toBeDisabled();
   const pages = page.getByRole('spinbutton');
   await expect(pages).toHaveCount(3);
+  await expect(page.locator('input[type="date"]')).toHaveValue('');
+  await page.getByPlaceholder('Rev 2 / IFC').fill('A');
   for (let index = 0; index < 3; index++) {
-    const row = pages.nth(index).locator('xpath=ancestor::tr');
-    await row.getByRole('textbox').nth(0).fill(`S-10${index + 1}`);
-    await row.getByRole('textbox').nth(1).fill(`Reviewed physical page ${index + 1}`);
+    await expect(pages.nth(index)).toHaveValue('');
+    await expect(page.getByRole('textbox', { name: `Revision code row ${index + 1}` })).toHaveValue('');
+    await page.getByRole('textbox', { name: `Sheet number row ${index + 1}` }).fill(`S-10${index + 1}`);
+    await page.getByRole('textbox', { name: `Sheet title row ${index + 1}` }).fill(`Reviewed physical page ${index + 1}`);
+    await page.getByRole('textbox', { name: `Revision code row ${index + 1}` }).fill('A');
+    await pages.nth(index).fill(String(index + 1));
+    await expect(page.getByRole('checkbox', { name: `Reviewed S-10${index + 1} identity and PDF page` })).not.toBeChecked();
   }
+  await expect(create).toBeDisabled();
+  for (let index = 0; index < 3; index++) await page.getByRole('checkbox', { name: `Reviewed S-10${index + 1} identity and PDF page` }).check();
+  await expect(create).toBeEnabled();
+  const firstReview = page.getByRole('checkbox', { name: 'Reviewed S-101 identity and PDF page' });
   await pages.nth(0).fill('4');
+  await expect(firstReview).not.toBeChecked();
+  await expect(firstReview).toBeDisabled();
   await expect(create).toBeDisabled();
   await pages.nth(0).fill('1');
+  await expect(firstReview).not.toBeChecked();
+  await expect(create).toBeDisabled();
+  await firstReview.check();
   await expect(create).toBeEnabled();
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+  await testInfo.attach('manual-reviewed-dom', { body: await page.locator('main').innerText(), contentType: 'text/plain' });
   await page.screenshot({ path: testInfo.outputPath('manual-three-page-intake.png') });
   await create.click();
-  await expect(page.getByRole('status')).toHaveText('Saved 3 pages: 1,2,3');
+  await expect(page.getByRole('status')).toHaveText('Preview accepted 3 pages: 1,2,3');
+  await page.screenshot({ path: testInfo.outputPath('manual-intake-accepted.png') });
+  await testInfo.attach('manual-intake-evidence', { body: JSON.stringify({ url: page.url(), title: await page.title(), viewport: page.viewportSize(), errors, warnings, externalRequests, result: await page.getByRole('status').innerText() }, null, 2), contentType: 'application/json' });
   expect(errors).toEqual([]);
   expect(externalRequests).toEqual([]);
 });

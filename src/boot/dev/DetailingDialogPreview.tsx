@@ -39,20 +39,26 @@ const availableSets = Array.from({ length: 8 }, (_, index) => ({
 }));
 
 function ManualIntakePreview() {
-  const [sheets, setSheets] = useState(Array.from({ length: 3 }, (_, index) => ({
-    sheetNumber: '', sheetTitle: '', discipline: 'Structural', revision: 'A',
-    sourceFile: 'manual.pdf', sourceFileUrl: 'app-files/manual.pdf', pdfPage: index + 1,
+  const sourcePath = 'app-files/manual.pdf';
+  // Explicit development simulation only; no capability RPC or backend save proof.
+  const simulatedCommandAvailable = true;
+  const [sheets, setSheets] = useState(Array.from({ length: 3 }, () => ({
+    sheetNumber: '', sheetTitle: '', discipline: 'Structural', revision: '',
+    sourceFile: 'manual.pdf', sourceFileUrl: sourcePath, pdfPage: null as number | null,
+    extractedText: null as string | null, callouts: null as unknown[] | null, hyperlinks: null as unknown[] | null,
+    reviewed: false, sourceReviewRequired: true,
     selected: true, _note: 'AI unavailable — manually review this physical PDF page.',
   })));
-  const [meta, setMeta] = useState({ setName: 'Manual package A', revision: 'A', issueDate: '2026-10-15', issuedBy: '', discipline: 'Structural' });
+  const [meta, setMeta] = useState({ setName: 'Manual package A', revision: '', issueDate: '', issuedBy: '', discipline: 'Structural' });
   const [saved, setSaved] = useState('');
   return <main style={{ padding: 16, color: 'var(--text-primary)' }}>
     <h1>Manual drawing intake verification</h1>
+    <p>Development-only simulated command availability. Create updates local preview state; it does not save drawings to a backend.</p>
     {saved ? <p role="status">{saved}</p> : <ReviewStep
       sheets={sheets} setSheets={setSheets} meta={meta} setMeta={setMeta}
-      fileResults={[{ fileName: 'manual.pdf', pageCount: 3, extractFailed: true }]}
-      onBack={() => {}} onCreate={(rows: Array<{ pdfPage: number }>) => setSaved(`Saved ${rows.length} pages: ${rows.map(row => row.pdfPage).join(',')}`)}
-      existingDrawings={[]} canSupersede={false} projectId={undefined}
+      fileResults={[{ fileName: 'manual.pdf', fileUrl: sourcePath, pageCount: 3, extractFailed: true }]}
+      onBack={() => {}} onCreate={(rows: Array<{ pdfPage: number }>) => setSaved(`Preview accepted ${rows.length} pages: ${rows.map(row => row.pdfPage).join(',')}`)}
+      existingDrawings={[]} canSupersede={false} projectId={undefined} commandAvailable={simulatedCommandAvailable}
     />}
   </main>;
 }
