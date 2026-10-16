@@ -30,7 +30,6 @@ Notes:
 
 ## Active claims
 
-| 2026-10-16 | codex-mac-store-release | Mac App Store distribution | .github/workflows/macos-release.yml; scripts/macos-*; scripts/__tests__/macos-*; docs/app-store/MAC-IPAD.md | Validate owner signing material; gate universal Mac package and upload on exact-main CI. |
 
 
 
