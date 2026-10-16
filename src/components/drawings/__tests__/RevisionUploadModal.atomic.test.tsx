@@ -53,9 +53,14 @@ let committed = false;
 let lostResponse = false;
 let rejection = '';
 let received: { p_request_id: string; p_request: ReviseSetRequest } | null = null;
-function result(id: string) { return { ...resultFixture(id), operation: 'revise_set', added: 0, revised: 1, source_pages: [{ drawing_id: drawingId, revision_id: '88888888-8888-4888-8888-888888888888', file_path: sourcePath, pdf_page: 1 }] }; }
+let twoSheetReceipt = false;
+function result(id: string) { return { ...resultFixture(id), operation: 'revise_set', added: 0, revised: twoSheetReceipt ? 2 : 1, sheet_count: twoSheetReceipt ? 2 : 1,
+  source_pages: twoSheetReceipt ? [
+    { drawing_id: drawingId, revision_id: '88888888-8888-4888-8888-888888888888', file_path: sourcePath, pdf_page: 2 },
+    { drawing_id: '99999999-9999-4999-8999-999999999999', revision_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', file_path: sourcePath, pdf_page: 1 },
+  ] : [{ drawing_id: drawingId, revision_id: '88888888-8888-4888-8888-888888888888', file_path: sourcePath, pdf_page: 1 }] }; }
 beforeEach(() => {
-  vi.resetAllMocks(); committed = false; lostResponse = false; rejection = ''; received = null; m.sourceToken = 'a'.repeat(64);
+  vi.resetAllMocks(); committed = false; lostResponse = false; rejection = ''; received = null; twoSheetReceipt = false; m.sourceToken = 'a'.repeat(64);
   vi.stubGlobal('indexedDB', new IDBFactory()); Object.defineProperty(navigator, 'locks', { configurable: true, value: createTestDrawingLocks() });
   setActiveOrgId(owner.orgId);
   m.getUser.mockResolvedValue({ data: { user: { id: owner.actorId } }, error: null });
@@ -74,12 +79,12 @@ beforeEach(() => {
     return { data: result(args.p_request_id), error: null };
   });
 });
-function mount(issueDate = '2026-10-15', usePreflight = true, selectedSet = set) {
+function mount(issueDate = '2026-10-15', usePreflight = true, selectedSet = set, sheets: unknown[] = [incoming]) {
   const file = new File(['%PDF'], 'review.pdf', { type: 'application/pdf' });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = (open: boolean) => <QueryClientProvider client={client}>
     <RevisionUploadModal open={open} onClose={() => {}} onComplete={m.complete} activeProject={{ id: owner.projectId }} preSelectedSet={selectedSet} drawingSets={[selectedSet]}
-      initialPdfFile={file} initialReview={usePreflight ? { sheets: [incoming], pageCount: 2, revisionLabel: 'B', issueDate, scanned: false, setMeta: null, sourcePages: { S1: 1 }, issuedBy: '' } : null} />
+      initialPdfFile={file} initialReview={usePreflight ? { sheets, pageCount: 2, revisionLabel: 'B', issueDate, scanned: false, setMeta: null, sourcePages: { S1: 1 }, issuedBy: '' } : null} />
   </QueryClientProvider>;
   const ui = render(view(true));
   return { ...ui, setOpen: (open: boolean) => ui.rerender(view(open)) };
@@ -230,4 +235,62 @@ it('recovering saved set A while set B is selected never completes package B', a
   await waitFor(() => expect((screen.getByRole('button', { name: 'View Drawing Log' }) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button', { name: 'View Drawing Log' }));
   expect(m.complete).not.toHaveBeenCalled(); expect(await loadDrawingCommands(owner)).toEqual([]);
+});
+it.each(['duplicate extraction', 'temporary duplicate during manual editing'])('retains every incoming page when correcting %s', async scenario => {
+  twoSheetReceipt = true;
+  const secondDrawingId = '99999999-9999-4999-8999-999999999999';
+  const secondRevisionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  m.drawings.mockResolvedValue([oldSheet, { ...oldSheet, id: secondDrawingId, sheet_number: 'S2' }]);
+  m.revisions.mockResolvedValue([
+    { id: revisionId, drawing_id: drawingId, project_id: owner.projectId, is_current: true, archived_at: null },
+    { id: secondRevisionId, drawing_id: secondDrawingId, project_id: owner.projectId, is_current: true, archived_at: null },
+  ]);
+  const second = { ...incoming, sheetNumber: scenario === 'duplicate extraction' ? 'S1' : 'S2',
+    pdfPage: 2, sheetTitle: 'Second page', extractedText: scenario === 'duplicate extraction' ? 'new page 2' : null,
+    callouts: scenario === 'duplicate extraction' ? [{ text: 'W16' }] : null };
+  mount('2026-10-15', true, set, [incoming, second]); await review();
+  if (scenario !== 'duplicate extraction') {
+    fireEvent.click(screen.getByLabelText(/I reviewed S1/));
+    fireEvent.click(screen.getByLabelText(/I reviewed S2/));
+    fireEvent.change(screen.getByLabelText('Sheet number for S2'), { target: { value: 'S1' } });
+  }
+  fireEvent.click(screen.getByRole('button', { name: /Apply Revision/ }));
+  await waitFor(() => expect(screen.getAllByText(/ambiguous|duplicate/i).length).toBeGreaterThan(0));
+  await waitFor(() => expect(screen.getByRole('button', { name: /Apply Revision/ }).closest('fieldset')?.disabled).toBe(false));
+  expect(received).toBeNull();
+  fireEvent.change(screen.getByLabelText('Sheet number for S1'), { target: { value: 'S2' } });
+  const pageInputs = screen.getAllByLabelText(/PDF page for/);
+  expect(pageInputs.map(input => (input as HTMLInputElement).value).sort()).toEqual(['1', '2']);
+  expect((screen.getByLabelText('Title for S1') as HTMLInputElement).value).toBe('Second page');
+  expect((screen.getByLabelText('Title for S2') as HTMLInputElement).value).toBe('Revised framing');
+  expect((screen.getByLabelText(/I reviewed S1/) as HTMLInputElement).checked).toBe(false);
+  expect((screen.getByLabelText(/I reviewed S2/) as HTMLInputElement).checked).toBe(false);
+  // Merge and split again: preserve both members without duplicating the exposed first.
+  fireEvent.change(screen.getByLabelText('Sheet number for S1'), { target: { value: 'S2' } });
+  fireEvent.click(screen.getByRole('button', { name: /Apply Revision/ }));
+  await waitFor(() => expect(screen.getByRole('button', { name: /Apply Revision/ }).closest('fieldset')?.disabled).toBe(false));
+  expect(received).toBeNull();
+  fireEvent.change(screen.getByLabelText('Sheet number for S2'), { target: { value: 'S1' } });
+  expect((screen.getByLabelText('PDF page for S1') as HTMLInputElement).value).toBe('2');
+  expect((screen.getByLabelText('PDF page for S2') as HTMLInputElement).value).toBe('1');
+  expect(screen.getAllByLabelText(/PDF page for/)).toHaveLength(2);
+  fireEvent.click(screen.getByLabelText(/I reviewed S1/));
+  fireEvent.click(screen.getByLabelText(/I reviewed S2/));
+  fireEvent.click(screen.getByRole('button', { name: /Apply Revision/ }));
+  await waitFor(() => expect(received).not.toBeNull());
+  expect(received?.p_request.sheets).toEqual([
+    expect.objectContaining({ action: 'revised', drawing_id: drawingId, sheet_number: 'S1', pdf_page: 2,
+      file_path: sourcePath, expected_revision_id: revisionId, reviewed: true,
+      extraction: scenario === 'duplicate extraction'
+        ? { text: { state: 'harvested', value: 'new page 2' }, callouts: { state: 'harvested', value: [{ text: 'W16' }] } }
+        : { text: { state: 'unavailable' }, callouts: { state: 'unavailable' } } }),
+    expect.objectContaining({ action: 'revised', drawing_id: secondDrawingId, sheet_number: 'S2', pdf_page: 1,
+      file_path: sourcePath, expected_revision_id: secondRevisionId, reviewed: true,
+      extraction: { text: { state: 'harvested', value: 'new page 1' }, callouts: { state: 'harvested', value: [{ text: 'W14' }] } } }),
+  ]);
+  expect(received?.p_request.source_objects).toEqual([{ path: sourcePath, token: 'a'.repeat(64) }]);
+  expect(await screen.findByText('Revision Applied')).toBeTruthy();
+  expect(screen.getByText(/2 drawing records updated/)).toBeTruthy();
+  await waitFor(async () => expect(await loadDrawingCommands(owner)).toEqual([]));
+  expect(m.legacy).not.toHaveBeenCalled();
 });

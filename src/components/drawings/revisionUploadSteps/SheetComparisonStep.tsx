@@ -14,7 +14,7 @@ export default function StepSheetComparison(props: any) {
     ambiguous: matchedSheets.filter((m: any) => m.change === "ambiguous").length,
   };
   const totalOld = matchedSheets.filter((m: any) => m.oldSheet).length;
-  const totalNew = matchedSheets.filter((m: any) => m.newSheet).length;
+  const totalNew = matchedSheets.reduce((count: number, m: any) => count + (m.newSheets?.length ?? (m.newSheet ? 1 : 0)), 0);
   const removedSheets = matchedSheets.filter((m: any) => m.change === "removed");
   const ambiguousSheets = matchedSheets.filter((m: any) => m.change === "ambiguous");
 
@@ -68,6 +68,9 @@ export default function StepSheetComparison(props: any) {
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
             Resolve duplicate or blank sheet numbers before applying.{" "}
             {ambiguousSheets.map((m: any) => m.ambiguousReason || `Sheet "${m.sheetNumber || "(blank)"}"`).join(" · ")}
+            {ambiguousSheets.some((m: any) => m.newSheets?.length > 1) && (
+              <p>All incoming pages are retained. Edit the displayed member of each duplicate group to its actual sheet number; the remaining members stay held for review.</p>
+            )}
           </div>
         </div>
       )}

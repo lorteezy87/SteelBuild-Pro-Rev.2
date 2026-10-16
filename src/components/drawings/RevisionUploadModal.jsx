@@ -286,12 +286,13 @@ export default function RevisionUploadModal({ open, onClose, onComplete = undefi
       const snapshots = await sourceSnapshots.capture([res.path]);
       assertActive();
       matched.forEach(m => {
-        if (m.newSheet) {
-          m.newSheet.fileUrl = res.path;
-          m.newSheet.sourceFileUrl = res.path;
-          m.newSheet.sourceSnapshot = snapshots[0];
-          m.newSheet.reviewed = false;
-        }
+        // Duplicate groups retain every incoming page, not only the displayed first member.
+        (m.newSheets || (m.newSheet ? [m.newSheet] : [])).forEach(sheet => {
+          sheet.fileUrl = res.path;
+          sheet.sourceFileUrl = res.path;
+          sheet.sourceSnapshot = snapshots[0];
+          sheet.reviewed = false;
+        });
       });
       setMatchedSheets(matched);
       setSourcePages({ [res.path]: physicalPageCount });
@@ -438,7 +439,12 @@ export default function RevisionUploadModal({ open, onClose, onComplete = undefi
       const numberEdited = updated.some((match, index) => match.newSheet?.sheetNumber !== matchedSheets[index]?.newSheet?.sheetNumber);
       if (numberEdited) {
         attestationState.resetAttestations();
-        setMatchedSheets(matchSheets(matchedSheets.filter(match => match.oldSheet).map(match => match.oldSheet), updated.filter(match => match.newSheet).map(match => match.newSheet)));
+        // The editable first member may differ from newSheets[0]. Keep its edit
+        // AND every remaining member; collapsing a duplicate must never omit a page.
+        setMatchedSheets(matchSheets(
+          matchedSheets.flatMap(match => match.oldSheets || (match.oldSheet ? [match.oldSheet] : [])),
+          updated.flatMap(match => match.newSheet ? [match.newSheet, ...(match.newSheets?.slice(1) || [])] : []),
+        ));
       } else setMatchedSheets(updated);
     }
   };
