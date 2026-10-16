@@ -148,7 +148,7 @@ final class DesktopBrowser: NSObject, ObservableObject, WKNavigationDelegate, WK
               CommandLine.arguments.indices.contains(index + 1) else { return }
         let destination = URL(fileURLWithPath: CommandLine.arguments[index + 1])
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
-            webView.evaluateJavaScript("JSON.stringify({rendered:!!document.querySelector('#root')?.children.length, textLength:document.body.innerText.length, title:document.title})") { value, error in
+            webView.evaluateJavaScript("JSON.stringify({rendered:!!document.querySelector('#root')?.children.length, textLength:document.body.innerText.length, title:document.title,origin:location.origin,signInVisible:/sign in/i.test(document.body.innerText)})") { value, error in
                 guard error == nil, let json = value as? String, let data = json.data(using: .utf8) else { return }
                 try? data.write(to: destination, options: .atomic)
             }
