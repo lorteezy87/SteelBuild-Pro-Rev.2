@@ -6,7 +6,106 @@ exactly what's needed.
 
 ---
 
-## Phase 0 closure status
+## Current production and Detailing repair status (2026-10-15)
+
+The version 20 frontend release is deployed from
+`b3cabc81eb1b4ecdd10e35b449e5c9217d5ab6f8`. All five required release jobs
+passed, and [production verification run 38771618666](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/38771618666)
+verified the unchanged GitHub artifact and exact entry asset on both public
+domains. Full release and rollback identifiers are in `README.md` → Deployment.
+Authenticated smoke was skipped because `E2E_ENABLED` was not enabled.
+This evidence verifies frontend promotion, not every application workflow.
+
+- **P0/P1 — drawing source/revision evidence integrity; contained in the repair branch, backend repair still open.**
+  New Set previously reused existing/deleted names, changed set metadata first,
+  swallowed history failures and retired omitted live sheets. It now refuses
+  those names and uniqueness-race adoption before existing-record writes.
+  Revision Upload's split sequence could commit the current pointer before a
+  failed coordination copy or parent write. Its Apply path is now held before
+  persistence, including adds/removals; review remains available. Edit Sheet and
+  generic single/bulk metadata editing no longer replace source/revision fields.
+  This is UI containment, not direct REST protection. Uniquely named intake
+  still creates the set/sheets/initial ledger in separate statements: failure
+  refreshes the register and identifies incomplete tracking, but lacks an atomic
+  recovery receipt. No automatic source deletion, history backfill or approval
+  attestation was added.
+- **P1 — page provenance and manual recovery; source fix locally verified, not deployed.**
+  Explicit pages survive reversed model order and legitimate shared-page layouts.
+  Invalid/out-of-range mappings remain unresolved rather than being assigned by
+  index or nearest unused page. Template OCR follows the explicit physical page.
+  Manual recovery retains every known PDF page with unknown sheet identities;
+  intake permits page correction and refuses unresolved/out-of-range selections.
+  Changing a page clears stale source-bound extraction. Unavailable text/callouts
+  stay NULL; inspected-empty remains distinct. Revision application validates
+  sources before its temporary hold. Local Vite now refuses an occupied port
+  rather than silently moving to an origin not permitted by staging CORS.
+- **P1 — blocked Submittals form actions; source fix verified, live acceptance open.**
+  The Submittal dialog opts into viewport bounds and scroll containment without
+  changing other dialogs' default stacking. Its
+  heading/actions stay outside its scrolling body. Fourteen local browser cases
+  passed across short desktop, phone and landscape windows: both themes,
+  create/edit, real dropdown selection, save/cancel, three-page manual intake and
+  nested popover/menu/context-menu/tooltip/hover-card stacking without a global
+  dialog-layer regression.
+  Fixtures use shipped components and synthetic records with no external requests;
+  they do not prove production persistence or authenticated workflow acceptance.
+- **P1 — complete approval reads; source fix locally verified, not deployed.**
+  All eight Submittals datasets use complete paged reads, preserving a last-page
+  blocker beyond 1,000 rows and exposing read failures instead of partial success.
+- **P1/P2 — transactional revision and query fan-out; reviewed backend cutover required.**
+  The legacy helper performs roughly 8–11 requests per revised sheet and has
+  capped zone/link inheritance reads. It must not be parallelized as a substitute
+  for atomicity. Existing uninstalled candidate
+  `supabase/candidates/drawing-set-revision-transaction.sql` (SHA-256
+  `562699f68482d6a3f85a2c6edd0719dadba3d5808460f36d188c594ef2d3fa06`)
+  passed 86 local PGlite behavioral checks on this repair run. This is not current
+  independent-session PostgreSQL, hosted-policy or deployment proof. It only
+  revises an existing set: complete remediation also needs atomic new-set intake,
+  stable upload/request recovery, typed adapters, protected direct source/current
+  writes and old-client handling, source-observation export/erasure review,
+  authenticated staging rollback/acceptance and a named reviewed backend release.
+  Do not install the candidate, promote quarantine SQL or alter the ownership
+  manifest merely to clear these gates.
+
+Repair-branch verification: the full Vitest run passed **8,967 tests across 889
+files**, exit 0. The SQL candidate's **86 PGlite checks** and the **14 browser
+cases** are separate groups, not additional Vitest coverage. The initial broad
+run exposed a capped-read-only Submittals test double; it was updated to model
+the complete-read API and retained its recovery/feature-gate assertions. These
+results do not close the hosted backend, live AI or authenticated acceptance gates.
+
+ESLint, TypeScript, JavaScript checking, strict-null and implicit-any ratchets,
+and no-new-JavaScript pass. Existing shrink-only grandfathered lists are unchanged.
+The production build passes with its existing chunk warnings and non-secret CI
+placeholder values; that local bundle is not a deployable production artifact.
+
+- **P1 — drawing intake Edge Function transport error; open, investigation in progress.**
+  The owner reports `llm-proxy edge function failed: Failed to send a request to
+  the Edge Function`. Production `llm-proxy` v44 is active with gateway JWT
+  verification disabled and internal authentication retained. Direct probes
+  returned the expected production-origin CORS headers and rejected an
+  unauthenticated POST with 401. These probes do not reproduce a successful
+  signed-in extraction or establish the reported failure's cause. Capture the
+  actual failing request, fix its cause, and cover upload/revision failure and
+  recovery without inventing PDF-page provenance or approval/release status.
+- **P1 — authenticated Detailing acceptance; open.** Verify the drawing register,
+  intake, revision handoff, linked submittal rounds, approval transitions, holds,
+  transmittals and specialist-tool navigation with project-scoped fixtures.
+  Include direct requests, permission denials, query failures and narrow
+  viewports; do not turn this into an unqualified "entire center fixed" claim.
+- **P2 — build-tool dependency advisory; open.** The release run reports five
+  high-severity findings in the Tailwind/chokidar/braces dependency chain.
+  Production-dependency audit passed. A toolchain upgrade needs its own
+  compatibility work; do not apply a forced major upgrade during this repair.
+
+Version 19 remains available for rollback. Its old source reference was
+preserved before the owner's approved one-time Sites-only `--force-with-lease`
+update. This exception grants no standing authorization to rewrite GitHub or
+future source history. Frontend promotion applied no SQL or Edge Function changes.
+
+## Historical Phase 0 closure status
+
+The following is a historical baseline, not the current production defect list.
 
 The Phase 0 release-candidate baseline is reconciled through Batch 40 on
 `agent/handoff-cleanup`. The local closure gates passed without a production
@@ -218,7 +317,7 @@ RLS-2, RLS-6, EDGE-2, EDGE-13, EDGE-14, EDGE-16, CI-3, CI-6, COMP-1, TEST-2.
   production rejects), DATA-5, LOGIC-5, LOGIC-6.
 - **Release pipeline.** CI-2 is resolved by the Sites handoff: the production
   job holds no Cloudflare or reusable Sites publishing credential, builds only
-  on a green main SHA, and emits a checksummed archive for an authorized Sites
+  when the five required jobs pass for the main SHA, and emits a checksummed archive for an authorized Sites
   promotion. Branch protection remains blocked by the repository plan
   (B41-P1-005). **CI-10:**
   the Netlify site is still connected and builds every PR — confirm it cannot

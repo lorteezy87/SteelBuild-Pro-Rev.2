@@ -4,12 +4,30 @@ on:
   push:
     paths:
       - supabase/candidates/drawing-set-revision-transaction.sql
+      - supabase/candidates/drawing-source-observation-export.sql
+      - supabase/candidates/drawing-adopted-source-protection.sql
+      - supabase/candidates/drawing-command-write-boundary.sql
       - supabase/tests/drawing-set-revision-transaction/**
+      - supabase/migrations/**
+      - supabase/drawing-cutover-package.json
+      - supabase/drawing-cutover/**
+      - scripts/drawing-cutover-package.ts
+      - supabase/tests/submittal-revision-evidence/**
+      - supabase/tests/function-search-path/live-helper-fixture.sql
       - .github/workflows/drawing-upload-postgres.yml
   pull_request:
     paths:
       - supabase/candidates/drawing-set-revision-transaction.sql
+      - supabase/candidates/drawing-source-observation-export.sql
+      - supabase/candidates/drawing-adopted-source-protection.sql
+      - supabase/candidates/drawing-command-write-boundary.sql
       - supabase/tests/drawing-set-revision-transaction/**
+      - supabase/migrations/**
+      - supabase/drawing-cutover-package.json
+      - supabase/drawing-cutover/**
+      - scripts/drawing-cutover-package.ts
+      - supabase/tests/submittal-revision-evidence/**
+      - supabase/tests/function-search-path/live-helper-fixture.sql
       - .github/workflows/drawing-upload-postgres.yml
 
 permissions:
@@ -43,7 +61,7 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: supabase/tests/drawing-set-revision-transaction/package-lock.json
-      - name: Verify source-only candidate against synthetic PostgreSQL
+      - name: Verify exact reviewed package against synthetic PostgreSQL
         env:
           DRAWING_UPLOAD_POSTGRES_TEST: "1"
           DRAWING_UPLOAD_POSTGRES_URL: postgresql://postgres:drawing-upload-fixture-only@127.0.0.1:5432/steelbuild_drawing_upload_test

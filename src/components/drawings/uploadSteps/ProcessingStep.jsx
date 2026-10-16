@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 
 // ─── Step 3: Processing UI ────────────────────────────────────────────
-export default function ProcessingStep({ processingStatus, onCancel, error }) {
+export default function ProcessingStep({ processingStatus, onCancel, error, recoverable = false }) {
   const { steps = [], currentStepId, progress = 0, message = "" } = processingStatus;
 
   if (error) {
@@ -10,12 +10,12 @@ export default function ProcessingStep({ processingStatus, onCancel, error }) {
       <div style={{ padding: "20px 0", textAlign: "center" }}>
         <div style={{ fontSize: 36, marginBottom: 10 }}>⚠</div>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--status-error)", marginBottom: 8 }}>
-          Processing Failed
+          {recoverable ? "Drawing request retained" : "Processing held"}
         </div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 24, maxWidth: 360, margin: "0 auto 24px" }}>
           {error}
         </div>
-        <Button variant="outline" onClick={onCancel}>← Start Over</Button>
+        <Button variant="outline" onClick={onCancel}>{recoverable ? "Close and retain request" : "← Start Over"}</Button>
       </div>
     );
   }
@@ -85,7 +85,7 @@ export default function ProcessingStep({ processingStatus, onCancel, error }) {
             letterSpacing: "0.08em", textDecoration: "underline",
           }}
         >
-          cancel &amp; start over
+          {recoverable ? "Close; retain any saved request" : "cancel & start over"}
         </button>
       </div>
     </div>

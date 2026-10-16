@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "payloads": [
+    {
+      "path": "supabase/migrations/20261016061756_drawing_reviewed_atomic_commands.sql",
+      "candidate": "supabase/candidates/drawing-set-revision-transaction.sql",
+      "version": "20261016061756",
+      "sha256": "05e6fd8f5fe3cd32c7cbd1797f543d9eaeb786068db04f3077ac2d6f36032adf",
+      "depends_on": []
+    },
+    {
+      "path": "supabase/migrations/20261016061808_drawing_adopted_source_protection.sql",
+      "candidate": "supabase/candidates/drawing-adopted-source-protection.sql",
+      "version": "20261016061808",
+      "sha256": "515a9252a76642f9eea51968498cc6fc6f5faf617eda637f28bd3e0d57b32435",
+      "depends_on": [
+        "20261016061756"
+      ]
+    },
+    {
+      "path": "supabase/migrations/20261016061825_drawing_command_write_boundary.sql",
+      "candidate": "supabase/candidates/drawing-command-write-boundary.sql",
+      "version": "20261016061825",
+      "sha256": "267522500056c715a0a413bb82dd6f79f4e53f7e8a633a23ee78eeca2699df4e",
+      "depends_on": [
+        "20261016061808"
+      ]
+    },
+    {
+      "path": "supabase/migrations/20261016061838_drawing_source_observation_export.sql",
+      "candidate": "supabase/candidates/drawing-source-observation-export.sql",
+      "version": "20261016061838",
+      "sha256": "0ab8cb29f3c26a0fe6eb1dd435b4628790a268a20ea09e2e6df9ffb4f95a0cf1",
+      "depends_on": [
+        "20261016061825"
+      ]
+    }
+  ],
+  "prerequisites": [
+    {
+      "path": "supabase/migrations/20260101000010_baseline_schema.sql",
+      "sha256": "f587ad2cbe91cc754aaa93809090198a1bf7148a0a6952c49dd6bdc6b64522e6"
+    },
+    {
+      "path": "supabase/migrations/20261009070300_submittal_round_revision_evidence.sql",
+      "sha256": "b4b77581e51a0c61ee63d47fa34d1010a123bb1759bee6889e0ca0ec719b0ea7"
+    },
+    {
+      "path": "supabase/migrations/20260914120000_adopt_production_soft_delete_project.sql",
+      "sha256": "e382440575c7a7f385b0e40e6b160a6949f0cfbedd075c96cd15c2d2bdbd9e8c"
+    },
+    {
+      "path": "supabase/migrations/20261008013546_align_drawing_set_governing_submittal.sql",
+      "sha256": "c4f4a86dda10c0965fd099e48d2b4c2af64c04fbf2b99392105103d3e1a1476a"
+    },
+    {
+      "path": "supabase/drawing-cutover/activation-capture.sql",
+      "sha256": "adec05b193e14191e5f8c2ae20cb23f07ea80bc7c559f174b37b5454bd5087ae"
+    },
+    {
+      "path": "supabase/drawing-cutover/activate-manual.sql",
+      "sha256": "e585e2d5be469f43e591481f45b90f401abb767238cc6b1bd33ce3d390711588"
+    },
+    {
+      "path": "supabase/tests/function-search-path/live-helper-fixture.sql",
+      "sha256": "11fc930756d390aceb5cc3496e97717cf289d5d5738edba3bab4c72b399e9e74"
+    },
+    {
+      "path": "supabase/tests/submittal-revision-evidence/live-workflow-guards.sql",
+      "sha256": "98908f36c0a39ce4d26424c9beb158b5cf797fc9726f11adc217b800ed36bde3"
+    },
+    {
+      "path": "supabase/tests/submittal-revision-evidence/live-erasure-functions.sql",
+      "sha256": "d27e1da7fc7f71a6f610f81ba66783e74cc29615114535a9d71af4d49efb940e"
+    }
+  ],
+  "required_prerequisite_identities": [
+    "public.user_is_org_member(uuid)",
+    "public.user_has_project_access(uuid)",
+    "public.user_has_project_role_at_least(uuid, text)",
+    "steelbuild_security.satisfies_mfa()",
+    "public.get_submittal_revision_coverage(uuid)",
+    "public.evaluate_fab_release_set(uuid, uuid)",
+    "steelbuild_workflow.has_round_context(uuid)",
+    "steelbuild_workflow.guard_captured_revision()"
+  ],
+  "observed_catalogs": [
+    {
+      "target": "production",
+      "project_ref": "kjrwqagyeswwoxpjkcko",
+      "capture_sha256": "ccb0302b92277b6377409101032ea11e37851e4de54de96dd9c76149ebbb102a",
+      "captured_at": "2026-10-15T20:23:24.328041+00:00",
+      "approval": false,
+      "prerequisites": [
+        {
+          "identity": "public.user_is_org_member(uuid)",
+          "sha256": "80ef1c35762b8869bad8d48af51ebb33895efec0950a00468a0270173883e7ab"
+        },
+        {
+          "identity": "public.user_has_project_access(uuid)",
+          "sha256": "6ad03ada254129629d0dcdf322b9ddf168b44286d7aa34b4e65f702731771dd9"
+        },
+        {
+          "identity": "public.user_has_project_role_at_least(uuid, text)",
+          "sha256": "603519255e08c637098f7269e17e5afe571c3d0cbc957a5c2ef3f2e6886c9cb7"
+        },
+        {
+          "identity": "steelbuild_security.satisfies_mfa()",
+          "sha256": "e7643284b9624563682c8424cf21a892e3055c29d33bb7ad77ca26cd803c7360"
+        },
+        {
+          "identity": "public.get_submittal_revision_coverage(uuid)",
+          "sha256": "5c852775ec03996cc08ce25fcee200752e744d458c265c22869575479dd362ad"
+        },
+        {
+          "identity": "public.evaluate_fab_release_set(uuid, uuid)",
+          "sha256": "11f400945ba354dab7456bd3f1fc1f4de827e511d10bbc0ef5e4f22eb50f58e1"
+        },
+        {
+          "identity": "steelbuild_workflow.has_round_context(uuid)",
+          "sha256": "b514b61291badbf337ce7497d67e8ae9b5b2296b071ff01bbf30b10013cbd8b2"
+        },
+        {
+          "identity": "steelbuild_workflow.guard_captured_revision()",
+          "sha256": "1b262f95069ca3dd1e8d45008008fadc5c29b6fbd42a03a79e65160a2400ac51"
+        }
+      ]
+    },
+    {
+      "target": "staging",
+      "project_ref": "ndyfjffsulfbwpmwdmic",
+      "capture_sha256": "6f8baa96f5e57e120f4608173bc4f4ad8a79cc144b51875f14334fc30b4f76d9",
+      "captured_at": "2026-10-15T20:23:17.841779+00:00",
+      "approval": false,
+      "prerequisites": [
+        {
+          "identity": "public.user_is_org_member(uuid)",
+          "sha256": "80ef1c35762b8869bad8d48af51ebb33895efec0950a00468a0270173883e7ab"
+        },
+        {
+          "identity": "public.user_has_project_access(uuid)",
+          "sha256": "6ad03ada254129629d0dcdf322b9ddf168b44286d7aa34b4e65f702731771dd9"
+        },
+        {
+          "identity": "public.user_has_project_role_at_least(uuid, text)",
+          "sha256": "603519255e08c637098f7269e17e5afe571c3d0cbc957a5c2ef3f2e6886c9cb7"
+        },
+        {
+          "identity": "steelbuild_security.satisfies_mfa()",
+          "sha256": "e7643284b9624563682c8424cf21a892e3055c29d33bb7ad77ca26cd803c7360"
+        },
+        {
+          "identity": "public.get_submittal_revision_coverage(uuid)",
+          "sha256": "5c852775ec03996cc08ce25fcee200752e744d458c265c22869575479dd362ad"
+        },
+        {
+          "identity": "public.evaluate_fab_release_set(uuid, uuid)",
+          "sha256": "11f400945ba354dab7456bd3f1fc1f4de827e511d10bbc0ef5e4f22eb50f58e1"
+        },
+        {
+          "identity": "steelbuild_workflow.has_round_context(uuid)",
+          "sha256": "b514b61291badbf337ce7497d67e8ae9b5b2296b071ff01bbf30b10013cbd8b2"
+        },
+        {
+          "identity": "steelbuild_workflow.guard_captured_revision()",
+          "sha256": "1b262f95069ca3dd1e8d45008008fadc5c29b6fbd42a03a79e65160a2400ac51"
+        }
+      ]
+    }
+  ]
+}

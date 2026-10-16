@@ -53,9 +53,7 @@ export function buildDrawingRecord({ sheet, fileResults, meta, activeProject, re
   const needsReview = sheetReviewFlags(sheet, sourceResult).needsReview;
   const validatedPage = validatePdfPage(sheet.pdfPage);
   if (validatedPage === null) {
-    console.warn(
-      `[DrawingSetUploadModal] Sheet "${sheet.sheetNumber || "?"}" has invalid pdfPage=${JSON.stringify(sheet.pdfPage)} — defaulting to 1.`,
-    );
+    throw new Error(`Sheet "${sheet.sheetNumber || "?"}" needs a confirmed PDF page.`);
   }
   return {
     sheet_number:     sheet.sheetNumber || "",
@@ -68,13 +66,13 @@ export function buildDrawingRecord({ sheet, fileResults, meta, activeProject, re
     revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
     stage:            meta.defaultStage || "Not Started",
     file_url:         sheet.sourceFileUrl,
-    pdf_page:         validatedPage ?? 1,
-    callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
+    pdf_page:         validatedPage,
+    callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : null,
     upload_batch_id:      batchId,
     upload_status:        "Uploaded",
     ai_extraction_status: needsReview ? "NeedsReview" : "Processed",
     ai_extraction_error:  sourceResult?.error || null,
-    extracted_text:       sheet.extractedText || null,
+    extracted_text:       typeof sheet.extractedText === "string" ? sheet.extractedText : null,
     hyperlinks:           Array.isArray(sheet.hyperlinks) ? sheet.hyperlinks : [],
     last_extracted_at:    now,
     notes: [

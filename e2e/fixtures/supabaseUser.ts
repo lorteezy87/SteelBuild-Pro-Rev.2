@@ -22,9 +22,22 @@ export interface SignedInClient {
 }
 
 async function signIn(email: string, password: string): Promise<SignedInClient> {
+  let guardedFetch: typeof fetch | undefined;
+  if (process.env.DRAWING_CUTOVER_ENABLED === "true") {
+    const { getDrawingRuntime, assertFabBindings } = await import("../../scripts/drawing-cutover-staging.ts");
+    const runtime = await getDrawingRuntime();
+    assertFabBindings(runtime.config, process.env);
+    const actor = runtime.config.manifest.actors.find(candidate => {
+      const credential = runtime.config.actors[candidate.alias];
+      return credential.email === email && credential.password === password;
+    });
+    if (!actor || !["pm", "viewer"].includes(actor.alias)) throw new Error("FAB_ACTOR_BINDING_REQUIRED");
+    guardedFetch = runtime.fetchFor(actor.alias);
+  }
   const environment = resolveE2EEnvironment({ ...process.env, E2E_USER: email, E2E_PASS: password });
   const supabase = createClient(environment.supabaseUrl, environment.supabaseAnonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    ...(guardedFetch ? { global: { fetch: guardedFetch } } : {}),
   });
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.session) {

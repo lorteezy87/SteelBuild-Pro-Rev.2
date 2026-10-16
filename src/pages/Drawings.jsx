@@ -54,7 +54,7 @@ export default function Drawings({ embedded = false } = {}) {
       embedded={embedded}
       revisionAiEnabled={revisionAiEnabled}
       canCreateDrawing={can("create", "drawing")}
-      canEditDrawing={can("edit", "drawing")}
+      canEditDrawing={can("edit")}
       canDeleteDrawing={can("delete", "drawing")}
       navigate={navigate}
       data={data}

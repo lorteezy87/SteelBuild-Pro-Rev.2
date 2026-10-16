@@ -72,6 +72,9 @@ coverage/
 .nyc_output/
 playwright-report/
 test-results/
+# Drawing cutover credentials, private manifest, sessions and synthetic PDF bytes.
+/e2e/.auth/drawing-cutover/
+/test-results/drawing-cutover-private/
 *.zip
 *.tgz
 *.tar.gz

@@ -22,54 +22,24 @@
 
 import { supabase } from "@/lib/supabase";
 
-/**
- * Mark a drawing set locked. Idempotent — calling lock on an already-locked
- * set just refreshes locked_reason / locked_at. Returns the updated row.
- */
-export async function lockSet({ setId, reason = null, userId = null } = {}) {
-  if (!setId) throw new Error("lockSet: setId required");
-  const { data, error } = await supabase
-    .from("drawing_sets")
-    .update({
-      is_locked:     true,
-      locked_at:     new Date().toISOString(),
-      locked_by:     userId,
-      locked_reason: reason ? String(reason).slice(0, 2000) : null,
-    })
-    .eq("id", setId)
-    .select()
-    .single();
+/** Lock actor, timestamp and permission are enforced by the server command. */
+async function setLock({ setId, locked, reason, expectedUpdatedAt }) {
+  if (!setId) throw new Error("setId required");
+  if (!locked && !reason?.trim()) throw new Error("Unlock reason required.");
+  if (!expectedUpdatedAt) throw new Error("Reviewed set version required. Reload the drawing set.");
+  if (new TextEncoder().encode(reason || "").length > 65536) throw new Error("Lock reason exceeds the supported limit.");
+  const { data, error } = await supabase.rpc("set_drawing_set_lock", {
+    p_set_id: setId, p_locked: locked, p_reason: reason || null,
+    p_expected_updated_at: expectedUpdatedAt,
+  });
   if (error) throw error;
   return data;
 }
-
-/**
- * Clear the lock — an ADMIN OVERRIDE. A `reason` is REQUIRED: unlocking a
- * released-for-fab set is consequential, so the override must be justified.
- * The lock columns (locked_at / locked_by / locked_reason) are nulled so a
- * future lock pass starts fresh — which means the reason only survives in the
- * caller's audit trail (see DrawingViewer.onUnlock → logActivity). Returns the
- * updated row. Throws if setId or reason is missing.
- */
-export async function unlockSet({ setId, reason = null } = {}) {
-  if (!setId) throw new Error("unlockSet: setId required");
-  const cleanReason = reason ? String(reason).trim() : "";
-  if (!cleanReason) {
-    throw new Error("unlockSet: reason required — unlocking is an admin override and must record why.");
-  }
-  const { data, error } = await supabase
-    .from("drawing_sets")
-    .update({
-      is_locked:     false,
-      locked_at:     null,
-      locked_by:     null,
-      locked_reason: null,
-    })
-    .eq("id", setId)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+export async function lockSet({ setId, reason = null, expectedUpdatedAt = null } = {}) {
+  return setLock({ setId, locked: true, reason, expectedUpdatedAt });
+}
+export async function unlockSet({ setId, reason = null, expectedUpdatedAt = null } = {}) {
+  return setLock({ setId, locked: false, reason, expectedUpdatedAt });
 }
 
 /**

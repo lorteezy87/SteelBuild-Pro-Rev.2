@@ -11394,6 +11394,27 @@ export type Database = {
       }
     }
     Functions: {
+      // Reviewed drawing command contract v1 (uninstalled candidate; readiness must fail closed).
+      create_drawing_set_from_review: {
+        Args: { p_request_id: string; p_request: Json }
+        Returns: Json
+      }
+      apply_drawing_set_revision: {
+        Args: { p_request_id: string; p_request: Json }
+        Returns: Json
+      }
+      get_drawing_revision_sources: {
+        Args: { p_project_id: string; p_paths: string[] }
+        Returns: Json
+      }
+      get_drawing_command_receipt: {
+        Args: { p_request_id: string; p_operation: string; p_request: Json }
+        Returns: Json
+      }
+      get_drawing_command_capabilities: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       _tmp_timeout_probe: { Args: never; Returns: string }
       accept_invitation: { Args: { p_token: string }; Returns: Json }
       acknowledge_transmittal: {

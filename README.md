@@ -34,7 +34,7 @@ moat.
 - **LLM**: a provider-agnostic gateway via the `llm-proxy` Edge Function
   (currently OpenAI `gpt-4o` / `gpt-4o-mini`). Never call a provider from the browser.
 - **Billing**: Stripe subscription plans via the `stripe-billing` Edge Function.
-- **Monitoring**: Sentry (`@sentry/react`) with masked session replay.
+- **Monitoring**: Sentry (`@sentry/react`); session replay is disabled.
 
 ## Rebuild direction
 
@@ -279,8 +279,9 @@ and `commercial-postgres`; **only if all five pass** does
 `prepare-sites-release` build and upload the checksummed Site archive. It does
 not publish. An authorized operator saves and deploys that exact archive through
 Sites, then dispatches `sites-production-verify.yml` with the release run ID and
-SHA. GitHub stores no reusable Sites credential. A red run creates no promotable
-artifact, so production stays on the last good Site version. Rollback redeploys
+SHA. GitHub stores no reusable Sites credential. A failed required job prevents
+a promotable artifact; the separate advisory dependency audit can remain red
+while the required release jobs pass. Rollback redeploys
 the recorded prior saved Sites version. See
 [`docs/runbooks/sites-release.md`](./docs/runbooks/sites-release.md). Remaining gap: no
 branch-protection required check (repo plan), so red/unreviewed commits can
@@ -306,16 +307,49 @@ disposable-mutation E2E jobs run against it. Details, including what the
 schema restore did and did not cover, are in
 [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
 
-**Current hosting boundary (2026-10-15).** Production is Sites version 19 for
-the project pinned by `.openai/hosting.json`. Its deployed source tree matched
-GitHub `main` at `98bdf17ec9c9aeeaf0d993b8b56200d7927bb21f`, and both custom
-domains are active. `CLOUDFLARE_ENABLED=false` is intentional because the legacy
-Worker no longer owns production routing. Future web releases use the gated
-Sites artifact, authorized promotion, and exact-domain verification described
-above. Source checks, an uploaded artifact, or a saved Site version alone are
-not hosted-production evidence. Whole-app enterprise and monetization readiness,
-provider delivery, backup restore, authenticated workflow/viewport acceptance,
-and the build-tool advisory remain open.
+**Verified production release (2026-10-15).** Sites **version 20** is live on
+`steelbuild-pro.com` and `www.steelbuild-pro.com`, from GitHub commit
+`b3cabc81eb1b4ecdd10e35b449e5c9217d5ab6f8` (PR #553).
+
+- Release artifact: `sites-production-b3cabc81eb1b4ecdd10e35b449e5c9217d5ab6f8`, from
+  [CI run 38766132373](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/38766132373).
+  All five required jobs and release packaging passed. The advisory audit still
+  reports five high-severity findings in the Tailwind/chokidar/braces build-tool chain.
+- Downloaded archive SHA-256:
+  `08e5a06275dc4d4e21caac8f2e417b7af5f2c0b0fba3b5e814c5a3eadfc8df9e`.
+  Its 530-file `dist/` tree and commit/project identity were independently verified.
+- Saved version: `appgprj_6a586bd122e48191baf2041322b2325d~appgver_dcdace2e12f4819198f3e22a1af2aa51`.
+  Deployment: `appgdep_6ad102fe7e9081919e8163f4ec2ff5f8`, status `succeeded`.
+- [Production verification run 38771618666](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/38771618666)
+  passed archive verification and confirmed both domains serve
+  `/assets/index-05t-3cEF.js` with SHA-256
+  `813f5ea713d5c477244e45a4c57b7964e9ae28ce56979354babf291527cbe014`.
+  Authenticated Playwright smoke was **skipped** (`E2E_ENABLED` not enabled).
+- Rollback remains saved **Sites version 19**, source
+  `62d87a693619b8d675ec067127b1c44fec484cca`, also preserved in the Sites source branch
+  `rollback/sites-v19-62d87a693619b8d675ec067127b1c44fec484cca`.
+  The owner approved the one-time lease-protected Sites source reconciliation;
+  GitHub history, database and Edge Functions were unchanged by the promotion.
+
+`CLOUDFLARE_ENABLED=false` remains intentional. Future releases follow the gated
+Sites artifact and promotion procedure above. Whole-app enterprise readiness,
+provider delivery, backup restore and authenticated workflow acceptance remain
+separate evidence requirements.
+
+**Current Detailing repairs (2026-10-15; source candidate only).** The repair
+branch bounds dialogs to the viewport, uses complete Submittals reads, preserves
+explicit PDF-page mappings and retains per-page manual intake after AI failure.
+New Set cannot adopt an existing/deleted set or retire its omitted sheets.
+In-place Apply Revision is temporarily held before any database mutation; use a
+uniquely named New Drawing Set and a new submittal for revised work. Existing
+sheet metadata edits cannot replace source, page or revision identity. Incomplete
+new imports identify their set and refresh the register, rather than advising a
+blind re-upload. These are safety mitigations, not a deployed transaction fix.
+The existing SQL transaction candidate remains uninstalled; protected direct
+writes, atomic creation/retry recovery and authenticated hosted acceptance remain
+release gates. The cause of the live signed-in `llm-proxy` transport failure is
+still unproven. None of these branch changes is part of the version 20 deployment.
+See [`TECH_DEBT.md`](./TECH_DEBT.md) for the remaining blockers.
 
 **Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
 `{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor

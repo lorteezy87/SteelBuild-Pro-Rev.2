@@ -4,6 +4,7 @@
 // Edge Function and the Vitest suite (src/lib/data/exportShape.test.ts) can import it. Keep the table list in
 // lockstep with the modules that exist — a table missing here is silently absent from every backup.
 
+import type { DrawingEvidenceExtension } from '../../../src/lib/drawingCommands/evidenceExport.ts';
 export const PROJECT_EXPORT_VERSION = 2;
 
 /** Every project-scoped table the export reads (under the caller's RLS). Order = the order in the envelope. */
@@ -130,6 +131,7 @@ export interface ProjectExportEnvelope {
   files: ExportFileRef[];
   file_count: number;
   storage_files: StorageFile[];
+  extensions?: { drawing_evidence: DrawingEvidenceExtension };
 }
 
 const isStoragePath = (v: unknown): v is string => typeof v === "string" && v.trim() !== "" && !v.startsWith("data:");
@@ -155,7 +157,7 @@ export function fileManifest(tableResults: readonly ProjectExportTableResult[]):
   return out;
 }
 
-export function buildProjectExport(args: { project: Record<string, unknown>; tableResults: ProjectExportTableResult[]; exportedBy: string; exportedAt?: string; storageFiles?: StorageFile[] }): ProjectExportEnvelope {
+export function buildProjectExport(args: { project: Record<string, unknown>; tableResults: ProjectExportTableResult[]; exportedBy: string; exportedAt?: string; storageFiles?: StorageFile[]; drawingEvidence?: DrawingEvidenceExtension }): ProjectExportEnvelope {
   const exportedAt = args.exportedAt ?? new Date().toISOString();
   const tables: Record<string, Record<string, unknown>[]> = {};
   const rowCounts: Record<string, number> = {};
@@ -172,7 +174,11 @@ export function buildProjectExport(args: { project: Record<string, unknown>; tab
     totalRows += rows.length;
   }
   const files = fileManifest(args.tableResults);
-  return { export_version: PROJECT_EXPORT_VERSION, exported_at: exportedAt, exported_by: args.exportedBy, project: args.project ?? {}, tables, row_counts: rowCounts, total_rows: totalRows, files, file_count: files.length, storage_files: args.storageFiles ?? [] };
+  for (const observation of args.drawingEvidence?.observations ?? []) {
+    if (isStoragePath(observation.parent_file_url)) files.push({ table: 'drawing_source_observations', row_id: observation.drawing_id, column: 'parent_file_url', path: observation.parent_file_url });
+  }
+  return { export_version: PROJECT_EXPORT_VERSION, exported_at: exportedAt, exported_by: args.exportedBy, project: args.project ?? {}, tables, row_counts: rowCounts, total_rows: totalRows, files, file_count: files.length, storage_files: args.storageFiles ?? [],
+    ...(args.drawingEvidence ? { extensions: { drawing_evidence: args.drawingEvidence } } : {}) };
 }
 
 export function getExportProjectName(project: Record<string, unknown> | null | undefined): string {

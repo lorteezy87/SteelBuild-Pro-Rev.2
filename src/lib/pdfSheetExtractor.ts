@@ -87,7 +87,7 @@ export type ParsedPdfSheet = PdfSheetRecord & {
 };
 
 export type PdfSheetWithPage = ParsedPdfSheet & { pdfPage: number };
-type AssignedPdfSheet = PdfSheetRecord & { pdfPage: number };
+type AssignedPdfSheet = PdfSheetRecord & { pdfPage: number | null };
 
 export type PdfExtractionWarning = string;
 export type PdfExtractionError = string;
@@ -454,7 +454,7 @@ const REPORT_DRAWING_SET_TOOL = {
             revision:    { type: "string", description: "PER-SHEET revision number as shown in the sheet's own title block (NOT the set-level revision). Use '0' only when no per-sheet revision is visible." },
             scale:       { type: "string", description: "Drawing scale (e.g. '1/4\" = 1\\'-0\"'). Empty string if not shown." },
             date:        { type: "string", description: "Per-sheet date in ISO YYYY-MM-DD format. Empty string if not shown." },
-            pdfPage:     { type: "integer", minimum: 1, description: "1-indexed PDF page number where this sheet's title block lives. The text input is delimited by '===== PAGE N =====' markers — emit the N for the page that physically contains this sheet's drawing. For drawing-index style PDFs where one cover page lists every sheet but each sheet's actual drawing lives on a later page, return the page where the drawing is, NOT the cover page. If unknown, return 1." },
+            pdfPage:     { type: ["integer", "null"], minimum: 1, description: "1-indexed PDF page number where this sheet's title block lives. The text input is delimited by '===== PAGE N =====' markers — emit the N for the page that physically contains this sheet's drawing. For drawing-index style PDFs where one cover page lists every sheet but each sheet's actual drawing lives on a later page, return the page where the drawing is, NOT the cover page. If unknown, return null; never infer a page from sheet order." },
           },
           required: ["sheetNumber", "sheetTitle", "discipline", "sheetType", "revision", "scale", "date", "pdfPage"],
         },
@@ -500,9 +500,9 @@ SEAL / AUTHORIZING ENGINEER:
 - Return only what is printed. A guessed engineer name travels onto a transmittal and gets attributed to a real licence holder.
 
 PDF PAGE NUMBERS:
-- Every sheet MUST have a pdfPage value (1-indexed integer ≥ 1) that points to the PDF page where this sheet's drawing physically lives. Use the "===== PAGE N =====" markers in the input to determine which page contains each sheet.
+- Every sheet MUST include pdfPage: either a 1-indexed integer pointing to its physical drawing page, or null when the page cannot be identified. Use the "===== PAGE N =====" markers, not output row order.
 - For drawing sets where each sheet occupies its own page (the common case), pdfPage equals the page marker N where the sheet's title block was found.
-- For drawing-index style PDFs (one page lists every sheet, each sheet's drawing follows on subsequent pages), pdfPage MUST be the page where the actual drawing is — NOT the index page. If you can't tell, default to 1 but populate the field.
+- For drawing-index style PDFs (one page lists every sheet, each sheet's drawing follows on subsequent pages), pdfPage MUST be the page where the actual drawing is — NOT the index page. If you cannot identify the physical page, return null. Never guess a page from row order or a sheet number.
 - NEVER return pdfPage = 1 for every sheet of a multi-page PDF unless the PDF really does only have one page of drawings. That is the bug we are trying to avoid.
 
 COMPLETENESS:
@@ -595,24 +595,15 @@ export function validatePdfPage(value: unknown): number | null {
 /**
  * Decide each sheet's pdf_page value.
  *
- * Rules:
- *   - When the LLM returned exactly one sheet per PDF page (sheets.length
- *     === pageCount), ignore whatever pdfPage the LLM emitted and assign
- *     deterministically by index. This is the common one-sheet-per-page
- *     upload pattern, where index-N corresponds unambiguously to PDF page
- *     N+1, and the LLM has been observed to emit pdfPage=1 for every sheet.
- *   - Otherwise (drawing-index style, multi-sheet pages, etc.), trust the
- *     LLM's pdfPage when it is a valid positive integer. When invalid or
- *     missing, fall back to 1 and log a warning so the user can hand-fix
- *     via SheetFormModal.
- *
- * Returns a NEW array of sheet objects with `pdfPage` populated; does not
- * mutate the input. Exported for testing.
+ * Preserve validated explicit pages, including legitimate shared pages.
+ * Missing/out-of-range values remain null for human source review. Array order
+ * and a matching sheet/page count never establish page provenance.
+ * Returns new records without mutating the input.
  */
 export function assignPdfPages<T extends PdfSheetRecord>(
   sheets: readonly T[],
   pageCount: unknown,
-): Array<T & { pdfPage: number }>;
+): Array<T & { pdfPage: number | null }>;
 export function assignPdfPages(
   sheets: null | undefined,
   pageCount: unknown,
@@ -626,100 +617,12 @@ export function assignPdfPages(
     ? pageCount
     : 0;
 
-  // One-sheet-per-page deterministic override.
-  if (pc > 0 && list.length === pc) {
-    return list.map((s, i) => ({ ...s, pdfPage: i + 1 }));
-  }
-
-  // Trust the LLM's pdfPage; validate and clamp.
-  let invalidCount = 0;
-  const out = list.map((s) => {
-    const validated = validatePdfPage(s?.pdfPage);
-    if (validated === null) {
-      invalidCount++;
-      return { ...s, pdfPage: 1 };
-    }
-    // Clamp to the page range when we know it.
-    if (pc > 0 && validated > pc) {
-      invalidCount++;
-      return { ...s, pdfPage: 1 };
-    }
-    return { ...s, pdfPage: validated };
+  // Array order and uniqueness are not source evidence. Several drawings may
+  // share a physical page; missing or out-of-range mappings require review.
+  const out = list.map((sheet) => {
+    const page = validatePdfPage(sheet.pdfPage);
+    return { ...sheet, pdfPage: page !== null && (pc === 0 || page <= pc) ? page : null };
   });
-  if (invalidCount > 0) {
-    console.warn(
-      `[pdfSheetExtractor] ${invalidCount} of ${list.length} sheet(s) had invalid or out-of-range pdfPage — defaulted to 1. ` +
-      `Users can hand-fix via the sheet edit form.`,
-    );
-  }
-
-  // ── De-duplicate: when the LLM assigns the same pdfPage to multiple
-  //    sheets, each duplicate gets the next available page. This is the
-  //    root cause of "every thumbnail shows the same page" — the LLM
-  //    reads a drawing index on page 1 and emits pdfPage=1 for every
-  //    entry, or assigns the same page to groups of related sheets.
-  //    Walk the array and reassign duplicates to the nearest unused page.
-  if (out.length > 1) {
-    // First pass: mark pages that are used exactly once.
-    const pageCounts: Record<number, number> = {};
-    for (const s of out) {
-      pageCounts[s.pdfPage] = (pageCounts[s.pdfPage] || 0) + 1;
-    }
-    const hasDupes = Object.values(pageCounts).some((c) => c > 1);
-    if (hasDupes) {
-      // Build the set of all available pages.
-      const maxPage = pc > 0 ? pc : Math.max(...out.map((s) => s.pdfPage), out.length);
-      const allPages = new Set<number>();
-      for (let p = 1; p <= maxPage; p++) allPages.add(p);
-
-      // First-come-first-served: the first sheet claiming a page keeps it,
-      // subsequent duplicates get reassigned to the nearest unclaimed page.
-      const claimed = new Set<number>();
-      let dupeFixCount = 0;
-      for (let i = 0; i < out.length; i++) {
-        if (!claimed.has(out[i].pdfPage)) {
-          claimed.add(out[i].pdfPage);
-          allPages.delete(out[i].pdfPage);
-        } else {
-          // Find the nearest unclaimed page.
-          const orig = out[i].pdfPage;
-          let best: number | null = null;
-          for (const p of allPages) {
-            if (best === null || Math.abs(p - orig) < Math.abs(best - orig)) {
-              best = p;
-            }
-          }
-          if (best !== null) {
-            out[i] = { ...out[i], pdfPage: best };
-            claimed.add(best);
-            allPages.delete(best);
-            dupeFixCount++;
-          } else {
-            // No unclaimed pages left — assign sequentially beyond the max.
-            const fallback = maxPage + dupeFixCount + 1;
-            out[i] = { ...out[i], pdfPage: fallback };
-            dupeFixCount++;
-          }
-        }
-      }
-      if (dupeFixCount > 0) {
-        console.warn(
-          `[pdfSheetExtractor] ${dupeFixCount} of ${out.length} sheets had duplicate pdfPage values — ` +
-          `reassigned to nearest unused pages. Verify in the upload preview.`,
-        );
-      }
-    }
-  }
-
-  // Sanity check: if pageCount > 1 and EVERY sheet ended up on page 1,
-  // that's almost certainly a regression of the original bug — surface it.
-  if (pc > 1 && out.length > 1 && out.every((s) => s.pdfPage === 1)) {
-    console.warn(
-      `[pdfSheetExtractor] All ${out.length} sheets resolved to pdf_page=1 in a ${pc}-page PDF — ` +
-      `this is the multi-sheet pdf_page bug. Verify the LLM is emitting pdfPage and that the ` +
-      `report_drawing_set tool schema includes the pdfPage field.`,
-    );
-  }
 
   return out;
 }
@@ -788,7 +691,7 @@ export async function extractSheetsFromPdf(
     console.error("[pdfSheetExtractor] pdfjs failed:", pdfErr);
     return {
       setMeta: { ...EMPTY_SET_META },
-      sheets: [makeManualEntryRow(file, "PDF text extraction failed — please fill in sheet details manually.")],
+      sheets: makeManualEntryRows(file, "PDF text extraction failed — please fill in sheet details manually."),
       scanned: false,
       extractFailed: true,
       error: errorMessage(pdfErr),
@@ -799,7 +702,7 @@ export async function extractSheetsFromPdf(
   if (extracted.scanned) {
     return {
       setMeta: { ...EMPTY_SET_META, setName: stripExt(file.name) },
-      sheets: [makeManualEntryRow(file, "Scanned PDF — no extractable text. Please fill in sheet details manually.")],
+      sheets: makeManualEntryRows(file, "Scanned PDF — no extractable text. Please fill in sheet details manually.", extracted.pageCount),
       scanned: true,
       extractFailed: false,
       pageCount: extracted.pageCount,
@@ -847,7 +750,7 @@ export async function extractSheetsFromPdf(
       console.error("[pdfSheetExtractor] InvokeLLM threw:", err);
       return {
         setMeta: { ...EMPTY_SET_META },
-        sheets: [makeManualEntryRow(file, `AI extraction failed: ${errorMessage(err)}`)],
+      sheets: makeManualEntryRows(file, `AI extraction failed: ${errorMessage(err)}`, extracted.pageCount),
         scanned: false,
         extractFailed: true,
         error: errorMessage(err),
@@ -879,7 +782,7 @@ export async function extractSheetsFromPdf(
       console.error("[pdfSheetExtractor] llm-proxy error:", llmResult.error);
       return {
         setMeta: { ...EMPTY_SET_META },
-        sheets: [makeManualEntryRow(file, `AI unavailable: ${llmResult.error}`)],
+      sheets: makeManualEntryRows(file, `AI unavailable: ${llmResult.error}`, extracted.pageCount),
         scanned: false,
         extractFailed: true,
         error: llmResult.error,
@@ -912,7 +815,7 @@ export async function extractSheetsFromPdf(
       typeof llmResult?.text === "string" ? llmResult.text.slice(0, 500) : llmResult);
     return {
       setMeta: { ...EMPTY_SET_META },
-      sheets: [makeManualEntryRow(file, msg)],
+      sheets: makeManualEntryRows(file, msg, extracted.pageCount),
       scanned: false,
       extractFailed: true,
       error: msg,
@@ -934,7 +837,7 @@ export async function extractSheetsFromPdf(
       console.error("[pdfSheetExtractor] JSON parse failed:", parseErr, "\nraw:", rawText);
       return {
         setMeta: { ...EMPTY_SET_META },
-        sheets: [makeManualEntryRow(file, "AI response was not valid JSON — manual entry required")],
+      sheets: makeManualEntryRows(file, "AI response was not valid JSON — manual entry required", extracted.pageCount),
         scanned: false,
         extractFailed: true,
         error: "AI response was not valid JSON",
@@ -954,44 +857,23 @@ export async function extractSheetsFromPdf(
   const fixed = rawSheets.map(fixupSheet);
   let sheets = dedupeSheets(fixed);
 
-  // 4b. Titleblock template override (slice 3 of the marker feature).
-  //     When the drawing set has rectangles saved AND the LLM returned
-  //     one sheet per page (the common case for revision uploads), the
-  //     per-page OCR values from the user-marked rectangles are more
-  //     authoritative than anything the LLM inferred — that's the whole
-  //     point of marking them. We override field-by-field, only when the
-  //     OCR captured non-empty text. Fields with empty OCR fall through
-  //     to whatever the LLM produced.
-  //
-  //     Mismatched sheet/page count (e.g. drawing-index style PDFs where
-  //     page 1 lists every sheet) skips the override entirely — sheet
-  //     index N no longer corresponds to page N+1, so we'd misalign the
-  //     OCR output. Logged so PMs can see why the template didn't apply.
-  //     Tracks which sheets had OCR sheet-numbers applied so the filename
-  //     cross-check below doesn't clobber them.
-  const ocrAppliedSheetNumberIdx = new Set();
-  if (extracted.titleblockApplied) {
-    if (sheets.length === extracted.pageCount) {
-      sheets = sheets.map((s, i) => {
-        const ocrTitle  = (extracted.perPageTitle  || [])[i] || "";
-        const ocrNumber = (extracted.perPageNumber || [])[i] || "";
-        const out = { ...s };
-        if (ocrTitle)  out.sheetTitle  = ocrTitle;
-        if (ocrNumber) {
-          // Normalise to match how fixupSheet treats sheet numbers
-          // elsewhere (uppercase, strip whitespace).
-          out.sheetNumber = ocrNumber.toUpperCase().replace(/\s+/g, "");
-          ocrAppliedSheetNumberIdx.add(i);
-        }
-        return out;
+  // Bind marked titleblock text to the explicit physical page, never row order.
+  // Shared-page layouts do not establish one titleblock per sheet.
+  const ocrAppliedSheetNumberIdx = new Set<number>();
+  if (extracted.titleblockApplied && sheets.length === extracted.pageCount) {
+    const pages = sheets.map(sheet => validatePdfPage(sheet.pdfPage));
+    const uniquePages = new Set(pages.filter(page => page !== null));
+    if (uniquePages.size === sheets.length && pages.every(page => page !== null && page <= extracted.pageCount)) {
+      sheets = sheets.map((sheet, index) => {
+        const page = pages[index]!;
+        const title = extracted.perPageTitle?.[page - 1] || "";
+        const number = extracted.perPageNumber?.[page - 1] || "";
+        if (number) ocrAppliedSheetNumberIdx.add(index);
+        return { ...sheet,
+          ...(title ? { sheetTitle: title } : {}),
+          ...(number ? { sheetNumber: number.toUpperCase().replace(/\s+/g, "") } : {}),
+        };
       });
-      console.info(
-        `[pdfSheetExtractor] Titleblock template applied to ${ocrAppliedSheetNumberIdx.size} of ${sheets.length} sheets (titles overridden where rect captured text).`,
-      );
-    } else {
-      console.info(
-        `[pdfSheetExtractor] Titleblock template not applied — sheet count (${sheets.length}) ≠ page count (${extracted.pageCount}). LLM-only extraction used.`,
-      );
     }
   }
 
@@ -1046,11 +928,7 @@ export async function extractSheetsFromPdf(
     }
   }
 
-  // 6. Assign pdfPage deterministically. When the LLM returned one sheet
-  //    per page, the LLM's pdfPage is ignored and we use index+1 — this
-  //    is the most common upload pattern and the original source of the
-  //    "every drawing renders page 1" bug. Otherwise trust the LLM but
-  //    validate (positive integer, within page range) and warn on misses.
+  // 6. Preserve explicit physical pages; unresolved mappings remain null.
   sheets = assignPdfPages(sheets, extracted.pageCount);
 
   // 7. Attach each sheet's own page text and callouts — the producers for
@@ -1169,6 +1047,16 @@ export function parseFilename(name: unknown): FilenameParts {
   }
 
   return result;
+}
+
+function makeManualEntryRows(file: File, note: string, pageCount?: number): ParsedPdfSheet[] {
+  const knownCount = Number.isInteger(pageCount) && Number(pageCount) > 0 ? Number(pageCount) : null;
+  return Array.from({ length: knownCount ?? 1 }, (_, index) => ({
+    ...makeManualEntryRow(file, note),
+    // Page identities are known from pdfjs, sheet identities are not.
+    ...(knownCount !== 1 ? { sheetNumber: "", sheetTitle: "" } : {}),
+    pdfPage: knownCount ? index + 1 : null,
+  }));
 }
 
 function makeManualEntryRow(file: File, note: string): ParsedPdfSheet {

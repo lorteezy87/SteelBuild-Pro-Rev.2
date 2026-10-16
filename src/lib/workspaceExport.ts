@@ -25,6 +25,7 @@ export interface WorkspaceExport {
   workspace: string;
   project_count: number;
   total_rows: number;
+  /** Preserve each v2 project's extensions verbatim; bundle version is independent. */
   projects: ProjectExportEnvelope[];
   /** Projects skipped due to an error — surfaced so a backup is never silently partial. */
   failures: WorkspaceExportFailure[];

@@ -22,6 +22,7 @@ vi.mock("@/api/supabaseClient", () => ({
     GcDrawing: { bulkCreate: mocked.createSheets },
   },
 }));
+vi.mock('@/api/client/uploads', () => ({ UploadDrawingFile: mocked.upload }));
 vi.mock("@/services/cacheRegistry", () => ({ invalidateEntities: mocked.invalidate }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 
@@ -54,7 +55,7 @@ describe("reviewed GC PDF persistence", () => {
         file,
       });
     });
-    expect(mocked.upload).toHaveBeenCalledWith({ file, workflow: "drawings" });
+    expect(mocked.upload).toHaveBeenCalledWith({ file, projectId: 'project-1', pathId: expect.stringMatching(/^[a-f0-9-]{36}$/) });
     expect(mocked.createSet).toHaveBeenCalledWith(expect.objectContaining({ file_url: "org/uploads/gc.pdf", project_id: "project-1" }));
     expect(mocked.createSheets).toHaveBeenCalledWith([expect.objectContaining({
       gc_drawing_set_id: "gc-set-1", file_url: "org/uploads/gc.pdf", pdf_page: 2, project_id: "project-1",

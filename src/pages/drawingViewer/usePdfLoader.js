@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { resolveFileUrl } from "@/api/supabaseClient";
 import { extractStoragePathFromSignedUrl } from "@/components/drawings/viewer/storageUrl";
@@ -8,7 +8,8 @@ import { extractStoragePathFromSignedUrl } from "@/components/drawings/viewer/st
 // the network-y side of the viewer so the page component can focus on
 // rendering / coordination.
 //
-// Behaviour matches the previous inline effects byte-for-byte:
+// Resolved URLs and documents are bound to the raw source, including the first
+// render after a source switch (before cleanup effects have run):
 //   1. When file_url changes, reset everything and re-sign. Stale signed
 //      URLs are unwound back to the storage path before re-signing.
 //   2. When resolvedUrl changes (and we're in canvas mode), open the PDF
@@ -21,18 +22,23 @@ import { extractStoragePathFromSignedUrl } from "@/components/drawings/viewer/st
 //   setPdfError. The page also pokes setPdfError for one external case
 //   (pdfjs render failure inside renderPage), which is why it leaks out.
 export function usePdfLoader({ activeDrawing, renderMode }) {
-  const [resolvedUrl, setResolvedUrl] = useState(null);
-  const [pdfDoc, setPdfDoc] = useState(null);
+  const source = activeDrawing?.file_url || null;
+  const [resolvedSource, setResolvedSource] = useState(null);
+  const [loadedSource, setLoadedSource] = useState(null);
+  const resolvedUrl = resolvedSource?.source === source ? resolvedSource.url : null;
+  const pdfDoc = loadedSource?.source === source ? loadedSource.doc : null;
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pdfError, setPdfError] = useState(null);
+  const [sourceError, setSourceError] = useState(null);
+  const pdfError = sourceError?.source === source ? sourceError.error : null;
+  const setPdfError = useCallback((error) => setSourceError({ source, error }), [source]);
 
   // Resolve file_url (storage path) to a signed URL.
   // If file_url is a stale Supabase signed URL, extract the path and re-sign.
   useEffect(() => {
     let cancelled = false;
-    setResolvedUrl(null);
-    setPdfDoc(null);
+    setResolvedSource(null);
+    setLoadedSource(null);
     setPdfError(null);
     setCurrentPage(1);
     setTotalPages(0);
@@ -45,16 +51,16 @@ export function usePdfLoader({ activeDrawing, renderMode }) {
     const toResolve = storagePath || rawUrl;
 
     resolveFileUrl(toResolve)
-      .then((url) => { if (!cancelled) setResolvedUrl(url); })
+      .then((url) => { if (!cancelled) setResolvedSource({ source, url }); })
       .catch((err) => {
         if (cancelled) return;
         // Fall back to raw URL — iframe may still load it
-        if (isHttp) setResolvedUrl(rawUrl);
+        if (isHttp) setResolvedSource({ source, url: rawUrl });
         else setPdfError(`Failed to resolve file URL: ${err.message}`);
       });
 
     return () => { cancelled = true; };
-  }, [activeDrawing?.file_url]);
+  }, [source, setPdfError]);
 
   // Sheet changes that share a multi-sheet PDF keep the same file_url, so the
   // resolve effect above does not re-run. Still clear a sticky render error and
@@ -62,7 +68,7 @@ export function usePdfLoader({ activeDrawing, renderMode }) {
   useEffect(() => {
     if (!activeDrawing?.id) return;
     setPdfError(null);
-  }, [activeDrawing?.id]);
+  }, [activeDrawing?.id, setPdfError]);
 
   // Load the PDF once we have a signed URL (only when canvas mode is active)
   useEffect(() => {
@@ -75,7 +81,7 @@ export function usePdfLoader({ activeDrawing, renderMode }) {
     loadingTask.promise
       .then((doc) => {
         if (cancelled) { doc.destroy(); return; }
-        setPdfDoc(doc);
+        setLoadedSource({ source, doc });
         setTotalPages(doc.numPages);
         setPdfError(null);
       })
@@ -89,7 +95,7 @@ export function usePdfLoader({ activeDrawing, renderMode }) {
         loadingTask.destroy?.();
       }
     };
-  }, [resolvedUrl, renderMode]);
+  }, [source, resolvedUrl, renderMode, setPdfError]);
 
   // Sync currentPage when activeDrawing changes or PDF loads. Clamp to the
   // real page count — DrawingViewer must not overwrite this with an unclamped
@@ -112,7 +118,7 @@ export function usePdfLoader({ activeDrawing, renderMode }) {
   return {
     resolvedUrl,
     pdfDoc,
-    totalPages,
+    totalPages: pdfDoc ? totalPages : 0,
     pdfError,
     setPdfError,
     currentPage,

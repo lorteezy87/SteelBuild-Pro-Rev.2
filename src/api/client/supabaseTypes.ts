@@ -97,6 +97,10 @@ export type AuthMeResult = {
 
 export type UploadFileArgs = EntityRequestOptions & {
   file: File;
+  /** Required for drawing sources; checked against the authenticated project workspace. */
+  projectId?: string;
+  /** Stable UUID generated once for the selected drawing PDF. */
+  pathId?: string;
   /** Cancels queued replay before each storage attempt, including retries. */
   assertActive?: () => void;
   /**
@@ -106,6 +110,10 @@ export type UploadFileArgs = EntityRequestOptions & {
    * executable/script extensions and caps size) so no upload path is unguarded.
    */
   workflow?: UploadWorkflow;
+};
+export type DrawingUploadFileArgs = Omit<UploadFileArgs, 'workflow' | 'projectId' | 'pathId'> & {
+  projectId: string;
+  pathId: string;
 };
 export type UploadFileResult = { file_url: string; file_name: string; path: string };
 

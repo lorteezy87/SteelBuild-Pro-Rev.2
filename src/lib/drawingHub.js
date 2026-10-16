@@ -11,8 +11,7 @@
  * drawing_revisions / drawing_zones / drawing_links.
  *
  * MVP scope (Slice 0):
- *   - Ensure a default "current" revision per drawing so MVP users
- *     who haven't onboarded revisions can still create zones.
+ *   - Read an authorized current revision; untracked PDFs stay read-only.
  *   - CRUD for zones (rectangle geometry, status, label).
  *   - CRUD + soft-delete for links (polymorphic: rfi / work_package /
  *     delivery / photo / inspection / document / change_order).
@@ -43,9 +42,6 @@ export { bboxFromPolygonPoints } from "./drawingHub/zoneGeometry";
 // here so existing imports continue to work.
 export {
   ensureCurrentRevision,
-  carryZonesForward,
-  createNewRevisionAndCarryZones,
-  recordSheetSlipSheet,
 } from "./drawingHub/revisions";
 
 // Zone CRUD — extracted to drawingHub/zones.js. Re-exported so existing

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Owns the imperative pdfjs canvas render. The page hands in the loaded
 // pdfjs document, the current page index, the zoom factor, and the rotation
@@ -24,6 +24,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // scale 1 AND at the user's zoom, link rects are projected via
 // viewport.convertToViewportPoint() so rotation is implicitly applied.
 export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderError }) {
+  const identity = useMemo(() => ({ pdfDoc, currentPage, zoom, rotation }), [pdfDoc, currentPage, zoom, rotation]);
+  const activeIdentity = useRef(identity);
+  activeIdentity.current = identity;
+  const [completedIdentity, setCompletedIdentity] = useState(null);
+  const renderReady = !!pdfDoc && completedIdentity === identity;
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
   const renderRunRef = useRef(0);
@@ -41,6 +46,7 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
     // blank. Serialize cancellation and use a run id so only the newest render
     // may publish state.
     const runId = ++renderRunRef.current;
+    const isCurrent = () => renderRunRef.current === runId && activeIdentity.current === identity;
     const previousTask = renderTaskRef.current;
     if (previousTask) {
       previousTask.cancel();
@@ -50,7 +56,7 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
         // RenderingCancelledException is the expected cancellation result.
         // Any real failure is surfaced by the render invocation that owns it.
       }
-      if (renderRunRef.current !== runId) return;
+      if (!isCurrent()) return;
     }
 
     // A file change clears pdfDoc while the replacement loads. That transition
@@ -62,6 +68,8 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
     }
 
     setRendering(true);
+    setCompletedIdentity(null);
+    setLinkHotspots([]);
     let renderTask = null;
     try {
       // Defense in depth: never ask PDF.js for a page outside [1, numPages].
@@ -74,7 +82,7 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
           ? Math.min(pageCount, requested)
           : requested;
       const page = await pdfDoc.getPage(safePage);
-      if (renderRunRef.current !== runId || !canvasRef.current) return;
+      if (!isCurrent() || !canvasRef.current) return;
 
       const baseViewport = page.getViewport({ scale: 1, rotation });
       setPageSize({ width: baseViewport.width, height: baseViewport.height });
@@ -87,17 +95,19 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
       renderTask = page.render({ canvasContext: ctx, viewport });
       renderTaskRef.current = renderTask;
       await renderTask.promise;
-      if (renderRunRef.current !== runId) return;
+      if (!isCurrent()) return;
 
       // Publish viewport + size so AnnotationLayer can project markup.
       // We do this AFTER the render so the overlay never displays against
       // a mismatched canvas (prevents a 1-frame "jump" on zoom).
       setCurrentViewport(viewport);
       setCanvasSize({ width: viewport.width, height: viewport.height });
+      if (safePage === currentPage) setCompletedIdentity(identity);
 
       // ── Extract link annotations for clickable overlays ──────────────
       try {
         const annots = await page.getAnnotations({ intent: "display" });
+        if (!isCurrent()) return;
         const linkAnnots = annots
           .filter((a) => a.subtype === "Link" && a.rect)
           .map((a) => {
@@ -120,11 +130,12 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
           });
         setLinkHotspots(linkAnnots);
       } catch {
+        if (!isCurrent()) return;
         setLinkHotspots([]);
       }
-      onRenderError?.(null);
+      if (isCurrent()) onRenderError?.(null);
     } catch (err) {
-      if (err?.name !== "RenderingCancelledException" && renderRunRef.current === runId) {
+      if (err?.name !== "RenderingCancelledException" && isCurrent()) {
         console.error("Render error:", err);
         onRenderError?.(`PDF render failed: ${err?.message || "Unknown rendering error"}`);
       }
@@ -132,7 +143,7 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
       if (renderTaskRef.current === renderTask) renderTaskRef.current = null;
       if (renderRunRef.current === runId) setRendering(false);
     }
-  }, [pdfDoc, currentPage, zoom, rotation, onRenderError]);
+  }, [identity, pdfDoc, currentPage, zoom, rotation, onRenderError]);
 
   useEffect(() => { renderPage(); }, [renderPage]);
 
@@ -145,9 +156,10 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
   return {
     canvasRef,
     rendering,
-    currentViewport,
-    canvasSize,
-    pageSize,
-    linkHotspots,
+    renderReady,
+    currentViewport: renderReady ? currentViewport : null,
+    canvasSize: renderReady ? canvasSize : { width: 0, height: 0 },
+    pageSize: renderReady ? pageSize : { width: 0, height: 0 },
+    linkHotspots: renderReady ? linkHotspots : [],
   };
 }

@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ensureCurrentRevision,
   listZones,
@@ -12,7 +12,6 @@ import {
   listZoneProposals,
   listZoneDependencies,
 } from "@/lib/drawingHub";
-import { invalidateEntity } from "@/services/cacheRegistry";
 
 const EMPTY_ZONE_DATA = { summaries: new Map(), computed: new Map(), densities: new Map() };
 
@@ -95,30 +94,15 @@ export function buildDependencyEdges({ showDeps, sheetDependencies, activeDrawin
 //   - zoneStatusCounts                     — counts grouped by status.
 //   - filteredZones                        — zonesWithComputed * zoneFilter.
 export function useZoneData({ projectId, activeId, activeDrawing, zoneMode, showDeps, zoneFilter }) {
-  // Resolve (or create) the drawing_revisions row that zones attach to.
-  // MVP: every drawing gets a v1 revision the first time the user opens
-  // zones on it. No explicit revision onboarding required.
-  const { data: currentRevision } = useQuery({
-    queryKey: ["drawing-revision-current", activeId],
-    queryFn: async () => {
-      if (!activeDrawing?.id) return null;
-      return ensureCurrentRevision({ drawing: activeDrawing });
-    },
-    enabled: !!activeDrawing?.id && zoneMode !== "off",
-    staleTime: 5 * 60 * 1000,
+  // Lookup is read-only. Missing tracking must not hide the accessible PDF.
+  const { data: currentRevision, error: trackingError } = useQuery({
+    queryKey: ["drawing-revision-current", activeId, activeDrawing?.file_url, activeDrawing?.pdf_page, activeDrawing?.revision_number],
+    queryFn: () => ensureCurrentRevision({ drawing: activeDrawing }),
+    enabled: !!activeDrawing?.id,
+    staleTime: 30_000,
+    retry: false,
+    throwOnError: false,
   });
-
-  // If the current revision was just PROVISIONED on demand (first zone-open on
-  // an untracked drawing), the Doc Control register + hub "Rev" rollup are
-  // stale — refresh them. Gated on __provisioned so the common found-existing
-  // path does no needless invalidation (and never the ["drawing-revision-current"]
-  // key this hook owns, so there's no refetch loop).
-  const qc = useQueryClient();
-  useEffect(() => {
-    if (currentRevision?.__provisioned && projectId) {
-      invalidateEntity(qc, "drawing_revision", projectId);
-    }
-  }, [currentRevision?.__provisioned, currentRevision?.id, projectId, qc]);
 
   const { data: zones = [], refetch: refetchZones } = useQuery({
     queryKey: ["drawing-zones", currentRevision?.id],
@@ -259,6 +243,7 @@ export function useZoneData({ projectId, activeId, activeDrawing, zoneMode, show
 
   return {
     currentRevision,
+    trackingError,
     zones,
     refetchZones,
     pendingProposalCount,

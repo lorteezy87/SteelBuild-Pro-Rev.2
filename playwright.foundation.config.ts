@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // data. The development-only entry mounts the shipped shell primitives.
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['foundation.spec.ts', 'executive.spec.ts', 'command-brief.spec.ts', 'acceptance-contract.spec.ts', 'staging-network.contract.spec.ts', 'telemetry-network.contract.spec.ts'],
+  testMatch: ['foundation.spec.ts', 'executive.spec.ts', 'command-brief.spec.ts', 'acceptance-contract.spec.ts', 'staging-network.contract.spec.ts', 'telemetry-network.contract.spec.ts', 'detailing-dialog-viewport.spec.ts'],
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -27,6 +27,7 @@ export default defineConfig({
     url: 'http://127.0.0.1:4186/dev/foundation.html',
     reuseExistingServer: false,
     env: {
+      STEELBUILD_FOUNDATION_VITE_CACHE_DIR: 'node_modules/.vite-foundation-app',
       VITE_SUPABASE_URL: 'http://127.0.0.1:54321',
       VITE_SUPABASE_ANON_KEY: 'foundation-no-network-placeholder',
     },
@@ -34,6 +35,9 @@ export default defineConfig({
     command: 'npm run dev -- --host 127.0.0.1 --port 4187 --strictPort',
     url: 'http://127.0.0.1:4187',
     reuseExistingServer: false,
-    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' },
+    env: {
+      STEELBUILD_FOUNDATION_VITE_CACHE_DIR: 'node_modules/.vite-foundation-missing-env',
+      VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '',
+    },
   }],
 });

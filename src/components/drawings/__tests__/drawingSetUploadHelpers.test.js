@@ -110,6 +110,16 @@ describe("buildDrawingRecord", () => {
       pdf_page: 3,
     });
   });
+
+  it("preserves unknown extraction instead of claiming an inspected blank page", () => {
+    validatePdfPage.mockReturnValue(3);
+    const rec = buildDrawingRecord({ sheet, ...ctx });
+    expect(rec.callouts).toBeNull();
+    expect(rec.extracted_text).toBeNull();
+    const inspected = buildDrawingRecord({ sheet: { ...sheet, extractedText: "", callouts: [] }, ...ctx });
+    expect(inspected.extracted_text).toBe("");
+    expect(inspected.callouts).toEqual([]);
+  });
 });
 
 describe("buildInitialRevisionRecords", () => {

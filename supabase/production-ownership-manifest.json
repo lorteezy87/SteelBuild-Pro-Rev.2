@@ -25,6 +25,26 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261016061756",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Rev.2-authored drawing command package component 1: supabase/migrations/20261016061756_drawing_reviewed_atomic_commands.sql, exact promotion of supabase/candidates/drawing-set-revision-transaction.sql under supabase/drawing-cutover-package.json. Installs atomic create/revise commands with API-role execution disabled. Independent source review, exact-SHA PostgreSQL acceptance, fresh full hosted ownership/dependency classification and staging acceptance remain required. Only separately authorized manual whole-package application and exact ledger stamping may install it; no production application or activation approval is claimed. See docs/audits/DRAWING_BACKEND_CUTOVER_2026-10-15.md. Keep missingMigrations blocking until its stamp exists."
+      },
+      {
+        "version": "20261016061808",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Rev.2-authored drawing command package component 2: supabase/migrations/20261016061808_drawing_adopted_source_protection.sql, exact promotion of supabase/candidates/drawing-adopted-source-protection.sql under supabase/drawing-cutover-package.json, after 20261016061756. Protects adopted drawing source evidence. Independent source review, exact-SHA PostgreSQL acceptance, fresh full hosted ownership/dependency classification and staging acceptance remain required. Only separately authorized manual whole-package application and exact ledger stamping may install it; no production application or activation approval is claimed. See docs/audits/DRAWING_BACKEND_CUTOVER_2026-10-15.md. Keep missingMigrations blocking until its stamp exists."
+      },
+      {
+        "version": "20261016061825",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Rev.2-authored drawing command package component 3: supabase/migrations/20261016061825_drawing_command_write_boundary.sql, exact promotion of supabase/candidates/drawing-command-write-boundary.sql under supabase/drawing-cutover-package.json, after 20261016061808. Installs write-boundary controls and an unapproved catalog review gate. Independent source review, exact-SHA PostgreSQL acceptance, fresh full hosted ownership/dependency classification and staging acceptance remain required. Only separately authorized manual whole-package application and exact ledger stamping may install it; activation additionally requires same-instance disabled/enabled catalog review. No production application or activation approval is claimed. See docs/audits/DRAWING_BACKEND_CUTOVER_2026-10-15.md. Keep missingMigrations blocking until its stamp exists."
+      },
+      {
+        "version": "20261016061838",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - Rev.2-authored drawing command package component 4: supabase/migrations/20261016061838_drawing_source_observation_export.sql, exact promotion of supabase/candidates/drawing-source-observation-export.sql under supabase/drawing-cutover-package.json, after 20261016061825. Adds caller-authorized bounded source-observation export without replacing full roster validation. Independent source review, exact-SHA PostgreSQL acceptance, fresh full hosted ownership/dependency classification and staging acceptance remain required. Only separately authorized manual whole-package application and exact ledger stamping may install it; no production application or activation approval is claimed. See docs/audits/DRAWING_BACKEND_CUTOVER_2026-10-15.md. Keep missingMigrations blocking until its stamp exists."
+      },
+      {
         "version": "20261013093000",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - caller-scoped feature-flag read candidate. Replaces the cross-tenant authenticated raw-table read with system-admin-only selection and an authenticated SECURITY DEFINER RPC that returns only each caller's effective key and boolean. Requires exact SQL review, hosted staging checks for admin management and ordinary-user reads, manual application, and a matching ledger stamp before production release."

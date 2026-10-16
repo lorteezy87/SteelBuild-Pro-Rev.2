@@ -174,15 +174,15 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
-        <DialogHeader>
+      <DialogContent className="z-[1200] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] sm:max-w-[560px]" overlayClassName="z-[1199]" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }} aria-describedby={undefined}>
+        <DialogHeader style={{ flexShrink: 0, paddingRight: 24 }}>
           <DialogTitle>
             {isSplit
               ? `Spin off from "${parentSubmittal?.submittal_number || parentSubmittal?.title || "parent"}"`
               : isEdit ? "Edit Submittal" : "New Submittal"}
           </DialogTitle>
         </DialogHeader>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 8 }}>
+        <div role="region" aria-label="Submittal details" tabIndex={0} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 10, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", paddingRight: 4, marginBottom: 8 }}>
           <div style={{ gridColumn: "1 / span 1" }}>
             <Label>Submittal # *</Label>
             <Input value={form.submittal_number} onChange={(e) => setField("submittal_number", e.target.value)} placeholder="Auto-assigned if blank" />
@@ -338,7 +338,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
             />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter style={{ flexShrink: 0, gap: 8 }}>
           <button
             onClick={onClose}
             disabled={saving}

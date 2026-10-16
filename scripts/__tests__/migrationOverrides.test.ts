@@ -170,6 +170,27 @@ describe('the real manifest', () => {
     expect(report.missingMigrations).toContain(version);
   });
 
+  it('keeps all four exact drawing cutover migrations required and missing until stamped', () => {
+    const versions = ['20261016061756', '20261016061808', '20261016061825', '20261016061838'];
+    for (const version of versions) {
+      const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
+      expect(entry?.lifecycle, version).toBe('required');
+      expect(entry?.evidence).toMatch(/PENDING PRODUCTION APPLY/);
+      expect(entry?.evidence).toContain(`supabase/migrations/${version}_`);
+      expect(entry?.evidence).toContain('supabase/drawing-cutover-package.json');
+      expect(LEDGER.has(version)).toBe(false);
+    }
+    const unstamped = compareDrift(manifest, local, [...LEDGER].map(version => ({ version })), []);
+    expect(unstamped.missingMigrations).toEqual(expect.arrayContaining(versions));
+    expect(unstamped.hasDrift).toBe(true);
+    for (const missing of versions) {
+      const partiallyStamped = [...LEDGER, ...versions.filter(version => version !== missing)].map(version => ({ version }));
+      const report = compareDrift(manifest, local, partiallyStamped, []);
+      expect(report.missingMigrations).toContain(missing);
+      expect(report.hasDrift).toBe(true);
+    }
+  });
+
   it.each(['20261008071019', '20261008032524', '20261009125901'])('requires billing/membership migration %s when its stamp is absent', (version) => {
     const entry = manifest.local.migrationOverrides.find((override: { version: string }) => override.version === version);
     expect(entry?.lifecycle).toBe('required');

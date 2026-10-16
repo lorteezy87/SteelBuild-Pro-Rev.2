@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { entities, resolveFileUrl } from "@/api/supabaseClient";
+import { resolveFileUrl } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
+import { usePermissions } from "@/services/permissions";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { supabase } from "@/lib/supabase";
 import { presentRemoteFile } from "@/lib/native/fileExport";
@@ -55,11 +57,9 @@ import {
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
   deleteZone as deleteZoneSvc,
-  createNewRevisionAndCarryZones,
   unlockSet as unlockSetSvc,
 } from "@/lib/drawingHub";
 import { logActivity } from "@/services/auditLogger";
-import { invalidateEntity } from "@/services/cacheRegistry";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -70,10 +70,9 @@ export default function DrawingViewer() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
 
-  const [userId, setUserId] = useState(null);
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null)).catch(() => {});
-  }, []);
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const { can } = usePermissions();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -159,6 +158,7 @@ export default function DrawingViewer() {
   const {
     canvasRef,
     rendering,
+    renderReady,
     currentViewport,
     canvasSize,
     pageSize,
@@ -178,7 +178,7 @@ export default function DrawingViewer() {
       if (!setIdForActive) return null;
       const { data, error } = await supabase
         .from("drawing_sets")
-        .select("id, set_name, metadata, is_locked, locked_at, locked_by, locked_reason")
+        .select("id, set_name, metadata, is_locked, locked_at, locked_by, locked_reason, updated_at")
         .eq("id", setIdForActive)
         .maybeSingle();
       if (error) throw error;
@@ -192,9 +192,13 @@ export default function DrawingViewer() {
   // a calibrate gesture. Prompts for the real-world distance (accepts
   // feet-inches like 10'-0, 10-0, 10'0", 10ft, or plain inches like 120
   // or 120"), parses it, computes scale factor, persists to the drawing.
+  const { handleAutoDetectScale, saveCalibration, assertCalibrationReady } = useAutoScaleOnLoad({
+    activeDrawing, pdfDoc, projectId, qc, actorId: userId, currentPage, renderReady, canCalibrate: can("edit"),
+  });
   const handleCalibrate = useCallback(async (pdfInches) => {
     if (!activeDrawing?.id) return;
     if (pdfInches <= 0) return;
+    try { assertCalibrationReady(); } catch (err) { toast.error(err.message); return; }
 
     const raw = window.prompt(
       `This page measures ${pdfInches.toFixed(2)}" on the PDF.\n\n` +
@@ -210,8 +214,7 @@ export default function DrawingViewer() {
     }
     const scale = realInches / pdfInches;
     try {
-      await entities.Drawing.update(activeDrawing.id, { markup_scale: scale });
-      qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+      await saveCalibration(scale);
       toast.success(
         `Calibrated · 1 page inch = ${scale.toFixed(1)} real inches ` +
         `(${formatScaleFraction(scale)})`,
@@ -219,14 +222,13 @@ export default function DrawingViewer() {
     } catch (err) {
       toast.error(`Save failed: ${err.message}`);
     }
-  }, [activeDrawing, projectId, qc]);
+  }, [activeDrawing, assertCalibrationReady, saveCalibration]);
 
   // Auto-detect scale from the PDF's title block text layer. Both paths
   // (the explicit toolbar AUTO button + the automatic once-per-uncalibrated
   // -drawing on-load effect with its UNDO toast) live in useAutoScaleOnLoad.
   // The hook owns the per-session dedup ref internally and returns the
-  // handler the toolbar wires to. Behaviour is unchanged.
-  const { handleAutoDetectScale } = useAutoScaleOnLoad({ activeDrawing, pdfDoc, projectId, qc });
+  // handlers above bind each write to the reviewed source and physical page.
 
   // ── Drawing-hub zones (MVP Slice 0) ────────────────────────────────
   // Three modes for the overlay:
@@ -264,6 +266,7 @@ export default function DrawingViewer() {
   // useZoneData only owns the data side.
   const {
     currentRevision,
+    trackingError,
     zones,
     refetchZones,
     pendingProposalCount,
@@ -282,6 +285,8 @@ export default function DrawingViewer() {
     drawingId: activeId,
     projectId,
     drawingRevisionId: currentRevision?.id || null,
+    actorId: userId,
+    sourceKey: JSON.stringify([activeDrawing?.file_url, activeDrawing?.pdf_page, activeDrawing?.revision_number]),
   });
   const overlayView = deriveOverlayViewModel({
     activeDrawing,
@@ -296,44 +301,9 @@ export default function DrawingViewer() {
   });
   const zonePanelSheet = deriveZonePanelSheet(currentRevision, activeDrawing);
 
-  // Handler: user clicked "+ Rev" — mint a new revision, carry
-  // zones + links over, flip is_current, and force a refetch so
-  // the viewer lands on the fresh revision immediately.
-  const handleNewRevision = useCallback(async () => {
-    if (!activeDrawing) return;
-    const newCode = window.prompt(
-      `New revision code for sheet ${activeDrawing.sheet_number || activeDrawing.drawing_number || "—"}\n(e.g. "B", "1", "IFC-2"):`,
-      "",
-    );
-    if (!newCode || !newCode.trim()) return;
-    const carryLinks = window.confirm(
-      "Carry the current zone links (RFIs, work packages, etc.) forward too?\n\nOK = yes, copy every active link.\nCancel = no, start fresh on the new revision.",
-    );
-    try {
-      const res = await createNewRevisionAndCarryZones({
-        drawing: activeDrawing,
-        newCode: newCode.trim(),
-        newName: null,
-        includeLinks: carryLinks,
-      });
-      toast.success(
-        `Revision ${res.revision.revision_code} created — ${res.zonesCloned} zones${
-          res.linksCloned ? ` + ${res.linksCloned} links` : ""
-        } carried forward`,
-      );
-      // Invalidate every drawing-hub query so the viewer repaints
-      // against the new current revision immediately.
-      qc.invalidateQueries({ queryKey: ["drawing-revision-current"] });
-      qc.invalidateQueries({ queryKey: ["drawing-zones"] });
-      qc.invalidateQueries({ queryKey: ["drawing-zones-summaries"] });
-      // createNewRevisionAndCarryZones flipped is_current, so the register +
-      // hub "Rev" column must refresh too (drawing_revision fans out to
-      // ["drawing-revisions"] + ["drawing-register"]).
-      invalidateEntity(qc, "drawing_revision", activeDrawing.project_id);
-    } catch (err) {
-      toast.error(`Couldn't create revision: ${err?.message || "unknown error"}`);
-    }
-  }, [activeDrawing, qc]);
+  const handleNewRevision = useCallback(() => {
+    toast.info("Manual revision bumps are held. Use the reviewed Revision Upload workflow from the drawing set.");
+  }, []);
 
   // Handler: user finished drawing a new zone. Payload carries the
   // shape discriminator — "rect" with a bbox (MVP) or "polygon" with
@@ -518,7 +488,7 @@ export default function DrawingViewer() {
           onCompareRevisions={() => setCompareOpen(true)}
           onUnlock={async (reason) => {
             try {
-              await unlockSetSvc({ setId: activeDrawingSet.id, reason });
+              await unlockSetSvc({ setId: activeDrawingSet.id, reason, expectedUpdatedAt: activeDrawingSet.updated_at });
               // The lock columns are nulled on unlock, so the reason only
               // survives in the audit trail — record the override here.
               logActivity(
@@ -540,6 +510,7 @@ export default function DrawingViewer() {
         />
 
         {/* Viewer toolbar */}
+        {trackingError && <div role="status" className="px-4 py-2 text-sm">{trackingError.message}</div>}
         <ViewerToolbar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
@@ -796,6 +767,7 @@ export default function DrawingViewer() {
                   }}
                 />
 
+                {renderReady && <>
                 {/* ── PDF link-hotspot layer (clickable internal/external links) ── */}
                 <PdfLinkHotspotLayer
                   linkHotspots={linkHotspots}
@@ -808,6 +780,7 @@ export default function DrawingViewer() {
                      Rendered ABOVE link hotspots + callouts so the user can
                      draw freely and selected items stay on top. */}
                 <AnnotationLayer
+                  key={JSON.stringify([projectId, activeDrawing?.id, activeDrawing?.file_url, activeDrawing?.pdf_page, activeDrawing?.revision_number, currentPage, currentRevision?.id, userId])}
                   viewport={currentViewport}
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}
@@ -864,6 +837,7 @@ export default function DrawingViewer() {
                   zoom={zoom}
                   onCalloutClick={onCalloutClick}
                 />
+                </>}
               </div>
             </div>
           )}

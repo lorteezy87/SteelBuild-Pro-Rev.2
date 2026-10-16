@@ -19,6 +19,7 @@ vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
+    filterAll: vi.fn().mockResolvedValue([]),
     get: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockResolvedValue(null),
@@ -26,7 +27,7 @@ vi.mock("@/api/supabaseClient", () => {
   return {
     entities: new Proxy({}, {
       get: (_target, entity) => {
-        if (entity === "Submittal") return { ...noop, filter: mocks.submittalFilter };
+        if (entity === "Submittal") return { ...noop, filter: mocks.submittalFilter, filterAll: mocks.submittalFilter };
         if (entity === "SubmittalComponent") return { ...noop, filter: mocks.componentFilter };
         if (entity === "FeatureFlag") return { ...noop, list: mocks.featureFlags };
         return noop;

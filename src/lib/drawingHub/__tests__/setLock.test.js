@@ -16,6 +16,7 @@ const tables = {
   drawing_sets: [],
 };
 
+const rpc = vi.hoisted(() => vi.fn());
 let pendingPayload = null; // captures update() body for assertion in tests
 
 function builder(tableName) {
@@ -65,6 +66,7 @@ function runQuery(state) {
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: (t) => builder(t),
+    rpc,
     auth: {
       getUser: async () => ({ data: { user: { id: "u-test", email: "t@example.com" } } }),
     },
@@ -84,6 +86,7 @@ beforeEach(() => {
     { id: "s2", is_locked: true,  set_name: "Set Two", locked_reason: "approved" },
   ];
   pendingPayload = null;
+  rpc.mockReset().mockResolvedValue({ data: { id: "s1" }, error: null });
 });
 
 describe("isSetLocked", () => {
@@ -135,38 +138,27 @@ describe("assertSetUnlocked", () => {
 });
 
 describe("lockSet / unlockSet", () => {
-  it("lockSet writes is_locked=true with timestamp + reason", async () => {
-    await lockSet({ setId: "s1", reason: "Auto-locked on approval", userId: "u-1" });
-    expect(pendingPayload.is_locked).toBe(true);
-    expect(pendingPayload.locked_reason).toBe("Auto-locked on approval");
-    expect(pendingPayload.locked_by).toBe("u-1");
-    expect(pendingPayload.locked_at).toBeTruthy();
+  it("holdAndLockUseRpc: sends only server command arguments and reviewed timestamp", async () => {
+    await lockSet({ setId: "s1", reason: "Reviewed", expectedUpdatedAt: "2026-10-15T00:00:00.123456Z" });
+    expect(rpc).toHaveBeenCalledWith("set_drawing_set_lock", { p_set_id: "s1", p_locked: true, p_reason: "Reviewed", p_expected_updated_at: "2026-10-15T00:00:00.123456Z" });
+    expect(pendingPayload).toBeNull();
   });
-
-  it("lockSet rejects missing setId", async () => {
-    await expect(lockSet({ setId: null })).rejects.toThrow(/setId required/);
+  it("unlock uses the same command with reason and exact version", async () => {
+    await unlockSet({ setId: "s2", reason: "Correction", expectedUpdatedAt: "2026-10-15T00:00:00Z" });
+    expect(rpc).toHaveBeenCalledWith("set_drawing_set_lock", { p_set_id: "s2", p_locked: false, p_reason: "Correction", p_expected_updated_at: "2026-10-15T00:00:00Z" });
+    expect(pendingPayload).toBeNull();
   });
-
-  it("unlockSet clears all the lock columns", async () => {
-    await unlockSet({ setId: "s2", reason: "Scope change approved by PM" });
-    expect(pendingPayload.is_locked).toBe(false);
-    expect(pendingPayload.locked_at).toBeNull();
-    expect(pendingPayload.locked_by).toBeNull();
-    expect(pendingPayload.locked_reason).toBeNull();
+  it("requires set identity, a reviewed version and reason for unlock before RPC", async () => {
+    await expect(lockSet({})).rejects.toThrow(/setId/);
+    await expect(lockSet({ setId: "s1" })).rejects.toThrow(/reload|version/i);
+    await expect(unlockSet({ setId: "s2", expectedUpdatedAt: "date" })).rejects.toThrow(/reason/);
+    expect(rpc).not.toHaveBeenCalled();
   });
-
-  it("unlockSet rejects missing setId", async () => {
-    await expect(unlockSet({ setId: undefined, reason: "x" })).rejects.toThrow(/setId required/);
-  });
-
-  it("unlockSet rejects a missing/blank reason (admin override must be justified)", async () => {
-    await expect(unlockSet({ setId: "s2" })).rejects.toThrow(/reason required/);
-    await expect(unlockSet({ setId: "s2", reason: "   " })).rejects.toThrow(/reason required/);
-  });
-
-  it("lockSet truncates very long reasons", async () => {
-    const longReason = "x".repeat(3000);
-    await lockSet({ setId: "s1", reason: longReason });
-    expect(pendingPayload.locked_reason.length).toBe(2000);
+  it("never truncates a reason or falls back after a command failure", async () => {
+    const reason = "x".repeat(3000);
+    rpc.mockResolvedValue({ data: null, error: new Error("command unavailable") });
+    await expect(lockSet({ setId: "s1", reason, expectedUpdatedAt: "2026-10-15T00:00:00Z" })).rejects.toThrow(/unavailable/);
+    expect(rpc.mock.calls[0][1].p_reason).toHaveLength(3000);
+    expect(pendingPayload).toBeNull();
   });
 });

@@ -1,428 +1,155 @@
-import React from "react";
-import { entities } from "@/api/supabaseClient";
+import { useEffect, useRef, useState } from "react";
 import { invalidateEntities } from "@/services/cacheRegistry";
-import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
-import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
-import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
-import { newUploadBatchId } from "@/lib/drawingUploadUtils";
-import { logActivity } from "@/services/auditLogger";
-import { recordSheetSlipSheet } from "@/lib/drawingHub";
-import { toast } from "sonner";
-import {
-  applyCrossSetSupersede,
-  describeSupersedeActivity,
-  describeSupersedeProblem,
-  describeSupersededSet,
-  groupSupersedeItemsBySet,
-  resolveUploadSetName,
-} from "@/lib/crossSetSupersede";
-import { fetchCrossSetSource } from "@/lib/crossSetSupersedeRepository";
-import {
-  buildDrawingRecord,
-  buildInitialRevisionRecords,
-  detectMultiSheetSamePageRegression,
-  planExistingSetSheetReplace,
-} from "../drawingSetUploadHelpers";
+import { getDrawingCommandCapabilities } from "@/api/client/drawingCommands";
+import { buildCreateSetRequest } from "@/lib/drawingCommands/requestBuilders";
+import { useDrawingCommand } from "@/lib/drawingCommands/useDrawingCommand";
+import { getActiveOrgGeneration, getActiveOrgId } from "@/lib/activeOrg";
+import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 
-// sonner renders toast text with white-space: normal, so "\n" would run the
-// lines together; give each line its own block instead.
-const toastLines = (lines) =>
-  React.createElement("div", null, lines.map((line, i) => React.createElement("div", { key: i }, line)));
+export const CROSS_SET_HELD = "Cross-set supersession is unavailable until its reviewed server command is released. Existing sets remain live.";
+export const SCHEDULE_HELD = "Drawings saved. Automatic schedule linking was not performed. Use Schedule to review and link tasks; do not re-upload these drawings.";
 
-// The wizard was reset while the supersede phase ran — the Success step is gone,
-// so say what happened to the old pages in a toast instead, one line per item.
-function notifySupersedeAfterCancel(result) {
-  const lines = groupSupersedeItemsBySet(result.superseded).map(describeSupersededSet);
-  const problems = [...result.failed, ...result.skipped].map(describeSupersedeProblem);
-  if (problems.length > 0) {
-    toast.warning("Upload finished with problems", { description: toastLines([...lines, ...problems]) });
-  } else if (lines.length > 0) {
-    toast.success(toastLines(lines));
-  }
-}
+export function useDrawingSetCreation({ meta, activeProject, fileResults, onComplete, qc, state,
+  owner = /** @type {import("@/lib/drawingCommands/types").DrawingCommandOwner | null} */ (null),
+  sourceSnapshots = /** @type {Pick<ReturnType<typeof import("./useDrawingSourceSnapshots").useDrawingSourceSnapshots>, "ready" | "snapshots" | "verify"> | null} */ (null) }) {
+  const { cancelledRef, setProcessError, setStep, setProcessingStatus, setCreatedCount } = state;
+  const context = JSON.stringify(owner);
+  const currentContext = useRef(context);
+  const contextVisit = useRef(0);
+  if (currentContext.current !== context) { currentContext.current = context; contextVisit.current++; }
+  const activeAttempt = useRef(() => false);
+  const committedAttempt = useRef(false);
+  const capabilityProjectId = owner?.projectId;
+  const busy = useRef(false);
+  const [capability, setCapability] = useState({ context: "", ready: false });
+  const [capabilityVisit, setCapabilityVisit] = useState(0);
+  const [preparing, setPreparing] = useState(false);
+  useEffect(() => {
+    let current = true;
+    if (!capabilityProjectId) return;
+    const generation = getActiveOrgGeneration();
+    getDrawingCommandCapabilities(capabilityProjectId).then(flags => {
+      if (current && generation === getActiveOrgGeneration()) setCapability({ context, ready: flags.contract_version === 1
+        && flags.new_set && flags.revision && flags.write_boundary && flags.source_protection && flags.receipt_lookup });
+    }).catch(() => { if (current) setCapability({ context, ready: false }); });
+    return () => { current = false; };
+  }, [context, capabilityVisit, capabilityProjectId]);
+  const available = capability.context === context && capability.ready;
 
-export function useDrawingSetCreation({ meta, activeProject, fileResults, uploadBatchId, onComplete, qc, state, canSupersede = false }) {
-  const {
-    cancelledRef, setProcessError, setStep, setProcessingStatus, setCreatedCount, setSupersedeResult,
-  } = state;
+  const command = useDrawingCommand(owner, { onCommitted: async (result, draft, fence) => {
+    const currentAttempt = activeAttempt.current;
+    const assertCurrent = () => {
+      fence.assertCurrent?.();
+      if (!currentAttempt()) throw new Error("Review closed; receipt retained.");
+    };
+    assertCurrent();
+    committedAttempt.current = true;
+    setCreatedCount(result.added);
+    setProcessError(SCHEDULE_HELD);
+    setStep(5);
+    await invalidateEntities(qc, ["drawing", "drawingSet", "submittal", "drawing_revision"], draft.owner.projectId);
+    assertCurrent();
+    await onComplete?.();
+    assertCurrent();
+  } });
 
-  const invalidateAfterSave = async (supersedeResult) => {
-    await invalidateEntities(qc, ["drawing", "drawingSet", "submittal", "drawing_revision"], activeProject?.id);
-    if (supersedeResult?.superseded?.length) {
-      // Piece approval and the canonical release gate both read is_superseded.
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["piece-register", activeProject?.id] }),
-        qc.invalidateQueries({ queryKey: ["canonical-release-gate"] }),
-      ]);
-    }
-  };
-
-  // supersedeIds: old drawings in OTHER sets the user left ticked in Review.
-  // supersedeLabels: their preview sheet numbers / set names, used only to name
-  // them if the commit-time re-read fails.
-  /**
-   * @param {Array<Record<string, unknown>>} selectedSheets
-   * @param {{ supersedeIds?: string[], supersedeLabels?: Record<string, { sheetNumber?: string, setName?: string }> | null }} [options]
-   */
-  const handleCreate = async (selectedSheets, { supersedeIds = [], supersedeLabels = null } = {}) => {
+  const begin = () => {
+    const knownCommit = command.draft && command.outcome?.kind === "committed" ? command.outcome.result : null;
+    committedAttempt.current = !!knownCommit;
     cancelledRef.current = false;
-    setProcessError(null);
-    if (setSupersedeResult) setSupersedeResult(null);
-    setStep(3);
-    setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
-
-    const resolvedSetName = resolveUploadSetName(meta);
-    const batchId = uploadBatchId || newUploadBatchId();
-    const setNumber = (meta.setNumber || "").trim();
-
-    try {
-      setProcessingStatus(prev => ({ ...prev, progress: 5, message: "Creating drawing set…" }));
-
-      let parentSetId = null;
-      let parentSetMetadata = null;
-      const existing = await entities.DrawingSet.filter({
-          project_id: activeProject?.id,
-          set_name:   resolvedSetName,
-      });
-      if (Array.isArray(existing) && existing.length > 0) {
-        parentSetId = existing[0].id;
-        parentSetMetadata = existing[0].metadata;
-      }
-
-      if (!parentSetId) {
-        const deleted = await entities.DrawingSet.filter({
-            project_id: activeProject?.id,
-            set_name:   resolvedSetName,
-            is_deleted:  true,
-        });
-        if (Array.isArray(deleted) && deleted.length > 0) {
-          parentSetId = deleted[0].id;
-          parentSetMetadata = deleted[0].metadata;
-          await entities.DrawingSet.update(parentSetId, {
-            is_deleted: false,
-            deleted_at: null,
-          });
-        }
-      }
-
-      const newFileUrl = selectedSheets.find((s) => s.sourceFileUrl)?.sourceFileUrl || null;
-
-      if (parentSetId) {
-        try {
-          await entities.DrawingSet.update(parentSetId, {
-              upload_batch_id: batchId,
-              revision:        meta.revision || "",
-              issued_date:     meta.issueDate || null,
-              issued_by:       meta.issuedBy  || "",
-              discipline:      meta.discipline || "",
-              notes:           meta.notes || "",
-              ...(newFileUrl ? { file_url: newFileUrl } : {}),
-              ...(setNumber ? { metadata: withDrawingSetNumberMetadata(parentSetMetadata, setNumber) } : {}),
-              updated_at:      new Date().toISOString(),
-            });
-          } catch (updErr) {
-            throw new Error(`Could not update drawing set metadata: ${updErr?.message || "unknown error"}`);
-        }
-      }
-
-      if (!parentSetId) {
-        const { record: sanitizedSet } = sanitizeDrawingSetPayload({
-          project_id:      activeProject?.id,
-          project_name:    activeProject?.name,
-          set_name:        resolvedSetName,
-          revision:        meta.revision || "",
-          discipline:      meta.discipline || "",
-          issued_date:     meta.issueDate || null,
-          issued_by:       meta.issuedBy || "",
-          status:          "Active",
-          notes:           meta.notes || "",
-          metadata:        withDrawingSetNumberMetadata({}, setNumber),
-          upload_batch_id: batchId,
-          ...(newFileUrl ? { file_url: newFileUrl } : {}),
-          sheet_count:        0,
-          processed_count:    0,
-          needs_review_count: 0,
-          failed_count:       0,
-        });
-        try {
-          const created = await entities.DrawingSet.create(sanitizedSet);
-          parentSetId = created?.id;
-        } catch (createErr) {
-          const msg = String(createErr?.message || createErr || "").toLowerCase();
-          const isUniqueViolation =
-            msg.includes("duplicate key") ||
-            msg.includes("unique constraint") ||
-            msg.includes("uq_drawing_sets_project_set_name") ||
-            msg.includes("23505");
-          if (!isUniqueViolation) throw createErr;
-
-          console.warn(
-            `[DrawingSetUploadModal] race on set "${resolvedSetName}" — another session created it first; re-looking up.`,
-          );
-          const winner = await entities.DrawingSet.filter({
-            project_id: activeProject?.id,
-            set_name:   resolvedSetName,
-          });
-          if (Array.isArray(winner) && winner.length > 0) {
-            parentSetId = winner[0].id;
-            parentSetMetadata = winner[0].metadata;
-          } else {
-            throw new Error(
-              `A drawing set named "${resolvedSetName}" already exists on this project but could not be loaded. ` +
-              `Refresh the page and try again, or pick a different set name.`,
-            );
-          }
-        }
-
-        if (!parentSetId) {
-          throw new Error("Drawing set was created but no id returned — cannot attach children.");
-        }
-      }
-
-      const now = new Date().toISOString();
-
-      let createdRows = 0;
-      let failedRows  = 0;
-      const records = selectedSheets.map((sheet) =>
-        buildDrawingRecord({ sheet, fileResults, meta, activeProject, resolvedSetName, parentSetId, batchId, now }),
-      );
-
-      for (const { sourceFile, sheetCount, pageCount } of detectMultiSheetSamePageRegression(selectedSheets, records, fileResults)) {
-        console.warn(
-          `[DrawingSetUploadModal] All ${sheetCount} sheets from "${sourceFile}" (a ${pageCount}-page PDF) have pdf_page=1. ` +
-          `This looks like the multi-sheet pdf_page bug regressing — check that the extractor schema includes pdfPage and that assignPdfPages ran.`,
-        );
-      }
-
-      setProcessingStatus(prev => ({
-        ...prev,
-        progress: 40,
-        message:  `Saving ${records.length} drawing entries…`,
-      }));
-
-      const sanitizedRecords = records.map((r) => sanitizeDrawingPayload(r).record);
-      const insertedRows = [];
-      const newlyCreatedRows = [];
-
-      let existingLive = [];
-      try {
-        const existingSheets = await entities.Drawing.filter({
-          project_id: activeProject?.id,
-          drawing_set_id: parentSetId,
-        });
-        existingLive = (existingSheets || []).filter((d) => !d.is_superseded);
-      } catch (listErr) {
-        console.warn("[drawings] could not list existing set sheets — falling back to insert-only:", listErr);
-      }
-
-      const replacePlan = existingLive.length
-        ? planExistingSetSheetReplace(existingLive, sanitizedRecords)
-        : { toUpdate: [], toCreate: sanitizedRecords, toSupersede: [] };
-
-      for (const { existing: liveSheet, record } of replacePlan.toUpdate) {
-        if (cancelledRef.current) break;
-        try {
-          try {
-            const slip = await recordSheetSlipSheet({
-              drawing: liveSheet,
-              newCode: record.revision_number || meta.revision || liveSheet.revision_number || "REV",
-              newFileUrl: record.file_url,
-              newPdfPage: record.pdf_page,
-              issuedAt: meta.issueDate || null,
-              notes: meta.notes || null,
-              userId: null,
-            });
-            if (slip?.skipped && slip.revisionId) {
-              await entities.DrawingRevision.update(slip.revisionId, {
-                file_url: record.file_url,
-                pdf_page: record.pdf_page,
-              });
-            }
-          } catch (histErr) {
-            console.warn(`[DrawingSetUploadModal] Slip-sheet history failed for "${record.sheet_number}":`, histErr);
-          }
-          const updated = await entities.Drawing.update(liveSheet.id, {
-            title: record.title,
-            revision_number: record.revision_number,
-            file_url: record.file_url,
-            pdf_page: record.pdf_page,
-            discipline: record.discipline,
-            upload_batch_id: batchId,
-            upload_status: record.upload_status,
-            ai_extraction_status: record.ai_extraction_status,
-            last_extracted_at: now,
-            drawing_set_id: parentSetId,
-            drawing_set_name: resolvedSetName,
-            is_superseded: false,
-          });
-          insertedRows.push(updated || { ...liveSheet, ...record });
-          createdRows++;
-        } catch (err) {
-          console.error("Failed to replace sheet:", record.sheet_number, err);
-          failedRows++;
-        }
-      }
-
-      for (const liveSheet of replacePlan.toSupersede) {
-        if (cancelledRef.current) break;
-        try {
-          await entities.Drawing.update(liveSheet.id, { is_superseded: true });
-        } catch (err) {
-          console.warn(`[DrawingSetUploadModal] Could not retire leftover sheet ${liveSheet.sheet_number}:`, err);
-        }
-      }
-
-      if (replacePlan.toCreate.length > 0 && !cancelledRef.current) {
-        try {
-          const inserted = await entities.Drawing.bulkCreate(replacePlan.toCreate);
-          if (Array.isArray(inserted)) {
-            insertedRows.push(...inserted);
-            newlyCreatedRows.push(...inserted);
-          }
-          createdRows += Array.isArray(inserted) ? inserted.length : replacePlan.toCreate.length;
-        } catch (bulkErr) {
-          console.warn("[drawings] bulkCreate failed, falling back to per-row:", bulkErr);
-          for (let i = 0; i < replacePlan.toCreate.length; i++) {
-            if (cancelledRef.current) break;
-            try {
-              const row = await entities.Drawing.create(replacePlan.toCreate[i]);
-              if (row) {
-                insertedRows.push(row);
-                newlyCreatedRows.push(row);
-              }
-              createdRows++;
-            } catch (err) {
-              console.error("Failed to create sheet:", replacePlan.toCreate[i]?.sheet_number, err);
-              failedRows++;
-            }
-          }
-        }
-      }
-
-      // A sheet is not fully imported until its initial, source-bound revision
-      // exists. Previously the wizard stopped after creating `drawings`, so the
-      // PDF and extracted text were in the database while revision-driven UI
-      // made the upload look missing. Keep this as one bulk statement and fail
-      // loudly if the complete ledger was not returned.
-      if (newlyCreatedRows.length > 0) {
-        setProcessingStatus(prev => ({
-          ...prev,
-          progress: 82,
-          message: `Recording ${newlyCreatedRows.length} current revision${newlyCreatedRows.length === 1 ? "" : "s"}…`,
-        }));
-        const revisionRecords = buildInitialRevisionRecords(newlyCreatedRows);
-        const createdRevisions = await entities.DrawingRevision.bulkCreate(revisionRecords);
-        if (!Array.isArray(createdRevisions) || createdRevisions.length !== revisionRecords.length) {
-          throw new Error(
-            `Drawing pages were stored, but revision tracking completed for only ${createdRevisions?.length || 0} of ${revisionRecords.length} sheets. Refresh before retrying.`,
-          );
-        }
-      }
-
-      // ── Cross-set supersede ─────────────────────────────────────────
-      // The pages this upload replaces in OTHER sets of the project. Runs only
-      // after the new rows are written, only for ids the user confirmed, and
-      // only for users who may write drawings. Cancel is checked once, here —
-      // a started phase always finishes, so no page is left half-done.
-      let supersedeResult = null;
-      const confirmedIds = Array.isArray(supersedeIds) ? supersedeIds.filter(Boolean) : [];
-      if (canSupersede && confirmedIds.length > 0 && !cancelledRef.current) {
-        setProcessingStatus(prev => ({
-          ...prev,
-          progress: 88,
-          message: `Marking ${confirmedIds.length} replaced page${confirmedIds.length === 1 ? "" : "s"} superseded…`,
-        }));
-        supersedeResult = await applyCrossSetSupersede({
-          confirmedIds,
-          labels: supersedeLabels,
-          savedRows: insertedRows,
-          parentSetId,
-          resolvedSetName,
-          batchId,
-          now,
-          fetchSource: () => fetchCrossSetSource(activeProject?.id),
-          update: (id, patch) => entities.Drawing.update(id, patch),
-        });
-        for (const summary of groupSupersedeItemsBySet(supersedeResult.superseded)) {
-          void logActivity(
-            "drawing",
-            "updated",
-            { id: summary.setId, project_id: activeProject?.id, name: summary.setName },
-            {
-              projectId: activeProject?.id,
-              projectName: activeProject?.name,
-              description: describeSupersedeActivity(summary, resolvedSetName),
-            },
-          );
-        }
-      }
-
-      if (insertedRows.length > 0 && !cancelledRef.current) {
-        setProcessingStatus(prev => ({
-          ...prev,
-          progress: 92,
-          message:  `Linking ${insertedRows.length} schedule tasks…`,
-        }));
-        try {
-          const { created: taskCount } = await autoCreateDetailingTasks(
-            insertedRows,
-            { projectName: insertedRows[0]?.project_name }
-          );
-          if (taskCount > 0) {
-            qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
-          }
-        } catch (err) {
-          console.warn("[drawings] auto-schedule tasks failed:", err);
-        }
-      }
-
-      setProcessingStatus(prev => ({
-        ...prev,
-        progress: 95,
-        message:  `Saved ${createdRows} of ${selectedSheets.length} entries`,
-      }));
-
-      if (cancelledRef.current) {
-        // Reset while saving. If the supersede phase ran, its writes landed:
-        // refresh the caches and report it in a toast.
-        if (supersedeResult) {
-          await invalidateAfterSave(supersedeResult);
-          notifySupersedeAfterCancel(supersedeResult);
-        }
-        return;
-      }
-      setCreatedCount(createdRows);
-      if (setSupersedeResult) setSupersedeResult(supersedeResult);
-
-      if (createdRows > 0) {
-        const needsReviewCount = sanitizedRecords.filter((r) => r.ai_extraction_status === "NeedsReview").length;
-        void logActivity(
-          "drawing",
-          existingLive.length ? "updated" : "created",
-          { id: parentSetId, project_id: activeProject?.id, name: resolvedSetName },
-          {
-            projectId: activeProject?.id,
-            projectName: activeProject?.name,
-            description:
-              `${existingLive.length ? "Replaced" : "Imported"} ${createdRows} sheet${createdRows === 1 ? "" : "s"} in "${resolvedSetName}"` +
-              `${needsReviewCount ? ` (${needsReviewCount} flagged for review)` : ""}` +
-              `${failedRows ? ` — ${failedRows} failed to save` : ""}`,
-          },
-        );
-      }
-
-      if (failedRows > 0) {
-        setProcessError(`${failedRows} sheet(s) failed to save. ${createdRows} saved successfully.`);
-      }
-
-      await invalidateAfterSave(supersedeResult);
-      setStep(5);
-      if (onComplete) onComplete();
-    } catch (err) {
-      console.error("Create drawings error:", err);
-      setProcessError(`Failed to save drawings: ${err.message}`);
+    setProcessError(knownCommit ? SCHEDULE_HELD : null);
+    setStep(knownCommit ? 5 : 3);
+    setCreatedCount(knownCommit ? knownCommit.added : null);
+    setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "Checking the saved drawing command…" });
+    const generation = getActiveOrgGeneration();
+    const visit = contextVisit.current;
+    const reviewGeneration = state.reviewGenerationRef?.current;
+    const isCurrent = () => !cancelledRef.current && currentContext.current === context && visit === contextVisit.current
+      && reviewGeneration === state.reviewGenerationRef?.current && generation === getActiveOrgGeneration()
+      && (!owner || owner.orgId === getActiveOrgId());
+    activeAttempt.current = isCurrent;
+    return isCurrent;
+  };
+  const showOutcome = (outcome, isCurrent) => {
+    if (!isCurrent()) return;
+    if (outcome.kind === "rejected") {
+      setCreatedCount(0);
+      setProcessError(`Drawing save rejected; zero sheets committed by this attempt. ${outcome.error.message} The saved request is retained for receipt reconciliation.`);
+    } else if (outcome.kind === "uncertain") {
+      setProcessError("The drawing save may have committed. Its saved request remains recoverable. Reconcile the receipt before starting another upload.");
     }
   };
 
-  return { handleCreate };
+  const handleRecover = async () => {
+    if (busy.current || command.draft?.operation !== "create_set") return;
+    busy.current = true;
+    setPreparing(true);
+    const isCurrent = begin();
+    try { showOutcome(await command.reconcile(), isCurrent); }
+    catch { if (isCurrent() && !committedAttempt.current) setProcessError("The saved drawing request remains unresolved. Receipt recovery is unavailable; do not create another copy."); }
+    finally { busy.current = false; setPreparing(false); }
+  };
+
+  const handleCreate = async (selectedSheets, { supersedeIds = /** @type {string[]} */ ([]) } = {}) => {
+    if (busy.current) return;
+    busy.current = true;
+    setPreparing(true);
+    const isCurrent = begin();
+    let saved = false;
+    try {
+      if (supersedeIds.length) throw new Error(CROSS_SET_HELD);
+      if (command.draft) throw new Error("A saved drawing request already exists. Reconcile that original request before preparing another.");
+      if (!owner || activeProject?.id !== owner.projectId || !available || !["reviewing", "committed"].includes(command.state)) throw new Error("Atomic drawing intake is unavailable. Refresh readiness before saving; no legacy writes will run.");
+      if (!sourceSnapshots?.ready) throw new Error("Source identity requires a fresh review.");
+      if (!selectedSheets.length) throw new Error("Select at least one reviewed sheet.");
+      for (const sheet of selectedSheets) {
+        const count = fileResults.find(result => result.fileUrl === sheet.sourceFileUrl)?.pageCount;
+        const page = validatePdfPage(sheet.pdfPage);
+        const original = sourceSnapshots.snapshots.find(snapshot => snapshot.path === sheet.sourceFileUrl);
+        if (page === null || !Number.isInteger(count) || count < 1 || page > count) throw new Error("Confirm an in-range PDF page against the source PDF before saving.");
+        if (!sheet.reviewed || sheet.sourceReviewRequired) throw new Error("Explicitly review each selected sheet and physical PDF page before saving.");
+        if (!original || sheet.sourceSnapshot?.path !== original.path || sheet.sourceSnapshot?.token !== original.token) throw new Error("The reviewed source identity changed. Start a fresh review.");
+      }
+      const paths = new Set(selectedSheets.map(sheet => sheet.sourceFileUrl));
+      const payload = buildCreateSetRequest({
+        project_id: owner.projectId, set_name: meta.setName, set_number: meta.setNumber || null,
+        revision_label: meta.revision, discipline: meta.discipline || null, issued_date: meta.issueDate || null,
+        issued_by: meta.issuedBy || null, notes: meta.notes || null, file_path: selectedSheets[0].sourceFileUrl,
+        source_objects: sourceSnapshots.snapshots.filter(source => paths.has(source.path)),
+        sheets: selectedSheets.map(sheet => ({ action: "added", sheet_number: sheet.sheetNumber,
+          sheet_title: sheet.sheetTitle, revision_code: sheet.revision, discipline: sheet.discipline || null,
+          file_path: sheet.sourceFileUrl, pdf_page: sheet.pdfPage, reviewed: true,
+          extraction: {
+            text: typeof sheet.extractedText === "string" ? { state: "harvested", value: sheet.extractedText } : { state: "unavailable" },
+            callouts: Array.isArray(sheet.callouts) ? { state: "harvested", value: sheet.callouts } : { state: "unavailable" },
+          },
+        })),
+      });
+      if (!await sourceSnapshots.verify(sourceSnapshots.snapshots.map(source => source.path))) throw new Error("Source identity changed or could not be verified. Start a fresh review.");
+      if (!isCurrent()) return;
+      await command.prepare({ version: 1, requestId: crypto.randomUUID(), operation: "create_set", owner, payload });
+      saved = true;
+      if (!isCurrent()) return;
+      showOutcome(await command.apply(), isCurrent);
+    } catch (error) {
+      if (isCurrent()) {
+        if (!saved && !command.draft) setCreatedCount(0);
+        setProcessError(saved ? "The saved drawing request remains unresolved. Reconcile its receipt; do not create another copy." : error.message);
+      }
+    } finally { busy.current = false; setPreparing(false); }
+  };
+  const handleDiscardSaved = async () => {
+    if (busy.current || command.draft?.operation !== "create_set") return;
+    busy.current = true;
+    setPreparing(true);
+    const isCurrent = begin();
+    try {
+      const discarded = await command.dismissSavedReview();
+      if (discarded && isCurrent()) state.reset();
+      else if (isCurrent() && !committedAttempt.current) setProcessError("The request was not discarded. Reconcile its receipt before starting another upload.");
+    }
+    catch { if (isCurrent() && !committedAttempt.current) setProcessError("The saved request could not be discarded. Its receipt remains unresolved."); }
+    finally { busy.current = false; setPreparing(false); }
+  };
+  return { handleCreate, handleRecover, handleDiscardSaved, command, available, preparing, refreshReadiness: () => setCapabilityVisit(value => value + 1) };
 }

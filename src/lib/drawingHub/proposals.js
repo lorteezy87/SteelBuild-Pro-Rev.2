@@ -494,7 +494,6 @@ export async function acceptZoneProposal(proposalId, { overrides = {} } = {}) {
   // Resolve the revision the new zone will live on. Proposal.drawing_revision_id
   // is preferred; if missing, ensure the drawing has a current revision.
   let revisionId = proposal.drawing_revision_id;
-  let provisionedRevision = false;
   if (!revisionId) {
     const { data: drawing, error: dErr } = await supabase
       .from("drawings")
@@ -502,9 +501,8 @@ export async function acceptZoneProposal(proposalId, { overrides = {} } = {}) {
       .eq("id", proposal.drawing_id)
       .single();
     if (dErr) throw dErr;
-    const rev = await ensureCurrentRevision({ drawing, userId });
+    const rev = await ensureCurrentRevision({ drawing });
     revisionId = rev.id;
-    provisionedRevision = Boolean(rev.__provisioned);
   }
 
   // Build the new zone payload from the proposal geometry.
@@ -580,7 +578,7 @@ export async function acceptZoneProposal(proposalId, { overrides = {} } = {}) {
     .single();
   if (uErr) throw uErr;
 
-  return { proposal: updated, zone: newZone, linksCreated, provisionedRevision };
+  return { proposal: updated, zone: newZone, linksCreated, provisionedRevision: false };
 }
 
 /**
