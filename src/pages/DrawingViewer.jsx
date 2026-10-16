@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { entities, resolveFileUrl } from "@/api/supabaseClient";
+import { resolveFileUrl } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
+import { usePermissions } from "@/services/permissions";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { supabase } from "@/lib/supabase";
 import { presentRemoteFile } from "@/lib/native/fileExport";
@@ -68,10 +70,9 @@ export default function DrawingViewer() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
 
-  const [userId, setUserId] = useState(null);
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null)).catch(() => {});
-  }, []);
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const { can } = usePermissions();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -190,9 +191,13 @@ export default function DrawingViewer() {
   // a calibrate gesture. Prompts for the real-world distance (accepts
   // feet-inches like 10'-0, 10-0, 10'0", 10ft, or plain inches like 120
   // or 120"), parses it, computes scale factor, persists to the drawing.
+  const { handleAutoDetectScale, saveCalibration, assertCalibrationReady } = useAutoScaleOnLoad({
+    activeDrawing, pdfDoc, projectId, qc, actorId: userId, currentPage, canCalibrate: can("edit"),
+  });
   const handleCalibrate = useCallback(async (pdfInches) => {
     if (!activeDrawing?.id) return;
     if (pdfInches <= 0) return;
+    try { assertCalibrationReady(); } catch (err) { toast.error(err.message); return; }
 
     const raw = window.prompt(
       `This page measures ${pdfInches.toFixed(2)}" on the PDF.\n\n` +
@@ -208,8 +213,7 @@ export default function DrawingViewer() {
     }
     const scale = realInches / pdfInches;
     try {
-      await entities.Drawing.update(activeDrawing.id, { markup_scale: scale });
-      qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+      await saveCalibration(scale);
       toast.success(
         `Calibrated · 1 page inch = ${scale.toFixed(1)} real inches ` +
         `(${formatScaleFraction(scale)})`,
@@ -217,14 +221,13 @@ export default function DrawingViewer() {
     } catch (err) {
       toast.error(`Save failed: ${err.message}`);
     }
-  }, [activeDrawing, projectId, qc]);
+  }, [activeDrawing, assertCalibrationReady, saveCalibration]);
 
   // Auto-detect scale from the PDF's title block text layer. Both paths
   // (the explicit toolbar AUTO button + the automatic once-per-uncalibrated
   // -drawing on-load effect with its UNDO toast) live in useAutoScaleOnLoad.
   // The hook owns the per-session dedup ref internally and returns the
-  // handler the toolbar wires to. Behaviour is unchanged.
-  const { handleAutoDetectScale } = useAutoScaleOnLoad({ activeDrawing, pdfDoc, projectId, qc });
+  // handlers above bind each write to the reviewed source and physical page.
 
   // ── Drawing-hub zones (MVP Slice 0) ────────────────────────────────
   // Three modes for the overlay:
@@ -281,6 +284,8 @@ export default function DrawingViewer() {
     drawingId: activeId,
     projectId,
     drawingRevisionId: currentRevision?.id || null,
+    actorId: userId,
+    sourceKey: JSON.stringify([activeDrawing?.file_url, activeDrawing?.pdf_page, activeDrawing?.revision_number]),
   });
   const overlayView = deriveOverlayViewModel({
     activeDrawing,
@@ -773,6 +778,7 @@ export default function DrawingViewer() {
                      Rendered ABOVE link hotspots + callouts so the user can
                      draw freely and selected items stay on top. */}
                 <AnnotationLayer
+                  key={JSON.stringify([projectId, activeDrawing?.id, activeDrawing?.file_url, activeDrawing?.pdf_page, activeDrawing?.revision_number, currentPage, currentRevision?.id, userId])}
                   viewport={currentViewport}
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}

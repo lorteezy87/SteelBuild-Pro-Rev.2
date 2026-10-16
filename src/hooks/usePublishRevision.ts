@@ -1,8 +1,8 @@
 /**
  * usePublishRevision — release a drawing revision via the
- * publish_drawing_revision RPC (promotes it to current + sets release_status,
- * superseding the prior current revision). Server-side the RPC enforces project
- * membership; UI gating (who sees the control) is display-only on top.
+ * publish_drawing_revision RPC. The compatible server command binds the
+ * existing current source and enforces the governing release gates; publishing
+ * is not a source replacement or current-pointer operation.
  *
  * Invalidates the drawing-register family so the grid reflects the new status.
  */
@@ -44,8 +44,7 @@ export function usePublishRevision() {
       const pid = data?.project_id ?? undefined;
       if (pid) {
         invalidateEntity(qc, "drawing", pid);
-        // publish_drawing_revision flips is_current, so the authoritative
-        // current revision changed: also invalidate the drawing_revision
+        // The current revision's release status changed: invalidate the revision
         // family (["drawing-revisions"] powers the hub "Rev" column, which the
         // "drawing" family alone does not cover).
         invalidateEntity(qc, "drawing_revision", pid);

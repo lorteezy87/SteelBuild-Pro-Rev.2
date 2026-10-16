@@ -13,6 +13,11 @@ export async function ensureCurrentRevision({ drawing }) {
   if (existing.project_id !== drawing.project_id || existing.drawing_id !== drawing.id || !existing.is_current || existing.archived_at !== null) {
     throw new Error("Current revision no longer matches this sheet. Reload the drawing.");
   }
+  if (typeof drawing.file_url !== "string" || !drawing.file_url || !Number.isInteger(drawing.pdf_page) || drawing.pdf_page < 1
+    || typeof drawing.revision_number !== "string" || !drawing.revision_number
+    || existing.file_url !== drawing.file_url || existing.pdf_page !== drawing.pdf_page || existing.revision_code !== drawing.revision_number) {
+    throw new Error("Current revision source does not match the reviewed PDF. Reload the sheet; history cannot be guessed or repaired here.");
+  }
   return existing;
 }
 
@@ -30,15 +35,4 @@ export function mapClonedZonesBySource(sourceZones, newZones) {
     idMap.set(src.id, clone);
   }
   return idMap;
-}
-
-
-export async function carryZonesForward() {
-  throw new Error("Revision carry-forward is held. Use the reviewed Revision Upload workflow.");
-}
-export async function createNewRevisionAndCarryZones() {
-  throw new Error("Manual revision creation is held. Use the reviewed Revision Upload workflow.");
-}
-export async function recordSheetSlipSheet() {
-  throw new Error("Split slip-sheet writes are held. Use the reviewed Revision Upload workflow.");
 }

@@ -103,7 +103,7 @@ async function updateDrawingCalibration(id: string, scale: number | null, source
   if (!source || source.id !== id || !id || typeof source.project_id !== 'string' || !source.project_id.trim() ||
       !nullableText(source.file_url) || !nullableText(source.revision_number) ||
       !(source.pdf_page === null || (positive(source.pdf_page) && Number.isInteger(source.pdf_page))) ||
-      typeof source.updated_at !== 'string' || !source.updated_at.trim() || !Number.isFinite(Date.parse(source.updated_at)) ||
+      typeof source.updated_at !== 'string' || !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(source.updated_at) || !Number.isFinite(Date.parse(source.updated_at)) ||
       !(source.markup_scale === null || positive(source.markup_scale))) {
     throw new Error('Complete drawing source/version required for calibration. Reload this PDF before saving.');
   }

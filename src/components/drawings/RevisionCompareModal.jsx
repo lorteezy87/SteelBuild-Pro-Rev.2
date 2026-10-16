@@ -8,7 +8,7 @@
  * pixel nudge for sheets whose title blocks shifted between prints.
  *
  * Data source: drawing_revisions file snapshots (file_url + pdf_page),
- * written by the slip-sheet flow (RevisionUploadModal → recordSheetSlipSheet)
+ * written by the reviewed atomic revision workflow
  * plus the live drawings row as "Current".
  *
  * Rendering is local pdfjs — the PDFs never leave the browser.
@@ -274,7 +274,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
     if (!cand) return null;
     if (cand.key !== "current") return cand.key; // already a drawing_revisions id
     const cur = revisionRows.find((r) => r.is_current);
-    if (cur?.id) return cur.id;
+    if (cur?.id && cur.file_url === drawing.file_url && cur.pdf_page === drawing.pdf_page && cur.revision_code === drawing.revision_number) return cur.id;
     const current = await ensureCurrentRevision({ drawing });
     return current?.id || null;
   }, [revisionRows, drawing]);

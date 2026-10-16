@@ -41,6 +41,13 @@ describe('source-bound calibration', () => {
     await expect(entities.Drawing.updateCalibration('d', 48, source)).rejects.toThrow(/changed|access|reload/i);
     expect(backend.writes).toHaveBeenCalledTimes(1);
   });
+  it.each([{ file_url: 'new.pdf' }, { pdf_page: 3 }, { revision_number: 'B' }, { updated_at: '2026-10-15T12:00:01.123456+00:00' }, { markup_scale: 96 }])('includes a rejecting predicate for replacement or new manual scale %j', async change => {
+    await entities.Drawing.updateCalibration('d', null, { ...source, markup_scale: 48 });
+    const newer: Record<string, unknown> = { ...source, markup_scale: 48, ...change };
+    // Predicate-shape proof only: PostgreSQL concurrency evidence belongs to Task 13.
+    expect(backend.filters.every(([, key, value]) => newer[String(key)] === value)).toBe(false);
+    expect(backend.writes).toHaveBeenCalledTimes(1);
+  });
   it('uses IS NULL for known nullable source values and exact numeric prior scale for Undo', async () => {
     await entities.Drawing.updateCalibration('d', null, { ...source, file_url: null, pdf_page: null, revision_number: null, markup_scale: 48 });
     expect(backend.filters).toContainEqual(['is','file_url',null]);
@@ -48,7 +55,7 @@ describe('source-bound calibration', () => {
     expect(backend.filters).toContainEqual(['is','revision_number',null]);
     expect(backend.filters).toContainEqual(['eq','markup_scale',48]);
   });
-  it.each([{ updated_at: undefined }, { project_id: '' }, { file_url: undefined }, { pdf_page: 0 }, { markup_scale: undefined }, { markup_scale: '48' }, { id: 'other' }])('rejects incomplete or malformed expected source %j before a request', async change => {
+  it.each([{ updated_at: undefined }, { updated_at: '1' }, { updated_at: '2026-10-15' }, { project_id: '' }, { file_url: undefined }, { pdf_page: 0 }, { markup_scale: undefined }, { markup_scale: '48' }, { id: 'other' }])('rejects incomplete or malformed expected source %j before a request', async change => {
     await expect(entities.Drawing.updateCalibration('d', 48, { ...source, ...change } as never)).rejects.toThrow(/source|reload/i);
     expect(backend.writes).not.toHaveBeenCalled();
   });

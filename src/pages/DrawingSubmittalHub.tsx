@@ -55,7 +55,6 @@ import {
   buildSetPackages,
   buildTriage,
   dueDateWriteTargets,
-  validateDetailingStateWrite,
   validateDueDateWrite,
 } from "./drawingSubmittalHub/format";
 import type {
@@ -655,13 +654,8 @@ function DetailingControlCenter() {
   // modal itself disables whichever kind the user can't create.
   const canEscalate = can("create", "rfi") || can("create", "change_order");
 
-  // Inline Control-Board edits touch drawing_sets / drawings / submittals, whose
-  // RLS UPDATE policies all floor at project role "field". Without this gate a
-  // project VIEWER saw fully enabled owner / due-date / state / readiness
-  // controls and only learned they could not use them from an RLS rejection
-  // toast. The entity overrides make can("edit", …) mirror the DB exactly.
-  const canEditDetailing =
-    can("edit", "drawing_set") || can("edit", "drawing") || can("edit", "submittal");
+  // Core drawing metadata is PM+. Annotation and hold permissions are separate.
+  const canEditDetailing = can("edit");
 
   // Sequence-aware readiness rollup (group packages by erection sequence).
   const sequenceReadiness = useMemo(() => buildSequenceReadiness(readinessByKey), [readinessByKey]);
@@ -778,10 +772,7 @@ function DetailingControlCenter() {
   // machine owns the middle of the flow); the UI gates the control accordingly.
   const updateDetailingStateMut = useMutation({
     mutationFn: async ({ item, next }: { item: TriageItem; next: string }) => {
-      const stateError = validateDetailingStateWrite(item, next);
-      if (stateError) throw new Error(stateError);
-      if (!item._drawingSetId) throw new Error("No drawing set to update");
-      await entities.DrawingSet.update(item._drawingSetId, { detailing_state: next } as any);
+      throw new Error("Detailing state changes are held here. Use the governing submittal/fabrication workflow.");
     },
     onSuccess: async (_data, { next }) => {
       await invalidateHub();
