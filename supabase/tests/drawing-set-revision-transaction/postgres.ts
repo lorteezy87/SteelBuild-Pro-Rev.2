@@ -9,6 +9,7 @@ import { runSourceCases } from './sourceCases.ts';
 import { runBoundaryCases } from './boundaryCases.ts';
 import { runExportCases } from './exportCases.ts';
 import { runInstallationCases, runPackageCases } from './packageCases.ts';
+import { runSetupEntitlementCases } from './setupEntitlementCases.ts';
 import { command, parent, submit, checklist, execute as roundExecute } from '../submittal-revision-evidence/cases.ts';
 
 assert.equal(process.env.DRAWING_UPLOAD_POSTGRES_TEST,'1','Explicit disposable fixture opt-in required');
@@ -55,6 +56,7 @@ try{
   // Only after the URL preflight and initial-empty census above. These are
   // operator fixture assertions, not a security boundary for hosted callers.
   await admin.query("select set_config('drawing_recovery.empty_fixture_verified','yes',false),set_config('drawing_recovery.client_loopback_verified','yes',false)");
+  console.log(`${await runSetupEntitlementCases(db)} actual PostgreSQL setup entitlement checks passed`);
   await initialize(db);
   console.log(`${await runInstallationCases(db)} actual PostgreSQL installation checks passed`);
   console.log(`${await runPackageCases(db)} actual PostgreSQL package checks passed`);

@@ -13,6 +13,7 @@ import { summarizeCases } from '../../e2e/drawingCutoverReporter.ts';
 import * as setup from '../../e2e/drawing-cutover-setup.ts';
 import type { SetupContext, SetupPlan, PrivateRecoveryPayload, ArtifactBinding, FoundationReceipt, SetupResume } from '../../e2e/drawing-cutover-setup.ts';
 import type { SetupTransports, SetupCheckpoint, SetupObservation, SetupSession, SetupActor, SetupIntent } from '../../e2e/drawing-cutover-setup.ts';
+import { runSetupEntitlementCases } from '../../supabase/tests/drawing-set-revision-transaction/setupEntitlementCases.ts';
 
 const sha = '1'.repeat(40);
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -43,6 +44,15 @@ function inputs() {
 }
 
 describe('drawing staging executable safety boundary', () => {
+  it('manualEntitlementFixtureRejectsNonemptyDatabaseBeforeDDL', async () => {
+    let writes = 0;
+    const db: Parameters<typeof runSetupEntitlementCases>[0] = {
+      exec: async () => { writes++; throw new Error('A nonempty database must never reach fixture DDL'); },
+      query: async <T extends Record<string, unknown>>(sql: string) => ({ rows: (sql.includes('count(*)') ? [{ n: 1 }] : []) as unknown as T[] }),
+    };
+    await expect(runSetupEntitlementCases(db)).rejects.toThrow('Entitlement cases require an empty disposable database');
+    expect(writes).toBe(0);
+  });
   it('refusesProductionUrlAndRef', async () => {
     const outbound = vi.fn(async () => new Response('{}'));
     const run = inputs(); run.env.E2E_SUPABASE_URL = 'https://kjrwqagyeswwoxpjkcko.supabase.co';

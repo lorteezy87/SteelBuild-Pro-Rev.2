@@ -7,6 +7,7 @@ import { runSourceCases } from './sourceCases.ts';
 import { runBoundaryCases } from './boundaryCases.ts';
 import { runExportCases } from './exportCases.ts';
 import { runPackageCases, runInstallationCases } from './packageCases.ts';
+import { runSetupEntitlementCases } from './setupEntitlementCases.ts';
 const db=new PGlite();
 async function serviceRoleState(){
   return {
@@ -31,6 +32,7 @@ try{
   // Reproduce the required shared PostgreSQL job: roles survive across databases.
   await db.exec('create role service_role nologin nosuperuser nobypassrls');
   const initialServiceRole=await serviceRoleState();
+  console.log(`${await runSetupEntitlementCases(db)} setup entitlement checks passed`);
   await initialize(db);
   console.log(`${await runInstallationCases(db)} installation checks passed`);
   console.log(`${await runPackageCases(db)} package checks passed`);
