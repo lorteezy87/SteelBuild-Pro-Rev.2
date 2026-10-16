@@ -1,53 +1,84 @@
 # iPad and Mac delivery
 
-## Existing iOS release
+## iPad: already in the uploaded iOS release
 
 Version 1.0.0, build 20261016, commit bc6380b5fbe0385411f6e1cf06e4eff2b3a1bcbb
-was uploaded by iOS release run 38948751514. Its App Store receipt reported VALID.
-The Xcode App target uses TARGETED_DEVICE_FAMILY = "1,2" in both configurations,
-and Info.plist declares all four iPad orientations. iPad uses the same iOS build;
-do not create a second app record or upload a separate iPad binary.
+was uploaded by iOS release run 38948751514. Apple reported VALID.
+The App target uses device families 1 and 2 and declares all four iPad orientations.
+iPad uses this same iOS build; it needs no separate binary or app record.
 
-Select the processed build on the iOS App Store version. Supply actual iPad
-screenshots and test sign-in, protected project workflows, file import/export,
-keyboard editing, orientation changes, and multitasking before review.
+Native validation run 38951763063 built the simulator binary, verified that
+UIDeviceFamily contains 2, installed and launched it on a 13-inch iPad, and captured
+the rendered sign-in screen. This validates launch, not authenticated workflows.
 
-## Native validation
+Select the build on the iOS version page. Supply actual iPad screenshots and test
+project access, imports/exports, keyboard editing, rotation, and multitasking.
 
-The Apple platform validation workflow builds bundled production web assets and
-performs unsigned feasibility checks on macOS runners. It has no distribution
-certificate or App Store API credentials and cannot upload a build.
+## Mac: standalone native shell
 
-- iPad: builds the simulator binary, checks UIDeviceFamily contains 2, installs
-  and launches on an available iPad simulator, then captures a screenshot.
-- Mac: enables Catalyst in an ephemeral copy of the Xcode project and attempts
-  an unsigned archive. A successful archive is not proof of runtime behavior,
-  sandbox compatibility, store signing, or App Store acceptance.
+Catalyst probes 38951763063 and 38952500832 established that the current Capacitor
+and Cordova XCFrameworks contain no Mac Catalyst libraries. Do not switch the
+working iOS project to Catalyst or represent those probes as successful builds.
 
-Artifacts are labeled unsigned and must not be presented as store releases.
+The Mac app instead uses SwiftUI/AppKit and WKWebView with the same bundled Vite
+application. It opens the project sign-in route and supports native back/forward,
+reload, file selection, save dialogs, and browser handling of external links.
+It has its own sandboxed browser session. Native iOS plugin APIs are not exposed;
+shared web fallbacks apply. macOS 13+ is required.
 
-## Mac distribution prerequisites
+Run `bash scripts/macos-build.sh` on a Mac with Xcode after `npm ci`.
+The script compiles arm64 and x86_64, creates a universal app with the existing
+product icon, bundles web assets/privacy metadata, and applies an ad-hoc signature
+for development validation. No App Store upload occurs.
 
-A Mac Catalyst release is a separate macOS binary. Before a store upload:
+Run 38953091100 proved the universal binary, strict local signature verification,
+and rendered public shell launch. Its screenshot showed the marketing page; the
+subsequent change starts at /Dashboard so a fresh session reaches sign-in.
+The workflow's final launch evidence must be checked for that change.
 
-1. Enable Mac Catalyst on the existing com.steelbuildpro.app App ID in Apple Developer.
-2. Create a Mac App Store Connect provisioning profile for that exact App ID.
-   The iOS profile cannot sign the Mac app.
-3. Configure Mac app sandbox permissions for observed needs: outgoing network,
-   user-selected imports/exports, and camera if supported and exercised.
-4. Store any Mac signing profile/certificate material in GitHub environment
-   secrets, never in source or chat. Keep Mac and iOS profile secrets separate.
-5. Run a reviewed, gated Mac signing/export/upload workflow; verify the receipt
-   identifies platform MAC_OS as well as the expected version/build.
-6. Verify the signed Mac app at runtime, including imports, downloads, share,
-   keyboard shortcuts, resizing, authentication, and project access.
-7. Add actual Mac screenshots and review metadata on the macOS version page.
+Development artifacts are not Apple distribution-signed or notarized. A local
+ad-hoc signature is not App Store or Gatekeeper release approval.
 
-The unsigned validation workflow intentionally does not replace these steps.
-Do not reuse scripts/ios-verify-upload.mjs for Mac without adding a platform
-filter: version and build numbers may coincide across iOS and macOS.
+## Native networking
 
-Apple references:
-- https://developer.apple.com/help/account/capabilities/create-a-mac-version-of-an-ipad-app
+The existing Edge CORS helper rejected custom native WebView origins. The source
+fix recognizes only capacitor://localhost and steelbuild://localhost for CORS.
+They are never accepted by isAllowedOrigin for billing redirect URLs.
+Unknown/null/custom origins, host suffixes, credentials, ports, and paths stay
+rejected. JWT/MFA/RLS checks still determine authorization.
+
+The source fix must be reviewed and deployed with each affected live Edge Function
+before native Edge workflows can be marked verified. This branch does not deploy
+backend code. Eighty-seven focused CORS and Stripe handler tests passed locally.
+
+## Mac App Store prerequisites
+
+The Mac development app has not been uploaded. Owner-side signing work:
+
+1. Create a Mac App Store Connect provisioning profile for com.steelbuildpro.app
+   (register/enable the macOS identifier if required). Name it
+   **SteelBuild Pro Mac App Store**. The iOS profile cannot sign this Mac app.
+2. Create a **Mac Installer Distribution** certificate and export it with its
+   matching private key as a password-protected .p12.
+3. Store the profile as MAC_PROVISIONING_PROFILE_BASE64 and the installer material
+   as MAC_INSTALLER_CERTIFICATE_BASE64 / MAC_INSTALLER_CERTIFICATE_PASSWORD in the
+   GitHub app-store environment. Do not send private keys or passwords in chat.
+   The existing Apple Distribution application certificate may be reused if it
+   is valid for this Mac profile.
+4. After review and required checks, implement/execute the gated Mac distribution
+   signing, productbuild packaging and App Store upload using those credentials.
+   Verify the Apple receipt matches platform MAC_OS, version and build.
+5. Test the signed sandboxed app: sign-in, project access, uploads, downloads,
+   file exports, external links, keyboard editing and window resizing. Camera
+   capture and protected workflows are not yet accepted on Mac.
+6. Supply Mac screenshots and review metadata on the macOS version page.
+
+Do not reuse the iOS receipt verifier unchanged: identical version/build numbers
+can exist on multiple platforms, so Mac verification must check MAC_OS explicitly.
+App Review submission remains separate from building/uploading.
+
+References:
+- https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/
+- https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution
 - https://developer.apple.com/help/account/provisioning-profiles/create-an-app-store-provisioning-profile
 - https://developer.apple.com/documentation/xcode/configuring-the-macos-app-sandbox
