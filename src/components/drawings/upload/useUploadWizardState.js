@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 
 // ── useUploadWizardState ─────────────────────────────────────────────
 // Owns the DrawingSetUploadModal wizard's ~15 useState/useRef cluster plus
@@ -10,16 +10,22 @@ import { useState, useRef } from "react";
 // hooks read from and write to — same setters, same refs, same defaults,
 // same reset/handleClose semantics as before.
 export function useUploadWizardState({ onClose }) {
+  const reviewGenerationRef               = useRef(0);
   const [step, setStep]                   = useState(0);
-  const [files, setFiles]                 = useState([]);
-  const [meta, setMeta]                   = useState({
+  const [files, updateFiles]              = useState([]);
+  const [meta, updateMeta]                = useState({
     setName: "", setNumber: "", discipline: "Structural", defaultStage: "Not Started",
     revision: "0",
-    issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "",
+    issueDate: "", issuedBy: "", notes: "",
   });
   const [processingStatus, setProcessingStatus] = useState({ steps: [], currentStepId: null, progress: 0, message: "" });
-  const [sheets, setSheets]               = useState([]);
-  const [fileResults, setFileResults]     = useState([]);
+  const [sheets, updateSheets]            = useState([]);
+  const [fileResults, updateFileResults]  = useState([]);
+  // Synchronous review invalidation also covers edits while source verification awaits.
+  const setFiles = useCallback(next => { reviewGenerationRef.current++; updateFiles(next); }, []);
+  const setMeta = useCallback(next => { reviewGenerationRef.current++; updateMeta(next); }, []);
+  const setSheets = useCallback(next => { reviewGenerationRef.current++; updateSheets(next); }, []);
+  const setFileResults = useCallback(next => { reviewGenerationRef.current++; updateFileResults(next); }, []);
   const [createdCount, setCreatedCount]   = useState(0);
   const [processError, setProcessError]   = useState(null);
   const [supersedeResult, setSupersedeResult] = useState(null); // cross-set supersede { superseded, failed, skipped }
@@ -27,7 +33,8 @@ export function useUploadWizardState({ onClose }) {
   const [uploadBatchId, setUploadBatchId] = useState(null); // set once per upload attempt
   const cancelledRef                      = useRef(false);
 
-  const reset = () => {
+  const reset = useCallback(() => {
+    reviewGenerationRef.current++;
     cancelledRef.current = true;  // abort any in-progress operation
     setStep(0); setFiles([]); setSheets([]); setFileResults([]); setCreatedCount(0);
     setProcessError(null);
@@ -35,8 +42,8 @@ export function useUploadWizardState({ onClose }) {
     setAiFilledFields({});
     setUploadBatchId(null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
-    setMeta({ setName: "", setNumber: "", discipline: "Structural", defaultStage: "Not Started", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
-  };
+    setMeta({ setName: "", setNumber: "", discipline: "Structural", defaultStage: "Not Started", revision: "0", issueDate: "", issuedBy: "", notes: "" });
+  }, [setFiles, setSheets, setFileResults, setMeta]);
 
   const handleClose = () => { reset(); onClose(); };
 
@@ -53,6 +60,7 @@ export function useUploadWizardState({ onClose }) {
     aiFilledFields, setAiFilledFields,
     uploadBatchId, setUploadBatchId,
     cancelledRef,
+    reviewGenerationRef,
     reset,
     handleClose,
   };

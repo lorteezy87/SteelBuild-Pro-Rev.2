@@ -4,6 +4,7 @@ import { UploadDrawingFile } from "@/api/client/uploads";
 import { EMPTY_SET_META } from "@/lib/pdfSheetExtractor";
 import { getActiveOrgGeneration, subscribeActiveOrgChange } from "@/lib/activeOrg";
 import { useDrawingSourceSnapshots } from "./useDrawingSourceSnapshots";
+import { readPdfPageCount } from "@/lib/docControl/pdfPageCount";
 import { withTimeout, newUploadBatchId } from "@/lib/drawingUploadUtils";
 import { validateAndExtract, makeProgressSteps, mergeAiSetMetadata } from "../drawingSetUploadHelpers";
 
@@ -162,7 +163,10 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
           );
         } catch (err) {
           if (!isCurrent()) return;
+          const physicalPageCount = await readPdfPageCount(file);
+          if (!isCurrent()) return;
           extractResult = {
+            pageCount: physicalPageCount,
             setMeta: { ...EMPTY_SET_META },
             sheets: [{
               sheetNumber: "",
@@ -174,7 +178,7 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
             }],
             scanned: false,
             extractFailed: true,
-            error: err.message,
+            error: physicalPageCount ? err.message : "The PDF page count could not be verified. Re-upload a readable PDF before reviewing physical pages.",
           };
         }
 
@@ -237,10 +241,9 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
       const reviewedSheets = allSheets.map(sheet => ({ ...sheet, sourceSnapshot: snapshotByPath.get(sheet.sourceFileUrl) }));
       const reviewedResults = results.map(result => ({ ...result, sourceSnapshot: snapshotByPath.get(result.fileUrl) ?? null }));
 
-      const defaultIssueDate = new Date().toISOString().split("T")[0];
       setMeta(prev => {
         if (!isCurrent()) return prev;
-        const { merged, aiFilled: prevAiFilled } = mergeAiSetMetadata(prev, aggregateSetMeta, defaultIssueDate);
+        const { merged, aiFilled: prevAiFilled } = mergeAiSetMetadata(prev, aggregateSetMeta, undefined);
         Object.assign(aiFilled, prevAiFilled);
         return merged;
       });

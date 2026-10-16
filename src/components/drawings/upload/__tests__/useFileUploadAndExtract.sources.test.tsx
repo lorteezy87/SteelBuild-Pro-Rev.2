@@ -2,12 +2,13 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { setActiveOrgId } from '@/lib/activeOrg';
-const m = vi.hoisted(() => ({ upload: vi.fn(), read: vi.fn(), extract: vi.fn() }));
+const m = vi.hoisted(() => ({ upload: vi.fn(), read: vi.fn(), extract: vi.fn(), count: vi.fn() }));
+vi.mock('@/lib/docControl/pdfPageCount', () => ({ readPdfPageCount: m.count }));
 vi.mock('@/api/client/uploads', () => ({ UploadDrawingFile: m.upload }));
 vi.mock('@/api/client/drawingCommands', () => ({ getDrawingRevisionSources: m.read }));
 vi.mock('@/api/supabaseClient', () => ({ entities: { DrawingSet: { filter: async (): Promise<unknown[]> => [] } }, integrations: { Core: { UploadFile: m.upload } } }));
-vi.mock('@/lib/pdfSheetExtractor', () => ({ EMPTY_SET_META: {}, parseFilename: () => ({ sheetNumber: 'S101', revision: 'A' }) }));
-vi.mock('../../drawingSetUploadHelpers', () => ({ validateAndExtract: m.extract, makeProgressSteps: (): unknown[] => [], mergeAiSetMetadata: (prev: unknown) => ({ merged: prev, aiFilled: {} }) }));
+vi.mock('@/lib/pdfSheetExtractor', () => ({ EMPTY_SET_META: { issueDate: '' }, parseFilename: () => ({ sheetNumber: 'S101', revision: 'A' }) }));
+vi.mock('../../drawingSetUploadHelpers', async (importOriginal) => ({ ...await importOriginal<typeof import('../../drawingSetUploadHelpers')>(), validateAndExtract: m.extract, makeProgressSteps: (): unknown[] => [] }));
 import { useFileUploadAndExtract } from '../useFileUploadAndExtract';
 
 const PROJECT = '22222222-2222-4222-8222-222222222222';
@@ -16,9 +17,26 @@ const source = { path: PATH, token: 'a'.repeat(64) };
 beforeEach(() => {
   setActiveOrgId('11111111-1111-4111-8111-111111111111');
   vi.clearAllMocks();
+  m.count.mockResolvedValue(null);
   m.upload.mockResolvedValue({ path: PATH, file_url: 'signed-url-must-not-be-persisted' });
   m.read.mockResolvedValue([source]);
   m.extract.mockResolvedValue({ sheets: [{ sheetNumber: 'S1', sheetTitle: 'PLAN', revision: 'A', pdfPage: 1 }], pageCount: 1 });
+});
+it('hard AI outage reads the physical count for manual page review', async () => {
+  m.extract.mockRejectedValue(new Error('AI unavailable'));
+  m.count.mockResolvedValue(3);
+  const { result, state, file } = setup();
+  await act(async () => { await result.current.handleUploadAndProcess(); });
+  expect(m.count).toHaveBeenCalledWith(file);
+  expect(state.setFileResults.mock.lastCall?.[0][0]).toMatchObject({ pageCount: 3, extractFailed: true });
+  expect(state.setSheets.mock.lastCall?.[0][0]).toMatchObject({ sheetNumber: '', revision: '', pdfPage: null, extractedText: null, callouts: null });
+});
+it('preserves a user-entered current issue date over AI metadata', async () => {
+  const today = new Date().toISOString().split('T')[0];
+  m.extract.mockResolvedValue({ sheets: [{ sheetNumber: 'S1', pdfPage: 1 }], pageCount: 1, setMeta: { issueDate: '2020-01-01' } });
+  const { result, state } = setup();
+  await act(async () => { await result.current.handleUploadAndProcess(); });
+  expect(state.setMeta.mock.lastCall?.[0]({ issueDate: today }).issueDate).toBe(today);
 });
 afterEach(() => { vi.useRealTimers(); });
 function setup() {
@@ -53,6 +71,7 @@ it('AI outage keeps manual recovery without manufacturing sheet identity or page
   await act(async () => { await result.current.handleUploadAndProcess(); });
   expect(state.setSheets.mock.lastCall?.[0][0]).toMatchObject({ sheetNumber: '', revision: '', pdfPage: null, extractedText: null, callouts: null, sourceSnapshot: source });
   expect(state.setStep).toHaveBeenLastCalledWith(4);
+  expect(state.setFileResults.mock.lastCall?.[0][0]).toMatchObject({ pageCount: null, error: expect.stringMatching(/Re-upload a readable PDF/) });
 });
 it('page edit clears source-bound evidence but retains the original token for explicit manual re-review', async () => {
   const { result, state } = setup();

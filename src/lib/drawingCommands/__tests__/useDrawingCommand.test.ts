@@ -42,6 +42,47 @@ it('persistsBeforeFirstRpc and acknowledges only after durable preparation', asy
   expect(await loadDrawingCommands(owner)).toEqual([]);
 });
 
+it.each(['remount', 'unavailable'] as const)('dismissSavedReview abandons %s review only after exact receipt lookup without mutation', async mode => {
+  await saveDrawingCommand(draftFixture());
+  const hook = await ready();
+  if (mode === 'unavailable') {
+    rpc.mockImplementation(async (name: string) => ({ error: null, data: name === 'get_drawing_command_receipt' ? { state: 'not_committed' } : { ...flags, new_set: false } }));
+    await act(async () => { await expect(hook.result.current.apply()).rejects.toThrow(); });
+  }
+  rpc.mockClear();
+  await act(async () => { expect(await hook.result.current.dismissSavedReview()).toBe(true); });
+  expect(rpc.mock.calls.map(([name]) => name)).toEqual(['get_drawing_command_receipt']);
+  expect(await loadDrawingCommands(owner)).toEqual([]);
+  expect(hook.result.current.draft).toBeNull();
+});
+
+it.each(['pending', 'lookup-error', 'revoked', 'committed'] as const)('dismissSavedReview safely handles %s without replay', async receiptState => {
+  await saveDrawingCommand(draftFixture());
+  const onCommitted = vi.fn();
+  const hook = renderHook(() => useDrawingCommand(owner, { onCommitted }));
+  await waitFor(() => expect(hook.result.current.draft).not.toBeNull());
+  if (receiptState === 'revoked') getUser.mockResolvedValue({ data: { user: null }, error: { message: 'revoked' } });
+  else if (receiptState === 'lookup-error') rpc.mockRejectedValue(new Error('lookup unavailable'));
+  else rpc.mockResolvedValue({ error: null, data: receiptState === 'committed' ? { state: 'committed', result: resultFixture() } : { state: 'pending' } });
+  await act(async () => {
+    if (receiptState === 'revoked' || receiptState === 'lookup-error') await expect(hook.result.current.dismissSavedReview()).rejects.toThrow();
+    else expect(await hook.result.current.dismissSavedReview()).toBe(false);
+  });
+  expect(rpc.mock.calls.every(([name]) => name === 'get_drawing_command_receipt')).toBe(true);
+  expect(await loadDrawingCommands(owner)).toEqual(receiptState === 'committed' ? [] : [draftFixture()]);
+  expect(onCommitted).toHaveBeenCalledTimes(receiptState === 'committed' ? 1 : 0);
+});
+
+it('dismissSavedReview cannot remove a newer exact reservation', async () => {
+  await saveDrawingCommand(draftFixture());
+  const hook = await ready();
+  await completeDrawingCommand(owner, draftFixture().requestId);
+  await saveDrawingCommand(draftFixture(nextId));
+  await act(async () => { await expect(hook.result.current.dismissSavedReview()).rejects.toThrow(); });
+  expect(rpc).not.toHaveBeenCalled();
+  expect(await loadDrawingCommands(owner)).toEqual([draftFixture(nextId)]);
+});
+
 it('storageQuotaRefusesDispatch', async () => {
   const hook = await ready();
   vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementationOnce(() => { throw new DOMException('Quota', 'QuotaExceededError'); });
@@ -154,7 +195,7 @@ it.each(['capabilities', 'final-auth'] as const)('another tab dismissing during 
   await waitFor(() => expect(rpc).toHaveBeenCalledWith('get_drawing_command_capabilities', { p_project_id: owner.projectId }));
   if (boundary === 'final-auth') await waitFor(() => expect(getUser.mock.results.some(({ value }) => value === paused.promise)).toBe(true));
   await act(async () => {
-    expect(await otherTab.result.current.dismissRejected()).toBe(true);
+    expect(await otherTab.result.current.dismissSavedReview()).toBe(true);
     await otherTab.result.current.prepare(draftFixture(nextId));
   });
   expect(await loadDrawingCommands(owner)).toEqual([draftFixture(nextId)]);

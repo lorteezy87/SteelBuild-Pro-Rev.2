@@ -176,11 +176,11 @@ export function useDrawingCommand(owner: DrawingCommandOwner | null, options: Dr
   }
 
   /** Explicit review dismissal, not server cancellation or a promise that another already dispatched tab cannot commit. */
-  async function dismissRejected(): Promise<boolean> {
+  async function dismissSavedReview(): Promise<boolean> {
     const fence = fenceForScope();
     fence.assertCurrent();
     const draft = scope.view.draft;
-    if (!scope.ready || scope.busy || !scope.rejected || !draft) throw new DrawingCommandPreflightError('unavailable');
+    if (!scope.ready || scope.busy || !draft) throw new DrawingCommandPreflightError('unavailable');
     scope.busy = true;
     try {
       await assertActor(fence);
@@ -205,6 +205,11 @@ export function useDrawingCommand(owner: DrawingCommandOwner | null, options: Dr
     } finally { scope.busy = false; }
   }
 
+  async function dismissRejected(): Promise<boolean> {
+    if (!scope.rejected) throw new DrawingCommandPreflightError('unavailable');
+    return dismissSavedReview();
+  }
+
   const visible = view?.scope === scope ? view.value : emptyView();
-  return { ...visible, prepare, apply: run, reconcile: run, dismissRejected };
+  return { ...visible, prepare, apply: run, reconcile: run, dismissRejected, dismissSavedReview };
 }

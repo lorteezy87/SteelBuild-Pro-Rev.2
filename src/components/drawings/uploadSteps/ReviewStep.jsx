@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
@@ -8,10 +8,11 @@ import CrossSetSupersedePanel from "./CrossSetSupersedePanel";
 import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 
 // ─── Review: verify AI-extracted sheets ───────────────────────────────
-export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [], canSupersede = false, projectId }) {
+export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [], canSupersede: _canSupersede = false, projectId, commandAvailable = false }) {
   const [search, setSearch]         = useState("");
   const [discFilter, setDiscFilter] = useState("all");
   const [fileFilter, setFileFilter] = useState("all");
+  const reviewId = useId();
 
   // Live sheets in OTHER sets of the project that this upload replaces. Read
   // fresh on every visit; re-planned as sheet numbers, titles, selection or the
@@ -21,13 +22,14 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   const invalidSelectedSource = sheets.some(sheet => {
     if (!sheet.selected) return false;
     const page = validatePdfPage(sheet.pdfPage);
-    const count = fileResults.find(result => result.fileName === sheet.sourceFile)?.pageCount;
-    return !String(sheet.sheetNumber || "").trim() || page === null || (count > 0 && page > count);
+    const count = fileResults.find(result => result.fileUrl === sheet.sourceFileUrl)?.pageCount;
+    return !String(sheet.sheetNumber || "").trim() || !String(sheet.sheetTitle || "").trim() || !String(sheet.revision || "").trim()
+      || page === null || !Number.isInteger(count) || count < 1 || page > count;
   });
+  const unreviewedSelected = sheets.some(sheet => sheet.selected && (!sheet.reviewed || sheet.sourceReviewRequired));
   const handleCreateClick = () => {
-    if (invalidSelectedSource) return;
-    const supersedeIds = canSupersede && crossSet.status === "ready" ? crossSet.checkedIds : [];
-    onCreate(sheets.filter(s => s.selected), { supersedeIds, supersedeLabels: crossSet.labels });
+    if (invalidSelectedSource || unreviewedSelected || !commandAvailable) return;
+    onCreate(sheets.filter(s => s.selected));
   };
 
   const setMetaField = (k, v) => setMeta(prev => ({ ...prev, [k]: v }));
@@ -38,7 +40,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   const filtered = sheets.filter(s => {
     const matchSearch = !search || s.sheetNumber?.toLowerCase().includes(search.toLowerCase()) || s.sheetTitle?.toLowerCase().includes(search.toLowerCase());
     const matchDisc   = discFilter === "all" || s.discipline === discFilter;
-    const matchFile   = fileFilter === "all" || s.sourceFile === fileFilter;
+    const matchFile   = fileFilter === "all" || s.sourceFileUrl === fileFilter;
     return matchSearch && matchDisc && matchFile;
   });
 
@@ -52,11 +54,18 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
     const realIdx = sheets.indexOf(filtered[filteredIdx]);
     setSheets(prev => prev.map((s, i) => i === realIdx ? {
       ...s, [key]: val,
-      ...(key === "pdfPage" && s.pdfPage !== val ? { extractedText: undefined, callouts: undefined, hyperlinks: undefined } : {}),
+      ...(s[key] !== val ? { reviewed: false, sourceReviewRequired: true } : {}),
+      ...(key === "pdfPage" && s.pdfPage !== val ? { extractedText: null, callouts: null, hyperlinks: null } : {}),
     } : s));
   };
 
-  const uniqueFiles = [...new Set(sheets.map(s => s.sourceFile).filter(Boolean))];
+  const uniqueFiles = [...new Set(sheets.map(s => s.sourceFileUrl).filter(Boolean))];
+  const sourceLabel = (path, name) => {
+    const index = fileResults.findIndex(result => result.fileUrl === path);
+    const label = name || fileResults[index]?.fileName || "Unknown source";
+    return index >= 0 && fileResults.filter(result => result.fileName === label).length > 1
+      ? `${label} · source ${index + 1}` : label;
+  };
   // Every soft problem (scanned, too large, extraction timed out) shows the
   // same amber "manual entry required" warning. Uploads are still allowed —
   // Known-page failures retain one editable row per physical page. Missing
@@ -68,9 +77,9 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   // quality problem (bad-source row, fallback, or missing sheet #) for a closer
   // look before commit. Same fn the persisted ai_extraction_status uses, so the
   // badge and the saved status never disagree.
-  const fileResultsByName = new Map(fileResults.map(r => [r.fileName, r]));
+  const fileResultsByPath = new Map(fileResults.map(r => [r.fileUrl, r]));
   const reviewCount = sheets.reduce(
-    (n, s) => n + (sheetReviewFlags(s, fileResultsByName.get(s.sourceFile)).needsReview ? 1 : 0),
+    (n, s) => n + (sheetReviewFlags(s, fileResultsByPath.get(s.sourceFileUrl)).needsReview ? 1 : 0),
     0,
   );
 
@@ -166,7 +175,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
 
       {/* Warnings — all soft failures share the amber "fill in manually" treatment */}
       {warnedFiles.map(r => (
-        <div key={r.fileName} style={{
+        <div key={r.fileUrl || r.fileName} style={{
           display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
           background: "var(--warning-muted)", border: "1px solid var(--warning-border)",
           borderRadius: 8, marginBottom: 10,
@@ -175,7 +184,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
             {r.extractFailed ? (
               <>
-                <span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> could not be auto-extracted by AI. Review the manual sheet rows below, confirm their identities and PDF pages, then click Create.
+                <span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{sourceLabel(r.fileUrl, r.fileName)}</span> could not be auto-extracted by AI. Review the manual sheet rows below, confirm their identities and PDF pages, then click Create.
                 {r.error && (
                   <div style={{ marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4, letterSpacing: "0.04em" }}>
                     {r.error}
@@ -183,9 +192,9 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
                 )}
               </>
             ) : r.scanned ? (
-              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
+              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{sourceLabel(r.fileUrl, r.fileName)}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
             ) : (
-              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
+              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{sourceLabel(r.fileUrl, r.fileName)}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
             )}
           </div>
         </div>
@@ -206,7 +215,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
           <select value={fileFilter} onChange={e => setFileFilter(e.target.value)}
             style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, maxWidth: 140 }}>
             <option value="all">All Files</option>
-            {uniqueFiles.map(f => <option key={f} value={f}>{f.replace(/\.pdf$/i, "")}</option>)}
+            {uniqueFiles.map(path => <option key={path} value={path}>{sourceLabel(path, null)}</option>)}
           </select>
         )}
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
@@ -231,7 +240,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
           </thead>
           <tbody>
             {filtered.map((s, i) => {
-              const review = sheetReviewFlags(s, fileResultsByName.get(s.sourceFile));
+              const review = sheetReviewFlags(s, fileResultsByPath.get(s.sourceFileUrl));
               return (
               <tr key={i} style={{ borderBottom: "1px solid var(--divider)", background: s.selected ? "var(--warning-muted)" : "transparent" }}>
                 <td style={{ padding: "6px 10px", textAlign: "center" }}>
@@ -239,7 +248,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
                 </td>
                 <td style={{ padding: "6px 10px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <input value={s.sheetNumber || ""} onChange={e => updateSheet(i, "sheetNumber", e.target.value)}
+                    <input aria-label={`Sheet number row ${sheets.indexOf(s) + 1}`} value={s.sheetNumber || ""} onChange={e => updateSheet(i, "sheetNumber", e.target.value)}
                       style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, width: 76 }}
                       onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
                       onBlur={e => e.target.style.borderColor = "transparent"} />
@@ -257,7 +266,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
                   </div>
                 </td>
                 <td style={{ padding: "6px 10px" }}>
-                  <input value={s.sheetTitle || ""} onChange={e => updateSheet(i, "sheetTitle", e.target.value)}
+                  <input aria-label={`Sheet title row ${sheets.indexOf(s) + 1}`} value={s.sheetTitle || ""} onChange={e => updateSheet(i, "sheetTitle", e.target.value)}
                     style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, width: "100%", minWidth: 140 }}
                     onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
                     onBlur={e => e.target.style.borderColor = "transparent"} />
@@ -269,22 +278,35 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
                   </select>
                 </td>
                 <td style={{ padding: "6px 10px" }}>
-                  <input value={s.revision || "0"} onChange={e => updateSheet(i, "revision", e.target.value)}
+                  <input aria-label={`Revision code row ${sheets.indexOf(s) + 1}`} value={s.revision || ""} onChange={e => updateSheet(i, "revision", e.target.value)}
                     style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, width: 36 }}
                     onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
                     onBlur={e => e.target.style.borderColor = "transparent"} />
                 </td>
                 {multiFile && (
-                  <td style={{ padding: "6px 10px", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {s.sourceFile?.replace(/\.pdf$/i, "") || "—"}
+                  <td title={s.sourceFileUrl} style={{ padding: "6px 10px", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {sourceLabel(s.sourceFileUrl, s.sourceFile)}
                   </td>
                 )}
                 <td style={{ padding: "6px 10px" }}>
                   <input type="number" min="1" step="1"
-                    max={fileResultsByName.get(s.sourceFile)?.pageCount || undefined}
+                    max={fileResultsByPath.get(s.sourceFileUrl)?.pageCount || undefined}
                     aria-label={`PDF page for ${s.sheetNumber || "unnamed sheet"}`}
                     value={s.pdfPage ?? ""} onChange={event => updateSheet(i, "pdfPage", validatePdfPage(event.target.value))}
                     style={{ width: 64, color: "var(--text-primary)", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)" }} />
+                  <label htmlFor={`${reviewId}-${sheets.indexOf(s)}`} style={{ display: "block", fontSize: 11 }}>
+                    <input id={`${reviewId}-${sheets.indexOf(s)}`} type="checkbox" aria-label={`Reviewed ${s.sheetNumber || "unnamed sheet"} identity and PDF page`}
+                      checked={!!s.reviewed && !s.sourceReviewRequired}
+                      disabled={!s.sheetNumber?.trim() || !s.sheetTitle?.trim() || !s.revision?.trim()
+                        || validatePdfPage(s.pdfPage) === null || !fileResultsByPath.get(s.sourceFileUrl)?.pageCount
+                        || s.pdfPage > fileResultsByPath.get(s.sourceFileUrl)?.pageCount}
+                      onChange={event => {
+                        const realIdx = sheets.indexOf(s);
+                        setSheets(prev => prev.map((sheet, index) => index === realIdx
+                          ? { ...sheet, reviewed: event.target.checked, sourceReviewRequired: !event.target.checked } : sheet));
+                      }} />
+                    Reviewed identity and PDF page
+                  </label>
                 </td>
               </tr>
               );
@@ -299,7 +321,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
       <CrossSetSupersedePanel
         status={crossSet.status}
         plan={crossSet.plan}
-        canSupersede={canSupersede}
+        canSupersede={false}
         isChecked={crossSet.isChecked}
         onToggle={crossSet.toggle}
         onToggleGroup={crossSet.toggleGroup}
@@ -309,12 +331,16 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
       />
 
       {invalidSelectedSource && <p role="alert">Enter a sheet number and a valid 1-based PDF page for every selected sheet before creating entries.</p>}
+      {unreviewedSelected && <p role="alert">Explicitly review the number, title, revision and physical PDF page of each selected sheet.</p>}
+      <p>{selectedCount} of {sheets.length} reviewed rows selected; {fileResults.filter(result => result.status === "failed").length} files failed upload. Only selected rows will be saved.</p>
+      <p>New revisions are received only. This upload does not approve, release or supersede drawings.</p>
+      {!commandAvailable && <p role="status">Atomic drawing intake is unavailable. Refresh readiness before saving.</p>}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
         <Button
           onClick={handleCreateClick}
-          disabled={selectedCount === 0 || checkingOtherSets || invalidSelectedSource}
+          disabled={selectedCount === 0 || checkingOtherSets || invalidSelectedSource || unreviewedSelected || !commandAvailable}
           style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}
         >
           {checkingOtherSets
