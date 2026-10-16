@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 // Rendered only after a verified committed command result.
 export default function SuccessStep({ createdCount, fileResults, processError,
   commandWarning = /** @type {string | null} */ (null), onViewLog, onUploadAnother,
-  onReconcile = /** @type {(() => void) | null} */ (null) }) {
+  onReconcile = /** @type {(() => void) | null} */ (null), busy = false }) {
   return (
     <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-primary)" }}>
       <h3>Drawing save committed</h3>
@@ -18,7 +18,7 @@ export default function SuccessStep({ createdCount, fileResults, processError,
       <a href="/ScheduleHub">Open Schedule to review and link tasks</a>
       <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16 }}>
         {onUploadAnother && <Button variant="outline" onClick={onUploadAnother}>Upload Another Set</Button>}
-        {onReconcile && <Button variant="outline" onClick={onReconcile}>Reconcile committed receipt</Button>}
+        {onReconcile && <Button variant="outline" disabled={busy} onClick={onReconcile}>Reconcile committed receipt</Button>}
         <Button onClick={onViewLog}>View Drawing Log</Button>
       </div>
     </div>

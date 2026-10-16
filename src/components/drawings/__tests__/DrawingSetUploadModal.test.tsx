@@ -1,19 +1,23 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { IDBFactory } from 'fake-indexeddb';
+import { setActiveOrgId } from '@/lib/activeOrg';
+import { saveDrawingCommand, loadDrawingCommands } from '@/lib/drawingCommands/journal';
 import type { useUploadWizardState } from "../upload/useUploadWizardState";
 import { AuthContext, type AuthContextValue } from '@/lib/AuthContext';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
-import { draftFixture } from "@/lib/drawingCommands/__tests__/fixtures";
+import { createTestDrawingLocks, deferred, draftFixture, owner, resultFixture } from "@/lib/drawingCommands/__tests__/fixtures";
 const m = vi.hoisted(() => ({
   role: "pm", review: {} as Record<string, unknown>, creation: {} as Record<string, unknown>,
   command: { state: "reviewing", draft: null as ReturnType<typeof draftFixture> | null, error: null as { message: string } | null },
   create: vi.fn(), recover: vi.fn(), discard: vi.fn(), reviewedSetter: vi.fn(), resetSources: vi.fn(),
   org: { id: "org" } as { id: string } | null, wizard: null as ReturnType<typeof useUploadWizardState> | null,
-  realCommand: false, rpc: vi.fn(),
+  realCommand: false, forceReview: true, rpc: vi.fn(), getUser: vi.fn(), invalidate: vi.fn(),
 }));
-vi.mock('@/lib/supabase', () => ({ supabase: { rpc: m.rpc, auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) } } }));
+vi.mock('@/lib/supabase', () => ({ supabase: { rpc: m.rpc, auth: { getUser: m.getUser, onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) } } }));
+vi.mock('@/services/cacheRegistry', () => ({ invalidateEntities: m.invalidate }));
 vi.mock("@/services/permissions", () => ({ usePermissions: () => ({ can: () => m.role === "pm" }) }));
 vi.mock("@/lib/AuthContext", async () => ({ AuthContext: (await import('react')).createContext(undefined) }));
 vi.mock("@/components/shared/OrgContext", () => ({ useOrg: () => { if (!m.org) throw new Error('missing org provider'); return { currentOrg: m.org }; }, useOptionalOrg: () => m.org ? { currentOrg: m.org } : null }));
@@ -27,7 +31,7 @@ vi.mock("../upload/useUploadWizardState", async importOriginal => {
   const actual = await importOriginal<typeof import('../upload/useUploadWizardState')>();
   return { useUploadWizardState: (args: NonNullable<Parameters<typeof actual.useUploadWizardState>[0]>) => {
     m.wizard = actual.useUploadWizardState(args);
-    return { ...m.wizard, step: 4 };
+    return m.forceReview ? { ...m.wizard, step: 4 } : m.wizard;
   } };
 });
 vi.mock("../upload/useFileUploadAndExtract", () => ({ useFileUploadAndExtract: () => ({
@@ -47,12 +51,11 @@ vi.mock("../uploadSteps/ChoiceStep", () => ({ default: (): null => null }));
 vi.mock("../uploadSteps/SetInfoStep", () => ({ default: (): null => null }));
 vi.mock("../uploadSteps/FileDropStep", () => ({ default: (): null => null }));
 vi.mock("../uploadSteps/ProcessingStep", () => ({ default: (): null => null }));
-vi.mock("../uploadSteps/SuccessStep", () => ({ default: (): null => null }));
 import DrawingSetUploadModal from "../DrawingSetUploadModal";
 function mount() {
   return render(<AuthContext.Provider value={{ user: { id: 'actor' } } as AuthContextValue}><QueryClientProvider client={new QueryClient()}><DrawingSetUploadModal open onClose={() => {}} onComplete={() => {}} activeProject={{ id: "project" }} onNewRevision={() => {}} /></QueryClientProvider></AuthContext.Provider>);
 }
-beforeEach(() => { vi.clearAllMocks(); m.realCommand = false; m.role = "pm"; m.org = { id: "org" }; m.command = { state: "reviewing", draft: null, error: null }; });
+beforeEach(() => { vi.clearAllMocks(); m.realCommand = false; m.forceReview = true; m.role = "pm"; m.org = { id: "org" }; m.command = { state: "reviewing", draft: null, error: null }; });
 it("wires original-source-aware setter and actor/org/project owner", () => {
   mount();
   expect(m.review.setSheets).toBe(m.reviewedSetter);
@@ -113,4 +116,35 @@ it("real wizard review survives rerenders and resets only on open/project transi
   rendered.rerender(view(false, 'other-project'));
   rendered.rerender(view(true, 'other-project'));
   expect(m.resetSources).toHaveBeenCalledTimes(3);
+});
+it('known committed modal stays truthful and busy during follow-up receipt retry', async () => {
+  vi.stubGlobal('indexedDB', new IDBFactory()); vi.stubGlobal('navigator', { locks: createTestDrawingLocks() });
+  setActiveOrgId(owner.orgId);
+  await saveDrawingCommand(draftFixture());
+  m.realCommand = true; m.forceReview = false; m.org = { id: owner.orgId };
+  m.getUser.mockResolvedValue({ data: { user: { id: owner.actorId } }, error: null });
+  m.invalidate.mockRejectedValue(new Error('cache failed'));
+  m.rpc.mockImplementation(async (name: string) => ({ error: null, data: name === 'get_drawing_command_capabilities'
+    ? { contract_version: 1, new_set: true, revision: true, write_boundary: true, source_protection: true, receipt_lookup: true }
+    : { state: 'committed', result: resultFixture() } }));
+  render(<AuthContext.Provider value={{ user: { id: owner.actorId } } as AuthContextValue}><QueryClientProvider client={new QueryClient()}><DrawingSetUploadModal open onClose={() => {}} onComplete={() => {}} activeProject={{ id: owner.projectId }} onNewRevision={() => {}} /></QueryClientProvider></AuthContext.Provider>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Reconcile saved request' }));
+  expect(await screen.findByRole('heading', { name: 'Drawing save committed' })).toBeInTheDocument();
+  const retry = await screen.findByRole('button', { name: 'Reconcile committed receipt' });
+  await waitFor(() => expect(retry).toBeEnabled());
+  const reply = deferred<{ data: { state: 'pending' }; error: null }>();
+  m.rpc.mockClear(); m.rpc.mockReturnValue(reply.promise);
+  fireEvent.click(retry);
+  expect(screen.getByRole('heading', { name: 'Drawing save committed' })).toBeInTheDocument();
+  expect(screen.getByText('1 Drawing Log entry created.')).toBeInTheDocument();
+  expect(retry).toBeDisabled();
+  fireEvent.click(retry);
+  await waitFor(() => expect(m.rpc).toHaveBeenCalledTimes(1));
+  await act(async () => { reply.resolve({ data: { state: 'pending' }, error: null }); });
+  expect(screen.getByText('1 Drawing Log entry created.')).toBeInTheDocument();
+  expect(screen.getByText(/Automatic schedule linking was not performed/)).toBeInTheDocument();
+  await waitFor(() => expect(retry).toBeEnabled());
+  expect(m.rpc).toHaveBeenCalledTimes(1);
+  expect(m.rpc.mock.calls[0][0]).toBe('get_drawing_command_receipt');
+  expect(await loadDrawingCommands(owner)).toEqual([draftFixture()]);
 });

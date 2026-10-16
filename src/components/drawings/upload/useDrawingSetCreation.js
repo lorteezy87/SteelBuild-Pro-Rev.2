@@ -54,11 +54,12 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, onComp
   } });
 
   const begin = () => {
-    committedAttempt.current = false;
+    const knownCommit = command.draft && command.outcome?.kind === "committed" ? command.outcome.result : null;
+    committedAttempt.current = !!knownCommit;
     cancelledRef.current = false;
-    setProcessError(null);
-    setStep(3);
-    setCreatedCount(null);
+    setProcessError(knownCommit ? SCHEDULE_HELD : null);
+    setStep(knownCommit ? 5 : 3);
+    setCreatedCount(knownCommit ? knownCommit.added : null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "Checking the saved drawing command…" });
     const generation = getActiveOrgGeneration();
     const visit = contextVisit.current;
@@ -82,10 +83,11 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, onComp
   const handleRecover = async () => {
     if (busy.current || command.draft?.operation !== "create_set") return;
     busy.current = true;
+    setPreparing(true);
     const isCurrent = begin();
     try { showOutcome(await command.reconcile(), isCurrent); }
-    catch { if (isCurrent()) setProcessError("The saved drawing request remains unresolved. Receipt recovery is unavailable; do not create another copy."); }
-    finally { busy.current = false; }
+    catch { if (isCurrent() && !committedAttempt.current) setProcessError("The saved drawing request remains unresolved. Receipt recovery is unavailable; do not create another copy."); }
+    finally { busy.current = false; setPreparing(false); }
   };
 
   const handleCreate = async (selectedSheets, { supersedeIds = /** @type {string[]} */ ([]) } = {}) => {
@@ -146,7 +148,7 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, onComp
       if (discarded && isCurrent()) state.reset();
       else if (isCurrent() && !committedAttempt.current) setProcessError("The request was not discarded. Reconcile its receipt before starting another upload.");
     }
-    catch { if (isCurrent()) setProcessError("The saved request could not be discarded. Its receipt remains unresolved."); }
+    catch { if (isCurrent() && !committedAttempt.current) setProcessError("The saved request could not be discarded. Its receipt remains unresolved."); }
     finally { busy.current = false; setPreparing(false); }
   };
   return { handleCreate, handleRecover, handleDiscardSaved, command, available, preparing, refreshReadiness: () => setCapabilityVisit(value => value + 1) };

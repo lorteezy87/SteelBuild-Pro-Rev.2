@@ -7,7 +7,8 @@ import { completeDrawingCommand, loadDrawingCommands, saveDrawingCommand } from 
 import { setActiveOrgId } from '@/lib/activeOrg';
 import { createTestDrawingLocks, deferred, draftFixture, nextId, owner, resultFixture } from './fixtures';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
-import type { DrawingCommandOutcome } from '../types';
+import type { DrawingCommandOutcome, DrawingCommandOwner } from '../types';
+import { DrawingCommandPreflightError } from '../errors';
 
 const { rpc, getUser, onAuthStateChange } = vi.hoisted(() => ({ rpc: vi.fn(), getUser: vi.fn(), onAuthStateChange: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc, auth: { getUser, onAuthStateChange } } }));
@@ -238,6 +239,73 @@ it('retry after cache/schedule failure acknowledges same receipt without another
   expect(onCommitted).toHaveBeenCalledTimes(2);
   expect(rpc.mock.calls.filter(([name]) => name === 'create_drawing_set_from_review')).toHaveLength(1);
   expect(await loadDrawingCommands(owner)).toEqual([]);
+});
+
+it.each((['reconcile', 'dismissSavedReview'] as const).flatMap(action =>
+  (['lookup-error', 'pending', 'preflight-unavailable', 'not_committed'] as const).map(response => ({ action, response }))))('known commit remains monotonic through $action after $response', async ({ action, response }) => {
+    const onCommitted = vi.fn().mockRejectedValue(new Error('cache failed'));
+    const hook = renderHook(() => useDrawingCommand(owner, { onCommitted }));
+    await waitFor(() => expect(hook.result.current.state).toBe('reviewing'));
+    rpc.mockImplementation(async (name: string) => ({ error: null, data: name === 'get_drawing_command_receipt' ? { state: 'not_committed' } : name === 'get_drawing_command_capabilities' ? flags : resultFixture() }));
+    await act(async () => { await hook.result.current.prepare(draftFixture()); await hook.result.current.apply(); });
+    expect(hook.result.current.state).toBe('committed');
+    rpc.mockClear();
+    if (response === 'preflight-unavailable') getUser.mockRejectedValueOnce(new DrawingCommandPreflightError('unavailable'));
+    rpc.mockImplementation(async (name: string) => {
+      if (response === 'lookup-error') throw new Error('lookup failed');
+      return { error: null, data: name === 'get_drawing_command_receipt' ? { state: response } : name === 'get_drawing_command_capabilities' ? flags : resultFixture() };
+    });
+    await act(async () => { await hook.result.current[action]().catch((): undefined => undefined); });
+    expect(hook.result.current.state, response).toBe('committed');
+    expect(hook.result.current.outcome, response).toEqual({ kind: 'committed', result: resultFixture() });
+    expect(hook.result.current.error?.message, response).toMatch(/committed.*follow-up/i);
+    expect(await loadDrawingCommands(owner), response).toEqual([draftFixture()]);
+    expect(rpc.mock.calls.some(([name]) => name === 'create_drawing_set_from_review'), response).toBe(false);
+    expect(onCommitted, response).toHaveBeenCalledOnce();
+});
+
+it.each(['reconcile', 'dismissSavedReview'] as const)('known commit %s only retries acknowledgement on a genuine committed receipt', async action => {
+  const onCommitted = vi.fn().mockRejectedValueOnce(new Error('cache failed')).mockResolvedValue(undefined);
+  const hook = renderHook(() => useDrawingCommand(owner, { onCommitted }));
+  await waitFor(() => expect(hook.result.current.state).toBe('reviewing'));
+  await act(async () => { await hook.result.current.prepare(draftFixture()); await hook.result.current.apply(); });
+  rpc.mockClear(); rpc.mockResolvedValue({ data: { state: 'committed', result: resultFixture() }, error: null });
+  await act(async () => { await hook.result.current[action](); });
+  expect(onCommitted).toHaveBeenCalledTimes(2);
+  expect(rpc.mock.calls.map(([name]) => name)).toEqual(['get_drawing_command_receipt']);
+  expect(hook.result.current.outcome).toEqual({ kind: 'committed', result: resultFixture() });
+  expect(hook.result.current.draft).toBeNull();
+  expect(await loadDrawingCommands(owner)).toEqual([]);
+});
+
+it.each(['reconcile', 'dismissSavedReview'] as const)('known commit %s cannot publish or acknowledge after owner change', async action => {
+  const onCommitted = vi.fn().mockRejectedValue(new Error('cache failed'));
+  const hook = renderHook(({ selectedOwner }: { selectedOwner: DrawingCommandOwner }) => useDrawingCommand(selectedOwner, { onCommitted }), { initialProps: { selectedOwner: owner } });
+  await waitFor(() => expect(hook.result.current.state).toBe('reviewing'));
+  await act(async () => { await hook.result.current.prepare(draftFixture()); await hook.result.current.apply(); });
+  const reply = deferred<{ data: unknown; error: null }>();
+  rpc.mockClear(); rpc.mockReturnValue(reply.promise);
+  let attempt!: Promise<unknown>;
+  act(() => { attempt = hook.result.current[action]().catch((): undefined => undefined); });
+  await waitFor(() => expect(rpc).toHaveBeenCalledOnce());
+  hook.rerender({ selectedOwner: { ...owner, projectId: nextId } });
+  await act(async () => { reply.resolve({ data: { state: 'committed', result: resultFixture() }, error: null }); await attempt; });
+  expect(onCommitted).toHaveBeenCalledOnce();
+  expect(hook.result.current.outcome).toBeNull();
+  expect(hook.result.current.draft).toBeNull();
+  expect(await loadDrawingCommands(owner)).toEqual([draftFixture()]);
+});
+
+it('known commit without Web Locks retains its journal and committed result', async () => {
+  const hook = renderHook(() => useDrawingCommand(owner, { onCommitted: () => { throw new Error('cache failed'); } }));
+  await waitFor(() => expect(hook.result.current.state).toBe('reviewing'));
+  await act(async () => { await hook.result.current.prepare(draftFixture()); await hook.result.current.apply(); });
+  vi.stubGlobal('navigator', {}); rpc.mockClear();
+  await act(async () => { await expect(hook.result.current.dismissSavedReview()).rejects.toThrow(); });
+  expect(hook.result.current.state).toBe('committed');
+  expect(hook.result.current.outcome).toEqual({ kind: 'committed', result: resultFixture() });
+  expect(await loadDrawingCommands(owner)).toEqual([draftFixture()]);
+  expect(rpc).not.toHaveBeenCalled();
 });
 
 it('sign-out invalidates active work and sign-in never auto replays', async () => {

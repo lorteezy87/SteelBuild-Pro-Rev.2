@@ -7,6 +7,7 @@ import { useUploadWizardState } from '../useUploadWizardState';
 import { loadDrawingCommands, saveDrawingCommand } from '@/lib/drawingCommands/journal';
 import { setActiveOrgId } from '@/lib/activeOrg';
 import { createTestDrawingLocks, deferred, draftFixture, owner, resultFixture } from '@/lib/drawingCommands/__tests__/fixtures';
+import { DrawingCommandPreflightError } from '@/lib/drawingCommands/errors';
 
 const m = vi.hoisted(() => ({ rpc: vi.fn(), getUser: vi.fn(), legacy: vi.fn(), invalidate: vi.fn(), applyCommand: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc: m.rpc, auth: { getUser: m.getUser, onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) } } }));
@@ -150,6 +151,26 @@ it('post-commit cache failure retains a committed receipt and never creates twic
   await act(async () => { await hook.result.current.handleRecover(); });
   expect(m.applyCommand).toHaveBeenCalledTimes(1);
   expect(await loadDrawingCommands(owner)).toEqual([]);
+});
+it.each((['handleRecover', 'handleDiscardSaved'] as const).flatMap(action =>
+  (['lookup-error', 'pending', 'preflight-unavailable', 'not_committed'] as const).map(response => ({ action, response }))))('known committed count and warning survive $action after $response', async ({ action, response }) => {
+  m.invalidate.mockRejectedValue(new Error('cache failed'));
+  const hook = await mount();
+  await act(async () => { await hook.result.current.handleCreate([sheet]); });
+  const [saved] = await loadDrawingCommands(owner);
+    if (response === 'preflight-unavailable') m.getUser.mockRejectedValueOnce(new DrawingCommandPreflightError('unavailable'));
+    m.rpc.mockImplementation(async (name: string, args: unknown) => {
+      if (response === 'lookup-error') throw new Error('lookup failed');
+      return name === 'get_drawing_command_receipt' ? { error: null, data: { state: response } } : name === 'get_drawing_command_capabilities' ? { error: null, data: flags } : m.applyCommand(args);
+    });
+    await act(async () => { await hook.result.current[action](); });
+    expect(hook.result.current.state.step, response).toBe(5);
+    expect(hook.result.current.state.createdCount, response).toBe(1);
+    expect(hook.result.current.command.state, response).toBe('committed');
+    expect(hook.result.current.state.processError, response).toContain('Automatic schedule linking was not performed');
+    expect(hook.result.current.command.error?.message, response).toMatch(/committed.*follow-up/i);
+    expect(await loadDrawingCommands(owner), response).toEqual([saved]);
+    expect(m.applyCommand, response).toHaveBeenCalledOnce();
 });
 it('pending or failed receipt lookup cannot claim zero committed rows or dispatch again', async () => {
   m.applyCommand.mockRejectedValue(new Error('response lost'));

@@ -108,7 +108,7 @@ export default function DrawingSetUploadModal({
           {!showRecovery && step === 2 && <FileDropStep files={files} setFiles={setFiles} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} setName={meta.setName} />}
           {!showRecovery && step === 3 && <ProcessingStep processingStatus={processingStatus} onCancel={preparing ? handleClose : reset} error={processError} recoverable={preparing} />}
           {!showRecovery && step === 4 && <ReviewStep sheets={sheets} setSheets={setReviewedSheets} fileResults={fileResults} meta={meta} setMeta={setMeta} aiFilledFields={aiFilledFields} onBack={() => setStep(2)} onCreate={handleCreate} existingDrawings={existingDrawings} projectId={activeProject?.id ?? null} commandAvailable={available && ["reviewing", "committed"].includes(command.state) && can("create", "drawing")} />}
-          {step === 5 && <SuccessStep createdCount={createdCount} fileResults={fileResults} processError={processError} commandWarning={command.error?.message} onViewLog={handleClose} onUploadAnother={savedDraft ? null : reset} onReconcile={savedDraft ? handleRecover : null} />}
+          {step === 5 && <SuccessStep createdCount={createdCount} fileResults={fileResults} processError={processError} commandWarning={command.error?.message} onViewLog={handleClose} onUploadAnother={savedDraft ? null : reset} onReconcile={savedDraft ? handleRecover : null} busy={saveBusy} />}
 
         </div>
       </DialogContent>

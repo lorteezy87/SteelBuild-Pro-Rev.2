@@ -154,10 +154,26 @@ export function useDrawingCommand(owner: DrawingCommandOwner | null, options: Dr
     fence.assertCurrent();
     const draft = scope.view.draft;
     if (!scope.ready || scope.busy || !draft) throw new DrawingCommandPreflightError('unavailable');
+    // This outcome belongs to this exact retained draft in the current owner scope.
+    // Once observed, receipt trouble can only delay acknowledgement, never undo the commit.
+    const knownCommit = scope.view.outcome?.kind === 'committed' ? scope.view.outcome : null;
     scope.busy = true;
-    publish({ ...scope.view, state: 'pending', error: null });
+    if (!knownCommit) publish({ ...scope.view, state: 'pending', error: null });
     try {
       await assertActor(fence);
+      if (knownCommit) {
+        const receipt = await withDrawingCommandLock(draft.owner, async () => {
+          await assertDrawingCommandReserved(draft);
+          fence.assertCurrent();
+          return getDrawingCommandReceipt(draft, fence);
+        });
+        fence.assertCurrent();
+        if (receipt.state === 'committed') await acknowledge(draft, knownCommit, fence);
+        else publish({ state: 'committed', draft, outcome: knownCommit, error: {
+          code: 'acknowledgement_pending', message: 'The drawing command committed. Follow-up remains incomplete because its latest receipt could not confirm acknowledgement. Do not create another copy.',
+        } });
+        return knownCommit;
+      }
       const outcome = await reconcileDrawingCommand(draft, fence);
       // Logical cancellation does not change a dispatched command's outcome or erase its journal.
       try { fence.assertCurrent(); } catch { return outcome; }
@@ -169,7 +185,10 @@ export function useDrawingCommand(owner: DrawingCommandOwner | null, options: Dr
       return outcome;
     } catch (error) {
       try { fence.assertCurrent(); } catch { throw error; }
-      publish({ ...scope.view, state: error instanceof DrawingCommandPreflightError || error instanceof DrawingCommandJournalError ? 'unavailable' : 'uncertain',
+      if (knownCommit) publish({ state: 'committed', draft, outcome: knownCommit, error: {
+        code: 'acknowledgement_failed', message: 'The drawing command committed. Follow-up receipt recovery is unavailable; the saved request is retained. Do not create another copy.',
+      } });
+      else publish({ ...scope.view, state: error instanceof DrawingCommandPreflightError || error instanceof DrawingCommandJournalError ? 'unavailable' : 'uncertain',
         error: { code: 'recovery_failed', message: 'The saved command remains unresolved. Its receipt could not be safely reconciled.' } });
       throw error;
     } finally { scope.busy = false; }
@@ -181,6 +200,10 @@ export function useDrawingCommand(owner: DrawingCommandOwner | null, options: Dr
     fence.assertCurrent();
     const draft = scope.view.draft;
     if (!scope.ready || scope.busy || !draft) throw new DrawingCommandPreflightError('unavailable');
+    if (scope.view.outcome?.kind === 'committed') {
+      await run(); // Known commits are acknowledgement-only, never uncommitted-review deletion.
+      return false;
+    }
     scope.busy = true;
     try {
       await assertActor(fence);
