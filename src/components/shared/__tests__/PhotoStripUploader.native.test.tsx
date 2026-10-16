@@ -9,7 +9,7 @@ const { captureNativePhoto, nativeImpact, uploadFile } = vi.hoisted(() => ({
   uploadFile: vi.fn(),
 }));
 
-vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => true }));
+vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => true, isStoreShell: () => true }));
 vi.mock("@/lib/native/capabilities", () => ({
   captureNativePhoto,
   nativeImpact,
