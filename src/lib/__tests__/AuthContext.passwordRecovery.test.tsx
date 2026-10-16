@@ -28,7 +28,7 @@ vi.mock("@/lib/supabase", () => ({ supabase: {
 } }));
 vi.mock("@/lib/query-client", () => ({ queryClientInstance: { clear: vi.fn() } }));
 vi.mock("@/lib/field/blobStore", () => ({ clearPendingPhotos: vi.fn(async () => {}) }));
-vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => false }));
+vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => false, isStoreShell: () => false }));
 vi.mock("@sentry/react", () => ({ setUser: vi.fn() }));
 vi.mock("@/components/shared/OrgContext", () => ({ OrgProvider: ({ children }: React.PropsWithChildren) => children, useOrg: () => ({ hasOrg: true, isLoadingOrgs: false }) }));
 vi.mock("@/components/shared/ProjectContext", () => ({ ProjectProvider: ({ children }: React.PropsWithChildren) => children }));
