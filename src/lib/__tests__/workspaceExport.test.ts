@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ProjectExportEnvelope } from '@/services/projectExportService';
 
 const invokeMock = vi.fn();
 const fromMock = vi.hoisted(() => vi.fn());
@@ -19,9 +20,9 @@ import {
 
 describe("buildWorkspaceExport", () => {
   it("bundles envelopes, sums total_rows, defaults workspace, carries failures", () => {
-    const envs = [
-      { export_version: 1, total_rows: 10, exported_at: "", exported_by: "", project: {}, tables: {}, row_counts: {} },
-      { export_version: 1, total_rows: 5, exported_at: "", exported_by: "", project: {}, tables: {}, row_counts: {} },
+    const envs: ProjectExportEnvelope[] = [
+      { export_version: 2, total_rows: 10, exported_at: "", exported_by: "", project: {}, tables: {}, row_counts: {}, files: [], file_count: 0, storage_files: [] },
+      { export_version: 2, total_rows: 5, exported_at: "", exported_by: "", project: {}, tables: {}, row_counts: {}, files: [], file_count: 0, storage_files: [] },
     ];
     const b = buildWorkspaceExport(envs, {
       exportedAt: "2026-06-16T00:00:00.000Z",
@@ -51,6 +52,16 @@ describe("workspaceExportFileName", () => {
 
 describe("exportWorkspace", () => {
   beforeEach(() => invokeMock.mockReset());
+
+  it('workspaceBundleRetainsExtension and reports an unavailable reader unchanged', async () => {
+    const envelope: ProjectExportEnvelope = { export_version: 2, total_rows: 0, tables: {}, exported_at: '', exported_by: '', project: {}, row_counts: {}, files: [], file_count: 0, storage_files: [], extensions: { drawing_evidence: { version: 1, observations: [], snapshot_token: 'a'.repeat(64) } } };
+    invokeMock.mockResolvedValueOnce({ data: envelope, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'DRAWING_EXPORT_CONFLICT' } });
+    const bundle = await exportWorkspace([{ id: 'p1' }, { id: 'p2' }]);
+    expect(bundle.export_version).toBe(1);
+    expect(bundle.projects).toEqual([envelope]);
+    expect(bundle.failures[0].error).toBe('DRAWING_EXPORT_CONFLICT');
+  });
 
   it("exports each project and records a per-project failure without aborting the rest", async () => {
     invokeMock

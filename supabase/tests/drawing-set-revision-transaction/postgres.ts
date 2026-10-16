@@ -8,6 +8,7 @@ import { runCases, snapshot, tables } from './cases.ts';
 import { runCommandCases } from './commandCases.ts';
 import { runSourceCases } from './sourceCases.ts';
 import { runBoundaryCases } from './boundaryCases.ts';
+import { runExportCases, exportCandidateUrl } from './exportCases.ts';
 import { command, parent, submit, checklist, execute as roundExecute } from '../submittal-revision-evidence/cases.ts';
 
 assert.equal(process.env.DRAWING_UPLOAD_POSTGRES_TEST,'1','Explicit disposable fixture opt-in required');
@@ -51,10 +52,15 @@ let count=0;
 async function check(name:string,run:()=>Promise<void>){await reset();await run();count++;console.log(`PASS concurrent ${name}`);}
 try{
   assert.equal((await admin.query("select count(*)::int n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_%' and c.relkind='r'")).rows[0].n,0,'Disposable fixture database must start empty');
+  // Only after the URL preflight and initial-empty census above. These are
+  // operator fixture assertions, not a security boundary for hosted callers.
+  await admin.query("select set_config('drawing_recovery.empty_fixture_verified','yes',false),set_config('drawing_recovery.client_loopback_verified','yes',false)");
   await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);await db.exec(boundaryCandidate);console.log(`${await runCases(db)} actual PostgreSQL behavioral checks passed`);
   console.log(`${await runBoundaryCases(db)} actual PostgreSQL write boundary checks passed`);
   console.log(`${await runCommandCases(db)} actual PostgreSQL atomic command checks passed`);
   console.log(`${await runSourceCases(db)} actual PostgreSQL source protection checks passed`);
+  await db.exec(await readFile(exportCandidateUrl,'utf8'));
+  console.log(`${await runExportCases(db,true)} actual PostgreSQL observation export checks passed`);
   for(const field of ['is_member','is_pm','mfa_satisfied'])await check(`governing approval final receipt wait rechecks ${field}`,async()=>{
     await roundExecute(db,command(await parent(db),submit));
     const approval=command(await parent(db),{status:'Approved',ball_in_court:'GC',metadata:{ofs_checklist:checklist}});

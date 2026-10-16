@@ -36,6 +36,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { reportError } from "../_shared/reportError.ts";
 import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
+import { readDrawingEvidence, type DrawingEvidenceClient } from './drawingEvidence.ts';
 
 // Additional object inventory supplements, rather than replaces, the v2 file references.
 const PROJECT_EXPORT_STORAGE_BUCKETS = ["app-files", "email-attachments"] as const;
@@ -292,11 +293,15 @@ async function handle(req: Request): Promise<Response> {
   // here is logged and skipped — it must not abort a data-complete export.
   const files = await listProjectStorageFiles(rls, projectId, typeof project.org_id === "string" ? project.org_id : undefined);
 
+  // Missing reader/version is unavailable, never an empty historical record.
+  const drawingEvidence = await readDrawingEvidence(rls as unknown as DrawingEvidenceClient, projectId);
+
   const envelope = buildProjectExport({
     project: project as Record<string, unknown>,
     tableResults,
     storageFiles: files,
     exportedBy: user.displayName,
+    drawingEvidence,
   });
 
   // Preserve the caller's database identity through the mandatory final write.

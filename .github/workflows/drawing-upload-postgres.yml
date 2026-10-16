@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - supabase/candidates/drawing-set-revision-transaction.sql
+      - supabase/candidates/drawing-source-observation-export.sql
       - supabase/candidates/drawing-adopted-source-protection.sql
       - supabase/candidates/drawing-command-write-boundary.sql
       - supabase/tests/drawing-set-revision-transaction/**
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - supabase/candidates/drawing-set-revision-transaction.sql
+      - supabase/candidates/drawing-source-observation-export.sql
       - supabase/candidates/drawing-adopted-source-protection.sql
       - supabase/candidates/drawing-command-write-boundary.sql
       - supabase/tests/drawing-set-revision-transaction/**

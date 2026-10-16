@@ -7,7 +7,7 @@
  *   - row counts / totals are accurate (the audit description derives from them),
  *   - the audit record records WHO exported WHAT and how much, in snake_case
  *     columns matching the activities table, without leaking row data,
- *   - the audit trail table (`activities`) is never itself part of the export.
+ *   - the shared v2 manifest and caller-attributed audit shape are retained.
  */
 
 import { describe, it, expect } from "vitest";
@@ -30,8 +30,8 @@ const tableResults: ProjectExportTableResult[] = [
 ];
 
 describe("PROJECT_EXPORT_TABLES manifest", () => {
-  it("never includes the audit trail table itself", () => {
-    expect(PROJECT_EXPORT_TABLES).not.toContain("activities");
+  it("retains the existing v2 activity history", () => {
+    expect(PROJECT_EXPORT_TABLES).toContain("activities");
   });
 
   it("never includes the projects header table (exported as the envelope head)", () => {
@@ -52,7 +52,7 @@ describe("buildProjectExport", () => {
       exportedAt: "2026-06-04T12:00:00.000Z",
     });
 
-    expect(env.export_version).toBe(PROJECT_EXPORT_VERSION);
+    expect(env.export_version).toBe(2);
     expect(env.exported_at).toBe("2026-06-04T12:00:00.000Z");
     expect(env.exported_by).toBe("Pat PM");
     expect(env.project).toEqual(project);
@@ -106,6 +106,7 @@ describe("buildExportAuditRecord", () => {
       export_version: PROJECT_EXPORT_VERSION,
       total_rows: 3,
       table_count: 3,
+      file_count: 0,
     });
   });
 
@@ -117,7 +118,7 @@ describe("buildExportAuditRecord", () => {
       envelope: env,
       performedBy: "Pat PM",
     });
-    expect(audit.description).toBe("Exported project backup — 3 rows across 3 tables");
+    expect(audit.description).toBe("Exported project backup — 3 rows across 3 tables, 0 file reference(s)");
     // No row identifiers should appear in the audit description.
     expect(audit.description).not.toContain("d1");
     expect(audit.description).not.toContain("r1");

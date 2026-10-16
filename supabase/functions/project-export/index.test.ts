@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import ts from 'typescript';
 import { buildExportAuditRecord, buildProjectExport } from './exportShape';
 import { mfaDenialForVerifiedUser } from '../_shared/mfa';
+import { readDrawingEvidence } from './drawingEvidence';
 
 // Execute unchanged entrypoint bodies; only the Deno import/network boundary is
 // replaced. The SQL companion exercises the installed trigger and RLS policies.
@@ -31,6 +32,8 @@ interface Scenario {
   auditError?: string;
   visible?: boolean;
   serviceKey?: boolean;
+  evidenceError?: string;
+  evidenceVersion?: number;
 }
 function setup(scenario: Scenario = {}) {
   const environment: Record<string, string | undefined> = {
@@ -43,6 +46,7 @@ function setup(scenario: Scenario = {}) {
   const adminInsert = vi.fn(async () => ({ data: null, error: null }));
   const readTablePaged = vi.fn(async () => ({ rows: [], error: null }));
   const client = {
+    rpc: async () => ({ data: { version: scenario.evidenceVersion ?? 1, rows: [], next_cursor: null, snapshot_token: 'a'.repeat(64) }, error: scenario.evidenceError ? { message: scenario.evidenceError } : null }),
     from: vi.fn((table: string) => table === 'activities' ? { insert } : {
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: scenario.visible === false ? null : { id: project, org_id: 'workspace' }, error: null }) }) }),
     }),
@@ -55,7 +59,7 @@ function setup(scenario: Scenario = {}) {
     corsHeaders: () => ({}), errorResponse: (status: number, error: string) => json({ error }, status), jsonResponse: json,
     PROJECT_EXPORT_TABLES: ['drawings'], readTablePaged,
     readNoteFolderExport: async () => ({ results: [], error: null }), listProjectStorageFiles: async () => [],
-    buildProjectExport, buildExportAuditRecord,
+    buildProjectExport, buildExportAuditRecord, readDrawingEvidence,
   };
   bindings.verifyJwt = compile('verifyJwt', bindings);
   return { handle: compile('handle', bindings), insert, adminInsert, selected, createClient, readTablePaged, authFetch };
@@ -64,6 +68,11 @@ function setup(scenario: Scenario = {}) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('project export requires a persisted caller-attributed audit', () => {
+  it.each([{ evidenceError: 'DRAWING_EXPORT_CONFLICT' }, { evidenceError: 'function not found' }, { evidenceVersion: 2 }])('refuses success/audit when evidence is unavailable %j', async scenario => {
+    const test = setup(scenario);
+    await expect(test.handle(request())).rejects.toThrow();
+    expect(test.insert).not.toHaveBeenCalled();
+  });
   it('uses the caller JWT for the final write and returns v2 only after its verified actor is persisted', async () => {
     const test = setup();
     const response = await test.handle(request());
