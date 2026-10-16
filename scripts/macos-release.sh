@@ -38,7 +38,7 @@ import os,re,sys
 from pathlib import Path
 s=Path(sys.argv[1]).read_text(errors='replace')
 for k,v in os.environ.items():
- if v and (k.startswith(('ASC_','IOS_','MAC_','VITE_')) or k in ('HOME','RUNNER_TEMP')): s=s.replace(v,'[redacted]')
+ if v and (k.startswith(('ASC_','IOS_','MAC_','VITE_')) or k in ('HOME','RUNNER_TEMP','GH_TOKEN')): s=s.replace(v,'[redacted]')
 s=re.sub(r'-----BEGIN .*?-----.*?-----END .*?-----','[redacted]',s,flags=re.S)
 s='\n'.join(line for line in s.splitlines() if not any(x in line.lower() for x in ['signing identity','provisioning profile','authority=','teamidentifier=','3rd party mac developer','apple distribution:']))
 Path('macos/output/release-diagnostics.txt').write_text(s[-12000:])
@@ -142,6 +142,7 @@ run_private 'Installer signature verification' pkgutil --check-signature "$packa
 export API_PRIVATE_KEYS_DIR="$release_tmp/private_keys"
 run_private 'App Store package validation' xcrun altool --validate-app --type macos --file "$package" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
 if [[ "${MAC_UPLOAD:-false}" == true ]]; then
+  node scripts/macos-release-gate.mjs --check-current-main
   run_private 'App Store upload' xcrun altool --upload-app --type macos --file "$package" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
   ASC_KEY_PATH="$release_tmp/private_keys/AuthKey_$ASC_KEY_ID.p8" node scripts/macos-verify-upload.mjs
 fi
