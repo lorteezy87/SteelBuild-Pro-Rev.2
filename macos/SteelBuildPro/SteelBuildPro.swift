@@ -13,6 +13,7 @@ struct SteelBuildDesktopApp: App {
         WindowGroup("SteelBuild Pro") {
             DesktopWebView(browser: browser)
                 .frame(minWidth: 900, minHeight: 600)
+                .onAppear { NSApplication.shared.activate(ignoringOtherApps: true) }
                 .toolbar {
                     Button(action: browser.back) { Image(systemName: "chevron.left") }
                         .help("Back")
@@ -79,7 +80,7 @@ final class DesktopBrowser: NSObject, ObservableObject, WKNavigationDelegate, WK
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
-        webView.load(URLRequest(url: URL(string: "steelbuild://localhost/")!))
+        webView.load(URLRequest(url: URL(string: "steelbuild://localhost/Dashboard")!))
     }
 
     func back() { webView.goBack() }
