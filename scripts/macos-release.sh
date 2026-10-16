@@ -121,6 +121,10 @@ info['DTXcode']=v[0].zfill(2)+''.join((v+['0','0'])[i] for i in (1,2)); info['DT
 p.write_bytes(plistlib.dumps(info))
 assert (p.parent/'Resources/PrivacyInfo.xcprivacy').exists()
 PYINFO
+node scripts/macos-bundle-permissions.mjs "$app"
+# Newly generated signature resources must also be readable. All private material
+# already lives inside the mode-0700 release_tmp directory and retains mode 0600.
+umask 022
 run_private 'Distribution app signing' codesign --force --sign "$app_identity" --keychain "$release_keychain" --timestamp --entitlements "$release_tmp/entitlements.plist" "$app"
 run_private 'Strict signature verification' codesign --verify --strict --verbose=2 "$app"
 codesign -d --entitlements :- "$app" > "$release_tmp/signed-entitlements.plist" 2>/dev/null
