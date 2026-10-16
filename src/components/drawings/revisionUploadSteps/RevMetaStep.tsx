@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 import { getRevisionSuggestions } from "@/lib/drawingUploadUtils";
 // ── Step B: Revision Metadata ──────────────────────────────────────
@@ -6,14 +6,6 @@ export default function StepRevMeta(props: any) {
   const { selectedSet, revMeta, setRevMeta, onBack, onNext } = props;
   const suggestions = getRevisionSuggestions(selectedSet.revision);
   const set = (k: any, v: any) => setRevMeta((p: any) => ({ ...p, [k]: v }));
-  const [autoFilled, setAutoFilled] = useState(false);
-
-  useEffect(() => {
-    if (!revMeta.revisionLabel && suggestions.length > 0) {
-      set("revisionLabel", suggestions[0]);
-      setAutoFilled(true);
-    }
-  }, [revMeta.revisionLabel, suggestions, set]);
 
   return (
     <div>
@@ -29,17 +21,12 @@ export default function StepRevMeta(props: any) {
       {/* Revision label */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-          <label style={{ margin: 0 }}>New Revision Label *</label>
-          {autoFilled && (
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-info)", background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.08em", fontWeight: 700 }}>
-              AUTO
-            </span>
-          )}
+          <label htmlFor="revision-label" style={{ margin: 0 }}>New Revision Label *</label>
         </div>
-        <input value={revMeta.revisionLabel} onChange={e => { set("revisionLabel", e.target.value); setAutoFilled(false); }} placeholder="e.g. IFC Rev 1" style={{ width: "100%", marginBottom: 8 }} />
+        <input id="revision-label" value={revMeta.revisionLabel} onChange={e => set("revisionLabel", e.target.value)} placeholder="e.g. IFC Rev 1" style={{ width: "100%", marginBottom: 8 }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {suggestions.map(s => (
-            <button key={s} onClick={() => { set("revisionLabel", s); setAutoFilled(false); }} style={{
+            <button key={s} onClick={() => set("revisionLabel", s)} style={{
               padding: "4px 10px", borderRadius: 6, cursor: "pointer",
               background: revMeta.revisionLabel === s ? "var(--warning-muted)" : "var(--hover-bg)",
               border: `1px solid ${revMeta.revisionLabel === s ? "rgba(245,158,11,0.35)" : "var(--border-default)"}`,
@@ -52,26 +39,25 @@ export default function StepRevMeta(props: any) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
         <div>
-          <label>Issue Date *</label>
-          <input type="date" value={revMeta.issueDate} onChange={e => set("issueDate", e.target.value)} style={{ width: "100%" }} />
+          <label htmlFor="revision-issue-date">Issue Date *</label>
+          <input id="revision-issue-date" type="date" value={revMeta.issueDate} onChange={e => set("issueDate", e.target.value)} style={{ width: "100%" }} />
         </div>
         <div>
-          <label>Issued By</label>
-          <input value={revMeta.issuedBy} onChange={e => set("issuedBy", e.target.value)} placeholder={selectedSet.issued_by || "Smith Engineering"} style={{ width: "100%" }} />
+          <label htmlFor="revision-issued-by">Issued By</label>
+          <input id="revision-issued-by" value={revMeta.issuedBy} onChange={e => set("issuedBy", e.target.value)} placeholder={selectedSet.issued_by || "Smith Engineering"} style={{ width: "100%" }} />
         </div>
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <label>Notes — What changed?</label>
-        <textarea rows={2} value={revMeta.notes} onChange={e => set("notes", e.target.value)} placeholder="e.g. Updated connection details, added embed schedule" style={{ width: "100%", resize: "vertical" }} />
+        <label htmlFor="revision-notes">Notes — What changed?</label>
+        <textarea id="revision-notes" rows={2} value={revMeta.notes} onChange={e => set("notes", e.target.value)} placeholder="e.g. Updated connection details, added embed schedule" style={{ width: "100%", resize: "vertical" }} />
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <label>Previous Revision Disposition</label>
+          <label>Previous Revision Disposition</label>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {[
             { value: "superseded", label: "Mark as Superseded", desc: "Recommended — old revision clearly replaced" },
-            { value: "reference", label: "Keep as Reference Only", desc: "Available but not active" },
           ].map(opt => (
             <div key={opt.value} onClick={() => set("disposition", opt.value)} style={{
               padding: "8px 12px", borderRadius: 8, cursor: "pointer",

@@ -24,6 +24,39 @@ export const reviseReview = () => ({
 });
 
 describe('review request builders', () => {
+  it.each(['create', 'revise'])('rejects own __proto__ callout keys before %s review can silently lose evidence', operation => {
+    const review = operation === 'create' ? createReview() : reviseReview();
+    const build = operation === 'create' ? buildCreateSetRequest : buildReviseSetRequest;
+    const callout = JSON.parse('{"nested":{"__proto__":"reviewed source"}}');
+    expect(() => build({ ...review, sheets: [{ ...review.sheets[0], extraction: {
+      text: { state: 'unavailable' }, callouts: { state: 'harvested', value: [callout] },
+    } }] } as never)).toThrow(DrawingCommandPreflightError);
+  });
+  it('preserves ordinary constructor/prototype keys and __proto__ value text', () => {
+    const review = createReview();
+    const value = [{ constructor: '__proto__', prototype: '🏗️' }];
+    expect(buildCreateSetRequest({ ...review, sheets: [{ ...review.sheets[0], extraction: {
+      text: { state: 'harvested', value: '__proto__' }, callouts: { state: 'harvested', value },
+    } }] }).sheets[0].extraction).toEqual({ text: { state: 'harvested', value: '__proto__' }, callouts: { state: 'harvested', value } });
+  });
+  it.each(['\u0000', '\ud800', '\udfff'])('rejects JSONB-incompatible string values and record keys %j', (bad) => {
+    for (const review of [createReview(), reviseReview()]) {
+      const build = 'set_id' in review ? buildReviseSetRequest : buildCreateSetRequest;
+      for (const callout of [{ nested: [bad] }, { [bad]: 'value' }]) {
+        expect(() => build({ ...review, sheets: [{ ...review.sheets[0], extraction: {
+          text: { state: 'unavailable' }, callouts: { state: 'harvested', value: [callout] },
+        } }] } as never)).toThrow(DrawingCommandPreflightError);
+      }
+      expect(() => build({ ...review, notes: bad } as never)).toThrow(DrawingCommandPreflightError);
+    }
+  });
+  it('preserves valid paired emoji in JSONB strings and keys', () => {
+    const review = createReview();
+    const callouts = { state: 'harvested' as const, value: [{ '🏗️': ['Steel 🏗️'] }] };
+    expect(buildCreateSetRequest({ ...review, notes: 'Steel 🏗️', sheets: [{ ...review.sheets[0], extraction: {
+      text: { state: 'harvested', value: 'Steel 🏗️' }, callouts,
+    } }] }).sheets[0].extraction.callouts).toEqual(callouts);
+  });
   it('unknownExtractionStaysUnknown', () => {
     const parsed = buildCreateSetRequest(createReview());
     expect(parsed.issued_date).toBeNull();

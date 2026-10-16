@@ -17,12 +17,14 @@ const m = vi.hoisted(() => ({
 }));
 vi.mock('@/api/client/uploads', () => ({ UploadDrawingFile: m.upload }));
 vi.mock('@/api/client/drawingCommands', () => ({ getDrawingRevisionSources: m.readSources }));
+vi.mock('@/components/shared/OrgContext', () => ({ useOptionalOrg: (): null => null }));
+vi.mock('@/lib/supabase', () => ({ supabase: { auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) } } }));
 
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
     Drawing: { filterAll: vi.fn(async () => []), create: m.createDrawing, update: vi.fn(async () => ({})) },
-    DrawingSet: { update: m.updateSet },
-    DrawingRevision: { update: vi.fn(async () => ({})) },
+    DrawingSet: { update: m.updateSet, get: vi.fn(async () => ({ id: 'set1', revision: '1' })) },
+    DrawingRevision: { update: vi.fn(async () => ({})), filterAll: vi.fn(async () => []) },
   },
   integrations: { Core: { UploadFile: m.upload } },
 }));

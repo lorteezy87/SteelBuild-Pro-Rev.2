@@ -152,6 +152,19 @@ describe('strict response parsing', () => {
 });
 
 describe('fail closed drawing transport', () => {
+  it.each(['\u0000', '\ud800', '\udfff'])('rejects JSONB-incompatible strings and keys before apply or receipt RPC %j', async (bad) => {
+    const created = draftFixture();
+    if (created.operation !== 'create_set') throw new Error('fixture');
+    const revised = revisionDraftFixture([{ ...created.payload.sheets[0], ...existingSheet, action: 'revised', expected_revision_id: revision }]);
+    for (const original of [created, revised]) for (const callout of [{ nested: [bad] }, { [bad]: 'value' }]) {
+      const draft: ReviewedDrawingCommand = { ...original, payload: { ...original.payload, sheets: [{ ...original.payload.sheets[0],
+        extraction: { text: { state: 'unavailable' }, callouts: { state: 'harvested', value: [callout] } },
+      }] } } as ReviewedDrawingCommand;
+      await expect(applyDrawingCommand(draft)).rejects.toThrow();
+      await expect(getDrawingCommandReceipt(draft)).rejects.toThrow();
+      expect(rpc).not.toHaveBeenCalled();
+    }
+  });
   it.each(impossibleCountCases())('direct success remains uncertain for impossible committed counts: $name', async ({ draft, result }) => {
     rpc.mockImplementation(async (name: string) => ({ data: name === 'get_drawing_command_capabilities' ? flags : result, error: null }));
     expect((await applyDrawingCommand(draft)).kind).toBe('uncertain');

@@ -2,10 +2,10 @@ import React from "react";
 import { ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { CHANGE_STYLE } from "../revisionUploadHelpers";
 import { DocControlIntakePanel } from "../DocControlReviewPanel";
-import { useAuth } from "@/lib/AuthContext";
+import { AuthContext } from "@/lib/AuthContext";
 // ── Step D: Sheet Comparison ───────────────────────────────────────
 export default function StepSheetComparison(props: any) {
-  const { selectedSet, revMeta, extraction, activeProject, matchedSheets, setMatchedSheets, supersedeUnlisted, setSupersedeUnlisted, onBack, onConfirm } = props;
+  const { selectedSet, revMeta, extraction, activeProject, matchedSheets, setMatchedSheets, supersedeUnlisted, setSupersedeUnlisted, onBack, onConfirm, busy = false } = props;
   const counts = {
     same: matchedSheets.filter((m: any) => m.change === "revised" && m.oldSheet?.sheetTitle === m.newSheet?.sheetTitle).length,
     revised: matchedSheets.filter((m: any) => m.change === "revised").length,
@@ -19,10 +19,12 @@ export default function StepSheetComparison(props: any) {
   const ambiguousSheets = matchedSheets.filter((m: any) => m.change === "ambiguous");
 
   const updateTitle = (idx: any, val: any) => {
-    setMatchedSheets((prev: any) => prev.map((m: any, i: any) => i === idx ? { ...m, newSheet: { ...m.newSheet, sheetTitle: val } } : m));
+    setMatchedSheets((prev: any) => prev.map((m: any, i: any) => i === idx ? { ...m, newSheet: { ...m.newSheet, sheetTitle: val, reviewed: false, manual: undefined } } : m));
   };
 
-  const { user } = useAuth();
+  const user = React.useContext(AuthContext)?.user;
+  const edit = (index: number, patch: Record<string, unknown>) => setMatchedSheets((previous: any[]) => previous.map((match, i) => i === index
+    ? { ...match, newSheet: { ...match.newSheet, ...patch } } : match));
 
   // Document Control intake for this upload. Memoised on the inputs the engine
   // actually reads so attesting a seal on one sheet does not rebuild the others.
@@ -40,6 +42,7 @@ export default function StepSheetComparison(props: any) {
 
   return (
     <div>
+      <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
       {/* Summary bar */}
       <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>{totalOld} → {totalNew} sheets</span>
@@ -130,13 +133,27 @@ export default function StepSheetComparison(props: any) {
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: changeColor, letterSpacing: "0.06em", fontWeight: 700 }}>{changeLabel}</span>
               <div>
                 {m.newSheet ? (
+                  <div>
+                  <input aria-label={`Sheet number for ${m.sheetNumber || 'manual sheet'}`} value={m.newSheet.sheetNumber || ''}
+                    onChange={event => edit(i, { sheetNumber: event.target.value, reviewed: false, manual: undefined })} />
                   <input
+                    aria-label={`Title for ${m.sheetNumber || 'manual sheet'}`}
                     value={m.newSheet.sheetTitle || ""}
                     onChange={e => updateTitle(i, e.target.value)}
                     style={{ background: "transparent", border: "1px solid transparent", borderRadius: 3, padding: "1px 4px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 10, width: "100%" }}
                     onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
                     onBlur={e => e.target.style.borderColor = "transparent"}
                   />
+                  <input aria-label={`Revision code for ${m.sheetNumber || 'manual sheet'}`} value={m.newSheet.revision || ''}
+                    onChange={event => edit(i, { revision: event.target.value, reviewed: false, manual: undefined })} />
+                  <input aria-label={`PDF page for ${m.sheetNumber || 'manual sheet'}`} type="number" min="1" value={m.newSheet.pdfPage ?? ''}
+                    onChange={event => edit(i, { pdfPage: event.target.value === '' ? null : Number(event.target.value) })} />
+                  <label><input type="checkbox" checked={m.newSheet.reviewed === true && !m.newSheet.sourceReviewRequired}
+                    onChange={event => edit(i, { reviewed: event.target.checked, sourceReviewRequired: !event.target.checked,
+                      manual: event.target.checked ? { sheetNumber: m.newSheet.sheetNumber, title: m.newSheet.sheetTitle, revision: m.newSheet.revision } : undefined })} />
+                    I reviewed {m.sheetNumber || 'this sheet'}, its revision code and physical PDF page
+                  </label>
+                  </div>
                 ) : (
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{keptNotRemoved ? "— kept (not in upload)" : "— REMOVED"}</span>
                 )}
@@ -146,6 +163,12 @@ export default function StepSheetComparison(props: any) {
         })}
       </div>
 
+      <button onClick={() => setMatchedSheets((previous: any[]) => {
+        const original = previous.find(match => match.newSheet)?.newSheet;
+        if (!original) return previous;
+        return [...previous, { change: 'ambiguous', sheetNumber: '', newSheet: { sheetNumber: '', sheetTitle: '', revision: '', pdfPage: null,
+          sourceFileUrl: original.sourceFileUrl, fileUrl: original.fileUrl, sourceSnapshot: original.sourceSnapshot, reviewed: false } }];
+      })}>Add manually reviewed sheet</button>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
@@ -159,6 +182,7 @@ export default function StepSheetComparison(props: any) {
           Apply Revision <ChevronRight style={{ width: 13, height: 13 }} />
         </button>
       </div>
+      </fieldset>
     </div>
   );
 }

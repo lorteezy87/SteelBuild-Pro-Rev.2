@@ -9,6 +9,16 @@ beforeEach(() => {
   vi.stubGlobal('navigator', { locks: createTestDrawingLocks() });
 });
 
+it.each(['\u0000', '\ud800', '\udfff'])('does not persist JSONB-incompatible nested strings or keys %j', async (bad) => {
+  const draft = draftFixture();
+  for (const callout of [{ nested: [bad] }, { [bad]: 'value' }]) {
+    await expect(saveDrawingCommand({ ...draft, payload: { ...draft.payload, sheets: [{ ...draft.payload.sheets[0],
+      extraction: { text: { state: 'unavailable' }, callouts: { state: 'harvested', value: [callout] } },
+    }] } })).rejects.toThrow();
+    expect(await loadDrawingCommands(owner)).toEqual([]);
+  }
+});
+
 it.each(['missing', 'failed'])('%s Web Locks blocks preparation and completion without erasing a saved record', async (failure) => {
   const draft = draftFixture();
   await saveDrawingCommand(draft);

@@ -11,8 +11,23 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 });
+// PostgreSQL JSONB cannot represent NUL or unpaired UTF-16 surrogates. Reject
+// before durable preparation, including keys, so receipt lookup stays possible.
+const jsonText = z.string().refine((value) => {
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code === 0 || (code >= 0xdc00 && code <= 0xdfff)) return false;
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(++index);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+    }
+  }
+  return true;
+});
 const json: z.ZodType<DrawingJson> = z.lazy(() => z.union([
-  z.null(), z.string(), z.boolean(), z.number().finite(), z.array(json), z.record(json),
+  z.null(), jsonText, z.boolean(), z.number().finite(), z.array(json),
+  // Zod 3 drops this own key while cloning records; refuse loss of reviewed evidence.
+  z.record(jsonText.refine(key => key !== '__proto__'), json),
 ]));
 const extraction = <T extends z.ZodType<unknown>>(value: T) => z.discriminatedUnion('state', [
   z.object({ state: z.literal('unavailable') }).strict(),
