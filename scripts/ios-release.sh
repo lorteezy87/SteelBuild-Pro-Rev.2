@@ -97,11 +97,14 @@ if (config.appId !== 'com.steelbuildpro.app' || config.server?.url) throw new Er
 JS
 mkdir -p ios/App/output
 archive="$release_tmp/SteelBuild-Pro.xcarchive"
+# Keep archive signing automatic at the project level. A command-line profile override
+# propagates into Swift package resource targets, which cannot accept provisioning profiles.
+# ExportOptions below applies the validated App Store profile only to the application bundle.
 if ! xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$archive" \
   CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" MARKETING_VERSION="$IOS_VERSION" \
-  DEVELOPMENT_TEAM="$IOS_TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='Apple Distribution' \
-  PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" archive > "$release_tmp/archive.log" 2>&1; then
+  DEVELOPMENT_TEAM="$IOS_TEAM_ID" CODE_SIGN_IDENTITY='Apple Distribution' \
+  archive > "$release_tmp/archive.log" 2>&1; then
   save_diagnostics "$release_tmp/archive.log"
   fail 'Xcode archive failed. Inspect this run with a signing administrator; no build was uploaded.'
 fi
