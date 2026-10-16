@@ -27,7 +27,12 @@ export function entitlementInputs(now = Date.now()): { plan: SetupPlan; receipt:
       noEmailSha256: '6'.repeat(64), settingsAuthoritySha256: '6'.repeat(64) },
     prerequisiteDetails: { sideEffects: { version: 1, projectRef: STAGE_REF, candidateSha: '1'.repeat(40),
       reviewedAt: new Date(now - 120_000).toISOString(), expiresAt: new Date(now + 660_000).toISOString(), installedClosureSha256: '7'.repeat(64),
-      activeCostCodeTemplates: [], seedSemantics: 'stage-foundation-v1' } },
+      activeCostCodeTemplates: [
+        { id: id(90), cost_code_number: '01', description: 'Synthetic decimal', category: 'Labor',
+          default_budget_amount: '9007199254740993.01', sort_order: -2147483648, is_active: true },
+        { id: id(91), cost_code_number: '02', description: '', category: 'Material',
+          default_budget_amount: null, sort_order: 2147483647, is_active: true },
+      ], seedSemantics: 'stage-foundation-v1' } },
   };
   plan.prerequisites.sideEffectsSha256 = hash(JSON.stringify(plan.prerequisiteDetails!.sideEffects));
   const receipt: FoundationReceipt = { context: { ...plan.context, checkpointSequence: 32 }, planSha256: hash(JSON.stringify(plan)),
@@ -163,6 +168,42 @@ export async function runSetupEntitlementCases(db: Database): Promise<number> {
       if (v.plan.prerequisiteDetails) await bind(v);
       else await db.query("select set_config('drawing_setup.plan',$1,true),set_config('drawing_setup.plan_sha256',$2,true),set_config('drawing_setup.receipt',$3,true),set_config('drawing_setup.receipt_sha256',$4,true)", [JSON.stringify(v.plan), hash(JSON.stringify(v.plan)), JSON.stringify(v.receipt), hash(JSON.stringify(v.receipt))]);
     });
+    // Malformed values stay confined to this synthetic matrix. Refresh every
+    // byte binding and still execute SQL after proving the shared validator rejects.
+    const templateCorruptions: [string, (templates: unknown[]) => void][] = [];
+    for (const field of ['cost_code_number', 'category', 'id', 'description'])
+      for (const value of [123, null, true]) templateCorruptions.push([
+        `${field} ${JSON.stringify(value)}`, templates => { Object.assign(templates[0] as object, { [field]: value }); },
+      ]);
+    for (const [field, values] of [
+      ['is_active', [null, 123, 'true', false]],
+      ['sort_order', [null, '1', true, 1.5, -2147483649, 2147483648]],
+      ['default_budget_amount', [123, true, '', '01', '1e3', `-${'9'.repeat(30)}.${'9'.repeat(30)}`, '9'.repeat(31), `0.${'9'.repeat(31)}`]],
+      ['id', ['invalid', id(90).replaceAll('-', '')]],
+      ['cost_code_number', ['', 'x'.repeat(101)]],
+      ['category', ['', 'x'.repeat(101)]],
+      ['description', ['x'.repeat(501)]],
+    ] as const) for (const value of values) templateCorruptions.push([
+      `${field} invalid ${JSON.stringify(value)}`, templates => { Object.assign(templates[0] as object, { [field]: value }); },
+    ]);
+    for (const value of [null, 123, true, 'template', []]) templateCorruptions.push([
+      `non-object ${JSON.stringify(value)}`, templates => { templates[0] = value; },
+    ]);
+    templateCorruptions.push(
+      ['missing category', templates => { delete (templates[0] as Record<string, unknown>).category; }],
+      ['unknown field', templates => { Object.assign(templates[0] as object, { extra: true }); }],
+      ['duplicate ID', templates => { Object.assign(templates[1] as object, { id: id(90) }); }],
+      ['duplicate number', templates => { Object.assign(templates[1] as object, { cost_code_number: '01' }); }],
+    );
+    for (const [name, change] of templateCorruptions) await rejection(`strict template ${name}`, async () => {
+      const v = structuredClone(inputs), effects = v.plan.prerequisiteDetails!.sideEffects;
+      change(effects.activeCostCodeTemplates);
+      v.plan.prerequisites.sideEffectsSha256 = hash(JSON.stringify(effects));
+      v.receipt.census!.sideEffectsSha256 = v.plan.prerequisites.sideEffectsSha256;
+      v.receipt.planSha256 = hash(JSON.stringify(v.plan));
+      assert.throws(() => validateSetupPlan(JSON.stringify(v.plan), v.receipt.planSha256, v.plan.context));
+      await bind(v);
+    }, /DRAWING_SETUP_(TEMPLATE_SHAPE|DUPLICATE_TEMPLATE)/);
     await db.exec('savepoint late_test');
     try {
       await db.exec(`create or replace function public.organizations_touch_updated_at() returns trigger language plpgsql as $$ begin
@@ -201,7 +242,7 @@ export async function runSetupEntitlementCases(db: Database): Promise<number> {
       else { assert.equal(actual.plan, 'pro'); assert.notEqual(actual.updated_at, before.updated_at); assert.deepEqual({ ...actual, plan: before.plan, updated_at: before.updated_at }, before); }
     }
     assert.deepEqual({ ...after, 'public.organizations': [] }, { ...fixtureBefore, 'public.organizations': [] }, 'No billing, audit or child writes expected');
-    count++; console.log('PASS entitlement entitlementsChangeOnlyTwoReviewedPlans; exactly two plans/timestamps, sentinel/billing/audit unchanged');
+    count++; console.log('PASS entitlement entitlementsChangeOnlyTwoReviewedPlans; valid nonempty templates with exact decimal/null and int32 boundaries; exactly two plans/timestamps, sentinel/billing/audit unchanged');
   } finally { await db.exec('rollback'); }
   assert.deepEqual(await roleSnapshot(db), initialRoles, 'Outer ROLLBACK must preserve all shared role attributes and memberships');
   assert.equal((await db.query("select count(*)::int n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_%' and c.relkind in ('r','p')")).rows[0].n, 0);

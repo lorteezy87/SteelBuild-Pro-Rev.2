@@ -202,14 +202,26 @@ BEGIN
   IF jsonb_typeof(effects->'activeCostCodeTemplates') IS DISTINCT FROM 'array' OR jsonb_array_length(effects->'activeCostCodeTemplates')>256 THEN
     RAISE EXCEPTION 'DRAWING_SETUP_TEMPLATE_SHAPE'; END IF;
   FOR x IN SELECT value FROM jsonb_array_elements(effects->'activeCostCodeTemplates') LOOP
+    -- Reject non-objects before object iteration, then validate JSON scalar types
+    -- before ->> can coerce numbers/booleans or turn JSON null into SQL NULL.
+    IF jsonb_typeof(x) IS DISTINCT FROM 'object' THEN
+      RAISE EXCEPTION 'DRAWING_SETUP_TEMPLATE_SHAPE'; END IF;
     IF (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(x) k) IS DISTINCT FROM
-      ARRAY['category','cost_code_number','default_budget_amount','description','id','is_active','sort_order']::text[]
-      OR x->'is_active' IS DISTINCT FROM 'true'::jsonb
+      ARRAY['category','cost_code_number','default_budget_amount','description','id','is_active','sort_order']::text[] THEN
+      RAISE EXCEPTION 'DRAWING_SETUP_TEMPLATE_SHAPE'; END IF;
+    IF EXISTS(SELECT 1 FROM jsonb_each(x) e WHERE e.key <> 'default_budget_amount'
+      AND jsonb_typeof(e.value) IS DISTINCT FROM CASE e.key
+        WHEN 'is_active' THEN 'boolean' WHEN 'sort_order' THEN 'number' ELSE 'string' END)
+      OR jsonb_typeof(x->'default_budget_amount') NOT IN ('string','null') THEN
+      RAISE EXCEPTION 'DRAWING_SETUP_TEMPLATE_SHAPE'; END IF;
+    IF x->'is_active' IS DISTINCT FROM 'true'::jsonb
+      OR x->>'id' !~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
       OR length(x->>'cost_code_number') NOT BETWEEN 1 AND 100 OR length(x->>'category') NOT BETWEEN 1 AND 100
-      OR length(x->>'description')>500 OR jsonb_typeof(x->'description') <> 'string'
-      OR (x->'default_budget_amount' <> 'null'::jsonb AND (jsonb_typeof(x->'default_budget_amount') <> 'string'
+      OR length(x->>'description')>500
+      OR (x->'default_budget_amount' <> 'null'::jsonb AND (length(x->>'default_budget_amount')>61
         OR x->>'default_budget_amount' !~ '^-?(0|[1-9][0-9]{0,29})([.][0-9]{1,30})?$'))
-      OR jsonb_typeof(x->'sort_order') <> 'number' OR x->>'sort_order' !~ '^-?[0-9]+$' THEN
+      OR x->>'sort_order' !~ '^-?[0-9]+$'
+      OR (x->>'sort_order')::numeric NOT BETWEEN -2147483648 AND 2147483647 THEN
       RAISE EXCEPTION 'DRAWING_SETUP_TEMPLATE_SHAPE'; END IF;
     PERFORM (x->>'id')::uuid, (x->>'sort_order')::integer;
   END LOOP;
