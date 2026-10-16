@@ -31,6 +31,13 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://127.0.0.1:4173",
 ];
 
+// Native WebView origins are trusted only for CORS. They must never become
+// accepted billing/portal redirect URLs through isAllowedOrigin().
+const NATIVE_CORS_ORIGINS = new Set([
+  "capacitor://localhost",
+  "steelbuild://localhost",
+]);
+
 const ALLOW_HEADERS =
   "authorization, x-client-info, apikey, content-type, x-supabase-auth, sentry-trace, baggage, stripe-signature, x-webhook-secret";
 
@@ -91,9 +98,13 @@ export function corsHeaders(
   // or missing Origin gets NO Access-Control-Allow-Origin header at all, which
   // the browser treats as a refusal — the previous `*` fallback is gone.
   const origin = req?.headers.get("Origin");
-  const normalized = origin ? normalizeOrigin(origin) : null;
-  if (normalized && effectiveOrigins().includes(normalized)) {
-    headers["Access-Control-Allow-Origin"] = normalized;
+  if (origin && NATIVE_CORS_ORIGINS.has(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  } else {
+    const normalized = origin ? normalizeOrigin(origin) : null;
+    if (normalized && effectiveOrigins().includes(normalized)) {
+      headers["Access-Control-Allow-Origin"] = normalized;
+    }
   }
   return headers;
 }
