@@ -12,6 +12,7 @@ import type { BrowserContext, Route } from '@playwright/test';
 import { summarizeCases } from '../../e2e/drawingCutoverReporter.ts';
 import * as setup from '../../e2e/drawing-cutover-setup.ts';
 import type { SetupContext, SetupPlan, PrivateRecoveryPayload, ArtifactBinding, FoundationReceipt, SetupResume } from '../../e2e/drawing-cutover-setup.ts';
+import type { SetupTransports, SetupCheckpoint, SetupObservation, SetupSession, SetupActor, SetupIntent } from '../../e2e/drawing-cutover-setup.ts';
 
 const sha = '1'.repeat(40);
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -389,11 +390,362 @@ function enrolledRecoveryFixture(verified: boolean): PrivateRecoveryPayload {
   appendSuccessfulOperation(payload.receipt, { action: 'enroll-mfa', actor: 'mfa' }, id(1900));
   payload.credentials.find(c => c.alias === 'mfa')!.mfa = { factorId: id(1900), secret: 'ABCDEFGHIJKLMNOP' };
   if (verified) {
-    appendSuccessfulOperation(payload.receipt, { action: 'verify-mfa', actor: 'mfa' }, id(1900));
+    appendSuccessfulOperation(payload.receipt, { action: 'challenge-mfa', actor: 'mfa', factorId: id(1900) }, id(1901));
+    appendSuccessfulOperation(payload.receipt, { action: 'verify-mfa', actor: 'mfa', factorId: id(1900), challengeId: id(1901) }, id(1900));
     payload.receipt.actors.find(a => a.alias === 'mfa')!.mfa = { factorId: id(1900), verified: true };
   }
   return payload;
 }
+
+function foundationPlan(): SetupPlan {
+  const plan = recoveryFixture().plan;
+  const now = Date.now(); plan.createdAt = new Date(now - 1000).toISOString(); plan.expiresAt = new Date(now + 600_000).toISOString();
+  plan.keyReview.publicKeySha256 = testHash('sb_publishable_synthetic'); plan.keyReview.setupKeySha256 = testHash('sb_secret_synthetic');
+  plan.prerequisiteDetails = { sideEffects: { version: 1, projectRef: setup.STAGE_REF, candidateSha: sha,
+    reviewedAt: new Date(now - 2000).toISOString(), expiresAt: new Date(now + 700_000).toISOString(), installedClosureSha256: '6'.repeat(64),
+    seedSemantics: 'stage-foundation-v1', activeCostCodeTemplates: [{ id: id(2900), cost_code_number: '01', description: 'Synthetic cost',
+      category: 'Labor', default_budget_amount: '9007199254740993.01', sort_order: 1, is_active: true }] } };
+  plan.prerequisites.sideEffectsSha256 = testHash(JSON.stringify(plan.prerequisiteDetails.sideEffects)); return plan;
+}
+async function foundationHarness(plan = foundationPlan(), resume: SetupResume | null = null) {
+  const provision = await import('../drawing-cutover-provision.ts');
+  const state: SetupObservation = { actors: [], profiles: [], organizations: [], projects: [], memberships: [], children: [],
+    activeCostCodeTemplates: structuredClone(plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates) };
+  if (resume) {
+    state.actors = resume.recovery.receipt.actors.map(a => ({ alias: a.alias, id: a.id, emailSha256: a.emailSha256, confirmed: true, factors: [] }));
+    state.organizations = resume.recovery.receipt.organizations.map(o => ({ ...o, plan: 'pro', memberDefaultProjectRole: 'viewer',
+      name: plan.organizations.find(p => p.alias === o.alias)!.name, slug: plan.organizations.find(p => p.alias === o.alias)!.slug }));
+    state.memberships = structuredClone(resume.recovery.receipt.memberships);
+  }
+  let next = 3000; const writes: string[] = []; const intents: SetupIntent[] = []; const results: unknown[] = [];
+  const sessions = new Map<string, SetupSession>(); const snapshots: SetupObservation[] = [];
+  const session = (a: SetupActor, aal: 'aal1' | 'aal2' = 'aal1'): SetupSession => ({ actorId: a.id, emailSha256: a.emailSha256,
+    sessionId: id(next++), expiresAt: Math.floor(Date.now() / 1000) + 3600, aal });
+  const actor = (alias: setup.ActorAlias) => state.actors.find(a => a.alias === alias)!;
+  const transports: SetupTransports = {
+    async createActor(alias) { writes.push(`create-user:${alias}`); const a = { alias, id: id(next++), emailSha256: testHash(`${alias}@example.invalid`), confirmed: true, factors: [] }; state.actors.push(a); return structuredClone(a); },
+    async readActor(alias, expectedId) { const a = actor(alias); if (a.id !== expectedId) throw new Error('TEST_ID'); return structuredClone(a); },
+    async signIn(alias) { writes.push(`authenticate-user:${alias}`); const a = actor(alias); const s = session(a); sessions.set(alias, s);
+      if (!state.profiles.some(p => p.id === a.id)) state.profiles.push({ id: a.id, emailSha256: a.emailSha256, role: 'user' }); return s; },
+    async currentUser(alias) { return { actor: structuredClone(actor(alias)), session: structuredClone(sessions.get(alias)!) }; },
+    async observe(scope) { const snapshot = structuredClone(state); snapshot.organizations = snapshot.organizations.filter(o => scope.organizations.some(s => s.id === o.id));
+      snapshot.memberships = snapshot.memberships.filter(m => snapshot.organizations.some(o => o.id === m.orgId)); snapshots.push(snapshot); return snapshot; },
+    async createOrganization(_scope, alias) { writes.push(`create-organization:${alias}`); const owner = actor(alias === 'A' ? 'admin' : 'foreign');
+      const p = plan.organizations.find(o => o.alias === alias)!; const org = { alias, id: id(next++), createdBy: owner.id, ownerId: owner.id, plan: 'free' as const, name: p.name, slug: p.slug, memberDefaultProjectRole: 'viewer' as const };
+      state.organizations.push(org); state.memberships.push({ id: id(next++), actor: owner.alias, userId: owner.id, orgId: org.id, role: 'owner' }); return structuredClone(org); },
+    async configureOrganization(_scope, alias) { writes.push(`configure-organization:${alias}`); const org = state.organizations.find(o => o.alias === alias)!; org.memberDefaultProjectRole = null; return structuredClone(org); },
+    async addOrganizationMember(_scope, alias) { writes.push(`add-organization-member:${alias}`); const org = state.organizations.find(o => o.alias === 'A')!;
+      const m = { id: id(next++), actor: alias, userId: actor(alias).id, orgId: org.id, role: 'member' as const }; state.memberships.push(m); return structuredClone(m); },
+    async createProject(_scope, alias) { writes.push(`create-project:${alias}`); const p = plan.projects.find(p => p.alias === alias)!; const org = state.organizations.find(o => o.alias === p.organization)!;
+      const project = { alias, id: id(next++), orgId: org.id, createdBy: org.ownerId, name: p.name, number: p.number }; state.projects.push(project);
+      state.memberships.push({ id: id(next++), actor: p.organization === 'A' ? 'admin' : 'foreign', userId: org.ownerId, orgId: org.id, projectId: project.id, role: 'owner' });
+      for (const recipe of provision.seedRecipes(plan, project)) {
+        const childId = id(next++); state.children.push({ ...recipe, id: childId, projectId: project.id });
+        if (recipe.table === 'action_items') state.children.push({ table: 'planner_action_events', id: id(next++), projectId: project.id,
+          values: { entityId: childId, actorId: project.createdBy, eventType: 'action_created', entityType: 'action_item', title: recipe.values.title, status: 'Open', priority: 'Medium' } });
+        if (recipe.table === 'cost_codes') state.children.push({ table: 'pma_audit_logs', id: id(next++), projectId: project.id,
+          values: { entityId: childId, actorId: project.createdBy, eventType: 'INSERT', entityType: 'cost_codes' } });
+      }
+      state.children.push({ table: 'number_sequences', id: id(next++), projectId: project.id, recordType: 'action_item', nextValue: 11 },
+        { table: 'number_sequences', id: id(next++), projectId: project.id, recordType: 'handoff_item', nextValue: 37 });
+      const creatorMembership = state.memberships.at(-1)!; state.children.push({ table: 'member_activity', id: id(next++), projectId: project.id,
+        values: { membershipId: creatorMembership.id, actorId: org.ownerId, targetId: org.ownerId, eventType: 'member_added', role: 'owner' } }); return structuredClone(project); },
+    async assignProjectRole(_scope, alias) { writes.push(`assign-project-role:${alias}`); const project = state.projects.find(p => p.alias === 'A1')!;
+      const roles = { pm: 'pm', viewer: 'viewer', field: 'field', removed: 'field', mfa: 'pm' } as const;
+      const m = { id: id(next++), actor: alias, userId: actor(alias).id, orgId: project.orgId, projectId: project.id, role: roles[alias] };
+      state.memberships.push(m); state.children.push({ table: 'member_activity', id: id(next++), projectId: project.id,
+        values: { membershipId: m.id, actorId: project.createdBy, targetId: m.userId, eventType: 'member_added', role: m.role } }); return structuredClone(m); },
+    async enrollMfa() { writes.push('enroll-mfa'); const factorId = id(next++); actor('mfa').factors.push({ id: factorId, type: 'totp', status: 'unverified' }); return { factorId, secret: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ' }; },
+    async challengeMfa(_scope, factorId) { writes.push('challenge-mfa'); return { factorId, challengeId: id(next++), expiresAt: Math.floor(Date.now() / 1000) + 60 }; },
+    async verifyMfa(_scope, factorId) { writes.push('verify-mfa'); actor('mfa').factors[0].status = 'verified'; const s = session(actor('mfa'), 'aal2'); sessions.set('mfa', s); return { factorId, session: s }; },
+  };
+  const checkpoint: SetupCheckpoint = { async assertInitialUploaded(context) { return { ...artifactFixture(), workflowRunId: context.workflowRunId, workflowRunAttempt: context.workflowRunAttempt }; },
+    async persistIntent(record) { intents.push(structuredClone(record.intent)); }, async persistResult(record) { results.push(structuredClone(record)); } };
+  return { provision, plan, state, transports, checkpoint, writes, intents, results, snapshots };
+}
+async function completedHarness() {
+  const h = await foundationHarness(); const priorReceipt = await h.provision.runFoundation(h.plan, null, h.transports, h.checkpoint);
+  const plan: SetupPlan = { ...structuredClone(h.plan), context: { ...h.plan.context, phase: 'setup-complete', workflowRunId: '123457' },
+    prior: { receiptSha256: testHash(JSON.stringify(priorReceipt)), artifact: artifactFixture() } };
+  const resume: SetupResume = { context: plan.context, planSha256: testHash(JSON.stringify(plan)), recovery: { plan: h.plan, receipt: priorReceipt, credentials: recoveryFixture().credentials },
+    artifact: artifactFixture(), receiptSha256: plan.prior!.receiptSha256, reviewedAt: new Date().toISOString(), reviewSha256: '7'.repeat(64),
+    entitlements: priorReceipt.organizations.map(o => ({ organization: o.alias, orgId: o.id, createdBy: o.createdBy, plan: 'pro', observedAt: new Date(Date.now() - 1).toISOString(), readbackSha256: '8'.repeat(64) })) };
+  return { ...await foundationHarness(plan, resume), resume };
+}
+
+describe('finite foundation factory', () => {
+  it('setupRfc6238Sha1Vectors', async () => {
+    const { computeTotp } = await import('../drawing-cutover-provision.ts'); const secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+    expect(computeTotp(secret, 59, 8)).toBe('94287082'); expect(computeTotp(secret, 1111111109, 8)).toBe('07081804');
+    expect(computeTotp(secret, 59)).toBe('287082'); expect(computeTotp(secret, 1111111109)).toBe('081804');
+    expect(() => computeTotp('not a secret', 59)).toThrow(); expect(() => computeTotp(secret, -1)).toThrow();
+  });
+  it('setupWrongTargetKeyOrEvidenceMakesZeroRequests', async () => {
+    const h = await foundationHarness(); const network = vi.fn();
+    for (const change of [(p: SetupPlan) => { p.context.projectRef = 'wrong' as typeof setup.STAGE_REF; },
+      (p: SetupPlan) => { delete p.prerequisiteDetails; }, (p: SetupPlan) => { p.prerequisiteDetails!.sideEffects.activeCostCodeTemplates[0].description = 'changed'; }]) {
+      const p = structuredClone(h.plan); change(p);
+      expect(() => h.provision.createSetupTransports(p, { publicKey: 'sb_publishable_synthetic', setupKey: 'sb_secret_synthetic', setupKeyIdentifier: 'synthetic-key-id', credentials: recoveryFixture().credentials }, network)).toThrow();
+    }
+    expect(network).not.toHaveBeenCalled();
+  });
+  it('setupAdminKeyNeverReachesCallerTransport', async () => {
+    const h = await foundationHarness(); const network = vi.fn();
+    expect(() => h.provision.createSetupTransports(h.plan, { publicKey: 'sb_secret_synthetic', setupKey: 'sb_secret_synthetic', setupKeyIdentifier: 'synthetic-key-id', credentials: recoveryFixture().credentials }, network)).toThrow();
+    expect(network).not.toHaveBeenCalled();
+  });
+  it('setupUnknownResponseNeverReposts', async () => {
+    const h = await foundationHarness(); h.transports.createActor = async () => { h.writes.push('lost-create'); throw new Error('lost synthetic response'); };
+    const receipt = await h.provision.runFoundation(h.plan, null, h.transports, h.checkpoint);
+    expect(receipt.status).toBe('UNKNOWN_COMMIT_STATE'); expect(h.writes).toEqual(['lost-create']); expect(receipt.operations).toHaveLength(2);
+  });
+  it('setupCheckpointLossStopsBeforeNextWrite', async () => {
+    for (const barrier of ['initial', 'intent', 'result'] as const) {
+      const h = await foundationHarness();
+      if (barrier === 'initial') h.checkpoint.assertInitialUploaded = async () => { throw new Error('lost'); };
+      if (barrier === 'intent') h.checkpoint.persistIntent = async () => { throw new Error('lost'); };
+      if (barrier === 'result') h.checkpoint.persistResult = async () => { throw new Error('lost'); };
+      const receipt = await h.provision.runFoundation(h.plan, null, h.transports, h.checkpoint);
+      expect(receipt.status).not.toBe('AWAITING_ENTITLEMENT_REVIEW'); expect(h.writes).toHaveLength(barrier === 'result' ? 1 : 0);
+    }
+  });
+  it('setupChangedOwnerOrUnexpectedChildBlocksComplete', async () => {
+    for (const change of ['owner', 'child'] as const) {
+      const h = await completedHarness();
+      if (change === 'owner') h.state.organizations[0].ownerId = id(9999);
+      else h.state.children.push({ table: 'number_sequences', id: id(9998), projectId: id(9997), recordType: 'action_item', nextValue: 11 });
+      const receipt = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+      expect(receipt.status).toBe('STOPPED'); expect(h.writes.length).toBeGreaterThan(0); expect(h.writes.every(w => ['authenticate-user:admin', 'authenticate-user:foreign'].includes(w))).toBe(true);
+    }
+  });
+  it('setupExactSevenTwoFourPositive', async () => {
+    const h = await completedHarness();
+    const receipt = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+    expect({ status: receipt.status, writes: h.writes }).toEqual({ status: 'FOUNDATION_PREPARED', writes: h.writes }); expect(setup.validateFoundationReceipt(receipt, h.plan)).toEqual(receipt);
+    expect(receipt.actors).toHaveLength(7); expect(receipt.organizations).toHaveLength(2); expect(receipt.projects).toHaveLength(4); expect(receipt.memberships).toHaveLength(16);
+    expect(h.writes.filter(w => w.startsWith('create-project:'))).toHaveLength(4); expect(h.writes.filter(w => w.startsWith('add-organization-member:'))).toHaveLength(5);
+    expect(h.snapshots[0].projects).toEqual([]); expect(h.snapshots.at(-1)!.projects).toHaveLength(4);
+    expect(h.state.memberships.filter(m => m.orgId === receipt.organizations[1].id)).toHaveLength(3);
+    expect(h.state.children.filter(c => c.table === 'number_sequences')).toHaveLength(8);
+    expect(receipt.actors.find(a => a.alias === 'mfa')!.mfa?.verified).toBe(true);
+    expect(receipt.census!.children).toHaveLength(273);
+    const enrollment = h.results.find(r => (r as { mfa?: unknown }).mfa) as { mfa: { factorId: string; secret: string } };
+    const payload: PrivateRecoveryPayload = { plan: h.plan, receipt, credentials: structuredClone(h.resume.recovery.credentials) };
+    payload.credentials.find(c => c.alias === 'mfa')!.mfa = enrollment.mfa;
+    expect(setup.validatePrivateRecoveryPayload(payload, receipt.context)).toEqual(payload);
+    expect(JSON.stringify(receipt)).not.toContain(enrollment.mfa.secret);
+    expect(JSON.stringify(h.provision.safeSetupStatus(receipt))).not.toContain('@');
+    for (const result of h.results.slice(1) as { result: { outcome: string }; receipt: FoundationReceipt }[]) {
+      if (result.result.outcome === 'SUCCEEDED') expect(result.receipt.census).toBeDefined();
+    }
+  });
+  it('setupEveryNonIdempotentResponseAndCheckpointLossStops', async () => {
+    const writeMethods = new Set(['createActor', 'signIn', 'createOrganization', 'configureOrganization', 'addOrganizationMember', 'createProject', 'assignProjectRole', 'enrollMfa', 'challengeMfa', 'verifyMfa']);
+    for (const phase of ['bootstrap', 'complete'] as const) {
+      const count = phase === 'bootstrap' ? 16 : 26;
+      for (const boundary of ['response', 'intent', 'result'] as const) for (let failure = 1; failure <= count; failure++) {
+        const h = phase === 'bootstrap' ? { ...await foundationHarness(), resume: null } : await completedHarness(); let calls = 0;
+        if (boundary === 'response') {
+          const original = h.transports;
+          h.transports = new Proxy(original, { get(target, key) {
+            const method = target[key as keyof SetupTransports]; if (typeof method !== 'function' || !writeMethods.has(String(key))) return method;
+            return async (...args: unknown[]) => { const value = await (method as (...values: unknown[]) => Promise<unknown>)(...args);
+              if (++calls === failure) throw new Error('synthetic lost response'); return value; };
+          } });
+        } else if (boundary === 'intent') h.checkpoint.persistIntent = async () => { if (++calls === failure) throw new Error('synthetic lost intent'); };
+        else h.checkpoint.persistResult = async () => { if (++calls === failure) throw new Error('synthetic lost result'); };
+        const receipt = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+        expect({ phase, boundary, failure, writes: h.writes.length, status: receipt.status }).toEqual({ phase, boundary, failure,
+          writes: boundary === 'intent' ? failure - 1 : failure, status: 'UNKNOWN_COMMIT_STATE' });
+        expect(() => setup.validateFoundationReceipt(receipt, h.plan)).not.toThrow();
+        await expect(h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint)).rejects.toThrow('SETUP_NO_REPLAY');
+        expect(h.writes).toHaveLength(boundary === 'intent' ? failure - 1 : failure);
+      }
+    }
+  }, 60_000);
+  it('setupAllRealMutationMethodsAndCliRefuseBeforeFetch', async () => {
+    const h = await foundationHarness(); const network = vi.fn(); const runtime = h.provision.createSetupTransports(h.plan,
+      { publicKey: 'sb_publishable_synthetic', setupKey: 'sb_secret_synthetic', setupKeyIdentifier: 'synthetic-key-id', credentials: recoveryFixture().credentials }, network);
+    const scope = h.provision.initialFoundationReceipt(h.plan, null);
+    for (const invoke of [() => runtime.createActor('pm'), () => runtime.signIn('pm', id(1)), () => runtime.createOrganization(scope, 'A'),
+      () => runtime.configureOrganization(scope, 'A'), () => runtime.addOrganizationMember(scope, 'pm'), () => runtime.createProject(scope, 'A1'),
+      () => runtime.assignProjectRole(scope, 'pm'), () => runtime.enrollMfa(scope), () => runtime.challengeMfa(scope, id(1)),
+      () => runtime.verifyMfa(scope, id(1), id(2), '123456')]) await expect(invoke()).rejects.toThrow('SETUP_MUTATION_PREREQUISITES_UNPROVED');
+    expect(network).not.toHaveBeenCalled(); expect(() => setup.assertDrawingMutationReadiness()).toThrow('MUTATION_PREREQUISITES_UNPROVED');
+    const args = ['prepare', '--target=staging', `--expected-ref=${setup.STAGE_REF}`, `--candidate-sha=${sha}`, '--phase=setup-bootstrap', `--plan-sha256=${'1'.repeat(64)}`];
+    expect(() => h.provision.runSetupCli(args)).toThrow('SETUP_MUTATION_PREREQUISITES_UNPROVED');
+    for (const extra of ['--setup-key=synthetic-secret', '--output=C:/outside', '--unknown=true']) expect(() => h.provision.parseSetupArguments([...args, extra])).toThrow();
+    const child = execFileSync(process.execPath, ['--input-type=module', '-e', `import {runSetupCli} from './scripts/drawing-cutover-provision.ts'; try { runSetupCli(${JSON.stringify(args)}); } catch { process.stdout.write('SETUP_REFUSED'); }`],
+      { encoding: 'utf8', windowsHide: true, env: { SystemRoot: process.env.SystemRoot, WINDIR: process.env.WINDIR, PATH: process.env.PATH, TEMP: process.env.TEMP } });
+    expect(child).toBe('SETUP_REFUSED'); expect(child).not.toContain('synthetic-secret');
+  });
+  it('setupMfaMissingSecretStaleSessionsAndNotificationEvidenceRefuse', async () => {
+    const missing = await completedHarness(); missing.transports.enrollMfa = async () => ({ factorId: id(9990), secret: '' });
+    expect((await missing.provision.runFoundation(missing.plan, missing.resume, missing.transports, missing.checkpoint)).status).toBe('UNKNOWN_COMMIT_STATE');
+    expect(missing.writes).not.toContain('challenge-mfa'); expect(missing.writes).not.toContain('verify-mfa');
+    const stale = await completedHarness(); const current = stale.transports.currentUser;
+    stale.transports.currentUser = async (...args) => { const result = await current(...args); result.session.expiresAt = 1; return result; };
+    expect((await stale.provision.runFoundation(stale.plan, stale.resume, stale.transports, stale.checkpoint)).status).toBe('UNKNOWN_COMMIT_STATE');
+    expect(stale.writes).toEqual(['authenticate-user:admin']);
+    const evidence = await foundationHarness(); (evidence.plan.prerequisites as unknown as Record<string, unknown>).noEmailSha256 = true;
+    await expect(evidence.provision.runFoundation(evidence.plan, null, evidence.transports, evidence.checkpoint)).rejects.toThrow(); expect(evidence.writes).toEqual([]);
+    const old = await completedHarness(); old.resume.artifact.candidateSha = '9'.repeat(40);
+    await expect(old.provision.runFoundation(old.plan, old.resume, old.transports, old.checkpoint)).rejects.toThrow(); expect(old.writes).toEqual([]);
+  });
+  it('setupRealShapedSessionAndProjectProvenance', async () => {
+    const h = await foundationHarness(); const actor: SetupActor = { alias: 'admin', id: id(77), emailSha256: testHash('admin@example.invalid'), confirmed: true, factors: [] };
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = (patch = {}) => `${Buffer.from(JSON.stringify({ alg: 'ES256', typ: 'JWT' })).toString('base64url')}.${Buffer.from(JSON.stringify({
+      sub: actor.id, email: 'admin@example.invalid', role: 'authenticated', aud: 'authenticated', iss: `${origin}/auth/v1`, exp: now + 3600, iat: now, session_id: id(78), aal: 'aal1', ...patch })).toString('base64url')}.synthetic`;
+    const raw = { access_token: jwt(), token_type: 'bearer', expires_in: 3600, refresh_token: 'discard-synthetic-refresh',
+      user: { id: actor.id, email: 'admin@example.invalid', email_confirmed_at: new Date().toISOString(), factors: [] } };
+    const parsed = h.provision.validateSetupSessionResponse(raw, actor); expect(parsed.session.aal).toBe('aal1'); expect(JSON.stringify(parsed)).not.toContain('discard-synthetic-refresh');
+    for (const patch of [{ sub: id(79) }, { email: 'other@example.invalid' }, { role: 'service_role' }, { exp: now - 1 }, { iss: 'https://foreign.invalid/auth/v1' }]) {
+      expect(() => h.provision.validateSetupSessionResponse({ ...raw, access_token: jwt(patch) }, actor)).toThrow();
+    }
+    const org = { alias: 'A' as const, id: id(80), createdBy: actor.id, ownerId: actor.id, name: 'Synthetic A', slug: 'synthetic-a', plan: 'pro' as const, memberDefaultProjectRole: null };
+    const project = { id: id(81), org_id: org.id, name: 'Synthetic A1', project_number: 'TEST-A1' };
+    expect(h.provision.projectCreateResponse(h.plan, 'A1', project, org, parsed.session).createdBy).toBe(actor.id);
+    expect(() => h.provision.projectCreateResponse(h.plan, 'A1', project, org, { ...parsed.session, actorId: id(82) })).toThrow();
+    expect(() => h.provision.projectCreateResponse(h.plan, 'A1', { ...project, org_id: id(83) }, org, parsed.session)).toThrow();
+    expect(h.provision.decimalIdentity('9007199254740993.0100')).toBe('9007199254740993.01');
+  });
+  it('setupUnknownMissingDuplicateAndForeignReadbacksFailClosed', async () => {
+    for (const defect of ['missing-id', 'duplicate-id', 'wrong-email', 'extra-factor'] as const) {
+      const h = await foundationHarness(); const create = h.transports.createActor;
+      h.transports.createActor = async alias => { const actor = await create(alias); if (defect === 'missing-id') actor.id = '';
+        if (defect === 'wrong-email') actor.emailSha256 = '0'.repeat(64); if (defect === 'extra-factor') actor.factors.push({ id: id(9), type: 'totp', status: 'verified' });
+        if (defect === 'duplicate-id' && h.state.actors.length > 1) actor.id = h.state.actors[0].id; return actor; };
+      const result = await h.provision.runFoundation(h.plan, null, h.transports, h.checkpoint); expect(result.status).toBe('UNKNOWN_COMMIT_STATE'); expect(h.writes.length).toBeLessThan(4);
+    }
+    const h = await completedHarness(); const create = h.transports.createProject;
+    h.transports.createProject = async (...args) => { const project = await create(...args); h.state.memberships.find(m => m.projectId === project.id)!.userId = id(9999); return project; };
+    const result = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint); expect(result.status).toBe('UNKNOWN_COMMIT_STATE');
+    expect(h.writes.filter(w => w.startsWith('create-project:'))).toHaveLength(1); expect(result.projects).toHaveLength(0);
+  });
+  it('setupFinalObservationDriftCannotReturnPrepared', async () => {
+    const h = await completedHarness(); const persist = h.checkpoint.persistResult;
+    h.checkpoint.persistResult = async record => { await persist(record);
+      if (record.receipt.operations.at(-2)?.kind === 'intent' && (record.receipt.operations.at(-2) as SetupIntent).action === 'verify-mfa') {
+        h.state.children.find(c => c.table === 'number_sequences')!.nextValue = 99;
+      }
+    };
+    const receipt = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+    expect(receipt.status).toBe('STOPPED'); expect(receipt.census?.children).toHaveLength(273);
+    expect(h.writes.filter(w => w === 'verify-mfa')).toHaveLength(1);
+  });
+  it('setupSafeReadRetriesAreExactIdBoundedAndNewKeysAreNotBearerTokens', async () => {
+    const h = await completedHarness(); const actor = h.resume.recovery.receipt.actors[0]; let attempts = 0;
+    const response = { id: actor.id, email: `${actor.alias}@example.invalid`, email_confirmed_at: new Date().toISOString(), factors: [], unused: 'discard' };
+    const network = vi.fn<typeof fetch>(async () => { if (++attempts === 1) throw new Error('synthetic timeout'); return Response.json(response); });
+    const runtime = h.provision.createSetupTransports(h.plan, { publicKey: 'sb_publishable_synthetic', setupKey: 'sb_secret_synthetic',
+      setupKeyIdentifier: 'synthetic-key-id', credentials: h.resume.recovery.credentials, resume: h.resume }, network);
+    const observed = await runtime.readActor(actor.alias, actor.id); expect(observed.id).toBe(actor.id); expect(observed).not.toHaveProperty('unused');
+    expect(network).toHaveBeenCalledTimes(2);
+    for (const [url, init] of network.mock.calls) {
+      expect(String(url)).toBe(`${origin}/auth/v1/admin/users/${actor.id}`);
+      expect(new Headers(init?.headers).get('apikey')).toBe('sb_secret_synthetic'); expect(new Headers(init?.headers).has('Authorization')).toBe(false);
+      expect(init?.redirect).toBe('error'); expect(init?.method).toBe('GET');
+    }
+    await expect(runtime.readActor(actor.alias, id(9999))).rejects.toThrow('SETUP_EXACT_AUTH_ID_REQUIRED'); expect(network).toHaveBeenCalledTimes(2);
+    network.mockImplementation(async () => { throw new Error('private server details'); });
+    await expect(runtime.readActor(actor.alias, actor.id)).rejects.toThrow('SETUP_REQUEST_FAILED'); expect(network).toHaveBeenCalledTimes(4);
+  });
+  it('setupSafeReadDeadlineIncludesHungBodyAndHasOnlyTwoAttempts', async () => {
+    const h = await completedHarness(); const actor = h.resume.recovery.receipt.actors[0];
+    const network = vi.fn<typeof fetch>(async () => new Response(new ReadableStream({ start() { /* synthetic never-ending body */ } })));
+    const runtime = h.provision.createSetupTransports(h.plan, { publicKey: 'sb_publishable_synthetic', setupKey: 'sb_secret_synthetic',
+      setupKeyIdentifier: 'synthetic-key-id', credentials: h.resume.recovery.credentials, resume: h.resume }, network);
+    vi.useFakeTimers();
+    try {
+      const outcome = runtime.readActor(actor.alias, actor.id).then(() => 'unexpected', error => (error as Error).message);
+      await vi.advanceTimersByTimeAsync(20_001); expect(await outcome).toBe('SETUP_REQUEST_FAILED'); expect(network).toHaveBeenCalledTimes(2);
+      expect(network.mock.calls.every(([, init]) => init?.signal?.aborted)).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+  it('setupStrictEvidenceCensusAndChallengeBindingsRejectSubstitution', async () => {
+    const h = await completedHarness();
+    for (const mutate of [
+      (p: SetupPlan) => { p.prerequisiteDetails!.sideEffects.activeCostCodeTemplates.push(p.prerequisiteDetails!.sideEffects.activeCostCodeTemplates[0]); },
+      (p: SetupPlan) => { p.prerequisiteDetails!.sideEffects.candidateSha = '9'.repeat(40); },
+      (p: SetupPlan) => { p.prerequisiteDetails!.sideEffects.activeCostCodeTemplates[0].default_budget_amount = '1e10'; },
+      (p: SetupPlan) => { p.prerequisiteDetails!.sideEffects.expiresAt = new Date(Date.now() - 1).toISOString(); },
+    ]) {
+      const plan = structuredClone(h.plan); mutate(plan); plan.prerequisites.sideEffectsSha256 = testHash(JSON.stringify(plan.prerequisiteDetails!.sideEffects));
+      expect(() => h.provision.requireFoundationPlan(plan)).toThrow();
+    }
+    const noCensus = structuredClone(h.resume); delete noCensus.recovery.receipt.census;
+    noCensus.receiptSha256 = testHash(JSON.stringify(noCensus.recovery.receipt));
+    const legacyPlan = structuredClone(h.plan); legacyPlan.prior!.receiptSha256 = noCensus.receiptSha256; noCensus.planSha256 = testHash(JSON.stringify(legacyPlan));
+    expect(() => h.provision.initialFoundationReceipt(legacyPlan, noCensus)).toThrow('SETUP_RESUME_CENSUS_REQUIRED');
+    const receipt = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+    for (const change of [
+      (r: FoundationReceipt) => { r.census!.children[0].projectId = id(9999); },
+      (r: FoundationReceipt) => { r.census!.children[1] = r.census!.children[0]; },
+      (r: FoundationReceipt) => { r.census!.sideEffectsSha256 = '0'.repeat(64); },
+      (r: FoundationReceipt) => { (r.operations.find(o => o.kind === 'intent' && o.action === 'verify-mfa') as SetupIntent).challengeId = id(9998); },
+      (r: FoundationReceipt) => { (r.operations.find(o => o.kind === 'intent' && o.action === 'challenge-mfa') as SetupIntent).factorId = id(9997); },
+    ]) { const invalid = structuredClone(receipt); change(invalid); expect(() => setup.validateFoundationReceipt(invalid, h.plan)).toThrow(); }
+  });
+  it('setupSeedValueAndStableIdDriftStopsBeforeNextWrite', async () => {
+    for (const defect of ['counter', 'stamp', 'id', 'template'] as const) {
+      const h = await completedHarness(); const persist = h.checkpoint.persistResult;
+      h.checkpoint.persistResult = async record => { await persist(record);
+        if (record.receipt.projects.length === 1) {
+          if (defect === 'counter') h.state.children.find(c => c.table === 'number_sequences')!.nextValue = 99;
+          if (defect === 'stamp') h.state.children.find(c => c.table === 'project_handoff_items')!.values!.createdBy = id(9999);
+          if (defect === 'id') h.state.children[0].id = id(9998);
+          if (defect === 'template') h.state.activeCostCodeTemplates[0].description = 'changed';
+        }
+      };
+      const receipt = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+      expect(receipt.status).toBe('STOPPED'); expect(h.writes.filter(w => w.startsWith('create-project:'))).toHaveLength(1);
+      expect(receipt.census?.children).toHaveLength(67);
+    }
+  });
+  it('setupPreparationAndPrivateDeltaNeverExposeCredentialsInPublicState', async () => {
+    const h = await foundationHarness(); const prepared = h.provision.prepareFoundation(h.plan, null, recoveryKeys.publicKey);
+    expect(new Set(prepared.payload.credentials.map(c => c.password)).size).toBe(7);
+    expect(prepared.payload.credentials.every(c => /^[A-Za-z0-9_-]{43}$/.test(c.password))).toBe(true);
+    expect(Object.keys(h.provision.safeSetupStatus(prepared.payload.receipt))).toEqual(['phase', 'status', 'checkpointSequence']);
+    for (const credential of prepared.payload.credentials) expect(JSON.stringify(prepared.envelope)).not.toContain(credential.password);
+    expect(() => h.provision.setupRunPaths('relative', '123', '1')).toThrow();
+    expect(() => h.provision.setupRunPaths(resolve(tmpdir()), '../123', '1')).toThrow();
+    expect(h.provision.setupRunPaths(resolve(tmpdir()), '123', '1').run).toBe(join(resolve(tmpdir()), 'drawing-foundation-123-1'));
+    const checkpoint = h.provision.createPrivateSetupCheckpoint(prepared.payload, recoveryKeys.publicKey, 'not-accessed', artifactFixture(), artifactFixture());
+    await expect(checkpoint.persistResult({ result: { kind: 'result', sequence: 0, operationId: id(9999), outcome: 'SUCCEEDED', observedId: id(9998) },
+      receipt: prepared.payload.receipt, mfa: { factorId: id(9998), secret: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ' } })).rejects.toThrow();
+  });
+  it('setupRlsShapedSelfProfilesArePendingUntilOwnSigninAndAllSevenBeforeAppWrites', async () => {
+    const positive = await completedHarness(); const configure = positive.transports.configureOrganization;
+    positive.transports.configureOrganization = async (...args) => {
+      expect(positive.state.profiles).toHaveLength(7); expect(positive.writes.filter(w => w.startsWith('authenticate-user:'))).toHaveLength(7);
+      expect(positive.snapshots.at(-1)!.profiles).toHaveLength(7); return configure(...args);
+    };
+    expect((await positive.provision.runFoundation(positive.plan, positive.resume, positive.transports, positive.checkpoint)).status).toBe('FOUNDATION_PREPARED');
+    expect(positive.snapshots[0].profiles.map(p => p.id)).toEqual([positive.state.actors.find(a => a.alias === 'admin')!.id]);
+    expect(positive.snapshots.some(s => s.profiles.length === 2 && s.organizations.length === 2)).toBe(true);
+    for (const defect of ['missing-self', 'wrong-role', 'premature-profile'] as const) {
+      const h = await completedHarness(); const signIn = h.transports.signIn;
+      h.transports.signIn = async (...args) => {
+        const session = await signIn(...args);
+        if (args[0] === 'pm') {
+          if (defect === 'missing-self') h.state.profiles = h.state.profiles.filter(p => p.id !== session.actorId);
+          if (defect === 'wrong-role') h.state.profiles.find(p => p.id === session.actorId)!.role = 'admin' as 'user';
+        }
+        if (args[0] === 'admin' && defect === 'premature-profile') {
+          const pending = h.state.actors.find(a => a.alias === 'pm')!;
+          h.state.profiles.push({ id: pending.id, emailSha256: pending.emailSha256, role: 'user' });
+        }
+        return session;
+      };
+      const receipt = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+      expect(receipt.status).toBe(defect === 'premature-profile' ? 'STOPPED' : 'UNKNOWN_COMMIT_STATE');
+      expect(h.writes).toEqual(defect === 'premature-profile' ? ['authenticate-user:admin'] : ['authenticate-user:admin', 'authenticate-user:foreign', 'authenticate-user:pm']);
+      expect(h.writes.some(w => !w.startsWith('authenticate-user:'))).toBe(false);
+    }
+  });
+});
 const psLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const recoveryWrapper = resolve('scripts/drawing-cutover-recovery-local.ps1');
 function runRecoveryPs(script: string): string {
@@ -594,7 +946,8 @@ describe('private staging recovery', () => {
       receipt.memberships.push(membership); operation({ action: 'assign-project-role', actor: alias, organization: 'A', project: 'A1' }, membership.id);
     }
     receipt.actors.find(a => a.alias === 'mfa')!.mfa = { factorId: id(1600), verified: true };
-    operation({ action: 'enroll-mfa', actor: 'mfa' }, id(1600)); operation({ action: 'verify-mfa', actor: 'mfa' }, id(1600));
+    operation({ action: 'enroll-mfa', actor: 'mfa' }, id(1600)); operation({ action: 'challenge-mfa', actor: 'mfa', factorId: id(1600) }, id(1601));
+    operation({ action: 'verify-mfa', actor: 'mfa', factorId: id(1600), challengeId: id(1601) }, id(1600));
     receipt.context.checkpointSequence = receipt.operations.length;
     expect(setup.validateFoundationReceipt(receipt, plan).status).toBe('FOUNDATION_PREPARED');
     expect(receipt.memberships.filter(m => !m.projectId)).toHaveLength(7);

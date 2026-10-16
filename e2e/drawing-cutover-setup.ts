@@ -93,6 +93,13 @@ const artifactSchema = z.object({
   workflowRunId: decimalId, workflowRunAttempt: decimalId, candidateSha: z.string().regex(/^[a-f0-9]{40}$/), archiveSha256: hash, ciphertextSha256: hash,
 }).strict();
 export type ArtifactBinding = z.infer<typeof artifactSchema>;
+// Numeric values are selected as text by PostgREST. Never round money through Number.
+export const setupDecimalSchema = z.string().max(61).regex(/^-?(?:0|[1-9][0-9]{0,29})(?:\.[0-9]{1,30})?$/);
+export const costTemplateSchema = z.object({ id: uuid, cost_code_number: z.string().min(1).max(100), description: z.string().max(500),
+  category: z.string().min(1).max(100), default_budget_amount: setupDecimalSchema.nullable(), sort_order: z.number().int().min(-2147483648).max(2147483647), is_active: z.literal(true) }).strict();
+const sideEffectsSchema = z.object({ version: z.literal(1), projectRef: z.literal(STAGE_REF), candidateSha: z.string().regex(/^[a-f0-9]{40}$/),
+  reviewedAt: z.string().datetime(), expiresAt: z.string().datetime(), installedClosureSha256: hash,
+  activeCostCodeTemplates: z.array(costTemplateSchema).max(256), seedSemantics: z.literal('stage-foundation-v1') }).strict();
 const setupPlanSchema = z.object({
   context: setupContextSchema, createdAt: z.string().datetime(), expiresAt: z.string().datetime(),
   roster: z.array(z.object({ alias, email: z.string().email().max(254) }).strict()).length(7),
@@ -101,14 +108,16 @@ const setupPlanSchema = z.object({
   keyReview: z.object({ publicKeySha256: hash, setupKeySha256: hash, setupKeyIdentifier: label, ownerAttestationSha256: hash }).strict(),
   prerequisites: z.object({ scenarioSourceSha256: hash, sourceJobsSha256: hash, immutableBuildSha256: hash, packageSha256: hash,
     ownershipSha256: hash, sideEffectsSha256: hash, healthSha256: hash, noEmailSha256: hash, settingsAuthoritySha256: hash }).strict(),
+  prerequisiteDetails: z.object({ sideEffects: sideEffectsSchema }).strict().optional(),
   prior: z.object({ receiptSha256: hash, artifact: artifactSchema }).strict().optional(),
 }).strict();
 export type SetupPlan = z.infer<typeof setupPlanSchema>;
 const operationIntentSchema = z.object({
   sequence, kind: z.literal('intent'), operationId: uuid,
   action: z.enum(['create-user', 'authenticate-user', 'create-organization', 'configure-organization', 'add-organization-member',
-    'create-project', 'assign-project-role', 'enroll-mfa', 'verify-mfa']), actor: alias,
+    'create-project', 'assign-project-role', 'enroll-mfa', 'challenge-mfa', 'verify-mfa']), actor: alias,
   organization: organizationAlias.optional(), project: projectAlias.optional(),
+  factorId: uuid.optional(), challengeId: uuid.optional(),
 }).strict();
 const operationResultSchema = z.object({ sequence, kind: z.literal('result'), operationId: uuid,
   outcome: z.enum(['SUCCEEDED', 'REJECTED', 'UNKNOWN']), observedId: uuid.optional() }).strict();
@@ -123,6 +132,9 @@ const receiptSchema = z.object({
   projects: z.array(z.object({ alias: projectAlias, id: uuid, orgId: uuid, createdBy: uuid }).strict()).max(4),
   memberships: z.array(z.object({ id: uuid, actor: alias, userId: uuid, orgId: uuid, projectId: uuid.optional(),
     role: z.enum(['owner', 'member', 'pm', 'viewer', 'field']) }).strict()).max(16),
+  census: z.object({ observedAt: z.string().datetime(), sideEffectsSha256: hash, observationSha256: hash,
+    children: z.array(z.object({ table: z.enum(['project_handoff_items', 'action_items', 'planner_action_events', 'piece_station_configurations',
+      'cost_codes', 'pma_audit_logs', 'number_sequences', 'member_activity']), id: uuid, projectId: uuid, rowSha256: hash }).strict()).max(2400) }).strict().optional(),
 }).strict();
 export type FoundationReceipt = z.infer<typeof receiptSchema>;
 const privateCredentialSchema = z.object({ alias, email: z.string().email().max(254), password: z.string().min(24).max(128),
@@ -135,6 +147,43 @@ const resumeSchema = z.object({ context: setupContextSchema, planSha256: hash, r
     observedAt: z.string().datetime(), readbackSha256: hash }).strict()).length(2),
 }).strict();
 export type SetupResume = z.infer<typeof resumeSchema>;
+export type SetupIntent = Extract<FoundationReceipt['operations'][number], { kind: 'intent' }>;
+export type SetupResult = Extract<FoundationReceipt['operations'][number], { kind: 'result' }>;
+export type SetupOrganizationAlias = 'A' | 'B';
+export type SetupProjectAlias = 'A1' | 'A2' | 'B1' | 'B2';
+export type SetupMemberAlias = Exclude<ActorAlias, 'admin' | 'foreign'>;
+export type SetupFactor = { id: string; type: 'totp'; status: 'unverified' | 'verified' };
+export type SetupActor = { alias: ActorAlias; id: string; emailSha256: string; confirmed: boolean; factors: SetupFactor[] };
+export type SetupSession = { actorId: string; emailSha256: string; sessionId: string; expiresAt: number; aal: 'aal1' | 'aal2' };
+export type SetupOrganization = Omit<FoundationReceipt['organizations'][number], 'memberDefaultProjectRole'> & {
+  plan: 'free' | 'pro'; name: string; slug: string; memberDefaultProjectRole: 'viewer' | null };
+export type SetupProject = FoundationReceipt['projects'][number] & { name: string; number: string };
+export type SetupMembership = FoundationReceipt['memberships'][number];
+export type SetupChild = { table: 'project_handoff_items' | 'action_items' | 'planner_action_events' | 'piece_station_configurations' | 'cost_codes' | 'pma_audit_logs' | 'member_activity' | 'number_sequences';
+  id: string; projectId: string; values?: Record<string, string | number | boolean | null>; recordType?: 'action_item' | 'handoff_item'; nextValue?: number };
+export type SetupObservation = { actors: SetupActor[]; profiles: { id: string; emailSha256: string; role: 'user' }[];
+  organizations: SetupOrganization[]; projects: SetupProject[]; memberships: SetupMembership[]; children: SetupChild[];
+  activeCostCodeTemplates: z.infer<typeof costTemplateSchema>[] };
+export type SetupTransports = {
+  createActor(alias: ActorAlias): Promise<SetupActor>;
+  readActor(alias: ActorAlias, id: string): Promise<SetupActor>;
+  signIn(alias: ActorAlias, id: string): Promise<SetupSession>;
+  currentUser(alias: ActorAlias, id: string): Promise<{ actor: SetupActor; session: SetupSession }>;
+  observe(receipt: FoundationReceipt): Promise<SetupObservation>;
+  createOrganization(receipt: FoundationReceipt, alias: SetupOrganizationAlias): Promise<SetupOrganization>;
+  configureOrganization(receipt: FoundationReceipt, alias: SetupOrganizationAlias): Promise<SetupOrganization>;
+  addOrganizationMember(receipt: FoundationReceipt, alias: SetupMemberAlias): Promise<SetupMembership>;
+  createProject(receipt: FoundationReceipt, alias: SetupProjectAlias): Promise<SetupProject>;
+  assignProjectRole(receipt: FoundationReceipt, alias: SetupMemberAlias): Promise<SetupMembership>;
+  enrollMfa(receipt: FoundationReceipt): Promise<{ factorId: string; secret: string }>;
+  challengeMfa(receipt: FoundationReceipt, factorId: string): Promise<{ factorId: string; challengeId: string; expiresAt: number }>;
+  verifyMfa(receipt: FoundationReceipt, factorId: string, challengeId: string, code: string): Promise<{ factorId: string; session: SetupSession }>;
+};
+export type SetupCheckpoint = {
+  assertInitialUploaded(context: SetupContext): Promise<ArtifactBinding>;
+  persistIntent(record: { intent: SetupIntent; receipt: FoundationReceipt }): Promise<void>;
+  persistResult(record: { result: SetupResult; receipt: FoundationReceipt; mfa?: { factorId: string; secret: string } }): Promise<void>;
+};
 
 function strictValue<T>(schema: z.ZodType<T>, value: unknown, code: string): T {
   const parsed = schema.safeParse(value);
@@ -177,6 +226,14 @@ function planShape(value: unknown): SetupPlan {
   for (const project of plan.projects) requireCondition(project.organization === organizationFor[project.alias], 'SETUP_PROJECT_MATRIX');
   const created = Date.parse(plan.createdAt); const expires = Date.parse(plan.expiresAt);
   requireCondition(created < expires && expires <= created + 86_400_000, 'SETUP_PLAN_LIFETIME');
+  if (plan.prerequisiteDetails) {
+    const original = (value as SetupPlan).prerequisiteDetails!.sideEffects; const evidence = plan.prerequisiteDetails.sideEffects;
+    requireCondition(digest(boundedJson(original)) === plan.prerequisites.sideEffectsSha256 && evidence.candidateSha === plan.context.candidateSha,
+      'SETUP_SIDE_EFFECTS_BINDING');
+    requireCondition(Date.parse(evidence.reviewedAt) <= created && expires <= Date.parse(evidence.expiresAt)
+      && Date.parse(evidence.expiresAt) <= Date.parse(evidence.reviewedAt) + 86_400_000, 'SETUP_SIDE_EFFECTS_WINDOW');
+    requireCondition(unique(evidence.activeCostCodeTemplates.map(c => c.id)) && unique(evidence.activeCostCodeTemplates.map(c => c.cost_code_number)), 'SETUP_COST_TEMPLATE_DUPLICATE');
+  }
   requireCondition((plan.context.phase === 'setup-complete') === Boolean(plan.prior), 'SETUP_PRIOR_BINDING');
   if (plan.prior) requireCondition(plan.prior.artifact.candidateSha === plan.context.candidateSha, 'SETUP_PRIOR_SOURCE');
   return value as SetupPlan;
@@ -209,7 +266,7 @@ export function validateFoundationReceipt(value: unknown, planValue: SetupPlan):
       requireCondition(receipt.context.phase === 'setup-bootstrap'
         ? ['create-user', 'authenticate-user', 'create-organization'].includes(operation.action)
         : !['create-user', 'create-organization'].includes(operation.action), 'RECEIPT_OPERATION_PHASE');
-      if (['create-user', 'authenticate-user', 'enroll-mfa', 'verify-mfa'].includes(operation.action)) {
+      if (['create-user', 'authenticate-user', 'enroll-mfa', 'challenge-mfa', 'verify-mfa'].includes(operation.action)) {
         requireCondition(!operation.organization && !operation.project, 'RECEIPT_OPERATION_SCOPE');
         if (operation.action.endsWith('mfa')) requireCondition(operation.actor === 'mfa', 'RECEIPT_MFA_ACTOR');
       } else {
@@ -221,11 +278,21 @@ export function validateFoundationReceipt(value: unknown, planValue: SetupPlan):
         } else requireCondition(operation.organization === 'A' && !['admin', 'foreign'].includes(operation.actor)
           && (operation.action !== 'assign-project-role' || operation.project === 'A1'), 'RECEIPT_OPERATION_MEMBER');
       }
+      if (operation.action === 'challenge-mfa' || operation.action === 'verify-mfa') {
+        requireCondition(operation.factorId && succeeded.some(s => s.intent.action === 'enroll-mfa' && s.observedId === operation.factorId), 'RECEIPT_MFA_ENROLLMENT_ORDER');
+        if (operation.action === 'challenge-mfa') requireCondition(!operation.challengeId
+          && !succeeded.some(s => s.intent.action === 'challenge-mfa'), 'RECEIPT_MFA_CHALLENGE_ONCE');
+        else requireCondition(operation.challengeId && succeeded.some(s => s.intent.action === 'challenge-mfa'
+          && s.intent.factorId === operation.factorId && s.observedId === operation.challengeId)
+          && !succeeded.some(s => s.intent.action === 'verify-mfa'), 'RECEIPT_MFA_CHALLENGE_BINDING');
+      } else requireCondition(!operation.factorId && !operation.challengeId, 'RECEIPT_MFA_EXTRA_FIELDS');
+      if (operation.action === 'enroll-mfa') requireCondition(!succeeded.some(s => s.intent.action === 'enroll-mfa'), 'RECEIPT_MFA_ENROLL_ONCE');
     } else {
       requireCondition(pending && pending.operationId === operation.operationId, 'RECEIPT_RESULT_WITHOUT_INTENT');
       requireCondition(operation.outcome !== 'REJECTED' || !operation.observedId, 'RECEIPT_REJECTED_ID');
       if (operation.outcome === 'SUCCEEDED') {
         requireCondition(operation.observedId, 'RECEIPT_SUCCESS_ID_REQUIRED');
+        if (pending.action === 'verify-mfa') requireCondition(operation.observedId === pending.factorId, 'RECEIPT_MFA_VERIFIED_FACTOR');
         succeeded.push({ intent: pending, observedId: operation.observedId });
       }
       ambiguous = operation.outcome === 'UNKNOWN'; rejected = operation.outcome === 'REJECTED'; pending = undefined;
@@ -237,6 +304,19 @@ export function validateFoundationReceipt(value: unknown, planValue: SetupPlan):
     && unique(receipt.organizations.map(o => o.alias)) && unique(receipt.organizations.map(o => o.id))
     && unique(receipt.projects.map(p => p.alias)) && unique(receipt.projects.map(p => p.id))
     && unique(receipt.memberships.map(m => m.id)), 'RECEIPT_DUPLICATE_IDENTITY');
+  if (receipt.census) {
+    requireCondition(receipt.census.sideEffectsSha256 === plan.prerequisites.sideEffectsSha256
+      && Date.parse(receipt.census.observedAt) >= Date.parse(plan.createdAt) && Date.parse(receipt.census.observedAt) < Date.parse(plan.expiresAt), 'RECEIPT_CENSUS_BINDING');
+    requireCondition(unique(receipt.census.children.map(c => `${c.table}:${c.id}`))
+      && receipt.census.children.every(c => receipt.projects.some(p => p.id === c.projectId)), 'RECEIPT_CENSUS_PROJECT');
+    requireCondition(plan.prerequisiteDetails, 'RECEIPT_CENSUS_EVIDENCE');
+    const costs = plan.prerequisiteDetails.sideEffects.activeCostCodeTemplates.length;
+    for (const project of receipt.projects) {
+      const expected = { project_handoff_items: 36, action_items: 10, planner_action_events: 10, piece_station_configurations: 6,
+        cost_codes: costs, pma_audit_logs: costs, number_sequences: 2, member_activity: receipt.memberships.filter(m => m.projectId === project.id).length };
+      for (const table of Object.keys(expected) as (keyof typeof expected)[]) requireCondition(receipt.census.children.filter(c => c.projectId === project.id && c.table === table).length === expected[table], 'RECEIPT_CENSUS_INCOMPLETE');
+    }
+  }
   for (const actor of receipt.actors) {
     requireCondition(actor.emailSha256 === digest(plan.roster.find(a => a.alias === actor.alias)!.email.toLowerCase()), 'RECEIPT_ACTOR_BINDING');
     requireCondition(!actor.mfa || (actor.alias === 'mfa' && actor.authenticated), 'RECEIPT_MFA_BINDING');
