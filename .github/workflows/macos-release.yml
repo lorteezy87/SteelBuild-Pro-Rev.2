@@ -85,6 +85,7 @@ jobs:
       - name: Sign, package, validate, and optionally upload
         run: bash scripts/macos-release.sh
         env:
+          GH_TOKEN: ${{ github.token }}
           MAC_VERSION: ${{ inputs.version || '1.0.0' }}
           MAC_BUILD_NUMBER: ${{ inputs.build_number || '20261016' }}
           MAC_UPLOAD: ${{ inputs.upload || false }}
