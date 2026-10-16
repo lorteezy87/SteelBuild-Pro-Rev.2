@@ -1,6 +1,8 @@
 /** Validation only. This module cannot provision users, grant roles, or apply SQL. */
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { validateDrawingIntakeBindings } from './drawingCutoverIntakeBindings.ts';
+import type { DrawingIntakeBindings } from './drawingCutoverIntakeBindings.ts';
 
 export const STAGE_REF = 'ndyfjffsulfbwpmwdmic';
 export const STAGE_ORIGIN = `https://${STAGE_REF}.supabase.co`;
@@ -29,8 +31,9 @@ const fixtureSchema = z.object({
   entities: z.array(z.object({ table: entityTable, id: uuid, projectId: uuid }).strict()).max(250),
   storage: z.array(z.object({ projectId: uuid, path: z.string().max(512), sha256: hash, pages: z.number().int().positive().max(250) }).strict()).min(1).max(20),
   fab: z.object({ projectId: uuid, blockedDrawingId: uuid, cleanDrawingId: uuid }).strict().optional(),
+  intakeBindings: z.unknown().optional(),
 }).strict();
-export type FixtureManifest = z.infer<typeof fixtureSchema>;
+export type FixtureManifest = Omit<z.infer<typeof fixtureSchema>, 'intakeBindings'> & { intakeBindings?: DrawingIntakeBindings };
 const credentialSchema = z.object({ email: z.string().email(), password: z.string().min(1), totpSecret: z.string().optional() }).strict();
 export type ActorCredential = z.infer<typeof credentialSchema>;
 export type RunConfig = {
@@ -61,7 +64,10 @@ export function validateFixture(text: string, expectedDigest: string, candidateS
     requireCondition(fixture.fab.blockedDrawingId !== fixture.fab.cleanDrawingId, 'FAB_FIXTURE_DISTINCT_REQUIRED');
     for (const id of [fixture.fab.blockedDrawingId, fixture.fab.cleanDrawingId]) requireCondition(fixture.entities.some(e => e.table === 'drawings' && e.id === id && e.projectId === fixture.fab!.projectId), 'FAB_FIXTURE_BINDING');
   }
-  return fixture;
+  const { intakeBindings, ...base } = fixture;
+  return Object.hasOwn(fixture, 'intakeBindings')
+    ? { ...base, intakeBindings: validateDrawingIntakeBindings(intakeBindings, base) }
+    : base;
 }
 export function validateCredentials(value: string | undefined, fixture: FixtureManifest): Record<ActorAlias, ActorCredential> {
   let raw: unknown;

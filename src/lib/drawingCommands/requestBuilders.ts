@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { DrawingCommandPreflightError } from './errors';
-import type { CreateSetRequest, CreateSetReview, DrawingJson, ReviseSetRequest, ReviseSetReview } from './types';
+import { DrawingCommandPreflightError } from './errors.ts';
+import type { CreateSetRequest, CreateSetReview, DrawingJson, ReviseSetRequest, ReviseSetReview } from './types.ts';
 
 const bytes = (value: string) => new TextEncoder().encode(value).byteLength;
 const chars = (max: number) => z.string().refine((value) => [...value].length <= max);

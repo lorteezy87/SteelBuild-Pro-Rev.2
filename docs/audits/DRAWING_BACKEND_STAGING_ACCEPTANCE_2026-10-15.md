@@ -76,13 +76,13 @@ The implemented subset is not currently runnable for hosted writes.
 | Auth identity and fresh parent checks | Implemented; no hosted run | Owner-provided reviewed actors/manifest and exact staging authorization |
 | Real protected-field negative probes with snapshot equality | Implemented in dedicated spec; no hosted run | Validate actual roles and independent synthetic provenance before execution |
 | Existing four-case fab gate | Original spec retained; guarded Node wiring and skip rejection implemented | Provide reviewed distinct clean/blocked drawings, PM/viewer bindings; execute original spec |
-| Both upload UIs / create and revise commands | Not implemented in this checkpoint | Fixed reviewed command payload schemas, uploaded-byte/source binding, real UI selectors and init read roster; no generic command JSON allowance |
+| Both upload UIs / create and revise commands | Finite intake input bindings implemented; transport/UI scenarios remain unimplemented | Uploaded-byte/source readback, exact live roster, finite forwarding and real UI selectors |
 | Lost response/reload and two-tab retry | Not implemented | Real-forward/commit-confirm/response-hide sequencing after command bindings |
 | Role/org/project and removed-membership matrix | Protected-column probe alone is insufficient | Verify membership/role state; exact removal lifecycle and full command denials |
 | MFA AAL1/AAL2 | Not implemented | Owner-created enrolled actor/factor and independently reviewed challenge/verify transport |
 | Storage upload/upsert/replace/move/delete, physical PDF/page readback | Not implemented | Exact synthetic PDF bytes/hash/page fixtures and bounded Storage operations |
 | Metadata/calibration, holds/locks, rounds/coverage and exports | Not implemented | Named scoped operations and authoritative before/after assertions |
-| Scanned/manual/AI-unavailable UI intake | Not implemented | Real manual intake and pre-provider rejection; no llm-proxy invocation |
+| Scanned/manual/AI-unavailable UI intake | Manual command input requires added sheets, known positive pages and unavailable text/callouts; UI scenario remains unimplemented | Real manual intake and pre-provider rejection; no llm-proxy invocation |
 | Rollback rehearsal / installed package / activation | Manual operator prerequisites | Separate exact-target reviewed SQL and full ownership/dependency closure |
 | Safe stop, direct RPC/UI denial, recovery and disposable erasure | Not implemented | Reviewed staged operations, same-instance hashes and unrelated-fixture counts |
 | Before/after advisors | Before baseline supplied by root only | Compare after actual permitted staging work; never auto-dismiss findings |
@@ -93,6 +93,43 @@ fingerprints, ledger payload hashes and effective mutation privileges. It is not
 required synthetic write rehearsal, stop/unstop implementation or install wrapper.
 Use the separately reviewed four-payload installer and same-instance capture/activation
 process only after root reconciles exact target, classifications and authority.
+
+## Parent Task 13 slice A: finite intake bindings (source only)
+
+The optional acceptance `FixtureManifest.intakeBindings` field is one strict
+version-1 book: `projects` has exactly `A1`, `A2`, `B1`, `B2`, each with its declared
+`id`, `orgId`, `createdBy`; `commands` has exactly `newSet`, `revision`,
+`manualIntake`, each with a distinct stable UUID `requestId`, `actor: pm`, the
+matching `create_set`/`revise_set` operation and complete production `payload`.
+The actual application request builders validate the payloads; no copied business
+parser or generic command forwarding was added. The minimal import/constructor
+compatibility changes let these existing builders run under Node 24 type stripping.
+
+Both A projects belong to the PM/admin organization and were created by the
+declared admin; both B projects belong to and were created by the declared foreign
+actor. Every alias must match its manifest identity, and all three plans explicitly
+target A1. The existing `drawing:preflight` selects validated A1 while retaining the
+PM caller and independent admin/foreign parent observers. Array order, names and
+PM-created-project inference cannot select it. Legacy CLI preflight manifests may
+still omit the book, but scenario selection refuses missing/null/ambiguous bindings.
+This does not promote legacy manifests to acceptance or change phase reporting.
+
+The pure boundary checks distinct request IDs and synthetic E2E new-set names,
+same-project declared set/drawing/revision identities, exact Storage paths, page
+bounds and consistent metadata tokens for repeated source paths. Manual intake
+cannot claim harvested-empty text/callouts. Unknown keys, substituted actors/actions,
+non-JSON input and conflicting identities refuse with sanitized errors. Returned
+books and requests are detached from caller objects and deeply frozen. Literal
+request strings retain their reviewed values. The separately reviewed full raw
+manifest fingerprint remains the approval boundary; the book creates no new digest
+or approval channel. SQL metadata tokens and PDF content hashes remain distinct.
+
+These checks do not establish the active database roster, set-to-drawing/history
+relationships, current timestamps, token existence, name availability, actual PDF
+bytes/pages or engineering approval. All need later authenticated readback. The
+three unconditional real setup, acceptance and mutation stops remain unchanged.
+No new browser scenario, transport route, workflow, setup schema or SQL changed;
+the sixteen remaining scenarios and full Task 13 hosted acceptance are incomplete.
 
 ## Root-supplied read-only baseline, 2026-10-16
 

@@ -1,10 +1,12 @@
-import type { DrawingCommandOutcome } from './types';
+import type { DrawingCommandOutcome } from './types.ts';
 
 /** No command was dispatched. Distinct from a write whose transport outcome is unknown. */
 export class DrawingCommandPreflightError extends Error {
   readonly dispatched = false;
-  constructor(readonly code: 'invalid_review' | 'identity_changed' | 'unavailable') {
+  readonly code: 'invalid_review' | 'identity_changed' | 'unavailable';
+  constructor(code: 'invalid_review' | 'identity_changed' | 'unavailable') {
     super(`Drawing command preflight failed: ${code}`);
+    this.code = code;
     this.name = 'DrawingCommandPreflightError';
   }
 }

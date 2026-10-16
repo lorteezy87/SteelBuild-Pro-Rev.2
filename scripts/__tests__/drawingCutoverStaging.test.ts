@@ -14,6 +14,7 @@ import * as setup from '../../e2e/drawing-cutover-setup.ts';
 import type { SetupContext, SetupPlan, PrivateRecoveryPayload, ArtifactBinding, FoundationReceipt, SetupResume } from '../../e2e/drawing-cutover-setup.ts';
 import type { SetupTransports, SetupCheckpoint, SetupObservation, SetupSession, SetupActor, SetupIntent } from '../../e2e/drawing-cutover-setup.ts';
 import { runSetupEntitlementCases } from '../../supabase/tests/drawing-set-revision-transaction/setupEntitlementCases.ts';
+import { selectDrawingIntakeProject } from '../../e2e/drawingCutoverIntakeBindings.ts';
 
 const sha = '1'.repeat(40);
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -44,6 +45,65 @@ function inputs() {
 }
 
 describe('drawing staging executable safety boundary', () => {
+  it('legacy CLI preflight stays optional but cannot infer an acceptance scenario project', () => {
+    const config = prepareRun(inputs());
+    expect(config.phase).toBe('preflight');
+    expect(config.manifest.intakeBindings).toBeUndefined();
+    expect(() => selectDrawingIntakeProject(config.manifest)).toThrow('INTAKE_BINDINGS_REQUIRED');
+    const run = inputs(); const fixture = { ...manifest(), intakeBindings: null };
+    run.fixtureText = JSON.stringify(fixture); run.env.DRAWING_CUTOVER_MANIFEST_SHA256 = setup.digest(run.fixtureText);
+    expect(() => prepareRun(run)).toThrow('INTAKE_BINDINGS_INVALID');
+  });
+  it('foundation owner projects select reviewed A1 with PM caller and retain independent parent observers and mutation stop', async () => {
+    const fixture = manifest();
+    fixture.projects.forEach(p => { if (p.orgId === id(2)) p.createdBy = id(13); });
+    const payload = { project_id: id(4), revision_label: '0', file_path: fixture.storage[0].path,
+      source_objects: [{ path: fixture.storage[0].path, token: '4'.repeat(64) }], set_name: 'E2E new set', set_number: null,
+      discipline: null, issued_date: null, issued_by: null, notes: null,
+      sheets: [{ action: 'added', sheet_number: 'S1', sheet_title: 'Synthetic', revision_code: '0', file_path: fixture.storage[0].path,
+        pdf_page: 1, reviewed: true, extraction: { text: { state: 'unavailable' }, callouts: { state: 'unavailable' } } }] };
+    const bound = { ...fixture, entities: [...fixture.entities, { table: 'drawing_sets', id: id(31), projectId: id(4) }],
+      intakeBindings: { version: 1, projects: { A1: fixture.projects[0], A2: fixture.projects[1], B1: fixture.projects[2], B2: fixture.projects[3] }, commands: {
+        newSet: { requestId: id(41), actor: 'pm', operation: 'create_set', payload },
+        manualIntake: { requestId: id(42), actor: 'pm', operation: 'create_set', payload: { ...payload, set_name: 'E2E manual set' } },
+        revision: { requestId: id(43), actor: 'pm', operation: 'revise_set', payload: { project_id: id(4), revision_label: '1',
+          file_path: payload.file_path, source_objects: payload.source_objects, set_id: id(31), expected_set_updated_at: '2026-10-16T12:00:00Z',
+          expected_set_revision: '0', issued_date: '2026-10-16',
+          sheets: [{ action: 'same', drawing_id: id(30), expected_updated_at: '2026-10-16T12:00:00Z', expected_revision_id: null, sheet_number: 'S1' }] } },
+      } } };
+    bound.projects.reverse();
+    const run = inputs(); run.fixtureText = JSON.stringify(bound); run.env.DRAWING_CUTOVER_MANIFEST_SHA256 = setup.digest(run.fixtureText);
+    const config = prepareRun(run); const project = selectDrawingIntakeProject(config.manifest);
+    expect(config.phase).toBe('preflight'); expect(project).toEqual({ id: id(4), orgId: id(2), createdBy: id(13) });
+    const observations: { projectId: string; authorization: string | null }[] = [];
+    let writes = 0;
+    const network: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.includes('/auth/')) {
+        const email = (JSON.parse(String(init?.body)) as { email: string }).email;
+        const actor = fixture.actors.find(a => `${a.alias}@example.invalid` === email)!;
+        return Response.json({ access_token: `offline-${actor.alias}`, refresh_token: 'offline', user: { id: actor.id } });
+      }
+      if (url.includes('/projects?')) {
+        const projectId = new URL(url).searchParams.get('id')!.slice(3);
+        observations.push({ projectId, authorization: new Headers(init?.headers).get('Authorization') });
+        const parent = fixture.projects.find(p => p.id === projectId)!;
+        return Response.json([{ id: parent.id, org_id: parent.orgId, created_by: parent.createdBy }]);
+      }
+      writes++; return Response.json({});
+    };
+    const runtime = new DrawingCutoverTransport(config, network);
+    for (const actor of ['pm', 'admin', 'foreign'] as const) await runtime.signIn(actor);
+    expect(await runtime.verifyParents([id(4), id(5), id(6), id(7)])).toHaveLength(4);
+    expect(observations).toEqual([
+      { projectId: id(4), authorization: 'Bearer offline-admin' }, { projectId: id(5), authorization: 'Bearer offline-admin' },
+      { projectId: id(6), authorization: 'Bearer offline-foreign' }, { projectId: id(7), authorization: 'Bearer offline-foreign' },
+    ]);
+    config.phase = 'acceptance';
+    await expect(runtime.request({ actor: 'pm', method: 'PATCH', path: `/rest/v1/drawings?id=eq.${id(30)}`, body: { notes: 'E2E reviewed' } }))
+      .rejects.toThrow('MUTATION_PREREQUISITES_UNPROVED');
+    expect(writes).toBe(0);
+  });
   it('manualEntitlementFixtureRejectsNonemptyDatabaseBeforeDDL', async () => {
     let writes = 0;
     const db: Parameters<typeof runSetupEntitlementCases>[0] = {

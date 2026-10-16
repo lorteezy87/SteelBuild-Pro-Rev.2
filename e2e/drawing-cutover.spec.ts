@@ -2,6 +2,7 @@ import { test as base, expect } from '@playwright/test';
 import { getDrawingRuntime } from '../scripts/drawing-cutover-staging.ts';
 import { digest } from './drawing-cutover-setup.ts';
 import { installDrawingBrowserGuard } from './drawingCutoverNetworkGuard.ts';
+import { selectDrawingIntakeProject } from './drawingCutoverIntakeBindings.ts';
 
 const test = base.extend<{ guardedContext: void }>({
   guardedContext: [async ({ context }, use) => {
@@ -17,9 +18,8 @@ test('drawing:preflight', async () => {
   const runtime = await getDrawingRuntime();
   const parents = await runtime.verifyParents(runtime.config.manifest.projects.map(p => p.id));
   expect(parents.length).toBe(4);
-  const project = runtime.config.manifest.projects.find(p => p.createdBy === runtime.config.manifest.actors.find(a => a.alias === 'pm')?.id);
-  expect(Boolean(project)).toBe(true);
-  const response = await runtime.request({ actor: 'pm', method: 'POST', path: '/rest/v1/rpc/get_drawing_command_capabilities', body: { p_project_id: project!.id } });
+  const project = selectDrawingIntakeProject(runtime.config.manifest);
+  const response = await runtime.request({ actor: 'pm', method: 'POST', path: '/rest/v1/rpc/get_drawing_command_capabilities', body: { p_project_id: project.id } });
   expect(response.status).toBe(200);
   const capabilities = await response.json() as Record<string, unknown>;
   expect(capabilities.contract_version === 1 && ['new_set', 'revision', 'write_boundary', 'source_protection', 'receipt_lookup'].every(k => capabilities[k] === true)).toBe(true);
