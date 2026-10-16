@@ -30,7 +30,7 @@ vi.mock("@/lib/supabase", () => ({
 }));
 vi.mock("@/lib/query-client", () => ({ queryClientInstance: { clear: mocks.clear } }));
 vi.mock("@/lib/field/blobStore", () => ({ clearPendingPhotos: vi.fn(async () => {}) }));
-vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => false }));
+vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => false, isStoreShell: () => false }));
 vi.mock("@sentry/react", () => ({ setUser: vi.fn() }));
 
 const satisfied: AalResult = { data: { currentLevel: "aal2", nextLevel: "aal2" }, error: null };
