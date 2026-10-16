@@ -44,6 +44,9 @@ export function useBillingActions({ orgId, canManage, native, refetchOrgs, navig
     if (!orgId || native || getActiveOrgId() !== orgId) return;
     const url = new URL(window.location.href);
     const status = url.searchParams.get('status');
+    // Session-bound returns are owned by CheckoutConfirmation; legacy returns
+    // retain the neutral message and refresh below without claiming activation.
+    if (status === 'success' && url.searchParams.has('session_id')) return;
     if (status !== 'success' && status !== 'cancel') return;
     url.searchParams.delete('status');
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);

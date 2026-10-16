@@ -25,6 +25,7 @@ import { mfaDenialForVerifiedUser } from "../_shared/mfa.ts";
 import { type BillingConfig, type OrgUpdate, subscriptionOrgUpdate, PAID_SUBSCRIPTION_STATUSES } from "./webhookLogic.ts";
 import { billingReadiness } from "./configGuard.ts";
 import { CheckoutError, createDurableCheckout } from "./checkout.ts";
+import { assessCheckoutStatus } from "./checkoutStatus.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -227,7 +228,7 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   // ── App actions: checkout / portal (JWT-verified) ──
-  let body: { action?: string; org_id?: string; plan?: string };
+  let body: { action?: string; org_id?: string; plan?: string; session_id?: string };
   try { body = await req.json(); } catch { return json({ error: "Invalid request body" }, 400, req); }
   const { action, org_id, plan } = body;
   if (!org_id) return json({ error: "org_id is required" }, 400, req);
@@ -245,6 +246,25 @@ async function handleRequest(req: Request): Promise<Response> {
   if (membershipError) return json({ error: "Workspace billing access could not be verified" }, 503, req);
   if (!membership || !["owner", "admin"].includes(membership.role)) {
     return json({ error: "You don't have permission to manage this workspace's billing" }, 403, req);
+  }
+
+  if (action === "checkout-status") {
+    if (typeof body.session_id !== 'string' || !/^cs_[A-Za-z0-9_]{6,240}$/.test(body.session_id)) {
+      return json({ error: 'A valid checkout session is required' }, 400, req);
+    }
+    // Never create/update a customer, subscription, receipt, or entitlement here.
+    // Recheck access AFTER the provider await, before disclosing any result.
+    const session = await stripe.checkout.sessions.retrieve(body.session_id);
+    const [memberNow, orgNow] = await Promise.all([
+      admin.from('organization_members').select('role').eq('org_id', org_id).eq('user_id', user.id).maybeSingle(),
+      admin.from('organizations').select('stripe_customer_id,stripe_subscription_id,plan,subscription_status').eq('id', org_id).maybeSingle(),
+    ]);
+    if (memberNow.error || orgNow.error) return json({ error: 'Billing confirmation is unavailable' }, 503, req);
+    if (!memberNow.data || !['owner', 'admin'].includes(memberNow.data.role) || !orgNow.data) {
+      return json({ error: 'Workspace billing access changed' }, 403, req);
+    }
+    try { return json(assessCheckoutStatus(session, orgNow.data, org_id, cfg.livemode), 200, req); }
+    catch { return json({ error: 'Checkout could not be verified for this workspace' }, 403, req); }
   }
 
   // Payment return URLs come from reviewed server configuration. Browser Origin

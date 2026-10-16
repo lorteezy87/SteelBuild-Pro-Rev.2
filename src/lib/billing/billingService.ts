@@ -6,6 +6,16 @@
 
 import { supabase } from "@/lib/supabase";
 
+export type CheckoutStatus = { state: 'confirmed'; plan: 'pro' | 'business' } | { state: 'pending' | 'expired' };
+
+/** The backend checks the provider session and the matching webhook-backed row. */
+export async function getCheckoutStatus(orgId: string, sessionId: string): Promise<CheckoutStatus> {
+  const response = await invokeBilling('checkout-status', { org_id: orgId, session_id: sessionId });
+  if (response?.state === 'confirmed' && ['pro', 'business'].includes(response.plan)) return response as CheckoutStatus;
+  if (response?.state === 'pending' || response?.state === 'expired') return { state: response.state };
+  throw new Error('Billing confirmation is unavailable');
+}
+
 /** Exact, RLS-visible usage without a row-cap or another workspace's cache. */
 export async function getWorkspaceProjectCount(orgId: string): Promise<number> {
   if (!orgId) throw new Error("Select a workspace to load project usage");
