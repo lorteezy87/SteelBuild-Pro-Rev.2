@@ -158,6 +158,7 @@ export default function DrawingViewer() {
   const {
     canvasRef,
     rendering,
+    renderReady,
     currentViewport,
     canvasSize,
     pageSize,
@@ -192,7 +193,7 @@ export default function DrawingViewer() {
   // feet-inches like 10'-0, 10-0, 10'0", 10ft, or plain inches like 120
   // or 120"), parses it, computes scale factor, persists to the drawing.
   const { handleAutoDetectScale, saveCalibration, assertCalibrationReady } = useAutoScaleOnLoad({
-    activeDrawing, pdfDoc, projectId, qc, actorId: userId, currentPage, canCalibrate: can("edit"),
+    activeDrawing, pdfDoc, projectId, qc, actorId: userId, currentPage, renderReady, canCalibrate: can("edit"),
   });
   const handleCalibrate = useCallback(async (pdfInches) => {
     if (!activeDrawing?.id) return;
@@ -766,6 +767,7 @@ export default function DrawingViewer() {
                   }}
                 />
 
+                {renderReady && <>
                 {/* ── PDF link-hotspot layer (clickable internal/external links) ── */}
                 <PdfLinkHotspotLayer
                   linkHotspots={linkHotspots}
@@ -835,6 +837,7 @@ export default function DrawingViewer() {
                   zoom={zoom}
                   onCalloutClick={onCalloutClick}
                 />
+                </>}
               </div>
             </div>
           )}

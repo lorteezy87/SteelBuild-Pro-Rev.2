@@ -6,9 +6,9 @@ import { getActiveOrgGeneration } from "@/lib/activeOrg";
 
 // Lifetime fences discard stale callbacks; the conditional UPDATE independently
 // checks the server's source, version and prior scale in one statement.
-export function useAutoScaleOnLoad({ activeDrawing, pdfDoc, projectId, qc, canCalibrate = false, actorId = null, currentPage }) {
+export function useAutoScaleOnLoad({ activeDrawing, pdfDoc, projectId, qc, canCalibrate = false, actorId = null, currentPage, renderReady = false }) {
   const identity = JSON.stringify([projectId, activeDrawing?.id, activeDrawing?.file_url,
-    activeDrawing?.pdf_page, activeDrawing?.revision_number, currentPage, actorId, canCalibrate, getActiveOrgGeneration()]);
+    activeDrawing?.pdf_page, activeDrawing?.revision_number, currentPage, actorId, canCalibrate, renderReady, getActiveOrgGeneration()]);
   const lifetime = useRef({ identity });
   if (lifetime.current.identity !== identity) lifetime.current = { identity };
   const token = lifetime.current;
@@ -24,11 +24,11 @@ export function useAutoScaleOnLoad({ activeDrawing, pdfDoc, projectId, qc, canCa
     }
     if (!canCalibrate || !actorId) throw new Error("PM metadata permission is required to calibrate this sheet.");
     const page = activeDrawing?.pdf_page;
-    if (!pdfDoc || !Number.isInteger(page) || page < 1 || page > pdfDoc.numPages || page !== currentPage) {
+    if (!renderReady || !pdfDoc || !Number.isInteger(page) || page < 1 || page > pdfDoc.numPages || page !== currentPage) {
       throw new Error("Select the registered PDF page and wait for it to load before calibrating.");
     }
     if (activeDrawing.project_id !== projectId) throw new Error("Drawing project changed. Reload the sheet.");
-  }, [token, generation, canCalibrate, actorId, activeDrawing, pdfDoc, currentPage, projectId]);
+  }, [token, generation, canCalibrate, actorId, activeDrawing, pdfDoc, currentPage, projectId, renderReady]);
   const saveCalibration = useCallback(async (scale) => {
     assertCalibrationReady();
     const saved = await entities.Drawing.updateCalibration(activeDrawing.id, scale, activeDrawing);
