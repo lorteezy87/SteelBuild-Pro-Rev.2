@@ -1,17 +1,71 @@
 import { expect, test } from '@playwright/test';
+import type { Page, TestInfo } from '@playwright/test';
 
-test('nested floating controls remain above the dialog and accept input', async ({ page }) => {
+async function openNestedControls(page: Page, testInfo: TestInfo) {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const externalRequests: string[] = [];
+  const layerModuleUrls = new Set<string>();
+  const moduleReads: Promise<void>[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() === 'warning') warnings.push(message.text());
+  });
+  page.on('response', response => {
+    const url = new URL(response.url());
+    if (url.origin === 'http://127.0.0.1:4186' && url.pathname.includes('/deps/') && url.pathname.endsWith('.js')) {
+      moduleReads.push(response.text().then(source => {
+        if (/\b(?:var|let|const) DismissableLayerContext\b/.test(source)) layerModuleUrls.add(response.url());
+      }).catch(error => { errors.push(`Dependency response read failed: ${String(error)}`); }));
+    }
+  });
+  await page.route('**/*', route => {
+    if (new URL(route.request().url()).origin === 'http://127.0.0.1:4186') return route.continue();
+    externalRequests.push(route.request().url());
+    return route.abort();
+  });
   await page.goto('/dev/detailing-dialogs.html?view=layers&theme=dark');
+  await expect(page).toHaveURL('http://127.0.0.1:4186/dev/detailing-dialogs.html?view=layers&theme=dark');
+  await expect(page).toHaveTitle('SteelBuild Pro — Detailing dialog verification');
   const dialog = page.getByRole('dialog', { name: 'Nested control verification' });
+  await expect(dialog.getByRole('heading', { name: 'Nested control verification' })).toBeVisible();
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('nested-controls-initial.png') });
+  return { dialog, errors, warnings, externalRequests, layerModuleUrls, moduleReads };
+}
+
+async function verifyNestedControls(page: Page, testInfo: TestInfo, evidence: Awaited<ReturnType<typeof openNestedControls>>) {
+  const { dialog, errors, warnings, externalRequests, layerModuleUrls, moduleReads } = evidence;
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('nested-controls-accepted.png') });
+  await Promise.all(moduleReads);
+  await testInfo.attach('nested-controls-evidence', {
+    body: JSON.stringify({ url: page.url(), title: await page.title(), viewport: page.viewportSize(),
+      errors, warnings, externalRequests, layerModuleUrls: [...layerModuleUrls],
+      dialog: await dialog.innerText() }, null, 2), contentType: 'application/json',
+  });
+  expect([...layerModuleUrls], 'nested primitives must share one loaded DismissableLayer module identity').toHaveLength(1);
+  expect(errors).toEqual([]);
+  expect(warnings).toEqual([]);
+  expect(externalRequests).toEqual([]);
+}
+
+test('nested floating controls remain above the dialog and accept input', async ({ page }, testInfo) => {
+  const evidence = await openNestedControls(page, testInfo);
+  const { dialog } = evidence;
   await page.getByText('Open popover', { exact: true }).click();
   await page.getByRole('button', { name: 'Popover action' }).click({ timeout: 3000 });
   await expect(dialog.getByRole('status')).toHaveText('popover');
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Popover action' })).toBeHidden();
+  await expect(page.getByText('Open popover', { exact: true })).toBeFocused();
   await page.getByText('Open menu', { exact: true }).click();
   await page.getByRole('menuitem', { name: 'Menu action', exact: true }).click();
   await page.getByText('Open context menu', { exact: true }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Context action', exact: true }).click();
   await expect(dialog.getByRole('status')).toHaveText('popover,menu,context');
+  await expect(page.getByRole('menuitem', { name: 'Context action', exact: true })).toBeHidden();
   for (const [trigger, content] of [['Show tooltip', 'Nested tooltip help'], ['Show hover details', 'Nested hover details']]) {
     await page.getByText(trigger, { exact: true }).hover();
     const popup = page.getByText(content, { exact: true }).first();
@@ -20,6 +74,40 @@ test('nested floating controls remain above the dialog and accept input', async 
     const dialogZ = await dialog.evaluate(element => Number(getComputedStyle(element).zIndex));
     expect(popupZ).toBeGreaterThanOrEqual(dialogZ);
   }
+  await verifyNestedControls(page, testInfo, evidence);
+});
+
+test('nested popover preserves keyboard text and accepts one activation', async ({ page }, testInfo) => {
+  // A separate context owns the keyboard cycle's focus and hover state. It is
+  // never a retry or recovery navigation for the original pointer acceptance.
+  const evidence = await openNestedControls(page, testInfo);
+  const { dialog } = evidence;
+  const popoverTrigger = page.getByText('Open popover', { exact: true });
+  const note = page.getByRole('textbox', { name: 'Popover note', exact: true });
+  await expect(dialog.getByRole('heading', { name: 'Nested control verification' })).toBeVisible();
+  await expect(note).toBeHidden();
+  await popoverTrigger.click();
+  await expect(note).toBeFocused();
+  await expect(note).toHaveCSS('pointer-events', 'auto');
+  await page.keyboard.press('Escape');
+  await expect(note).toBeHidden();
+  await expect(popoverTrigger).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(note).toBeFocused();
+  await expect(note).toHaveCSS('pointer-events', 'auto');
+  await page.keyboard.type('Reviewed nested note');
+  await expect(note).toHaveValue('Reviewed nested note');
+  await expect(dialog.getByText('Popover note: Reviewed nested note', { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('nested-controls-keyboard-input.png') });
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Popover action' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('status')).toHaveText('popover');
+  await page.keyboard.press('Escape');
+  await expect(note).toBeHidden();
+  await expect(popoverTrigger).toBeFocused();
+  await expect(dialog.getByText('Popover note: Reviewed nested note', { exact: true })).toBeVisible();
+  await verifyNestedControls(page, testInfo, evidence);
 });
 
 test('manual intake can review all PDF pages after an extraction failure', async ({ page }, testInfo) => {

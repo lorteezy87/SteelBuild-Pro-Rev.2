@@ -8,6 +8,10 @@ import { telemetryAssetManifest } from './scripts/vite/telemetryAssetManifest.ts
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// The two no-backend foundation servers must not share mutable optimizer state.
+// Keep this opt-in confined to that workflow; ordinary dev/build use Vite defaults.
+const foundationCacheDir = process.env.STEELBUILD_FOUNDATION_VITE_CACHE_DIR
+
 // web-ifc's .wasm MUST match the installed web-ifc JS version, or the IFC viewer
 // silently renders zero geometry. Copy the wasm straight from node_modules into
 // the served /wasm/ path on every build/dev start so the two can never drift
@@ -128,6 +132,15 @@ function vendorChunk(id) {
 if (process.env.VITEST) process.env.TZ = 'UTC'
 
 export default defineConfig({
+  ...(foundationCacheDir ? {
+    cacheDir: foundationCacheDir,
+    optimizeDeps: { include: [
+      '@radix-ui/react-dialog', '@radix-ui/react-popover',
+      '@radix-ui/react-dropdown-menu', '@radix-ui/react-context-menu',
+      '@radix-ui/react-tooltip', '@radix-ui/react-hover-card',
+      '@radix-ui/react-label', '@radix-ui/react-select', '@radix-ui/react-slot',
+    ] },
+  } : {}),
   // Edge Function CORS permits the configured development origin. Silently
   // switching ports turns a busy dev server into an opaque browser AI failure.
   server: { strictPort: true },

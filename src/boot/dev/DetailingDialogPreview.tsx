@@ -65,11 +65,14 @@ function ManualIntakePreview() {
 
 function NestedControlsPreview() {
   const [accepted, setAccepted] = useState<string[]>([]);
+  const [popoverNote, setPopoverNote] = useState('');
   const accept = (name: string) => setAccepted(previous => [...previous, name]);
   return <Dialog open>
     <DialogContent aria-describedby={undefined}>
       <DialogHeader className=""><DialogTitle>Nested control verification</DialogTitle></DialogHeader>
       <Popover><PopoverTrigger>Open popover</PopoverTrigger><PopoverContent>
+        <label htmlFor="nested-popover-note">Popover note</label>
+        <input id="nested-popover-note" value={popoverNote} onChange={event => setPopoverNote(event.target.value)} />
         <button onClick={() => accept('popover')}>Popover action</button>
       </PopoverContent></Popover>
       <DropdownMenu><DropdownMenuTrigger>Open menu</DropdownMenuTrigger><DropdownMenuContent>
@@ -83,6 +86,7 @@ function NestedControlsPreview() {
       <HoverCard openDelay={0}><HoverCardTrigger>Show hover details</HoverCardTrigger>
         <HoverCardContent>Nested hover details</HoverCardContent></HoverCard>
       <p role="status">{accepted.join(',')}</p>
+      <p>Popover note: {popoverNote}</p>
     </DialogContent>
   </Dialog>;
 }
