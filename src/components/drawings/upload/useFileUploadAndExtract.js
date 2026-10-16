@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { entities } from "@/api/supabaseClient";
 import { UploadDrawingFile } from "@/api/client/uploads";
 import { EMPTY_SET_META } from "@/lib/pdfSheetExtractor";
+import { getActiveOrgGeneration, subscribeActiveOrgChange } from "@/lib/activeOrg";
 import { useDrawingSourceSnapshots } from "./useDrawingSourceSnapshots";
 import { withTimeout, newUploadBatchId } from "@/lib/drawingUploadUtils";
 import { validateAndExtract, makeProgressSteps, mergeAiSetMetadata } from "../drawingSetUploadHelpers";
@@ -11,26 +12,47 @@ const EXTRACT_TIMEOUT_MS = 300_000;
 
 export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
   const sourceSnapshots = useDrawingSourceSnapshots(activeProject?.id);
-  const selectedFiles = useRef(files);
-  const selectedProject = useRef(activeProject?.id);
-  selectedProject.current = activeProject?.id;
-  useEffect(() => {
-    if (selectedFiles.current.length !== files.length || files.some((file, index) => file !== selectedFiles.current[index])) {
-      selectedFiles.current = files;
-      sourceSnapshots.reset();
-      state.cancelledRef.current = true;
-      state.setSheets([]);
-      state.setFileResults([]);
-    }
-  });
+  const { reset: resetSourceSnapshots } = sourceSnapshots;
   const {
     setProcessError, setStep, setUploadBatchId, setProcessingStatus,
     setMeta, setAiFilledFields, setSheets, setFileResults, cancelledRef,
   } = state;
+  const processingGeneration = useRef(0);
+  const selectedContext = useRef({ projectId: activeProject?.id, files: [...files] });
+  const contextChanged = selectedContext.current.projectId !== activeProject?.id
+    || selectedContext.current.files.length !== files.length
+    || files.some((file, index) => file !== selectedContext.current.files[index]);
+  // Invalidate synchronously on render, before any old promise continuation.
+  if (contextChanged) {
+    processingGeneration.current++;
+    selectedContext.current = { projectId: activeProject?.id, files: [...files] };
+  }
+  const resetProcessingSources = useCallback(() => {
+    processingGeneration.current++;
+    cancelledRef.current = true;
+    resetSourceSnapshots();
+    setSheets([]);
+    setFileResults([]);
+  }, [cancelledRef, resetSourceSnapshots, setSheets, setFileResults]);
+  useEffect(() => {
+    if (contextChanged) resetProcessingSources();
+  });
+  useEffect(() => subscribeActiveOrgChange(resetProcessingSources), [resetProcessingSources]);
+  useEffect(() => () => { processingGeneration.current++; }, []);
 
   const handleUploadAndProcess = async () => {
+    const projectId = activeProject?.id;
+    const runFiles = [...files];
+    if (projectId !== selectedContext.current.projectId || runFiles.length !== selectedContext.current.files.length
+      || runFiles.some((file, index) => file !== selectedContext.current.files[index])) return;
+    const generation = ++processingGeneration.current;
+    const orgGeneration = getActiveOrgGeneration();
+    const isCurrent = () => generation === processingGeneration.current && !cancelledRef.current
+      && orgGeneration === getActiveOrgGeneration() && projectId === selectedContext.current.projectId
+      && runFiles.length === selectedContext.current.files.length
+      && runFiles.every((file, index) => file === selectedContext.current.files[index]);
     cancelledRef.current = false;
-    sourceSnapshots.reset();
+    resetSourceSnapshots();
     setSheets([]);
     setFileResults([]);
     setProcessError(null);
@@ -39,7 +61,7 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
     setUploadBatchId(batchId);
     const allSheets  = [];
     const results    = [];
-    const totalFiles = files.length;
+    const totalFiles = runFiles.length;
     const aggregateSetMeta = { ...EMPTY_SET_META };
     const aiFilled = {};
 
@@ -51,6 +73,7 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
           project_id: activeProject.id,
           set_name:   setName,
         });
+        if (!isCurrent()) return;
         if (Array.isArray(existing) && existing.length > 0) {
           const tRect = existing[0].titleblock_title_rect;
           const nRect = existing[0].titleblock_number_rect;
@@ -61,13 +84,14 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
         }
       }
     } catch (e) {
+      if (!isCurrent()) return;
       console.warn("Titleblock template lookup failed — extraction will use LLM fallback:", e);
     }
 
     try {
-      for (let i = 0; i < files.length; i++) {
-        if (cancelledRef.current) break;
-        const file = files[i];
+      for (let i = 0; i < runFiles.length; i++) {
+        if (!isCurrent()) return;
+        const file = runFiles[i];
 
         setProcessingStatus({
           steps: makeProgressSteps("upload", []),
@@ -79,20 +103,22 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
         let fileUrl;
         try {
           const res = await withTimeout(
-            UploadDrawingFile({ file, projectId: activeProject?.id, pathId: crypto.randomUUID(), assertActive: () => {
-              if (cancelledRef.current || selectedProject.current !== activeProject?.id) throw new Error("Drawing upload project or review changed.");
+            UploadDrawingFile({ file, projectId, pathId: crypto.randomUUID(), assertActive: () => {
+              if (!isCurrent()) throw new Error("Drawing upload project or review changed.");
             } }),
             UPLOAD_TIMEOUT_MS,
             "File upload"
           );
+          if (!isCurrent()) return;
           fileUrl = res?.path;
           if (!fileUrl) throw new Error("Upload succeeded but no source path was returned");
         } catch (err) {
+          if (!isCurrent()) return;
           results.push({ fileName: file.name, sheetCount: 0, status: "failed", error: err.message });
           continue;
         }
 
-        if (cancelledRef.current) break;
+        if (!isCurrent()) return;
 
         const baseProgress = Math.round(((i + 0.2) / totalFiles) * 90);
 
@@ -117,16 +143,17 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
             validateAndExtract(file, {
               ...(titleblockTemplate ? { titleblockTemplate } : {}),
               onStatus: (status) => {
+                if (!isCurrent()) return;
                 if (status.phase === 'rate-limit-wait') {
-                  setProcessingStatus(prev => ({
+                  setProcessingStatus(prev => isCurrent() ? ({
                     ...prev,
                     message: `Rate limit cooldown — ${status.remainingSec}s before reading ${file.name}… (${i + 1} of ${totalFiles})`,
-                  }));
+                  }) : prev);
                 } else if (status.phase === 'llm-calling') {
-                  setProcessingStatus(prev => ({
+                  setProcessingStatus(prev => isCurrent() ? ({
                     ...prev,
                     message: `Claude is reading ${file.name}… (${i + 1} of ${totalFiles})`,
-                  }));
+                  }) : prev);
                 }
               },
             }),
@@ -134,6 +161,7 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
             "AI extraction"
           );
         } catch (err) {
+          if (!isCurrent()) return;
           extractResult = {
             setMeta: { ...EMPTY_SET_META },
             sheets: [{
@@ -150,7 +178,7 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
           };
         }
 
-        if (cancelledRef.current) break;
+        if (!isCurrent()) return;
 
         setProcessingStatus({
           steps: makeProgressSteps("parse", ["upload", "encode", "extract"], extractResult.scanned ? { extract: true } : {}),
@@ -187,12 +215,12 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
           sizeMB,
         });
 
-        if (i < files.length - 1) {
+        if (i < runFiles.length - 1) {
           await new Promise(r => setTimeout(r, 200));
         }
       }
 
-      if (cancelledRef.current) return;
+      if (!isCurrent()) return;
 
       if (allSheets.length === 0) {
         setFileResults(results);
@@ -204,13 +232,14 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
       // One bounded source read before rendering review. Preserve these tokens
       // on the file and each sheet; confirmation must compare, never recapture.
       const snapshots = await sourceSnapshots.capture(results.filter(result => result.status === "success").map(result => result.fileUrl));
-      if (cancelledRef.current) return;
+      if (!isCurrent()) return;
       const snapshotByPath = new Map(snapshots.map(snapshot => [snapshot.path, snapshot]));
       const reviewedSheets = allSheets.map(sheet => ({ ...sheet, sourceSnapshot: snapshotByPath.get(sheet.sourceFileUrl) }));
       const reviewedResults = results.map(result => ({ ...result, sourceSnapshot: snapshotByPath.get(result.fileUrl) ?? null }));
 
       const defaultIssueDate = new Date().toISOString().split("T")[0];
       setMeta(prev => {
+        if (!isCurrent()) return prev;
         const { merged, aiFilled: prevAiFilled } = mergeAiSetMetadata(prev, aggregateSetMeta, defaultIssueDate);
         Object.assign(aiFilled, prevAiFilled);
         return merged;
@@ -228,9 +257,10 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
       setFileResults(reviewedResults);
       await new Promise(r => setTimeout(r, 600));
 
-      if (!cancelledRef.current) setStep(4);
+      if (isCurrent()) setStep(4);
 
     } catch (fatalErr) {
+      if (!isCurrent()) return;
       console.error("Fatal upload error:", fatalErr);
       setProcessError(fatalErr.message || "An unexpected error occurred. Please try again.");
     }
@@ -255,5 +285,5 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
     setSheets(reviewed);
   };
 
-  return { handleUploadAndProcess, sourceSnapshots, setReviewedSheets };
+  return { handleUploadAndProcess, sourceSnapshots: { ...sourceSnapshots, reset: resetProcessingSources }, setReviewedSheets };
 }
