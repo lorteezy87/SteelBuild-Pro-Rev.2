@@ -78,18 +78,26 @@ function drawingMetadataClient<T extends 'drawings' | 'drawing_sets' | 'drawing_
     ...base, create: held, bulkCreate: held, delete: held, bulkDelete: held,
     update: async (id, patch, options) => {
       validatePatch(patch);
+      const clean = cleanRecord(patch as Record<string, unknown>);
       // Do not use generic update: it adds protected caller updated_at.
       const { data, error } = await (options?.client ?? supabase).from(table as 'drawings' | 'drawing_sets' | 'drawing_revisions')
-        .update(patch as never).eq('id', id).select().single();
+        .update(clean as never).eq('id', id).select().single();
       if (error) throw new SupabaseOperationError(table, 'update', error);
       return addAliases<RowWithAliases<T>>(data as unknown as RowWithAliases<T>, table);
     },
     bulkUpdate: async (ids, patch) => {
       validatePatch(patch);
-      if (ids.length > 500) throw new Error('Select at most 500 drawings for one metadata update.');
-      const { data, error } = await supabase.from(table as 'drawings' | 'drawing_sets' | 'drawing_revisions').update(patch as never).in('id', ids).select();
-      if (error) throw new SupabaseOperationError(table, 'bulkUpdate', error);
-      return (data || []).map(row => addAliases<RowWithAliases<T>>(row as unknown as RowWithAliases<T>, table));
+      const clean = cleanRecord(patch as Record<string, unknown>);
+      const validIds = ids.filter((id): id is string => typeof id === 'string' && id.length > 0);
+      const out: Array<RowWithAliases<T>> = [];
+      // Preserve the generic API's bounded metadata chunks, not an atomic batch guarantee.
+      for (let offset = 0; offset < validIds.length; offset += 500) {
+        const { data, error } = await supabase.from(table as 'drawings' | 'drawing_sets' | 'drawing_revisions')
+          .update(clean as never).in('id', validIds.slice(offset, offset + 500)).select();
+        if (error) throw new SupabaseOperationError(table, 'bulkUpdate', error);
+        out.push(...(data || []).map(row => addAliases<RowWithAliases<T>>(row as unknown as RowWithAliases<T>, table)));
+      }
+      return out;
     },
   };
 }

@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const backend = vi.hoisted(() => ({ writes: vi.fn(), filters: [] as unknown[][], row: { id: 'd', markup_scale: 48 } as Record<string, unknown> | null }));
+type BulkResponse = { data: Record<string, unknown>[] | null; error: { code: string; message: string } | null };
+const backend = vi.hoisted(() => ({ requests: vi.fn(), writes: vi.fn(), filters: [] as unknown[][], responses: [] as BulkResponse[], row: { id: 'd', markup_scale: 48 } as Record<string, unknown> | null }));
 vi.mock('@/lib/supabase', () => ({ supabase: { rpc: vi.fn(), from(table: string) {
-  const query = { insert: (patch: unknown) => { backend.writes(table, patch); return query; }, update: (patch: unknown) => { backend.writes(table, patch); return query; }, delete: () => { backend.writes(table, 'delete'); return query; }, eq: (key: string, value: unknown) => { backend.filters.push(['eq', key, value]); return query; }, is: (key: string, value: unknown) => { backend.filters.push(['is', key, value]); return query; }, in: () => query, select: () => query, single: async () => ({ data: backend.row, error: null as null }), maybeSingle: async () => ({ data: backend.row, error: null as null }), then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: backend.row ? [backend.row] : [], error: null as null }).then(resolve) };
+  backend.requests(table);
+  const query = { insert: (patch: unknown) => { backend.writes(table, patch); return query; }, update: (patch: unknown) => { backend.writes(table, patch); return query; }, delete: () => { backend.writes(table, 'delete'); return query; }, eq: (key: string, value: unknown) => { backend.filters.push(['eq', key, value]); return query; }, is: (key: string, value: unknown) => { backend.filters.push(['is', key, value]); return query; }, in: (key: string, value: unknown) => { backend.filters.push(['in', key, value]); return query; }, select: () => query, single: async () => ({ data: backend.row, error: null as null }), maybeSingle: async () => ({ data: backend.row, error: null as null }), then: (resolve: (value: unknown) => unknown) => Promise.resolve(backend.responses.shift() ?? { data: backend.row ? [backend.row] : [], error: null as null }).then(resolve) };
   return query;
 } } }));
 import { entities } from '../entities';
-beforeEach(() => { backend.writes.mockClear(); backend.filters = []; backend.row = { id: 'd', markup_scale: 48 }; });
+beforeEach(() => { backend.requests.mockClear(); backend.writes.mockClear(); backend.filters = []; backend.responses = []; backend.row = { id: 'd', markup_scale: 48 }; });
 describe('core drawing API write boundary', () => {
   it.each(['Drawing', 'DrawingSet', 'DrawingRevision'] as const)('holds %s source creation and lifecycle CRUD before any request', async name => {
     const client = entities[name];
@@ -19,6 +21,46 @@ describe('core drawing API write boundary', () => {
   it('safeCalibrationStillSaves without caller timestamps', async () => {
     await entities.Drawing.update('d', { markup_scale: 48 });
     expect(backend.writes).toHaveBeenCalledWith('drawings', { markup_scale: 48 });
+  });
+  it.each(['Drawing', 'DrawingSet'] as const)('normalizes a cleared permitted date through %s.update without timestamps', async name => {
+    const patch: { due_date: string; notes?: string } = { due_date: '', notes: undefined };
+    backend.row = { id: 'd', due_date: null, updated_at: '2026-10-15T00:00:00Z' };
+    const result = await entities[name].update('d', patch);
+    expect(backend.writes).toHaveBeenCalledExactlyOnceWith(name === 'Drawing' ? 'drawings' : 'drawing_sets', { due_date: null });
+    expect(result.updated_date).toBe('2026-10-15T00:00:00Z');
+    expect(patch).toEqual({ due_date: '', notes: undefined as undefined });
+  });
+  it.each(['Drawing', 'DrawingSet'] as const)('chunks 501 permitted %s metadata IDs and combines aliased results', async name => {
+    const ids = Array.from({ length: 501 }, (_, i) => `d-${i}`);
+    backend.responses = [
+      { data: ids.slice(0, 500).map(id => ({ id, due_date: null as null, updated_at: 'first' })), error: null },
+      { data: [{ id: ids[500], due_date: null, updated_at: 'second' }], error: null },
+    ];
+    const result = await entities[name].bulkUpdate(ids, { due_date: '' });
+    expect(backend.writes.mock.calls).toEqual(Array.from({ length: 2 }, () => [name === 'Drawing' ? 'drawings' : 'drawing_sets', { due_date: null as null }]));
+    expect(backend.filters).toEqual([['in', 'id', ids.slice(0, 500)], ['in', 'id', ids.slice(500)]]);
+    expect(result.map(row => row.id)).toEqual(ids);
+    expect(result[0].updated_date).toBe('first');
+    expect(result[500].updated_date).toBe('second');
+  });
+  it.each(['updated_at', 'updated_date', 'file_url', '_discarded', 'unknownField'])('rejects mixed protected %s before normalization or the first bulk request', async field => {
+    const patch: Record<string, string | undefined> = { due_date: '', [field]: undefined };
+    await expect(entities.Drawing.update('d', patch)).rejects.toThrow(/protected|held/i);
+    await expect(entities.Drawing.bulkUpdate(Array.from({ length: 501 }, (_, i) => `d-${i}`), patch)).rejects.toThrow(/protected|held/i);
+    expect(backend.requests).not.toHaveBeenCalled();
+    expect(backend.writes).not.toHaveBeenCalled();
+  });
+  it('preserves empty/invalid-ID no-op behavior for permitted metadata', async () => {
+    expect(await entities.Drawing.bulkUpdate(['', null, undefined] as never, { due_date: '' })).toEqual([]);
+    expect(backend.requests).not.toHaveBeenCalled();
+  });
+  it('stops after a failing metadata chunk without retry or a third request', async () => {
+    backend.responses = [
+      { data: [{ id: 'first' }], error: null },
+      { data: null, error: { code: '42501', message: 'metadata denied' } },
+    ];
+    await expect(entities.Drawing.bulkUpdate(Array.from({ length: 1001 }, (_, i) => `d-${i}`), { due_date: '2026-10-15' })).rejects.toMatchObject({ name: 'SupabaseOperationError', operation: 'bulkUpdate' });
+    expect(backend.writes).toHaveBeenCalledTimes(2);
   });
   it('permits set rectangles but rejects protected bulk patches and all history metadata', async () => {
     await entities.DrawingSet.update('s', { titleblock_title_rect: { x: 0.2 } });
