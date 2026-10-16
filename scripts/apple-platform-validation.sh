@@ -8,6 +8,16 @@ npm run build
 npx cap sync ios
 common=(-project ios/App/App.xcodeproj -scheme App -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=)
 if [[ "$platform" == mac ]]; then
+  # Destination discovery reads the project before command-line overrides are applied.
+  python3 - <<'PYMAC'
+from pathlib import Path
+p = Path('ios/App/App.xcodeproj/project.pbxproj')
+s = p.read_text()
+marker = 'TARGETED_DEVICE_FAMILY = "1,2";'
+assert s.count(marker) == 2
+s = s.replace(marker, marker + '\n\t\t\t\tSUPPORTS_MACCATALYST = YES;\n\t\t\t\tDERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;\n\t\t\t\tSUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";')
+p.write_text(s)
+PYMAC
   xcodebuild "${common[@]}" -destination 'generic/platform=macOS,variant=Mac Catalyst' \
     -archivePath "$RUNNER_TEMP/SteelBuild-Mac.xcarchive" \
     SUPPORTS_MACCATALYST=YES DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER=NO \
