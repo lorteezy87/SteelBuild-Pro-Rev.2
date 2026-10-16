@@ -169,8 +169,13 @@ export async function runSourceCases(db:Database){
     }
   });
   await check('privileged Storage administrators remain outside ordinary-role promise but cannot silently readopt changed identity',async()=>{
-    await adopt(db);await db.exec('set local role service_role');
-    await db.query("update storage.objects set version='privileged-change' where name=$1",[path]);await db.exec('reset role');
+    await adopt(db);await db.exec('set local role drawing_fixture_storage_admin');
+    assert.deepEqual((await db.query('select current_user role,rolsuper,rolbypassrls,rolcanlogin from pg_roles where rolname=current_user')).rows[0],
+      {role:'drawing_fixture_storage_admin',rolsuper:false,rolbypassrls:true,rolcanlogin:false});
+    const changed=await db.query("update storage.objects set version='privileged-change' where name=$1 returning id,version",[path]);
+    assert.equal(changed.rows.length,1,'Privileged Storage mutation must actually update exactly one adopted object');
+    await db.exec('reset role');
+    assert.equal((await db.query('select version from storage.objects where name=$1',[path])).rows[0].version,'privileged-change');
     const p=await request(db);await denied(db,()=>execute(db,p,'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'),/SOURCE_CHANGED/);
   });
   await check('project erasure retains existing authorization archive reason and captured evidence contracts',async()=>{

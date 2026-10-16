@@ -26,6 +26,18 @@ export async function enableFixtureMutations(db:Database){
 export const path=`${ids.org}/uploads/${ids.project}/reviewed-new.pdf`;
 export const zoneA='abababab-abab-4bab-8bab-abababababab',zoneB='bcbcbcbc-bcbc-4cbc-8cbc-bcbcbcbcbcbc';
 export async function initialize(db:Database){
+  // TEST ONLY: cluster roles can outlive another fixture database. Never alter
+  // shared API-role attributes to manufacture a privileged Storage writer.
+  await db.exec(`do $$ begin
+    if not exists(select 1 from pg_roles where rolname='drawing_fixture_storage_admin') then
+      create role drawing_fixture_storage_admin nologin nosuperuser nocreatedb nocreaterole noinherit noreplication bypassrls;
+    end if;
+    if not exists(select 1 from pg_roles where rolname='drawing_fixture_storage_admin'
+      and not rolcanlogin and not rolsuper and not rolcreatedb and not rolcreaterole
+      and not rolinherit and not rolreplication and rolbypassrls)
+      or exists(select 1 from pg_auth_members where roleid='drawing_fixture_storage_admin'::regrole or member='drawing_fixture_storage_admin'::regrole)
+    then raise exception 'DRAWING_FIXTURE_STORAGE_ADMIN_UNEXPECTED';end if;
+  end $$;`);
   await baseInitialize(db);
   await db.exec(await readFile(migrationUrl,'utf8'));
   const baseline=await readFile(new URL('../../migrations/20260101000010_baseline_schema.sql',import.meta.url),'utf8');
@@ -115,6 +127,8 @@ export async function initialize(db:Database){
     create function storage.foldername(text) returns text[] language sql immutable as $$ select (string_to_array($1,'/'))[1:array_length(string_to_array($1,'/'),1)-1] $$;
     alter table storage.objects enable row level security;
     grant select,insert,update,delete on storage.objects to authenticated,service_role;
+    grant usage on schema storage to drawing_fixture_storage_admin;
+    grant select,update on storage.objects to drawing_fixture_storage_admin;
     alter table public.drawing_holds add foreign key(drawing_id) references public.drawings(id);
     create function public.user_is_org_member(p_org uuid) returns boolean language sql stable security definer set search_path='' as $$
       select p_org='${ids.org}'::uuid and coalesce((select is_member from auth.test_access where user_id=auth.uid()),false) $$;

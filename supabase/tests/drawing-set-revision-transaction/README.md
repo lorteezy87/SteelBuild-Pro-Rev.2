@@ -20,6 +20,18 @@ useful but is not the only release blocker. Actual PostgreSQL execution requires
 loopback database path and no query. The initial empty-database census precedes
 any fixture setup. Never point the harness at an application database.
 
+Separate databases still share PostgreSQL cluster roles. The PGlite entrypoint
+deliberately precreates `service_role` without RLS bypass, like the earlier
+commercial fixture in required CI, and verifies its attributes and memberships
+remain unchanged. Privileged Storage replacement uses only the dedicated
+`drawing_fixture_storage_admin` test role: NOLOGIN, NOSUPERUSER, BYPASSRLS,
+no memberships, and explicit Storage schema USAGE/object SELECT and UPDATE.
+Unexpected preexisting attributes or memberships abort fixture initialization;
+the harness never normalizes a shared API role. The privileged test verifies
+its actual role, exactly one updated object and the persisted changed version
+before requiring SOURCE_CHANGED with complete rejected-command snapshot equality.
+This fixture role is never part of the candidate, migration or manual package.
+
 The harness installs the complete checked-in manual SQL, using exact promoted
 bytes in dependency order. Its deliberately failing fourth ledger stamp proves
 all four components and stamps roll back together. Each successful ledger row
