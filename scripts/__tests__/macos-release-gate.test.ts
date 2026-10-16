@@ -22,3 +22,18 @@ describe('Mac release gate',()=>{
     expect(()=>assertMacReleaseChecks({...run,head_branch:'feature',event:'pull_request'},jobs,'exact-sha','feature',false)).not.toThrow();
   });
 });
+
+describe('main is rechecked immediately before Mac upload',()=>{
+  it('accepts the current source commit',async()=>{
+    const { assertMacUploadMain }=await import('../macos-release-gate.mjs');
+    await expect(assertMacUploadMain('owner/repo','release-sha','synthetic-token',async()=>new Response(JSON.stringify({commit:{sha:'release-sha'}}),{status:200}))).resolves.toBeUndefined();
+  });
+  it('blocks upload if main advanced during approval or packaging',async()=>{
+    const { assertMacUploadMain }=await import('../macos-release-gate.mjs');
+    await expect(assertMacUploadMain('owner/repo','release-sha','synthetic-token',async()=>new Response(JSON.stringify({commit:{sha:'new-main-sha'}}),{status:200}))).rejects.toThrow(/Main changed/);
+  });
+  it('fails closed when GitHub cannot confirm the branch head',async()=>{
+    const { assertMacUploadMain }=await import('../macos-release-gate.mjs');
+    await expect(assertMacUploadMain('owner/repo','release-sha','synthetic-token',async()=>new Response('',{status:403}))).rejects.toThrow(/HTTP 403/);
+  });
+});
