@@ -8,7 +8,7 @@
 
 **Tech Stack:** Existing Node 24 crypto/type stripping, TypeScript, Zod, Vitest, PowerShell/Windows ACLs, pinned PGlite/pg test package, GitHub Actions, Supabase Auth and caller-JWT REST/RPC. No new dependencies.
 
-**Spec:** [Approved setup/recovery addendum](../specs/2026-10-16-drawing-staging-setup-recovery-design.md), supplementary to the approved [whole cutover plan](2026-10-15-drawing-backend-cutover.md). Status: **PENDING OWNER IMPLEMENTATION-PLAN REVIEW**. The selected execution method is preserved; implementation has not started. These four work units extend parent Task 13; they do not reset its completed tasks, erase its deferred findings or complete its hosted acceptance. Use sequential implementers and fresh task-scoped reviews; the final whole-cutover branch review remains the parent plan's final gate.
+**Spec:** [Approved setup/recovery addendum](../specs/2026-10-16-drawing-staging-setup-recovery-design.md), supplementary to the approved [whole cutover plan](2026-10-15-drawing-backend-cutover.md). Status: **IMPLEMENTATION PLAN APPROVED BY THE OWNER** on 2026-10-16. The owner selected subagent-driven execution, requested complete staging acceptance, and authorized production publication once all required release checks pass. These four work units extend parent Task 13; they do not reset its completed tasks, erase its deferred findings or complete its hosted acceptance. Use sequential implementers and fresh task-scoped reviews; the final whole-cutover branch review remains the parent plan's final gate. Conditional publication does not bypass the exact manual shared-database release process or authorize unrelated changes.
 
 ## Global Constraints
 
