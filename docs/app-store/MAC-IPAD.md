@@ -82,3 +82,27 @@ References:
 - https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution
 - https://developer.apple.com/help/account/provisioning-profiles/create-an-app-store-provisioning-profile
 - https://developer.apple.com/documentation/xcode/configuring-the-macos-app-sandbox
+
+
+## Gated Mac distribution workflow
+
+`macos-release.yml` waits for all five production CI jobs on the exact source
+commit. Branch runs may sign and validate only; uploads require current main and
+its completed push CI. The installer/profile secrets are separate from iOS; the
+existing Apple Distribution .p12 is reused only when its private-key identity is
+present in the Mac profile. Profile platform, team, App ID, expiry, and App Store
+distribution type are checked before signing. Credentials remain in a temporary
+keychain/directory and are cleaned on exit.
+
+The workflow builds both architectures, embeds the Mac profile and exact signed
+entitlements, produces a signed productbuild package, verifies both signatures,
+and validates the package with Apple. Upload is optional and defaults to false.
+Upload receipt verification requires MAC_OS, the exact marketing/build versions,
+and VALID processing; a matching iOS build never satisfies Mac verification.
+The Mac en-US What to Test text is updated only after that match. This does not
+submit App Review or make authenticated workflow acceptance unnecessary.
+
+Owner-created profile inspected on 2026-10-16: OSX, exact bundle ID,
+App Store distribution, unexpired. No private key or password was uploaded in chat.
+The owner reports the three Mac secrets are stored in the app-store environment;
+actual import/signing validation must confirm their contents.
