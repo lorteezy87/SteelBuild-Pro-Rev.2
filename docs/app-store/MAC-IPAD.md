@@ -113,3 +113,8 @@ the payload with error 90255 because the secret-protection umask also made bundl
 resources root-only. The release now normalizes the public app payload to readable
 files/traversable directories before signing, and uses normal permissions for newly
 generated signature resources. The temporary signing directory stays private.
+
+A fresh GitHub main-head comparison runs immediately before the upload command,
+after package validation, so approval queues/build delays cannot release stale main.
+Nineteen focused gate/receipt/permissions tests passed locally; live Apple
+validation of the permission correction is still required.
