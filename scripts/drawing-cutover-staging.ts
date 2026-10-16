@@ -1,5 +1,5 @@
 /** Staging-only entrypoint. No SQL, setup, deploy or production mode. */
-import { STAGE_REF, STAGE_ORIGIN, requireCondition, validateFixture, validateCredentials } from '../e2e/drawing-cutover-setup.ts';
+import { STAGE_REF, STAGE_ORIGIN, requireCondition, validateFixture, validateCredentials, assertDrawingMutationReadiness } from '../e2e/drawing-cutover-setup.ts';
 import type { RunConfig } from '../e2e/drawing-cutover-setup.ts';
 import { ACTORS, digest } from '../e2e/drawing-cutover-setup.ts';
 import { DrawingCutoverTransport } from '../e2e/drawingCutoverNetworkGuard.ts';
@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 export function prepareRun(input: { args: readonly string[]; head: string; fixtureText: string; env: Record<string, string | undefined> }): RunConfig {
   const flags = new Map<string, string>();
@@ -51,7 +52,9 @@ const SAFE_FAILURES = new Set(['PRIVATE_FIXTURE_PATH_REQUIRED', 'CLEAN_CANDIDATE
   'STAGING_TARGET_REQUIRED', 'CANDIDATE_SOURCE_MISMATCH', 'PHASE_UNSUPPORTED', 'STAGING_ORIGIN_REQUIRED', 'PUBLIC_KEY_REQUIRED',
   'FIXTURE_REVIEW_DIGEST_REQUIRED', 'FIXTURE_SCHEMA_INVALID', 'FIXTURE_SOURCE_OR_EXPIRY', 'ACTOR_CREDENTIALS_REQUIRED',
   'ACTOR_CREDENTIAL_BINDING', 'SYNTHETIC_AUTH_FAILED', 'AUTH_IDENTITY_MISMATCH', 'OWNERSHIP_CHANGED', 'OWNERSHIP_READ_FAILED',
-  'PUBLIC_KEY_BINDING_REQUIRED', 'ENTITY_OWNERSHIP_REQUIRED', 'ENTITY_OWNERSHIP_CHANGED', 'ENTITY_OWNERSHIP_READ_FAILED',
+  'MUTATION_PREREQUISITES_UNPROVED', 'PUBLIC_KEY_BINDING_REQUIRED', 'ENTITY_OWNERSHIP_REQUIRED', 'ENTITY_OWNERSHIP_CHANGED', 'ENTITY_OWNERSHIP_READ_FAILED',
+  'CLIENT_PUBLIC_KEY_MISMATCH', 'BUILD_PUBLIC_KEY_MISMATCH', 'BUILD_PUBLIC_CONFIG_REQUIRED', 'BUILD_PUBLIC_CONFIG_AMBIGUOUS',
+  'BUILD_CONFIG_LITERAL_REQUIRED', 'BUILD_RUNTIME_BINDING_REQUIRED', 'BUILD_CONFIG_MISMATCH',
   'BUILD_SOURCE_MISMATCH', 'BUILD_IDENTITY_MISMATCH', 'BUILD_BYTES_MISMATCH', 'PACKAGE_BYTES_MISMATCH']);
 export function safeFailure(error: unknown): string {
   return error instanceof Error && SAFE_FAILURES.has(error.message) ? error.message : 'RUNNER_REFUSED';
@@ -77,7 +80,12 @@ let runtime: Promise<DrawingCutoverTransport> | undefined;
 export function getDrawingRuntime(): Promise<DrawingCutoverTransport> {
   runtime ??= (async () => {
     requireCondition(process.env.DRAWING_CUTOVER_ENABLED === 'true', 'DRAWING_RUNNER_OPT_IN_REQUIRED');
-    const transport = new DrawingCutoverTransport(loadRunConfig());
+    const config = loadRunConfig();
+    if (config.phase === 'acceptance') {
+      verifyBuild(config.candidateSha, config.manifest.publicKeySha256);
+      assertDrawingMutationReadiness();
+    }
+    const transport = new DrawingCutoverTransport(config);
     // Both independently created project observers must authenticate before any write.
     for (const actor of ACTORS) await transport.signIn(actor);
     await transport.verifyParents(transport.config.manifest.projects.map(p => p.id));
@@ -102,21 +110,59 @@ function buildFiles(directory: string): string[] {
     return entry.isDirectory() ? buildFiles(file) : [file];
   }).filter(file => !file.endsWith(`${sep}drawing-cutover-build.json`)).sort();
 }
-export function sealBuild(candidateSha: string): void {
+/** Inspect the emitted Vite env object, not the sealing process's environment.
+ * Unsupported/ambiguous emission refuses; never evaluate bundle code or log keys. */
+function builtPublicBinding(files: string[], candidateSha: string): { publicKeySha256: string; publicConfigSha256: string } {
+  const bindings: { publicKeySha256: string; publicConfigSha256: string }[] = [];
+  const fields = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_APP_VERSION'];
+  for (const file of files.filter(file => file.endsWith('.js'))) {
+    const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
+    function visit(node: ts.Node): void {
+      if (ts.isObjectLiteralExpression(node)) {
+        const relevant = node.properties.filter(property => property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) && fields.includes(property.name.text));
+        if (relevant.length) {
+          const values = new Map<string, string>();
+          requireCondition(!node.properties.some(ts.isSpreadAssignment), 'BUILD_CONFIG_LITERAL_REQUIRED');
+          for (const property of relevant) {
+            requireCondition(ts.isPropertyAssignment(property) && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) && ts.isStringLiteral(property.initializer), 'BUILD_CONFIG_LITERAL_REQUIRED');
+            requireCondition(!values.has(property.name.text), 'BUILD_CONFIG_LITERAL_REQUIRED');
+            values.set(property.name.text, property.initializer.text);
+          }
+          requireCondition(fields.every(field => values.has(field)), 'BUILD_CONFIG_LITERAL_REQUIRED');
+          const url = values.get('VITE_SUPABASE_URL')!;
+          const key = validatePublicStage(url, values.get('VITE_SUPABASE_ANON_KEY'));
+          requireCondition(values.get('VITE_APP_VERSION') === candidateSha, 'BUILD_SOURCE_MISMATCH');
+          bindings.push({ publicKeySha256: digest(key), publicConfigSha256: digest(JSON.stringify([candidateSha, url, key])) });
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(source);
+  }
+  requireCondition(bindings.length > 0, 'BUILD_PUBLIC_CONFIG_REQUIRED');
+  requireCondition(bindings.length === 1, 'BUILD_PUBLIC_CONFIG_AMBIGUOUS');
+  return bindings[0];
+}
+export function sealBuild(candidateSha: string, directory = 'dist'): void {
   requireCondition(/^[a-f0-9]{40}$/.test(candidateSha) && execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() === candidateSha, 'BUILD_SOURCE_MISMATCH');
-  const files = buildFiles('dist');
+  const files = buildFiles(directory);
   requireCondition(files.length > 0 && files.some(f => f.endsWith(`${sep}index.html`)), 'BUILD_MISSING');
-  const hashes = Object.fromEntries(files.map(file => [relative(resolve('dist'), file).split(sep).join('/'), digest(readFileSync(file))]));
+  const hashes = Object.fromEntries(files.map(file => [relative(resolve(directory), file).split(sep).join('/'), digest(readFileSync(file))]));
   const runtimeFiles = files.filter(file => file.endsWith('.js')).map(file => readFileSync(file, 'utf8')).join('\n');
   requireCondition(runtimeFiles.includes(STAGE_ORIGIN) && !runtimeFiles.includes('https://kjrwqagyeswwoxpjkcko.supabase.co'), 'BUILD_TARGET_MISMATCH');
-  writeFileSync('dist/drawing-cutover-build.json', JSON.stringify({ version: 1, candidateSha, projectRef: STAGE_REF, hashes }));
+  const publicBinding = builtPublicBinding(files, candidateSha);
+  writeFileSync(resolve(directory, 'drawing-cutover-build.json'), JSON.stringify({ version: 2, candidateSha, projectRef: STAGE_REF, ...publicBinding, hashes }));
 }
-export function verifyBuild(candidateSha: string): void {
-  const marker = JSON.parse(readFileSync('dist/drawing-cutover-build.json', 'utf8')) as { version?: number; candidateSha?: string; projectRef?: string; hashes?: Record<string, string> };
-  requireCondition(marker.version === 1 && marker.candidateSha === candidateSha && marker.projectRef === STAGE_REF && marker.hashes, 'BUILD_IDENTITY_MISMATCH');
-  const files = buildFiles('dist');
+export function verifyBuild(candidateSha: string, expectedPublicKeySha256: string, directory = 'dist'): void {
+  requireCondition(/^[a-f0-9]{64}$/.test(expectedPublicKeySha256 ?? ''), 'BUILD_RUNTIME_BINDING_REQUIRED');
+  const marker = JSON.parse(readFileSync(resolve(directory, 'drawing-cutover-build.json'), 'utf8')) as { version?: number; candidateSha?: string; projectRef?: string; publicKeySha256?: string; publicConfigSha256?: string; hashes?: Record<string, string> };
+  requireCondition(marker.version === 2 && marker.candidateSha === candidateSha && marker.projectRef === STAGE_REF && marker.hashes, 'BUILD_IDENTITY_MISMATCH');
+  const files = buildFiles(directory);
   requireCondition(files.length === Object.keys(marker.hashes).length, 'BUILD_FILE_ROSTER_MISMATCH');
-  for (const file of files) requireCondition(marker.hashes[relative(resolve('dist'), file).split(sep).join('/')] === digest(readFileSync(file)), 'BUILD_BYTES_MISMATCH');
+  for (const file of files) requireCondition(marker.hashes[relative(resolve(directory), file).split(sep).join('/')] === digest(readFileSync(file)), 'BUILD_BYTES_MISMATCH');
+  const actualBinding = builtPublicBinding(files, candidateSha);
+  requireCondition(marker.publicKeySha256 === actualBinding.publicKeySha256 && marker.publicConfigSha256 === actualBinding.publicConfigSha256, 'BUILD_CONFIG_MISMATCH');
+  requireCondition(actualBinding.publicKeySha256 === expectedPublicKeySha256, 'BUILD_PUBLIC_KEY_MISMATCH');
 }
 export function verifyPackage(): void {
   const manifest = JSON.parse(readFileSync('supabase/drawing-cutover-package.json', 'utf8')) as { payloads: { path: string; candidate: string; sha256: string }[] };
@@ -140,7 +186,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   try {
     const config = loadRunConfig(process.argv.slice(2));
     verifyPackage();
-    if (config.phase === 'acceptance') verifyBuild(config.candidateSha);
+    if (config.phase === 'acceptance') verifyBuild(config.candidateSha, config.manifest.publicKeySha256);
     const report = await runPreflight(config);
     mkdirSync('test-results/drawing-cutover', { recursive: true });
     writeFileSync('test-results/drawing-cutover/preflight.json', JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });

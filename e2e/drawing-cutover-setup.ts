@@ -11,6 +11,11 @@ export const digest = (value: string | Uint8Array): string => createHash('sha256
 export function requireCondition(condition: unknown, code: string): asserts condition {
   if (!condition) throw new Error(code);
 }
+/** No prerequisite verifier exists yet. Only reviewed source work can open writes;
+ * flags, actor aliases, manifest assertions and a later reporter cannot do so. */
+export function assertDrawingMutationReadiness(): void {
+  throw new Error('MUTATION_PREREQUISITES_UNPROVED');
+}
 const uuid = z.string().uuid();
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const alias = z.enum(ACTORS);

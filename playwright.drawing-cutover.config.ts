@@ -1,13 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 import { loadRunConfig, verifyBuild, assertFabBindings } from './scripts/drawing-cutover-staging.ts';
-import { PREVIEW_ORIGIN, STAGE_REF } from './e2e/drawing-cutover-setup.ts';
+import { PREVIEW_ORIGIN, STAGE_REF, assertDrawingMutationReadiness } from './e2e/drawing-cutover-setup.ts';
 
 // Evaluate before browser launch or test discovery. Missing input is a failure, never a skip.
 const config = (() => {
-  try { const value = loadRunConfig(); verifyBuild(value.candidateSha); return value; }
+  try { const value = loadRunConfig(); verifyBuild(value.candidateSha, value.manifest.publicKeySha256); return value; }
   catch { throw new Error('DRAWING_CONFIGURATION_REFUSED'); }
 })();
 if (config.phase !== 'acceptance' || process.env.DRAWING_CUTOVER_ENABLED !== 'true') throw new Error('ACCEPTANCE_OPT_IN_REQUIRED');
+assertDrawingMutationReadiness();
 const fab = config.manifest.fab;
 if (!fab) throw new Error('FAB_FIXTURE_BINDINGS_REQUIRED');
 Object.assign(process.env, {

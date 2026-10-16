@@ -17,17 +17,21 @@ Only `preflight` and `acceptance` exist; neither installs SQL or provisions acco
 
 The manifest binds two organizations/four projects, seven distinct synthetic actors,
 known drawing entities and source objects. Names or purpose metadata confer no
-authority. Before a permitted mutation the transport rereads the exact parent
+authority. The underlying mutation validation rereads the exact parent
 through its independently authenticated creator and compares id/org/creator.
 It also rereads each exact referenced entity and verifies its project binding.
 This verifies these bindings, not every lifecycle relationship or role;
 those remaining requirements are listed below. All app clients still use user JWTs.
 
-The finite network policy permits bounded fixture reads, protected-field rejection
-probes and the original fab-gate operations. Production/provider/email/unknown
+The finite classifier recognizes bounded fixture reads, protected-field rejection
+probes and the original fab-gate operations. A shared final prerequisite gate now
+refuses ALL mutations because a reviewed readiness verifier does not yet exist.
+Neither environment flags nor manifest assertions can unlock it. Production/provider/email/unknown
 requests and redirects refuse locally. Declared foreign/removed actors may send
-known-fixture negative probes; those are counted as forwarded only after the actual
-server reply. The protected-write case distinguishes explicit 401/403 from a
+known-fixture negative probes in the underlying classifier; they cannot currently
+cross the readiness gate. When separately authorized source work implements actual
+readiness, forwarding may be counted only after the actual server reply. The
+protected-write case distinguishes explicit 401/403 from a
 200 empty RETURNING result, and requires exact target existence and complete-row
 observer equality. A local refusal cannot satisfy that server-denial case.
 Browser routing and opt-in Node Supabase fixture clients share this boundary.
@@ -43,7 +47,13 @@ the existing four non-drift source jobs passing together, and the unchanged
 main-only staging-backend environment policy. A separate build job validates
 the fixed staging public configuration, records source/file hashes, and uploads
 an immutable artifact. The evidence job downloads that artifact ID and rechecks
-its bytes before consuming actor/manifest secrets. No privileged setup key is
+its bytes before consuming actor/manifest secrets. The seal parses the actual
+emitted Vite configuration object, binds source/URL/public-key digests and refuses
+missing, nonliteral or ambiguous configuration. Verification recomputes those
+bindings from the hashed bytes and compares the runtime key, then the entry point
+compares the reviewed manifest before authentication. Browser/Node adapters reject
+missing or different supplied apikey headers rather than replacing a bad key.
+No plaintext key is added to seal metadata or evidence. No privileged setup key is
 injected. Dependencies are installed without hooks before actor credentials exist
 in the step environment. Only sanitized JSON paths are eligible for evidence upload.
 
@@ -54,12 +64,14 @@ authorized with real fixtures, then returns INCOMPLETE/nonzero for the unresolve
 catalog, installation, MFA, command/lifecycle, recovery/erasure and advisor gates.
 Consequently the checked-in workflow stops before its browser command. It must not
 be treated as a ready full acceptance workflow or dispatched to obtain a green run.
-The dedicated browser command can run its implemented subset under the same
-bindings, but its reporter still cannot return PASS for the incomplete matrix.
+The dedicated browser command now refuses before authentication, browser launch or
+mutation enablement. The acceptance runtime and shared final mutation transport
+also enforce this stop, independently of the workflow exit and final reporter.
+The implemented subset is not currently runnable for hosted writes.
 
 | Requirement | Source status | Next concrete work |
 | --- | --- | --- |
-| Exact target/source, credential/manifest binding, no provider spend | Implemented and tested offline | Independent source review before credentials |
+| Exact target/source, emitted build/key and client-key binding, no provider spend | Implemented and tested offline; R1 fixes await re-review | Independent source review before credentials |
 | Auth identity and fresh parent checks | Implemented; no hosted run | Owner-provided reviewed actors/manifest and exact staging authorization |
 | Real protected-field negative probes with snapshot equality | Implemented in dedicated spec; no hosted run | Validate actual roles and independent synthetic provenance before execution |
 | Existing four-case fab gate | Original spec retained; guarded Node wiring and skip rejection implemented | Provide reviewed distinct clean/blocked drawings, PM/viewer bindings; execute original spec |
@@ -107,3 +119,12 @@ responses prove guard behavior only and are never hosted authorization evidence.
 Actual RED/GREEN, static and full-suite results are recorded in the implementation
 report. Hosted results remain absent. Production remains read-only and the four
 unapplied versions must continue blocking production drift.
+
+R1 is focused verification only. The previous 9,371-test/916-file full suite and
+build/budget belong to source checkpoint 0c42e5c89, not proof of the later fix SHA.
+Owner has approved the automated-setup choice and reports that the dedicated
+`STAGING_DRAWING_SETUP_SECRET_KEY` is stored only in `staging-backend`. That is
+owner-reported storage, not independently verified availability, exact-project
+binding or permission to use its value. Separate setup source review, secure
+handoff and execution remain absent; this does not open the source-only readiness
+gate.

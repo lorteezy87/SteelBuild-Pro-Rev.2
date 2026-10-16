@@ -117,7 +117,9 @@ jobs:
       - name: Verify immutable build handoff
         env:
           CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
-        run: node --input-type=module -e "import {verifyBuild} from './scripts/drawing-cutover-staging.ts'; verifyBuild(process.env.CANDIDATE_SHA)"
+          E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+        run: node --input-type=module -e "import {verifyBuild,validatePublicStage,safeFailure} from './scripts/drawing-cutover-staging.ts'; import {digest} from './e2e/drawing-cutover-setup.ts'; try {verifyBuild(process.env.CANDIDATE_SHA,digest(validatePublicStage(process.env.E2E_SUPABASE_URL,process.env.E2E_SUPABASE_ANON_KEY)))} catch(error) {console.error(safeFailure(error));process.exit(1)}"
       - name: Guarded evidence (INCOMPLETE fails; no setup authority)
         env:
           DRAWING_CUTOVER_ENABLED: 'true'

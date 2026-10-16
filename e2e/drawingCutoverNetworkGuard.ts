@@ -1,4 +1,4 @@
-import { STAGE_ORIGIN, PREVIEW_ORIGIN, requireCondition } from './drawing-cutover-setup.ts';
+import { STAGE_ORIGIN, PREVIEW_ORIGIN, requireCondition, assertDrawingMutationReadiness } from './drawing-cutover-setup.ts';
 import type { ActorAlias, RunConfig } from './drawing-cutover-setup.ts';
 import type { BrowserContext } from '@playwright/test';
 
@@ -86,14 +86,9 @@ export function classifyRequest(config: RunConfig, request: GuardedRequest): { m
 export async function guardRequest(config: RunConfig, request: GuardedRequest, transport: typeof fetch, context?: RequestContext): Promise<Response> {
   const classification = classifyRequest(config, request);
   if (classification.mutation) {
+    assertDrawingMutationReadiness();
     requireCondition(config.phase === 'acceptance' && context?.token && context.ownership, 'LIVE_OWNERSHIP_PROOF_REQUIRED');
-    const parents = await context.ownership(classification.projectIds);
-    requireCondition(parents.length === classification.projectIds.length && new Set(parents.map(p => p.id)).size === parents.length, 'OWNERSHIP_CHANGED');
-    for (const id of classification.projectIds) {
-      const expected = config.manifest.projects.find(p => p.id === id)!;
-      const current = parents.find(p => p.id === id);
-      requireCondition(current && current.org_id === expected.orgId && current.created_by === expected.createdBy, 'OWNERSHIP_CHANGED');
-    }
+    await verifyRequestOwnership(config, classification.projectIds, context);
   }
   const response = await transport(`${STAGE_ORIGIN}${request.path}`, {
     method: request.method, body: request.body === undefined ? undefined : JSON.stringify(request.body), redirect: 'error',
@@ -101,6 +96,16 @@ export async function guardRequest(config: RunConfig, request: GuardedRequest, t
   });
   requireCondition(!response.redirected && !(response.status >= 300 && response.status < 400), 'REDIRECT_OR_TRANSPORT_REFUSED');
   return response;
+}
+/** Underlying live ownership check, not readiness or permission to forward. */
+export async function verifyRequestOwnership(config: RunConfig, projectIds: string[], context: RequestContext): Promise<void> {
+  const parents = await context.ownership(projectIds);
+  requireCondition(parents.length === projectIds.length && new Set(parents.map(p => p.id)).size === parents.length, 'OWNERSHIP_CHANGED');
+  for (const id of projectIds) {
+    const expected = config.manifest.projects.find(p => p.id === id);
+    const current = parents.find(p => p.id === id);
+    requireCondition(expected && current && current.org_id === expected.orgId && current.created_by === expected.createdBy, 'OWNERSHIP_CHANGED');
+  }
 }
 
 interface Session { access_token: string; refresh_token: string; user: { id: string }; [key: string]: unknown }
@@ -117,7 +122,7 @@ export class DrawingCutoverTransport {
   async signIn(actor: ActorAlias): Promise<Session> {
     const credential = this.config.actors[actor];
     const response = await this.fetchFor(actor)(`${STAGE_ORIGIN}/auth/v1/token?grant_type=password`, {
-      method: 'POST', body: JSON.stringify({ email: credential.email, password: credential.password }),
+      method: 'POST', headers: { apikey: this.config.anonKey }, body: JSON.stringify({ email: credential.email, password: credential.password }),
     });
     requireCondition(response.ok, 'SYNTHETIC_AUTH_FAILED');
     return this.session(actor);
@@ -175,6 +180,7 @@ export class DrawingCutoverTransport {
       const incoming = new Request(input, init);
       const url = new URL(incoming.url);
       requireCondition(url.origin === STAGE_ORIGIN && !url.username && !url.password && !url.hash, 'STAGING_ORIGIN_REQUIRED');
+      requireCondition(incoming.headers.get('apikey') === this.config.anonKey, 'CLIENT_PUBLIC_KEY_MISMATCH');
       const text = ['GET', 'HEAD'].includes(incoming.method) ? undefined : await incoming.text();
       requireCondition(!text || Buffer.byteLength(text) <= 1_048_576, 'REQUEST_SIZE_REFUSED');
       let body: unknown;
