@@ -483,6 +483,262 @@ async function completedHarness(bootstrapPlan = foundationPlan()) {
   return { ...await foundationHarness(plan, resume), resume };
 }
 
+type WorkflowStep = { id?: string; name?: string; if?: string; uses?: string; run?: string; 'continue-on-error'?: boolean; env?: Record<string, string>; with?: Record<string, string | number> };
+type WorkflowJob = { if?: string; needs?: string[] | string; environment?: string; env?: Record<string, string>; steps: WorkflowStep[] };
+function stagingWorkflow() {
+  return load(readFileSync('.github/workflows/drawing-cutover-staging.yml', 'utf8')) as {
+    on: { workflow_dispatch: { inputs: Record<string, { required: boolean; options?: string[] }> } };
+    env?: Record<string, string>; jobs: Record<string, WorkflowJob>;
+  };
+}
+function workflowGate() {
+  const script = stagingWorkflow().jobs.verify.steps[0].with!.script;
+  const execute = new Function('context', 'github', 'core', 'process', `return (async()=>{${script}})();`) as (...args: unknown[]) => Promise<void>;
+  const checks = ['Lint + Typecheck + Test + Build', 'Secret scan (gitleaks)', 'Release Edge Function typecheck', 'Commercial SQL + concurrent PostgreSQL acceptance'];
+  const runs = [{ head_sha: sha, event: 'push', status: 'completed', id: 1 }];
+  const jobs = new Map([[1, checks.map(name => ({ name, conclusion: 'success' }))]]);
+  let ancestor = sha;
+  const github = { rest: { repos: { compareCommitsWithBasehead: async () => ({ data: { merge_base_commit: { sha: ancestor } } }) },
+    actions: { listWorkflowRuns: 'runs', listJobsForWorkflowRun: 'jobs' } },
+  paginate: async (method: string, args: { run_id: number }) => method === 'runs' ? runs : jobs.get(args.run_id) ?? [] };
+  const output = vi.fn();
+  return { runs, jobs, output, setAncestor(value: string) { ancestor = value; },
+    run: (phase: string, input: Record<string, string> = {}, context = {}, env = {}) => {
+      const inputs = { candidate_sha: sha, phase, ...(!phase.startsWith('setup-') ? { fixture_manifest_sha256: '2'.repeat(64) } : {}), ...input };
+      return execute({ ref: 'refs/heads/main', eventName: 'workflow_dispatch', repo: {}, sha, runAttempt: 1, payload: { inputs }, ...context }, github,
+        { setOutput: output }, { env: { CANDIDATE_SHA: inputs.candidate_sha, PHASE: phase, MANIFEST_SHA: inputs.fixture_manifest_sha256 ?? '', ...env } });
+    } };
+}
+function workflowCondition(condition: string | undefined, phase: string, failed = false, cancelled = false, steps: Record<string, { outcome: string }> = {}): boolean {
+  const source = (condition ?? 'success()').replace(/^\$\{\{\s*|\s*\}\}$/g, '');
+  return Boolean(new Function('github', 'inputs', 'success', 'cancelled', 'steps', `return (${source});`)(
+    { ref: 'refs/heads/main', event_name: 'workflow_dispatch' }, { phase }, () => !failed && !cancelled, () => cancelled, steps));
+}
+async function executeSetupWorkflowScript(step: WorkflowStep, env: Record<string, string>, github: unknown = {}, overrides: Record<string, unknown> = {}) {
+  const writes: { path: string; value: unknown; mode?: number }[] = [];
+  const provision = await import('../drawing-cutover-provision.ts');
+  const modules: Record<string, unknown> = {
+    'node:fs/promises': { mkdir: async (path: string, options: { mode: number }) => { writes.push({ path, value: null, mode: options.mode }); },
+      open: async (path: string, flag: string, mode: number) => { expect(flag).toBe('wx'); return { writeFile: async (value: string) => { writes.push({ path, value, mode }); }, sync: async () => {}, close: async () => {} }; } },
+    'node:path': await import('node:path'),
+    'node:crypto': await import('node:crypto'),
+    './scripts/drawing-cutover-provision.ts': provision,
+    './e2e/drawing-cutover-setup.ts': setup,
+    './scripts/drawing-cutover-recovery.ts': { ...(await import('../drawing-cutover-recovery.ts')),
+      writePrivateJson: async (path: string, value: unknown) => { writes.push({ path, value, mode: 0o600 }); },
+      readPrivateText: async () => '{"encrypted":"synthetic"}' },
+    ...overrides,
+  };
+  const source = String(step.with!.script).replaceAll('await import(', 'await importModule(');
+  const execute = new Function('process', 'github', 'context', 'core', 'Buffer', 'importModule', `return (async()=>{${source}})();`) as (...args: unknown[]) => Promise<void>;
+  const outputs = vi.fn();
+  await execute({ env: { GITHUB_WORKSPACE: '.', ...env } }, github, { repo: { owner: 'lorteezy87', repo: 'SteelBuild-Pro-Rev.2' }, runId: 123456, runAttempt: 1, sha },
+    { setOutput: outputs, setFailed: (message: string) => { throw new Error(message); } }, Buffer, async (name: string) => {
+      if (!(name in modules)) throw new Error(`Unexpected import ${name}`); return modules[name];
+    });
+  return { writes, outputs };
+}
+
+describe('approved private workflow handoff', () => {
+  it('workflowSetupKeepsExactMainAndFourJobs', async () => {
+    for (const phase of ['preflight', 'acceptance']) {
+      const h = workflowGate(); await h.run(phase); expect(h.output).toHaveBeenCalledWith('candidate_sha', sha);
+      await expect(h.run(phase, { fixture_manifest_sha256: '' })).rejects.toThrow('EXACT_INPUTS_REQUIRED');
+    }
+    for (const phase of ['setup-bootstrap', 'setup-complete']) {
+      const h = workflowGate(); await expect(h.run(phase)).rejects.toThrow('SETUP_PREREQUISITES_UNPROVED'); expect(h.output).not.toHaveBeenCalled();
+      await expect(h.run(phase, {}, { ref: 'refs/heads/feature' })).rejects.toThrow('MAIN_DISPATCH_REQUIRED');
+      await expect(h.run(phase, {}, { eventName: 'push' })).rejects.toThrow('MAIN_DISPATCH_REQUIRED');
+      h.setAncestor('9'.repeat(40)); await expect(h.run(phase)).rejects.toThrow('MAIN_ANCESTOR_REQUIRED'); h.setAncestor(sha);
+      h.jobs.set(1, h.jobs.get(1)!.slice(0, 3)); h.runs.push({ head_sha: sha, event: 'push', status: 'completed', id: 2 });
+      h.jobs.set(2, [{ name: 'Commercial SQL + concurrent PostgreSQL acceptance', conclusion: 'success' }]);
+      await expect(h.run(phase)).rejects.toThrow('EXACT_SOURCE_CHECKS_REQUIRED');
+      h.runs[0].head_sha = '9'.repeat(40); await expect(h.run(phase)).rejects.toThrow('EXACT_SOURCE_CHECKS_REQUIRED');
+    }
+  });
+  it('workflowSetupRejectsDispatchDigestsAndReruns', async () => {
+    const h = workflowGate();
+    for (const phase of ['setup-bootstrap', 'setup-complete']) {
+      for (const key of ['setup_plan_sha256', 'setup_resume_sha256', 'unknown']) await expect(h.run(phase, { [key]: 'a'.repeat(64) })).rejects.toThrow('EXACT_INPUTS_REQUIRED');
+      await expect(h.run(phase, { fixture_manifest_sha256: 'a'.repeat(64) })).rejects.toThrow('EXACT_INPUTS_REQUIRED');
+      await expect(h.run(phase, {}, { runAttempt: 2 })).rejects.toThrow('SETUP_RERUN_REFUSED');
+      await expect(h.run(phase, { fixture_manifest_sha256: '' })).rejects.toThrow('SETUP_PREREQUISITES_UNPROVED');
+    }
+    await expect(h.run('other')).rejects.toThrow('EXACT_INPUTS_REQUIRED'); expect(h.output).not.toHaveBeenCalled();
+  });
+  it('workflowEnvironmentBindingsArePhaseScoped', () => {
+    const workflow = stagingWorkflow(); expect(workflow.env).toBeUndefined();
+    expect(workflow.on.workflow_dispatch.inputs.fixture_manifest_sha256.required).toBe(false);
+    expect(Object.keys(workflow.on.workflow_dispatch.inputs).sort()).toEqual(['candidate_sha', 'fixture_manifest_sha256', 'phase']);
+    const job = workflow.jobs.setup; expect(job.needs).toEqual(['verify', 'build']); expect(job.environment).toBe('staging-backend'); expect(job.env).toBeUndefined();
+    expect(job.if).toContain("github.ref == 'refs/heads/main'"); expect(job.if).toContain("github.event_name == 'workflow_dispatch'");
+    const privateSteps = job.steps.filter(step => Object.values(step.env ?? {}).some(value => /STAGING_DRAWING_SETUP_(PLAN|RESUME)/.test(value)));
+    expect(privateSteps).toHaveLength(2);
+    const [bootstrap, complete] = privateSteps;
+    expect(bootstrap.if).toBe("inputs.phase == 'setup-bootstrap'"); expect(complete.if).toBe("inputs.phase == 'setup-complete'");
+    expect(Object.keys(bootstrap.env!)).not.toContain('SETUP_RESUME'); expect(Object.keys(bootstrap.env!)).not.toContain('SETUP_RESUME_SHA256');
+    expect(complete.env!.SETUP_RESUME_SHA256).toBe('${{ secrets.STAGING_DRAWING_SETUP_RESUME_SHA256 }}');
+    for (const name of ['verify', 'build', 'evidence']) {
+      expect(workflow.jobs[name].env).toBeUndefined();
+      expect(workflow.jobs[name].steps.flatMap(step => Object.values(step.env ?? {})).some(value => /STAGING_DRAWING_(SETUP|RECOVERY)/.test(value))).toBe(false);
+    }
+    expect(workflow.jobs.evidence.if).toContain("inputs.phase == 'preflight'"); expect(workflow.jobs.evidence.if).toContain("inputs.phase == 'acceptance'");
+    const keyed = job.steps.filter(step => Object.values(step.env ?? {}).some(value => value.includes('STAGING_DRAWING_SETUP_SECRET_KEY')));
+    expect(keyed).toHaveLength(1); expect(keyed[0].id).toBe('server');
+    expect(job.steps.findIndex(step => step.run === 'npm ci --ignore-scripts')).toBeLessThan(job.steps.indexOf(bootstrap));
+    expect(Object.values(workflow.jobs.verify.steps[0].env ?? {}).some(value => value.includes('secrets.'))).toBe(false);
+  });
+  it('workflowFailureCannotTurnFoundationIntoAcceptance', async () => {
+    const h = workflowGate(); await expect(h.run('setup-complete')).rejects.toThrow('SETUP_PREREQUISITES_UNPROVED'); expect(h.output).not.toHaveBeenCalled();
+    const provision = await import('../drawing-cutover-provision.ts'); const network = vi.spyOn(globalThis, 'fetch');
+    try { expect(() => provision.runSetupCli(['prepare', '--target=staging', `--expected-ref=${setup.STAGE_REF}`, `--candidate-sha=${sha}`, '--phase=setup-bootstrap', `--plan-sha256=${'1'.repeat(64)}`])).toThrow('SETUP_MUTATION_PREREQUISITES_UNPROVED');
+      expect(network).not.toHaveBeenCalled(); } finally { network.mockRestore(); }
+    expect(summarizeCases([]).status).toBe('INCOMPLETE');
+  });
+  it('setupTransportCountsUtf8AndRejectsOverflowBeforeWrites', async () => {
+    const provision = await import('../drawing-cutover-provision.ts');
+    for (const raw of ['x'.repeat(48_000), 'é'.repeat(24_000)]) expect(() => provision.requireSetupTransportSize(raw)).not.toThrow();
+    for (const raw of ['x'.repeat(48_001), 'é'.repeat(24_001), JSON.stringify('\\'.repeat(24_000))]) expect(() => provision.requireSetupTransportSize(raw)).toThrow('SETUP_TRANSPORT_CAPACITY');
+    const h = await foundationHarness(); const template = h.plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates[0];
+    h.plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates = Array.from({ length: 80 }, (_, n) => ({ ...template, id: id(7000 + n), cost_code_number: String(n), description: 'é'.repeat(500) }));
+    h.plan.prerequisites.sideEffectsSha256 = testHash(JSON.stringify(h.plan.prerequisiteDetails!.sideEffects));
+    await expect(h.provision.runFoundation(h.plan, null, h.transports, h.checkpoint)).rejects.toThrow('SETUP_TRANSPORT_CAPACITY'); expect(h.writes).toEqual([]);
+    const complete = await completedHarness(); complete.resume.reviewedAt = complete.resume.reviewedAt.replace('Z', `${'0'.repeat(48_001)}Z`);
+    expect(() => provision.initialFoundationReceipt(complete.plan, complete.resume)).toThrow('SETUP_TRANSPORT_CAPACITY');
+    expect(() => provision.createSetupTransports(complete.plan, { publicKey: 'sb_publishable_synthetic', setupKey: 'sb_secret_synthetic',
+      setupKeyIdentifier: 'synthetic-key-id', credentials: complete.resume.recovery.credentials, resume: complete.resume }, vi.fn())).toThrow('SETUP_TRANSPORT_CAPACITY');
+  });
+  it('bootstrapResumeBoundCoversOwnerConstruction', async () => {
+    const provision = await import('../drawing-cutover-provision.ts');
+    const plan = foundationPlan(); plan.context.workflowRunId = '9'.repeat(20); plan.context.workflowRunAttempt = '9'.repeat(20);
+    plan.roster = plan.roster.map(a => ({ ...a, email: `${a.alias.padEnd(254 - '@example.invalid'.length, 'e')}@example.invalid` }));
+    plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates[0].description = 'é"\\\n'.repeat(100);
+    plan.prerequisites.sideEffectsSha256 = testHash(JSON.stringify(plan.prerequisiteDetails!.sideEffects));
+    // Independently construct all successful bootstrap identities/journal/wrappers,
+    // never use the estimator or factory to build the expected resume.
+    const receipt: FoundationReceipt = { context: { ...plan.context, checkpointSequence: 32 }, planSha256: testHash(JSON.stringify(plan)), status: 'AWAITING_ENTITLEMENT_REVIEW',
+      operations: [], actors: plan.roster.map((a, n) => ({ alias: a.alias, id: id(600 + n), emailSha256: testHash(a.email), authenticated: true })),
+      organizations: [], projects: [], memberships: [], census: { observedAt: new Date().toISOString(), sideEffectsSha256: plan.prerequisites.sideEffectsSha256, observationSha256: 'f'.repeat(64), children: [] } };
+    for (const a of receipt.actors) for (const action of ['create-user', 'authenticate-user'] as const) appendSuccessfulOperation(receipt, { action, actor: a.alias }, a.id);
+    for (const [n, alias] of (['A', 'B'] as const).entries()) {
+      const actor = receipt.actors.find(a => a.alias === (alias === 'A' ? 'admin' : 'foreign'))!;
+      receipt.organizations.push({ alias, id: id(700 + n), createdBy: actor.id, ownerId: actor.id });
+      receipt.memberships.push({ id: id(800 + n), actor: actor.alias, userId: actor.id, orgId: id(700 + n), role: 'owner' });
+      appendSuccessfulOperation(receipt, { action: 'create-organization', actor: actor.alias, organization: alias }, id(700 + n));
+    }
+    const artifact = { ...artifactFixture(), artifactId: '9'.repeat(20), workflowRunId: '9'.repeat(20), workflowRunAttempt: '9'.repeat(20) };
+    const context: SetupContext = { ...plan.context, phase: 'setup-complete', workflowRunId: '8'.repeat(20) };
+    const completePlan: SetupPlan = { ...structuredClone(plan), context, prior: { receiptSha256: testHash(JSON.stringify(receipt)), artifact } };
+    const resume: SetupResume = { context, planSha256: testHash(JSON.stringify(completePlan)), recovery: { plan, receipt, credentials: plan.roster.map(a => ({ ...a, password: a.alias.padEnd(43, 'p') })) },
+      artifact, receiptSha256: testHash(JSON.stringify(receipt)), reviewedAt: new Date().toISOString(), reviewSha256: 'b'.repeat(64),
+      entitlements: receipt.organizations.map(o => ({ organization: o.alias, orgId: o.id, createdBy: o.createdBy, plan: 'pro', observedAt: new Date().toISOString(), readbackSha256: 'c'.repeat(64) })) };
+    resume.reviewedAt = new Date().toISOString();
+    const resumeRaw = JSON.stringify(resume);
+    expect(setup.validateSetupResume(resumeRaw, testHash(resumeRaw), completePlan, artifact)).toEqual(resume);
+    expect(Buffer.byteLength(JSON.stringify(resume))).toBeLessThanOrEqual(provision.estimateBootstrapResumeBytes(plan));
+    expect(provision.estimateBootstrapResumeBytes(plan)).toBeLessThan(48_000); expect(() => provision.requireFoundationPlan(plan)).not.toThrow();
+    const template = plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates[0];
+    plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates = Array.from({ length: 53 }, (_, n) => ({ ...template, id: id(9000 + n), cost_code_number: String(n), description: 'd'.repeat(500) }));
+    plan.prerequisites.sideEffectsSha256 = testHash(JSON.stringify(plan.prerequisiteDetails!.sideEffects));
+    expect(Buffer.byteLength(JSON.stringify(plan))).toBeLessThan(48_000); expect(provision.estimateBootstrapResumeBytes(plan)).toBeGreaterThan(48_000);
+    expect(() => provision.requireFoundationPlan(plan)).toThrow('SETUP_BOOTSTRAP_RESUME_CAPACITY');
+  });
+  it('workflowPrivateResumeAndArtifactIdentityBound', async () => {
+    const workflow = stagingWorkflow(); const stages = workflow.jobs.setup.steps.filter(s => s.id === 'stage-bootstrap' || s.id === 'stage-complete'); expect(stages).toHaveLength(2);
+    for (const complete of [false, true]) {
+      const h = complete ? await completedHarness() : { plan: foundationPlan(), resume: null }; const raw = JSON.stringify(h.plan); const resumeRaw = h.resume ? JSON.stringify(h.resume) : '';
+      const approved = testHash(raw); const approvedResume = testHash(resumeRaw);
+      const env = { RUNNER_TEMP: tmpdir(), GITHUB_RUN_ID: h.plan.context.workflowRunId, GITHUB_RUN_ATTEMPT: '1', GITHUB_REPOSITORY: 'lorteezy87/SteelBuild-Pro-Rev.2',
+        CANDIDATE_SHA: sha, PHASE: h.plan.context.phase, SETUP_PLAN: raw, SETUP_PLAN_SHA256: approved, RECOVERY_PUBLIC_KEY: recoveryKeys.publicKey,
+        ...(complete ? { SETUP_RESUME: resumeRaw, SETUP_RESUME_SHA256: approvedResume } : {}) };
+      const result = await executeSetupWorkflowScript(stages[complete ? 1 : 0], env);
+      expect(result.writes.find(w => w.path.endsWith('plan.json'))?.value).toEqual(h.plan); expect(result.outputs).not.toHaveBeenCalled();
+      expect(result.writes.find(w => w.path.endsWith('plan.json'))!.mode).toBe(0o600); expect(result.writes[0].mode).toBe(0o700);
+      for (const patch of [{ SETUP_PLAN_SHA256: '' }, { SETUP_PLAN_SHA256: 'f'.repeat(64) }, { SETUP_PLAN: raw.replace('Synthetic A', 'Changed A') }, { GITHUB_RUN_ATTEMPT: '2' }, { GITHUB_RUN_ID: '765432' }, { CANDIDATE_SHA: '9'.repeat(40) }, { PHASE: complete ? 'setup-bootstrap' : 'setup-complete' }, { RECOVERY_PUBLIC_KEY: '' }]) {
+        await expect(executeSetupWorkflowScript(stages[complete ? 1 : 0], { ...env, ...patch })).rejects.toThrow('SETUP_PRIVATE_INPUT_REFUSED');
+      }
+      if (complete) for (const patch of [{ SETUP_RESUME_SHA256: '' }, { SETUP_RESUME_SHA256: approved }, { SETUP_RESUME: resumeRaw.replace('777', '778') }]) await expect(executeSetupWorkflowScript(stages[1], { ...env, ...patch })).rejects.toThrow('SETUP_PRIVATE_INPUT_REFUSED');
+      // Even a freshly approved full-byte fingerprint cannot waive stale context,
+      // expiry, recipient or bootstrap artifact source identity.
+      const expired = structuredClone(h.plan); expired.expiresAt = expired.createdAt;
+      const wrongRecipient = structuredClone(h.plan); wrongRecipient.context.recipientSha256 = 'f'.repeat(64);
+      for (const changed of [expired, wrongRecipient]) {
+        const changedRaw = JSON.stringify(changed); await expect(executeSetupWorkflowScript(stages[complete ? 1 : 0], { ...env, SETUP_PLAN: changedRaw, SETUP_PLAN_SHA256: testHash(changedRaw) })).rejects.toThrow('SETUP_PRIVATE_INPUT_REFUSED');
+      }
+      if (h.resume) for (const patch of [{ archiveSha256: 'c'.repeat(64) }, { ciphertextSha256: 'd'.repeat(64) }, { workflowRunAttempt: '2' }]) {
+        const changed = structuredClone(h.resume); Object.assign(changed.artifact, patch); const changedRaw = JSON.stringify(changed);
+        await expect(executeSetupWorkflowScript(stages[1], { ...env, SETUP_RESUME: changedRaw, SETUP_RESUME_SHA256: testHash(changedRaw) })).rejects.toThrow('SETUP_PRIVATE_INPUT_REFUSED');
+      }
+    }
+  });
+  it('workflowSecretScopeAndInitialUploadBarrier', async () => {
+    const job = stagingWorkflow().jobs.setup; const steps = job.steps;
+    const initial = steps.find(s => s.id === 'initial')!; const bind = steps.find(s => s.id === 'bind-initial')!; const server = steps.find(s => s.id === 'server')!;
+    expect(initial.with!.path).toContain('/initial.enc.json'); expect(initial.with!['retention-days']).toBe(1); expect(initial.with!['if-no-files-found']).toBe('error');
+    expect(steps.indexOf(initial)).toBeLessThan(steps.indexOf(bind)); expect(steps.indexOf(bind)).toBeLessThan(steps.indexOf(server)); expect(server.if).toBe('success()');
+    const env = { RUNNER_TEMP: tmpdir(), GITHUB_RUN_ID: '123456', GITHUB_RUN_ATTEMPT: '1', CANDIDATE_SHA: sha, INITIAL_ARTIFACT_ID: '777', INITIAL_ARCHIVE_SHA256: 'a'.repeat(64) };
+    const artifact = { id: 777, name: `drawing-foundation-initial-${sha}-123456-1`, expired: false, digest: `sha256:${'a'.repeat(64)}`, workflow_run: { id: 123456, head_sha: sha, head_branch: 'main' } };
+    const github = { rest: { actions: { getArtifact: async () => ({ data: artifact }), getWorkflowRun: async () => ({ data: { id: 123456, run_attempt: 1, event: 'workflow_dispatch', head_branch: 'main', head_sha: sha, path: '.github/workflows/drawing-cutover-staging.yml' } }) } } };
+    const result = await executeSetupWorkflowScript(bind, env, github); const binding = result.writes.find(w => w.path.endsWith('initial-upload.json'))!.value as { artifact: ArtifactBinding };
+    expect(binding.artifact.archiveSha256).toBe('a'.repeat(64)); expect(binding.artifact.ciphertextSha256).toBe(testHash('{"encrypted":"synthetic"}')); expect(binding.artifact.ciphertextSha256).not.toBe(binding.artifact.archiveSha256);
+    for (const patch of [{ INITIAL_ARTIFACT_ID: '' }, { INITIAL_ARCHIVE_SHA256: '' }, { INITIAL_ARCHIVE_SHA256: 'b'.repeat(64) }]) await expect(executeSetupWorkflowScript(bind, { ...env, ...patch }, github)).rejects.toThrow('SETUP_INITIAL_UPLOAD_REFUSED');
+    for (const patch of [{ expired: true }, { workflow_run: { id: 2, head_sha: sha, head_branch: 'main' } }, { digest: `sha256:${'b'.repeat(64)}` }]) {
+      const bad = { rest: { actions: { ...github.rest.actions, getArtifact: async () => ({ data: { ...artifact, ...patch } }) } } };
+      await expect(executeSetupWorkflowScript(bind, env, bad)).rejects.toThrow('SETUP_INITIAL_UPLOAD_REFUSED');
+    }
+    const final = steps.find(s => s.id === 'final')!; expect(final.if).toContain('!cancelled()'); expect(final.with!.path).toContain('/final.enc.json'); expect(final.with!['retention-days']).toBe(1);
+    expect(final.with!['if-no-files-found']).toBe('error'); expect(final['continue-on-error']).toBeUndefined();
+    // Execute actual conditions with failed/cancelled callbacks. A failed initial
+    // upload/metadata barrier cannot run the server, and final upload never erases
+    // a previous failure or fabricates a missing final file.
+    for (const failAt of ['initial', 'bind-initial', 'server', 'final', 'cancelled']) {
+      let failed = false; let cancelled = false; const calls: string[] = []; const outcomes: Record<string, { outcome: string }> = {};
+      for (const step of steps) {
+        cancelled ||= failAt === 'cancelled' && step.id === 'server';
+        if (!workflowCondition(step.if, 'setup-bootstrap', failed, cancelled, outcomes)) continue;
+        if (step.id) { calls.push(step.id); const outcome = step.id === failAt ? 'failure' : 'success'; outcomes[step.id] = { outcome }; failed ||= outcome === 'failure'; }
+      }
+      if (['initial', 'bind-initial', 'cancelled'].includes(failAt)) expect(calls).not.toContain('server');
+      if (failAt === 'cancelled') expect(calls).not.toContain('final');
+      if (failAt !== 'cancelled') expect(failed).toBe(true);
+    }
+    for (const phase of ['setup-bootstrap', 'setup-complete']) {
+      expect(workflowCondition(stagingWorkflow().jobs.setup.if, phase)).toBe(true); expect(workflowCondition(stagingWorkflow().jobs.evidence.if, phase)).toBe(false);
+    }
+    let bindingWrites = 0;
+    const recoveryModule = { ...(await import('../drawing-cutover-recovery.ts')), writePrivateJson: async () => { bindingWrites++; } };
+    await expect(executeSetupWorkflowScript(bind, env, { rest: { actions: { getArtifact: async () => { throw new Error('metadata unavailable'); } } } },
+      { './scripts/drawing-cutover-recovery.ts': recoveryModule })).rejects.toThrow('SETUP_INITIAL_UPLOAD_REFUSED'); expect(bindingWrites).toBe(0);
+  });
+  it('setupFinalCheckpointRetainsTerminalReceiptAndMfa', async () => {
+    const recovery = await import('../drawing-cutover-recovery.ts'); const directory = privateTemp();
+    try {
+      const h = await completedHarness(); const terminal = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+      const records = h.results as Parameters<SetupCheckpoint['persistResult']>[0][];
+      const beforeMfa = records.filter(r => (r.receipt.operations.at(-2) as SetupIntent).action === 'assign-project-role').at(-1)!;
+      const initial = { ...h.provision.prepareFoundation(h.plan, h.resume, recoveryKeys.publicKey).payload, receipt: beforeMfa.receipt };
+      const artifact = { ...artifactFixture(), workflowRunId: h.plan.context.workflowRunId };
+      const checkpoint = h.provision.createPrivateSetupCheckpoint(initial, recoveryKeys.publicKey, directory, artifact, artifact);
+      for (const record of records.filter(r => ['enroll-mfa', 'challenge-mfa', 'verify-mfa'].includes((r.receipt.operations.at(-2) as SetupIntent).action))) await checkpoint.persistResult(record);
+      expect(terminal.status).toBe('FOUNDATION_PREPARED');
+      const finalPath = await checkpoint.persistFinal(terminal); expect(finalPath).toBe(join(directory, 'final.enc.json'));
+      const decrypted = recovery.decryptRecovery(JSON.parse(readFileSync(finalPath, 'utf8')), recoveryKeys.privateKey, terminal.context);
+      expect(decrypted.receipt).toEqual(terminal); expect(decrypted.receipt.census).toEqual(terminal.census); expect(decrypted.credentials.find(c => c.alias === 'mfa')!.mfa).toEqual({ factorId: terminal.actors.find(a => a.alias === 'mfa')!.mfa!.factorId, secret: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ' });
+      await expect(checkpoint.persistFinal(terminal)).rejects.toThrow(); expect(recovery.decryptRecovery(JSON.parse(readFileSync(finalPath, 'utf8')), recoveryKeys.privateKey, terminal.context).receipt).toEqual(terminal);
+      const impossible = structuredClone(terminal); impossible.operations.splice(-6); impossible.context.checkpointSequence -= 6;
+      await expect(checkpoint.persistFinal(impossible)).rejects.toThrow();
+      const blocked = h.provision.createPrivateSetupCheckpoint(initial, recoveryKeys.publicKey, join(directory, 'absent'), artifact, artifact);
+      await expect(blocked.persistFinal(initial.receipt)).rejects.toThrow();
+    } finally { removeRecoveryTemp(directory); }
+  }, 60_000);
+  it('workflowNeverAppliesSqlOrDeploys', () => {
+    const workflow = stagingWorkflow();
+    for (const job of Object.values(workflow.jobs)) for (const step of job.steps) expect(step.run ?? '').not.toMatch(/supabase (?:db push|migration repair|functions deploy)|wrangler|vercel deploy|psql|apply_migration/);
+    expect(workflow.jobs.setup.steps.find(s => s.id === 'prepare')?.run).toContain("'prepare'");
+    expect(workflow.jobs.setup.steps.find(s => s.id === 'server')?.run).toContain("'run'");
+  });
+});
+
 describe('finite foundation factory', () => {
   it('setupFix1I1ExactHttpRangeCannotHideAdditionalRows', async () => {
     const provision = await import('../drawing-cutover-provision.ts'); const body = [{ id: id(1) }, { id: id(2) }];
@@ -520,8 +776,10 @@ describe('finite foundation factory', () => {
     expect(network).not.toHaveBeenCalled();
     let accepted = 0;
     for (let n = 1; n <= 256; n++) { try { provision.requireFoundationPlan(widePlan(n)); accepted = n; } catch { break; } }
-    expect(accepted).toBeGreaterThan(64); expect(accepted).toBeLessThan(256);
-    expect(() => provision.requireFoundationPlan(widePlan(accepted + 1))).toThrow('SETUP_OBSERVATION_CAPACITY');
+    // The later 48,000-byte transport/forward-resume gates deliberately admit
+    // fewer templates than the original 1MiB observation-only admission.
+    expect(accepted).toBeGreaterThan(0); expect(accepted).toBeLessThan(64);
+    expect(() => provision.requireFoundationPlan(widePlan(accepted + 1))).toThrow('SETUP_BOOTSTRAP_RESUME_CAPACITY');
     const near = widePlan(accepted); expect(Buffer.byteLength(JSON.stringify(independentCostRows(near)))).toBeLessThan(1_048_576);
     const h = await completedHarness(near); const receipt = await provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
     expect(receipt.status).toBe('FOUNDATION_PREPARED'); expect(Buffer.byteLength(JSON.stringify(h.snapshots.at(-1)))).toBeLessThan(1_048_576);

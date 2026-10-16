@@ -13,7 +13,8 @@ refuses unknown/missing arguments, dirty/different source, wrong origins, privil
 API keys, malformed/expired/unbound fixtures and missing synthetic actors. The
 public key digest must match the independently reviewed fixture; an opaque key
 prefix alone is not project proof.
-Only `preflight` and `acceptance` exist; neither installs SQL or provisions accounts.
+The evidence CLI supports `preflight` and `acceptance`; neither installs SQL or
+provisions accounts. Separate guarded foundation phases are described below.
 
 The manifest binds two organizations/four projects, seven distinct synthetic actors,
 known drawing entities and source objects. Names or purpose metadata confer no
@@ -54,7 +55,7 @@ bindings from the hashed bytes and compares the runtime key, then the entry poin
 compares the reviewed manifest before authentication. Browser/Node adapters reject
 missing or different supplied apikey headers rather than replacing a bad key.
 No plaintext key is added to seal metadata or evidence. No privileged setup key is
-injected. Dependencies are installed without hooks before actor credentials exist
+injected into build/evidence/browser processes. Dependencies install without hooks before actor credentials exist
 in the step environment. Only sanitized JSON paths are eligible for evidence upload.
 
 ## Current execution status and deliberate stops
@@ -128,3 +129,99 @@ owner-reported storage, not independently verified availability, exact-project
 binding or permission to use its value. Separate setup source review, secure
 handoff and execution remain absent; this does not open the source-only readiness
 gate.
+
+## Task 4 foundation handoff: source only, 2026-10-16
+
+Hosted acceptance remains **INCOMPLETE**. The workflow now describes separate
+`setup-bootstrap` and `setup-complete` jobs, but its secret-free verifier always
+refuses setup with `SETUP_PREREQUISITES_UNPROVED` before any environment job.
+The real CLI and every real setup mutation transport also retain their
+unconditional readiness stops. Manual approval, matching fingerprints and a
+passing source test cannot unlock them. No real keys, private inputs, settings,
+main integration, dispatch, SQL, Auth operation or deployment were used for this
+source change. Parent Task 13, all sixteen missing drawing scenarios and the
+original four fab cases remain required; foundation receipts prove no acceptance.
+
+The checked-in source requires manual `main` dispatch, a reviewed ancestor and
+the same exact-SHA push run containing all four required source jobs. Setup
+attempts must be `1`, including partial-job reruns. Setup dispatch carries only
+`candidate_sha` and `phase`; a nonempty fixture digest, legacy setup digest or
+unknown input is refused. Preflight/acceptance still require their fixture digest.
+Build/evidence/browser processes have no setup inputs or broad setup key.
+Bootstrap has no resume-secret binding; complete alone receives its resume.
+Only the finite server step receives the dedicated setup key. Tooling installs
+without hooks before private inputs are injected; concurrency remains serialized.
+
+Later operator sequence, only after reviewed readiness permits execution:
+
+1. Complete source review/readiness, exact main/SHA/four-source-job gates,
+   immutable same-source build and public-key seal, compatible installed package
+   and provenance, maintenance/classification, side effects, health and no-email
+   closure. No accounts should be created while known scenario source is missing.
+2. Independently read the effective `lorteezy87/SteelBuild-Pro-Rev.2` →
+   `staging-backend` policy and establish the separately approved owner reviewer
+   `lorteezy87`, administrator bypass OFF, owner self-review allowed and sole
+   branch `main`. Preserve unrelated settings. All other environment jobs,
+   including build/evidence, require manual approval too. Source tests do not
+   establish effective policy or prove a waiting job's secret-read timing.
+3. After its required build, hold the selected setup job at its separate manual
+   approval. Independently review the actual repository, workflow, execution run,
+   attempt, candidate, phase, campaign and recipient. Privately finalize the exact
+   compact documents and separately approve their complete UTF-8 fingerprints.
+   The owner saves `STAGING_DRAWING_SETUP_PLAN` and
+   `STAGING_DRAWING_SETUP_PLAN_SHA256` as **environment secrets**; complete also
+   needs `STAGING_DRAWING_SETUP_RESUME` and
+   `STAGING_DRAWING_SETUP_RESUME_SHA256`. Keep each pair fixed through startup,
+   then approve that job. No automatic secret writer is provided.
+4. Independently inspect metadata to establish those exact secret names originate
+   in the environment and have no repository/organization fallback. Matching
+   values and YAML `secrets.NAME` references cannot establish origin. A later
+   authorized same-source run must prove that the job waits before obtaining
+   environment secrets and reads the owner-entered post-creation values when it
+   starts. No synthetic hosted rehearsal may bypass current readiness stops.
+5. Validate raw full-byte fingerprints, actual execution context, expiry,
+   recipient and prerequisites before creating private 0700/0600 input files.
+   Each raw document must fit 48,000 UTF-8 bytes; no normalization before hashing,
+   truncation, fragments or alternate channel. The separate 1 MiB private recovery
+   bound remains in force. Prepare writes the initial encrypted file; upload only
+   that fixed file with one-day retention. Independently cross-check the upload
+   action's immutable ID/archive digest against repository/run metadata and the
+   local ciphertext-file digest before any server execution. Archive and
+   ciphertext hashes identify different bytes and must remain distinct.
+6. Download the exact immutable final artifact by independently pinned ID, verify
+   its repository/workflow/run/attempt/candidate and archive digest, extract only
+   `final.enc.json`, verify that file's separate ciphertext digest, and decrypt
+   privately with the dedicated local custody key and its original context/AAD.
+   Review the actual terminal receipt, journal, identities, census and recoverable
+   MFA state. The final file is create-new and binds the factory's terminal
+   receipt to the latest valid private checkpoint; a result checkpoint is not a
+   terminal success artifact. Missing persistence/upload, interruption or
+   cancellation remains incomplete/uncertain. Never retry account creation,
+   relabel a context, reset credentials, adopt existing accounts or clean up
+   unknown rows/PDFs. Reconcile `UNKNOWN_COMMIT_STATE` independently.
+
+Canonical owner resume construction uses the original compact bootstrap plan
+once, its reviewed final recovery receipt and seven generated 43-character
+base64url passwords with the exact reviewed emails. A successful bootstrap has
+sixteen operations/thirty-two journal records, seven authenticated actors, two
+organizations and two owner memberships, no projects, no MFA and an empty child
+census. The source-derived estimator serializes these shapes plus every resume,
+context, artifact, receipt-review and two-entitlement wrapper, reserving 20-digit
+decimal IDs, 36-byte UUIDs and full hashes. It counts UTF-8 and JSON escaping of
+the actual copied plan/emails. Census, owner review and two entitlement readback
+timestamps in this recipe use `Date.toISOString()` with a four-digit UTC year
+(24 bytes). This bounds this construction recipe, not schema-unrestricted
+timestamp/password widths. Bootstrap admission proves that future recipe fits
+before any write; complete independently checks its actual complete raw input.
+
+After bootstrap, the owner independently verifies the exact newly created two
+organization identities/creators and side effects before the separate reviewed
+manual entitlement fragment changes only those receipt-bound rows from `free` to
+`pro`. Retain its exact readback and provenance. Complete uses a new reviewed plan
+for its new execution and independently pins the original bootstrap artifact,
+receipt and original decryption context. An expired plan requires fresh review
+and live readback, not account recreation. MFA enrollment/notification requires
+named action-time owner authority and reviewed restoration/closeout; generated
+TOTP secrets and credentials remain in private encrypted recovery only. No setup
+key, deployment PAT or local private key may enter recovery. This source change
+does not apply entitlements, configure policy or claim PostgreSQL/runtime proof.

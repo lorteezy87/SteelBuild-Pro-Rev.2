@@ -23,9 +23,43 @@ const equal = isDeepStrictEqual;
 const projection = <T>(schema: z.ZodType<T>, value: unknown): T => {
   const result = schema.safeParse(value); requireCondition(result.success, 'SETUP_RESPONSE_INVALID'); return result.data;
 };
+export function requireSetupTransportSize(raw: string): void {
+  requireCondition(Buffer.byteLength(raw, 'utf8') <= 48_000, 'SETUP_TRANSPORT_CAPACITY');
+}
+/** Bound the documented successful-bootstrap owner recipe, not arbitrary schema
+ * timestamps/passwords. Outer review/readback timestamps use four-digit UTC
+ * Date.toISOString() (24 bytes); the embedded reviewed plan keeps its exact bytes.
+ * UUID/hash/decimal placeholders size values only and never become identities. */
+export function estimateBootstrapResumeBytes(plan: SetupPlan): number {
+  const sizingId = '00000000-0000-4000-8000-000000000000'; const hash = 'f'.repeat(64); const decimal = '9'.repeat(20);
+  const timestamp = '9999-12-31T23:59:59.999Z';
+  const context = { ...plan.context, workflowRunId: decimal, workflowRunAttempt: decimal, checkpointSequence: 32 };
+  const actors = ACTORS.map(alias => ({ alias, id: sizingId, emailSha256: hash, authenticated: true }));
+  const organizations = (['A', 'B'] as const).map(alias => ({ alias, id: sizingId, createdBy: sizingId, ownerId: sizingId }));
+  const operations: FoundationReceipt['operations'] = [];
+  const operation = (fields: Omit<SetupIntent, 'sequence' | 'kind' | 'operationId'>) => {
+    const sequence = operations.length + 1;
+    operations.push({ ...fields, sequence, kind: 'intent', operationId: sizingId },
+      { sequence: sequence + 1, kind: 'result', operationId: sizingId, outcome: 'SUCCEEDED', observedId: sizingId });
+  };
+  for (const actor of actors) for (const action of ['create-user', 'authenticate-user'] as const) operation({ action, actor: actor.alias });
+  for (const org of organizations) operation({ action: 'create-organization', actor: owner(org.alias), organization: org.alias });
+  const receipt = { context, planSha256: hash, status: 'AWAITING_ENTITLEMENT_REVIEW', operations, actors, organizations, projects: [],
+    memberships: organizations.map(o => ({ id: sizingId, actor: owner(o.alias), userId: sizingId, orgId: sizingId, role: 'owner' })),
+    census: { observedAt: timestamp, sideEffectsSha256: hash, observationSha256: hash, children: [] } };
+  const resume = { context: { ...context, phase: 'setup-complete', checkpointSequence: 0 }, planSha256: hash,
+    recovery: { plan, receipt, credentials: plan.roster.map(a => ({ ...a, password: 'p'.repeat(43) })) },
+    artifact: { artifactId: decimal, repository: 'lorteezy87/SteelBuild-Pro-Rev.2', workflow: '.github/workflows/drawing-cutover-staging.yml',
+      workflowRunId: decimal, workflowRunAttempt: decimal, candidateSha: plan.context.candidateSha, archiveSha256: hash, ciphertextSha256: hash },
+    receiptSha256: hash, reviewedAt: timestamp, reviewSha256: hash,
+    entitlements: organizations.map(o => ({ organization: o.alias, orgId: sizingId, createdBy: sizingId, plan: 'pro', observedAt: timestamp, readbackSha256: hash })) };
+  return Buffer.byteLength(boundedJson(resume), 'utf8');
+}
 export function requireFoundationPlan(plan: SetupPlan, now = Date.now()): SetupPlan {
+  requireSetupTransportSize(boundedJson(plan));
   validateSetupPlan(boundedJson(plan), digest(boundedJson(plan)), plan.context, now);
   requireCondition(plan.prerequisiteDetails?.sideEffects, 'SETUP_SIDE_EFFECTS_REQUIRED');
+  if (plan.context.phase === 'setup-bootstrap') requireCondition(estimateBootstrapResumeBytes(plan) <= 48_000, 'SETUP_BOOTSTRAP_RESUME_CAPACITY');
   requireCondition(plan.organizations.every(o => o.name === o.name.trim()) && plan.projects.every(p => p.name === p.name.trim() && p.number === p.number.trim()), 'SETUP_TRIMMED_NAMES_REQUIRED');
   // 300 bytes bounds each strict child projection; 64KiB reserves journal, identities, credentials and headers.
   const maximumChildren = 4 * (64 + 2 * plan.prerequisiteDetails.sideEffects.activeCostCodeTemplates.length) + 9;
@@ -66,6 +100,7 @@ export function initialFoundationReceipt(plan: SetupPlan, resume: SetupResume | 
   requireFoundationPlan(plan);
   if (plan.context.phase === 'setup-complete') {
     requireCondition(resume && plan.prior, 'SETUP_RESUME_REQUIRED');
+    requireSetupTransportSize(boundedJson(resume));
     validateSetupResume(boundedJson(resume), digest(boundedJson(resume)), plan, plan.prior.artifact);
     requireCondition(resume.recovery.receipt.census, 'SETUP_RESUME_CENSUS_REQUIRED');
   } else requireCondition(!resume, 'SETUP_BOOTSTRAP_RESUME_FORBIDDEN');
@@ -430,6 +465,7 @@ export function validateExactSetupRows(value: unknown, contentRange: string | nu
 }
 export function createSetupTransports(planValue: SetupPlan, credentialsValue: SetupServerCredentials, network: typeof fetch = fetch): SetupTransports {
   const plan = structuredClone(requireFoundationPlan(planValue));
+  if (credentialsValue.resume) requireSetupTransportSize(boundedJson(credentialsValue.resume));
   const credentials = structuredClone(credentialsValue);
   requireCondition(Object.keys(credentials).every(k => ['publicKey', 'setupKey', 'setupKeyIdentifier', 'credentials', 'resume'].includes(k)), 'SETUP_CREDENTIAL_SCHEMA');
   requireCondition(/^sb_publishable_[A-Za-z0-9_-]+$/.test(credentials.publicKey) && /^sb_secret_[A-Za-z0-9_-]+$/.test(credentials.setupKey)
@@ -715,8 +751,9 @@ export function setupRunPaths(runnerTemp: string, workflowRunId: string, attempt
 }
 /** Task 4 supplies this closure with the independently reviewed initial upload binding.
  * Only private, create-new encrypted checkpoints are written; no final upload is claimed. */
+type PrivateSetupCheckpoint = SetupCheckpoint & { persistFinal(receipt: FoundationReceipt): Promise<string> };
 export function createPrivateSetupCheckpoint(initial: PrivateRecoveryPayload, recipientSpki: string, directory: string,
-  initialArtifact: ArtifactBinding, independentlyVerifiedArtifact: ArtifactBinding): SetupCheckpoint {
+  initialArtifact: ArtifactBinding, independentlyVerifiedArtifact: ArtifactBinding): PrivateSetupCheckpoint {
   let payload = structuredClone(validatePrivateRecoveryPayload(initial, initial.receipt.context));
   const persist = async (receipt: FoundationReceipt, kind: 'intent' | 'result', mfa?: { factorId: string; secret: string }) => {
     const next = structuredClone(payload); next.receipt = structuredClone(receipt);
@@ -738,6 +775,17 @@ export function createPrivateSetupCheckpoint(initial: PrivateRecoveryPayload, re
     },
     async persistIntent({ intent, receipt }) { requireCondition(equal(receipt.operations.at(-1), intent), 'SETUP_CHECKPOINT_INTENT'); await persist(receipt, 'intent'); },
     async persistResult({ result, receipt, mfa }) { requireCondition(equal(receipt.operations.at(-1), result), 'SETUP_CHECKPOINT_RESULT'); await persist(receipt, 'result', mfa); },
+    async persistFinal(receipt) {
+      // A failed/pending checkpoint may leave a terminal receipt that the latest
+      // durable private state cannot represent. Do not invent a recovery success.
+      for (const field of ['context', 'operations', 'actors', 'organizations', 'projects', 'memberships', 'planSha256'] as const) {
+        requireCondition(equal(receipt[field], payload.receipt[field]), 'SETUP_FINAL_PRIVATE_STATE');
+      }
+      const final = structuredClone(payload); final.receipt = structuredClone(receipt);
+      validatePrivateRecoveryPayload(final, receipt.context);
+      const path = join(directory, 'final.enc.json');
+      await writePrivateJson(path, encryptRecovery(final, recipientSpki, receipt.context)); return path;
+    },
   };
 }
 /** The real entry always stops before this offline/file path. It exists so the
@@ -747,12 +795,14 @@ async function setupCommandFiles(args: string[], environment: NodeJS.ProcessEnv)
   const paths = setupRunPaths(environment.RUNNER_TEMP ?? '', workflowRunId, attempt);
   const root = await lstat(paths.root); requireCondition(root.isDirectory() && !root.isSymbolicLink() && resolve(await realpath(paths.root)) === paths.root, 'SETUP_RUN_ROOT');
   const planRaw = await readPrivateText(join(paths.inputs, 'plan.json'));
+  requireSetupTransportSize(planRaw);
   const unvalidated = JSON.parse(planRaw) as SetupPlan;
   const context: SetupPlan['context'] = { ...unvalidated.context, projectRef: STAGE_REF, candidateSha: parsed.options['candidate-sha'], workflowRunId,
     workflowRunAttempt: attempt, phase: parsed.options.phase as SetupPlan['context']['phase'], checkpointSequence: 0 };
   const plan = validateSetupPlan(planRaw, parsed.options['plan-sha256'], context); requireFoundationPlan(plan);
-  const resume = plan.context.phase === 'setup-complete'
-    ? validateSetupResume(await readPrivateText(join(paths.inputs, 'resume.json')), parsed.options['resume-sha256'], plan, plan.prior!.artifact) : null;
+  const resumeRaw = plan.context.phase === 'setup-complete' ? await readPrivateText(join(paths.inputs, 'resume.json')) : null;
+  if (resumeRaw !== null) requireSetupTransportSize(resumeRaw);
+  const resume = resumeRaw !== null ? validateSetupResume(resumeRaw, parsed.options['resume-sha256'], plan, plan.prior!.artifact) : null;
   const recipient = await readPrivateText(join(paths.inputs, 'recipient.pem'), 4096);
   if (parsed.command === 'prepare') {
     // mkdir without recursive/exist-ok is the run-specific create-new barrier.
@@ -776,13 +826,19 @@ async function setupCommandFiles(args: string[], environment: NodeJS.ProcessEnv)
   const keys = projection(z.object({ publicKey: z.string(), setupKey: z.string(), setupKeyIdentifier: z.string() }).strict(), await readPrivateJson(join(paths.inputs, 'server-credentials.json')));
   const transport = createSetupTransports(plan, { ...keys, credentials: prepared.credentials, ...(resume ? { resume } : {}) });
   const checkpoint = createPrivateSetupCheckpoint(prepared, recipient, paths.run, artifact, binding.independentlyVerifiedExpected as ArtifactBinding);
-  return runFoundation(plan, resume, transport, checkpoint);
+  const receipt = await runFoundation(plan, resume, transport, checkpoint);
+  await checkpoint.persistFinal(receipt); return receipt;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     runSetupCli(process.argv.slice(2));
     // This line cannot run until a later reviewed change replaces the unconditional stop.
-    void setupCommandFiles(process.argv.slice(2), process.env).then(receipt => { if (receipt) process.stdout.write(`${JSON.stringify(safeSetupStatus(receipt))}\n`); })
+    void setupCommandFiles(process.argv.slice(2), process.env).then(receipt => {
+      if (receipt) {
+        process.stdout.write(`${JSON.stringify(safeSetupStatus(receipt))}\n`);
+        if (!['AWAITING_ENTITLEMENT_REVIEW', 'FOUNDATION_PREPARED'].includes(receipt.status)) process.exitCode = 1;
+      }
+    })
       .catch(() => { process.stderr.write('SETUP_REFUSED\n'); process.exitCode = 1; });
   } catch { process.stderr.write('SETUP_REFUSED\n'); process.exitCode = 1; }
 }
