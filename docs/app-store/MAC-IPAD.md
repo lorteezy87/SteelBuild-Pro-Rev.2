@@ -1,5 +1,25 @@
 # iPad and Mac delivery
 
+## Verified Mac upload — 2026-10-16
+
+Mac version **1.0.0**, build **20261016**, source commit
+`f1e5edef78f749063e6014e1c81e51a5960bf817` was signed, packaged, validated and
+uploaded by [release run 38969556839](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/38969556839).
+The receipt confirms **MAC_OS**, exact version/build, **VALID** processing and
+updated en-US What to Test. The package contains arm64 and x86_64; both app and
+installer signatures were verified. Package SHA256:
+`7b4bffbaa3b0942c63436e6c8ba22b31248b7cec767227719f37a800c2344ee3`.
+PR #559 is merged. All five required main CI jobs passed in run 38969470989;
+the dependency audit is still an advisory failure. **App Review was not submitted.**
+
+Before App Review, complete the separately reviewed native CORS backend rollout,
+authenticated Mac/iPad project/upload/export/editing acceptance using a dedicated
+test workspace, real app screenshots, listing metadata, reviewer account and
+owner review contact details. The Mac upload proves packaging and Apple processing,
+not those authenticated product workflows. Production handlers differ from current
+main in some functions, so replacing every live handler from main is not a safe
+shortcut for the CORS rollout; retain the existing reviewed-backend release process.
+
 ## iPad: already in the uploaded iOS release
 
 Version 1.0.0, build 20261016, commit bc6380b5fbe0385411f6e1cf06e4eff2b3a1bcbb
@@ -34,7 +54,8 @@ for development validation. No App Store upload occurs.
 Run 38953091100 proved the universal binary, strict local signature verification,
 and rendered public shell launch. Its screenshot showed the marketing page; the
 subsequent change starts at /Dashboard so a fresh session reaches sign-in.
-The workflow's final launch evidence must be checked for that change.
+Final development run 38954754567 confirmed rendered sign-in and the exact native
+origin steelbuild://localhost; its screenshot was inspected.
 
 Development artifacts are not Apple distribution-signed or notarized. A local
 ad-hoc signature is not App Store or Gatekeeper release approval.
@@ -53,7 +74,8 @@ backend code. Eighty-seven focused CORS and Stripe handler tests passed locally.
 
 ## Mac App Store prerequisites
 
-The Mac development app has not been uploaded. Owner-side signing work:
+The Mac distribution app has now been uploaded successfully. The signing setup
+and repeatable release path are:
 
 1. Create a Mac App Store Connect provisioning profile for com.steelbuildpro.app
    (register/enable the macOS identifier if required). Name it
@@ -65,9 +87,9 @@ The Mac development app has not been uploaded. Owner-side signing work:
    GitHub app-store environment. Do not send private keys or passwords in chat.
    The existing Apple Distribution application certificate may be reused if it
    is valid for this Mac profile.
-4. After review and required checks, implement/execute the gated Mac distribution
-   signing, productbuild packaging and App Store upload using those credentials.
-   Verify the Apple receipt matches platform MAC_OS, version and build.
+4. Run the gated Mac App Store release workflow from main for future builds.
+   It performs distribution signing, productbuild packaging, Apple validation,
+   optional upload, and receipt checks for MAC_OS plus exact version/build.
 5. Test the signed sandboxed app: sign-in, project access, uploads, downloads,
    file exports, external links, keyboard editing and window resizing. Camera
    capture and protected workflows are not yet accepted on Mac.
@@ -104,8 +126,8 @@ submit App Review or make authenticated workflow acceptance unnecessary.
 
 Owner-created profile inspected on 2026-10-16: OSX, exact bundle ID,
 App Store distribution, unexpired. No private key or password was uploaded in chat.
-The owner reports the three Mac secrets are stored in the app-store environment;
-actual import/signing validation must confirm their contents.
+The three Mac secrets in app-store were confirmed usable by private-key identity
+matching, successful distribution signing, installer packaging and Apple validation.
 
 First signed run 38965878832 confirmed both signing identities, the universal app
 signature, exact entitlements, and installer signature. Apple validation rejected
@@ -116,5 +138,11 @@ generated signature resources. The temporary signing directory stays private.
 
 A fresh GitHub main-head comparison runs immediately before the upload command,
 after package validation, so approval queues/build delays cannot release stale main.
-Nineteen focused gate/receipt/permissions tests passed locally; live Apple
-validation of the permission correction is still required.
+Nineteen focused gate/receipt/permissions tests passed locally. Corrected-package
+Apple validation passed in run 38968083388, and the main release upload/VALID receipt
+passed in run 38969556839.
+
+Future iOS release follow-up: make the existing iOS receipt matcher explicitly
+require platform IOS as well as marketing/build versions now that both platforms
+can share those numbers. The uploaded iOS build was verified before this Mac upload;
+the new Mac matcher already requires MAC_OS.
