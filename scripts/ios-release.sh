@@ -97,13 +97,138 @@ if (config.appId !== 'com.steelbuildpro.app' || config.server?.url) throw new Er
 JS
 mkdir -p ios/App/output
 archive="$release_tmp/SteelBuild-Pro.xcarchive"
-# Keep archive signing automatic at the project level. A command-line profile override
-# propagates into Swift package resource targets, which cannot accept provisioning profiles.
-# ExportOptions below applies the validated App Store profile only to the application bundle.
+# Apply manual distribution signing only to the App target's Release configuration.
+# Command-line signing overrides propagate into Swift package resource targets, which
+# cannot accept provisioning profiles or a distribution signing identity.
+export IOS_PROFILE_UUID="$profile_uuid"
+python3 - <<'PY'
+import os, re
+from pathlib import Path
+
+path = Path('ios/App/App.xcodeproj/project.pbxproj')
+text = path.read_text()
+matches = []
+for match in re.finditer(r'/\\* Release \\*/ = \\{', text):
+    end = text.find('\n\t\t};', match.start())
+    if end != -1:
+        block = text[match.start():end]
+        if 'PRODUCT_BUNDLE_IDENTIFIER = com.steelbuildpro.app;' in block:
+            matches.append((match.start(), end))
+if len(matches) != 1:
+    raise SystemExit(f'Expected one App Release build configuration, found {len(matches)}.')
+start, end = matches[0]
+block = text[start:end]
+block, style_count = re.subn(
+    r'(?m)^(\\s*)CODE_SIGN_STYLE = Automatic;
+  save_diagnostics "$release_tmp/archive.log"
+  fail 'Xcode archive failed. Inspect this run with a signing administrator; no build was uploaded.'
+fi
+export IOS_ARCHIVE_PATH="$archive"
+python3 - <<'PY'
+import os, plistlib
+from pathlib import Path
+app = Path(os.environ['IOS_ARCHIVE_PATH']) / 'Products/Applications/App.app'
+p = plistlib.loads((app / 'Info.plist').read_bytes())
+assert p['CFBundleIdentifier'] == 'com.steelbuildpro.app'
+assert p['CFBundleVersion'] == os.environ['IOS_BUILD_NUMBER']
+assert p['CFBundleShortVersionString'] == os.environ['IOS_VERSION']
+assert p.get('ITSAppUsesNonExemptEncryption') is False
+assert (app / 'PrivacyInfo.xcprivacy').exists()
+options = {'method': 'app-store-connect', 'destination': 'upload' if os.environ.get('IOS_UPLOAD') == 'true' else 'export',
+  'signingStyle': 'manual', 'teamID': os.environ['IOS_TEAM_ID'], 'signingCertificate': 'Apple Distribution',
+  'provisioningProfiles': {'com.steelbuildpro.app': os.environ['IOS_PROFILE_UUID']},
+  'manageAppVersionAndBuildNumber': False, 'testFlightInternalTestingOnly': False, 'uploadSymbols': True}
+(Path(os.environ['IOS_RELEASE_TEMP']) / 'ExportOptions.plist').write_bytes(plistlib.dumps(options))
+PY
+upload_args=()
+if [[ "${IOS_UPLOAD:-false}" == true ]]; then
+  upload_args=(-allowProvisioningUpdates -authenticationKeyPath "$release_tmp/AuthKey.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+fi
+if ! xcodebuild -exportArchive -archivePath "$archive" -exportPath "$release_tmp/export" \
+  -exportOptionsPlist "$release_tmp/ExportOptions.plist" "${upload_args[@]}" > "$release_tmp/export.log" 2>&1; then
+  save_diagnostics "$release_tmp/export.log"
+  fail 'Archive passed, but export/upload failed. App Store Connect receipt is unconfirmed.'
+fi
+if [[ "${IOS_UPLOAD:-false}" == true ]]; then
+  ASC_KEY_PATH="$release_tmp/AuthKey.p8" node scripts/ios-verify-upload.mjs
+else
+  cp "$release_tmp/export/"*.ipa ios/App/output/
+fi
+python3 - <<'PY'
+import json, os
+from pathlib import Path
+result = {'commit': os.environ['GITHUB_SHA'], 'bundleId': 'com.steelbuildpro.app',
+  'version': os.environ['IOS_VERSION'], 'buildNumber': os.environ['IOS_BUILD_NUMBER'],
+  'archive': 'passed', 'export': 'passed', 'uploadRequested': os.environ.get('IOS_UPLOAD') == 'true',
+  'appReviewSubmitted': False}
+Path('ios/App/output/release-evidence.json').write_text(json.dumps(result, indent=2) + '\n')
+PY
+echo 'Signed archive and export verified. App Review submission remains a separate step.'
+,
+    lambda m: (
+        f'{m.group(1)}CODE_SIGN_IDENTITY = "Apple Distribution";\\n'
+        f'{m.group(1)}CODE_SIGN_STYLE = Manual;\\n'
+        f'{m.group(1)}PROVISIONING_PROFILE_SPECIFIER = "{os.environ["IOS_PROFILE_UUID"]}";'
+    ),
+    block,
+)
+block, team_count = re.subn(
+    r'(?m)^(\\s*)DEVELOPMENT_TEAM = .*;
+  save_diagnostics "$release_tmp/archive.log"
+  fail 'Xcode archive failed. Inspect this run with a signing administrator; no build was uploaded.'
+fi
+export IOS_ARCHIVE_PATH="$archive" IOS_PROFILE_UUID="$profile_uuid"
+python3 - <<'PY'
+import os, plistlib
+from pathlib import Path
+app = Path(os.environ['IOS_ARCHIVE_PATH']) / 'Products/Applications/App.app'
+p = plistlib.loads((app / 'Info.plist').read_bytes())
+assert p['CFBundleIdentifier'] == 'com.steelbuildpro.app'
+assert p['CFBundleVersion'] == os.environ['IOS_BUILD_NUMBER']
+assert p['CFBundleShortVersionString'] == os.environ['IOS_VERSION']
+assert p.get('ITSAppUsesNonExemptEncryption') is False
+assert (app / 'PrivacyInfo.xcprivacy').exists()
+options = {'method': 'app-store-connect', 'destination': 'upload' if os.environ.get('IOS_UPLOAD') == 'true' else 'export',
+  'signingStyle': 'manual', 'teamID': os.environ['IOS_TEAM_ID'], 'signingCertificate': 'Apple Distribution',
+  'provisioningProfiles': {'com.steelbuildpro.app': os.environ['IOS_PROFILE_UUID']},
+  'manageAppVersionAndBuildNumber': False, 'testFlightInternalTestingOnly': False, 'uploadSymbols': True}
+(Path(os.environ['IOS_RELEASE_TEMP']) / 'ExportOptions.plist').write_bytes(plistlib.dumps(options))
+PY
+upload_args=()
+if [[ "${IOS_UPLOAD:-false}" == true ]]; then
+  upload_args=(-allowProvisioningUpdates -authenticationKeyPath "$release_tmp/AuthKey.p8" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+fi
+if ! xcodebuild -exportArchive -archivePath "$archive" -exportPath "$release_tmp/export" \
+  -exportOptionsPlist "$release_tmp/ExportOptions.plist" "${upload_args[@]}" > "$release_tmp/export.log" 2>&1; then
+  save_diagnostics "$release_tmp/export.log"
+  fail 'Archive passed, but export/upload failed. App Store Connect receipt is unconfirmed.'
+fi
+if [[ "${IOS_UPLOAD:-false}" == true ]]; then
+  ASC_KEY_PATH="$release_tmp/AuthKey.p8" node scripts/ios-verify-upload.mjs
+else
+  cp "$release_tmp/export/"*.ipa ios/App/output/
+fi
+python3 - <<'PY'
+import json, os
+from pathlib import Path
+result = {'commit': os.environ['GITHUB_SHA'], 'bundleId': 'com.steelbuildpro.app',
+  'version': os.environ['IOS_VERSION'], 'buildNumber': os.environ['IOS_BUILD_NUMBER'],
+  'archive': 'passed', 'export': 'passed', 'uploadRequested': os.environ.get('IOS_UPLOAD') == 'true',
+  'appReviewSubmitted': False}
+Path('ios/App/output/release-evidence.json').write_text(json.dumps(result, indent=2) + '\n')
+PY
+echo 'Signed archive and export verified. App Review submission remains a separate step.'
+,
+    lambda m: f'{m.group(1)}DEVELOPMENT_TEAM = {os.environ["IOS_TEAM_ID"]};',
+    block,
+)
+if style_count != 1 or team_count != 1:
+    raise SystemExit('App Release signing settings were not in the expected form.')
+path.write_text(text[:start] + block + text[end:])
+PY
 if ! xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$archive" \
   CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" MARKETING_VERSION="$IOS_VERSION" \
-  DEVELOPMENT_TEAM="$IOS_TEAM_ID" CODE_SIGN_IDENTITY='Apple Distribution' \
   archive > "$release_tmp/archive.log" 2>&1; then
   save_diagnostics "$release_tmp/archive.log"
   fail 'Xcode archive failed. Inspect this run with a signing administrator; no build was uploaded.'
