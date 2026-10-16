@@ -1,8 +1,8 @@
 # Drawing staging approval binding amendment
 
-Date: 2026-10-16. Status: **Written amendment awaiting owner review**.
+Date: 2026-10-16. Status: **WRITTEN AMENDMENT APPROVED BY THE OWNER**.
 
-The owner selected manual staging approval with post-creation fingerprints in this chat, including its effect on other jobs using `staging-backend`. This amendment specifies that choice. Written-spec review and the updated implementation-plan review precede implementation and settings changes; completed setup/recovery Tasks 1–3 are not restarted.
+The owner selected manual staging approval with post-creation fingerprints in this chat, including its effect on other jobs using `staging-backend`, then explicitly approved this written amendment and requested the updated implementation plan with continued subagent-driven work. Written-spec review is complete; updated implementation-plan review still precedes implementation and settings changes. Completed setup/recovery Tasks 1–3 are not restarted. Production stays untouched until staging acceptance and all required release checks pass; the exact shared-database release boundaries below also remain in force.
 
 This supplements the approved [setup and recovery design](2026-10-16-drawing-staging-setup-recovery-design.md) and its [implementation plan](../plans/2026-10-16-drawing-staging-setup-recovery.md). It replaces only the setup dispatch-digest timing/channel and related workflow/operator requirements. The foundation remains separate from authenticated drawing acceptance. Production stays untouched during this work.
 
