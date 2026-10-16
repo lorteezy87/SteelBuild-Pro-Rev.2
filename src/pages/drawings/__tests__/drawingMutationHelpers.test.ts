@@ -12,10 +12,13 @@ describe("drawing source edit containment", () => {
     expect(() => buildDrawingMetadataUpdate(current, { [field]: "different" })).toThrow(/source.*revision/i);
   });
   it("omits unchanged source values so a metadata save cannot overwrite a newer source", () => {
-    expect(buildDrawingMetadataUpdate(current, { ...current, title: "Corrected title", pdf_page: "2" })).toEqual({ title: "Corrected title" });
+    expect(buildDrawingMetadataUpdate(current, { ...current, notes: "Safe note", pdf_page: "2" })).toEqual({ notes: "Safe note" });
   });
   it("does not coerce an unknown original page into page one", () => {
     expect(() => buildDrawingMetadataUpdate({ ...current, pdf_page: null }, { pdf_page: 1 })).toThrow();
+  });
+  it.each(['title', 'stage', 'set_approval_status', 'is_deleted', 'metadata', 'unexpected_field'])('rejects protected %s through metadata editing', field => {
+    expect(() => buildDrawingMetadataUpdate(current, { notes: 'safe', [field]: 'change' })).toThrow(/source.*revision|protected/i);
   });
 });
 

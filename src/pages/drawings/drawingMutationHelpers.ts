@@ -11,7 +11,9 @@ export function buildDrawingMetadataUpdate(
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
   const result = { ...patch };
-  for (const field of ["file_url", "pdf_page", "revision_number", "sheet_number", "drawing_set_id", "drawing_set_name", "project_id", "project_name", "extracted_text", "callouts", "hyperlinks", "upload_batch_id"]) {
+  const allowed = new Set(["notes", "reviewer", "due_date", "spec_section", "priority_flag", "fabrication_start_date", "fabrication_finish_date", "ready_for_install_date", "final_delivery_date", "markup_scale", "scale_status"]);
+  for (const field of Object.keys(result)) {
+    if (allowed.has(field)) continue;
     if (!Object.hasOwn(result, field)) continue;
     const comparable = (value: unknown) => value !== null && typeof value === "object" ? JSON.stringify(value) : String(value ?? "");
     if (comparable(current[field]) !== comparable(result[field])) {

@@ -31,7 +31,7 @@ import { withReviewedSovSaves } from './sovLifecycle';
 import { withSubmittalLifecycle } from './submittalLifecycle';
 import { createNumberedRecord } from './numberedCreate';
 import type { NumberedKind } from './numberedCreate';
-import type { EntityRequestOptions, Insert, RowWithAliases, Update } from './supabaseTypes';
+import type { EntityClient, EntityRequestOptions, Insert, RowWithAliases, Update } from './supabaseTypes';
 import type { Json } from '@/types/supabase';
 
 /** Numbering, collected fields and retry identity are committed together. */
@@ -59,6 +59,66 @@ function atomicCreateClient<T extends NumberedKind>(tableName: T) {
       return created;
     },
   };
+}
+
+const DRAWING_METADATA = ['notes', 'reviewer', 'due_date', 'spec_section', 'priority_flag', 'fabrication_start_date', 'fabrication_finish_date', 'ready_for_install_date', 'final_delivery_date', 'markup_scale', 'scale_status'];
+const SET_METADATA = ['description', 'notes', 'due_date', 'eor_reviewer', 'area_sequence', 'material_impacted', 'long_lead_impact', 'titleblock_title_rect', 'titleblock_number_rect', 'titleblock_revision_rect'];
+
+/** Client containment mirrors the reviewed server allowlist; RLS remains authoritative. */
+function drawingMetadataClient<T extends 'drawings' | 'drawing_sets' | 'drawing_revisions'>(table: T, allowed: readonly string[]): EntityClient<T> {
+  const base = createEntityClient(table);
+  const held = async (): Promise<never> => { throw new Error('This drawing source/lifecycle operation is held. Use the reviewed drawing or submittal workflow.'); };
+  const validatePatch = (patch: Update<T>) => {
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid drawing metadata patch.');
+    const protectedFields = Object.keys(patch).filter(key => !allowed.includes(key));
+    if (protectedFields.length) throw new Error(`Protected drawing fields are held: ${protectedFields.join(', ')}. Use the reviewed drawing or submittal workflow.`);
+    if (!Object.keys(patch).length) throw new Error('No drawing metadata changes to save.');
+  };
+  return {
+    ...base, create: held, bulkCreate: held, delete: held, bulkDelete: held,
+    update: async (id, patch, options) => {
+      validatePatch(patch);
+      // Do not use generic update: it adds protected caller updated_at.
+      const { data, error } = await (options?.client ?? supabase).from(table as 'drawings' | 'drawing_sets' | 'drawing_revisions')
+        .update(patch as never).eq('id', id).select().single();
+      if (error) throw new SupabaseOperationError(table, 'update', error);
+      return addAliases<RowWithAliases<T>>(data as unknown as RowWithAliases<T>, table);
+    },
+    bulkUpdate: async (ids, patch) => {
+      validatePatch(patch);
+      if (ids.length > 500) throw new Error('Select at most 500 drawings for one metadata update.');
+      const { data, error } = await supabase.from(table as 'drawings' | 'drawing_sets' | 'drawing_revisions').update(patch as never).in('id', ids).select();
+      if (error) throw new SupabaseOperationError(table, 'bulkUpdate', error);
+      return (data || []).map(row => addAliases<RowWithAliases<T>>(row as unknown as RowWithAliases<T>, table));
+    },
+  };
+}
+
+type CalibrationSource = Pick<RowWithAliases<'drawings'>, 'id' | 'project_id' | 'file_url' | 'pdf_page' | 'revision_number' | 'updated_at' | 'markup_scale'>;
+
+/** One conditional UPDATE: concurrent replacement/calibration must still match every predicate. */
+async function updateDrawingCalibration(id: string, scale: number | null, source: CalibrationSource): Promise<RowWithAliases<'drawings'>> {
+  const nullableText = (value: unknown) => value === null || (typeof value === 'string' && value.trim().length > 0);
+  const positive = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;
+  if (!source || source.id !== id || !id || typeof source.project_id !== 'string' || !source.project_id.trim() ||
+      !nullableText(source.file_url) || !nullableText(source.revision_number) ||
+      !(source.pdf_page === null || (positive(source.pdf_page) && Number.isInteger(source.pdf_page))) ||
+      typeof source.updated_at !== 'string' || !source.updated_at.trim() || !Number.isFinite(Date.parse(source.updated_at)) ||
+      !(source.markup_scale === null || positive(source.markup_scale))) {
+    throw new Error('Complete drawing source/version required for calibration. Reload this PDF before saving.');
+  }
+  if (!(scale === null || positive(scale))) throw new Error('Calibration scale must be a positive finite number or null.');
+  let query = supabase.from('drawings').update({ markup_scale: scale }).eq('id', id).eq('project_id', source.project_id);
+  // Explicit null predicates are essential: omission would permit an unknown source to match anything.
+  query = source.file_url === null ? query.is('file_url', null) : query.eq('file_url', source.file_url);
+  query = source.pdf_page === null ? query.is('pdf_page', null) : query.eq('pdf_page', source.pdf_page);
+  query = source.revision_number === null ? query.is('revision_number', null) : query.eq('revision_number', source.revision_number);
+  query = query.eq('updated_at', source.updated_at);
+  query = source.markup_scale === null ? query.is('markup_scale', null) : query.eq('markup_scale', source.markup_scale);
+  const { data, error } = await query.select().maybeSingle();
+  if (error) throw new SupabaseOperationError('drawings', 'updateCalibration', error);
+  if (!data) throw new Error('Drawing source or calibration changed, or access was removed. Reload the PDF and review its scale.');
+  return addAliases<RowWithAliases<'drawings'>>(data, 'drawings');
 }
 
 // ─── Entity registry ──────────────────────────────────────────────────────────
@@ -115,10 +175,10 @@ export const entities = {
     },
   },
   RFI:                   createEntityClient('rfis'),
-  Drawing:               createEntityClient('drawings'),
+  Drawing: { ...drawingMetadataClient('drawings', DRAWING_METADATA), updateCalibration: updateDrawingCalibration },
   DrawingActivity:       createEntityClient('drawing_activity'),
   DrawingSet: {
-    ...createEntityClient('drawing_sets'),
+    ...drawingMetadataClient('drawing_sets', SET_METADATA),
     /**
      * Soft-delete a set AND cascade-soft-delete every child sheet, in a single
      * transaction. Returns the number of child sheets that were deleted.
@@ -139,7 +199,7 @@ export const entities = {
   // every rectangular zone on a sheet revision can link to RFIs, work
   // packages, deliveries, photos, inspections, etc. via a polymorphic
   // join. RLS gates all three on user_has_project_access(project_id).
-  DrawingRevision:       createEntityClient('drawing_revisions'),
+  DrawingRevision:       drawingMetadataClient('drawing_revisions', []),
   DrawingZone:           createEntityClient('drawing_zones'),
   DrawingLink:           createEntityClient('drawing_links'),
   // ── Drawing control module (20260526240000) ─────────────────────
