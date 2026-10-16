@@ -29,7 +29,24 @@ export function requireFoundationPlan(plan: SetupPlan, now = Date.now()): SetupP
   requireCondition(plan.organizations.every(o => o.name === o.name.trim()) && plan.projects.every(p => p.name === p.name.trim() && p.number === p.number.trim()), 'SETUP_TRIMMED_NAMES_REQUIRED');
   // 300 bytes bounds each strict child projection; 64KiB reserves journal, identities, credentials and headers.
   const maximumChildren = 4 * (64 + 2 * plan.prerequisiteDetails.sideEffects.activeCostCodeTemplates.length) + 9;
-  requireCondition(Buffer.byteLength(boundedJson(plan)) + maximumChildren * 300 + 65_536 <= 1_048_576, 'SETUP_RECOVERY_CAPACITY'); return plan;
+  const privateBytes = Buffer.byteLength(boundedJson(plan)) + maximumChildren * 300 + 65_536;
+  requireCondition(privateBytes <= 1_048_576, 'SETUP_RECOVERY_CAPACITY');
+  // The encrypted envelope is also written through the 1MiB JSON writer. Reserve
+  // base64 expansion plus 8KiB for the bounded RSA wrapper, context and fields.
+  requireCondition(4 * Math.ceil(privateBytes / 3) + 8192 <= 1_048_576, 'SETUP_ENVELOPE_CAPACITY');
+  // Calculation-only UUIDs never enter an observation or receipt. Every seed row
+  // has the exact reviewed text width; event/counter/member projections have
+  // fixed bounded fields. 64KiB covers all nonchild identities and JSON framing.
+  const sizingId = '00000000-0000-4000-8000-000000000000';
+  let observationBytes = 65_536 + Buffer.byteLength(boundedJson(plan.prerequisiteDetails.sideEffects.activeCostCodeTemplates)) + 9 * 512;
+  for (const project of plan.projects) {
+    for (const recipe of seedRecipes(plan, { alias: project.alias, id: sizingId, orgId: sizingId, createdBy: sizingId, name: project.name, number: project.number })) {
+      observationBytes += Buffer.byteLength(boundedJson({ ...recipe, id: sizingId, projectId: sizingId })) + 1;
+      if (recipe.table === 'action_items' || recipe.table === 'cost_codes') observationBytes += 512;
+    }
+    observationBytes += 2 * 256;
+  }
+  requireCondition(observationBytes <= 1_048_576, 'SETUP_OBSERVATION_CAPACITY'); return plan;
 }
 export function computeTotp(base32Secret: string, timeSeconds: number, digits: 6 | 8 = 6): string {
   requireCondition(/^[A-Z2-7]{16,128}$/.test(base32Secret) && Number.isSafeInteger(timeSeconds) && timeSeconds >= 0
@@ -252,7 +269,7 @@ export async function runFoundation(plan: SetupPlan, resume: SetupResume | null,
     receipt.operations.push(intent); receipt.context.checkpointSequence++; receipt.status = 'UNKNOWN_COMMIT_STATE';
     try { await checkpoint.persistIntent({ intent: structuredClone(intent), receipt: structuredClone(receipt) }); }
     catch { throw new Error('SETUP_CHECKPOINT_FAILED'); }
-    let observedId: string | undefined; let remoteReturned = false;
+    let observedId: string | undefined; let remoteReturned = false; let resultPersistenceStarted = false;
     try {
       fresh(); const value = await dispatch(); remoteReturned = true;
       const candidate = structuredClone(before); const applied = apply(value, candidate); observedId = uuid.parse(applied.id);
@@ -271,6 +288,7 @@ export async function runFoundation(plan: SetupPlan, resume: SetupResume | null,
         validateFoundationObservation(plan, candidate, observed, previous, authenticated); previous = structuredClone(observed); candidate.census = censusFrom(plan, observed);
       }
       validateFoundationReceipt(candidate, plan);
+      resultPersistenceStarted = true;
       await checkpoint.persistResult({ result: structuredClone(result), receipt: structuredClone(candidate), ...(applied.mfa ? { mfa: { ...applied.mfa } } : {}) });
       receipt = candidate;
     } catch (error) {
@@ -278,8 +296,9 @@ export async function runFoundation(plan: SetupPlan, resume: SetupResume | null,
       const result: SetupResult = { sequence: intent.sequence + 1, kind: 'result', operationId: intent.operationId, outcome,
         ...(outcome === 'UNKNOWN' && observedId ? { observedId } : {}) };
       receipt.operations.push(result); receipt.context.checkpointSequence++; receipt.status = outcome === 'UNKNOWN' ? 'UNKNOWN_COMMIT_STATE' : 'STOPPED';
-      // Never retry a result checkpoint that may already have persisted a success.
-      if (!remoteReturned) try { await checkpoint.persistResult({ result: structuredClone(result), receipt: structuredClone(receipt) }); } catch { /* pending/unknown is retained */ }
+      // A known returned ID survives failed readback in one best-effort UNKNOWN
+      // checkpoint. Never retry persistence that may already have stored success.
+      if (!resultPersistenceStarted) try { await checkpoint.persistResult({ result: structuredClone(result), receipt: structuredClone(receipt) }); } catch { /* pending/unknown is retained */ }
       throw new Error('SETUP_OPERATION_STOPPED');
     }
   }
@@ -320,7 +339,7 @@ export async function runFoundation(plan: SetupPlan, resume: SetupResume | null,
             && !candidate.organizations.some(o => o.id === value.id), 'SETUP_ORG_RESPONSE');
           candidate.organizations.push({ alias, id: uuid.parse(value.id), createdBy: actor.id, ownerId: actor.id }); return { id: value.id };
         });
-      requireCondition(receipt.census, 'SETUP_CENSUS_REQUIRED');
+      fresh(); await observe(); fresh(); requireCondition(receipt.census, 'SETUP_CENSUS_REQUIRED');
       return validateFoundationReceipt({ ...receipt, status: 'AWAITING_ENTITLEMENT_REVIEW' }, plan);
     }
     for (const alias of ['A', 'B'] as const) await operation({ action: 'configure-organization', actor: owner(alias), organization: alias },
@@ -359,7 +378,7 @@ export async function runFoundation(plan: SetupPlan, resume: SetupResume | null,
       checkSession({ ...actorFor('mfa'), confirmed: true, factors: [] }, value.session, 'aal2');
       candidate.actors.find(a => a.alias === 'mfa')!.mfa = { factorId: factor.factorId, verified: true }; return { id: factor.factorId };
     }, async () => { await current('mfa', 'aal2'); });
-    await observe(); requireCondition(receipt.census, 'SETUP_CENSUS_REQUIRED');
+    fresh(); await observe(); fresh(); requireCondition(receipt.census, 'SETUP_CENSUS_REQUIRED');
     return validateFoundationReceipt({ ...receipt, status: 'FOUNDATION_PREPARED' }, plan);
   } catch { return receipt; }
 }
@@ -399,6 +418,16 @@ export function projectCreateResponse(plan: SetupPlan, alias: SetupProjectAlias,
     && row.project_number === requested.number && session.actorId === organization.ownerId && session.expiresAt > Date.now() / 1000, 'SETUP_PROJECT_PROVENANCE');
   return { alias, id: row.id, orgId: row.org_id, createdBy: session.actorId, name: row.name, number: row.project_number };
 }
+/** Decode only a complete zero-offset exact PostgREST census, including empty. */
+export function validateExactSetupRows(value: unknown, contentRange: string | null, maximum: number): Record<string, unknown>[] {
+  requireCondition(Number.isSafeInteger(maximum) && maximum >= 0 && maximum <= 256 && Array.isArray(value) && value.length <= maximum, 'SETUP_ROW_CAP');
+  const rows = value as unknown[];
+  const range = /^(0|[1-9][0-9]*)-(0|[1-9][0-9]*)\/(0|[1-9][0-9]*)$/.exec(contentRange ?? '');
+  const complete = range && range.slice(1).every(n => Number.isSafeInteger(Number(n)))
+    && Number(range[1]) === 0 && Number(range[2]) + 1 === rows.length && Number(range[3]) === rows.length;
+  requireCondition(rows.length === 0 ? contentRange === '*/0' : complete, 'SETUP_EXACT_RANGE_REQUIRED');
+  return rows.map(row => projection(z.record(z.unknown()), row));
+}
 export function createSetupTransports(planValue: SetupPlan, credentialsValue: SetupServerCredentials, network: typeof fetch = fetch): SetupTransports {
   const plan = structuredClone(requireFoundationPlan(planValue));
   const credentials = structuredClone(credentialsValue);
@@ -423,7 +452,7 @@ export function createSetupTransports(planValue: SetupPlan, credentialsValue: Se
     requireCondition(equal(privateCredentials, credentials.resume.recovery.credentials), 'SETUP_RESTORED_CREDENTIALS');
   } else requireCondition(!credentials.resume, 'SETUP_BOOTSTRAP_RESUME_FORBIDDEN');
   const fresh = () => { requireFoundationPlan(plan); requireCondition(Date.now() < deadline, 'SETUP_PHASE_DEADLINE'); };
-  const request = async (path: string, method: 'GET' | 'POST' | 'PATCH', headers: Record<string, string>, body?: unknown): Promise<unknown> => {
+  const request = async (path: string, method: 'GET' | 'POST' | 'PATCH', headers: Record<string, string>, body?: unknown, exactRows?: number): Promise<unknown> => {
     fresh(); const url = new URL(path, STAGE_ORIGIN);
     requireCondition(url.origin === STAGE_ORIGIN && !url.username && !url.password && !url.hash, 'SETUP_FIXED_TARGET');
     const attempts = method === 'GET' ? 2 : 1;
@@ -450,7 +479,7 @@ export function createSetupTransports(planValue: SetupPlan, credentialsValue: Se
           if (method !== 'GET' && [400, 401, 403, 404, 409, 422].includes(response.status) && code && rejectedCodes.includes(code)) throw new SetupRejected();
           throw new Error('SETUP_HTTP_FAILURE');
         }
-        return value;
+        return exactRows === undefined ? value : validateExactSetupRows(value, response.headers.get('content-range'), exactRows);
       } catch (error) {
         if (method !== 'GET' || attempt + 1 === attempts) throw error instanceof SetupRejected ? error : new Error('SETUP_REQUEST_FAILED');
       } finally { clearTimeout(timeout!); }
@@ -475,16 +504,16 @@ export function createSetupTransports(planValue: SetupPlan, credentialsValue: Se
     const actor = projectActorResponse(plan, alias, await request('/auth/v1/user', 'GET', actorHeaders(alias)), id);
     checkSession(actor, state.session, state.session.aal); return { actor, session: { ...state.session } };
   };
-  const caller = async (alias: ActorAlias, path: string, method: 'GET' | 'POST' | 'PATCH', body?: unknown) => {
+  const caller = async (alias: ActorAlias, path: string, method: 'GET' | 'POST' | 'PATCH', body?: unknown, exactRows?: number) => {
     const id = known.get(alias); requireCondition(id, 'SETUP_ACTOR_REQUIRED');
     if (method !== 'GET') await currentUser(alias, id);
-    return request(path, method, actorHeaders(alias), body);
+    return request(path, method, actorHeaders(alias), body, exactRows);
   };
   const rows = async (alias: ActorAlias, table: string, select: string, filters: Record<string, string>, max: number): Promise<Record<string, unknown>[]> => {
     const query = new URLSearchParams({ select, ...filters, limit: String(max + 1) });
-    const value = await caller(alias, `/rest/v1/${table}?${query}`, 'GET');
-    requireCondition(Array.isArray(value) && value.length <= max, 'SETUP_ROW_CAP');
-    return value.map(v => projection(z.record(z.unknown()), v));
+    // Preserve the response's exact range/count through request validation; a
+    // server-side cap cannot hide extra rows behind an expected-length array.
+    return await caller(alias, `/rest/v1/${table}?${query}`, 'GET', undefined, max) as Record<string, unknown>[];
   };
   const organizationRow = (alias: SetupOrganizationAlias, raw: unknown, ownerId: string): SetupOrganization => {
     const row = projection(z.object({ id: uuid, created_by: uuid, name: z.string(), slug: z.string(), plan: z.enum(['free', 'pro']), member_default_project_role: z.literal('viewer').nullable() }), raw);

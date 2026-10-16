@@ -463,8 +463,8 @@ async function foundationHarness(plan = foundationPlan(), resume: SetupResume | 
     async persistIntent(record) { intents.push(structuredClone(record.intent)); }, async persistResult(record) { results.push(structuredClone(record)); } };
   return { provision, plan, state, transports, checkpoint, writes, intents, results, snapshots };
 }
-async function completedHarness() {
-  const h = await foundationHarness(); const priorReceipt = await h.provision.runFoundation(h.plan, null, h.transports, h.checkpoint);
+async function completedHarness(bootstrapPlan = foundationPlan()) {
+  const h = await foundationHarness(bootstrapPlan); const priorReceipt = await h.provision.runFoundation(h.plan, null, h.transports, h.checkpoint);
   const plan: SetupPlan = { ...structuredClone(h.plan), context: { ...h.plan.context, phase: 'setup-complete', workflowRunId: '123457' },
     prior: { receiptSha256: testHash(JSON.stringify(priorReceipt)), artifact: artifactFixture() } };
   const resume: SetupResume = { context: plan.context, planSha256: testHash(JSON.stringify(plan)), recovery: { plan: h.plan, receipt: priorReceipt, credentials: recoveryFixture().credentials },
@@ -474,6 +474,94 @@ async function completedHarness() {
 }
 
 describe('finite foundation factory', () => {
+  it('setupFix1I1ExactHttpRangeCannotHideAdditionalRows', async () => {
+    const provision = await import('../drawing-cutover-provision.ts'); const body = [{ id: id(1) }, { id: id(2) }];
+    const decode = async (range: string | null, value: unknown = body, max = 2) => {
+      const response = Response.json(value, { headers: range === null ? {} : { 'Content-Range': range, 'Range-Unit': 'items' } });
+      return provision.validateExactSetupRows(await response.json(), response.headers.get('content-range'), max);
+    };
+    await expect(decode('0-1/2')).resolves.toEqual(body); await expect(decode('*/0', [], 0)).resolves.toEqual([]);
+    for (const range of ['0-1/3', '0-1/*', null, '1-2/2', '0-0/2', '0-2/2', '*/2', '0-1/02', '0-1/9007199254740993', 'bad']) {
+      await expect(decode(range)).rejects.toThrow('SETUP_EXACT_RANGE_REQUIRED');
+    }
+    await expect(decode('*/0', body)).rejects.toThrow(); await expect(decode('0-1/2', body, 1)).rejects.toThrow();
+  });
+  it('setupFix1I2MaximumWidthPlansRefuseBeforeWritesAndNearBoundaryFits', async () => {
+    const provision = await import('../drawing-cutover-provision.ts');
+    const widePlan = (count: number): SetupPlan => {
+      const plan = foundationPlan(); plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates = Array.from({ length: count }, (_, i) => ({
+        id: id(7000 + i), cost_code_number: String(i).padStart(100, 'C'), description: 'd'.repeat(500), category: 'k'.repeat(100),
+        default_budget_amount: `${'9'.repeat(30)}.${'9'.repeat(30)}`, sort_order: i, is_active: true as const,
+      })); plan.prerequisites.sideEffectsSha256 = testHash(JSON.stringify(plan.prerequisiteDetails!.sideEffects)); return plan;
+    };
+    // Independent width construction: no seedRecipes() oracle supplies these cost rows.
+    const independentCostRows = (plan: SetupPlan) => plan.projects.flatMap((project, projectIndex) => plan.prerequisiteDetails!.sideEffects.activeCostCodeTemplates.map((template, index) => ({
+      table: 'cost_codes', id: id(10000 + projectIndex * 256 + index), projectId: id(8000 + projectIndex), values: {
+        number: template.cost_code_number, description: template.description, category: template.category, phase: template.category,
+        budget: template.default_budget_amount, actual: '0', committed: '0', forecast: '0', projectName: project.name,
+        createdBy: id(projectIndex < 2 ? 9000 : 9001), autoSeeded: true, source: 'default_cost_codes',
+      },
+    })));
+    const maximum = widePlan(256);
+    expect(Buffer.byteLength(JSON.stringify({ children: independentCostRows(maximum), activeCostCodeTemplates: maximum.prerequisiteDetails!.sideEffects.activeCostCodeTemplates }))).toBeGreaterThan(1_048_576);
+    const network = vi.fn();
+    expect(() => provision.createSetupTransports(maximum, { publicKey: 'sb_publishable_synthetic', setupKey: 'sb_secret_synthetic',
+      setupKeyIdentifier: 'synthetic-key-id', credentials: recoveryFixture().credentials }, network)).toThrow(/CAPACITY/);
+    expect(network).not.toHaveBeenCalled();
+    let accepted = 0;
+    for (let n = 1; n <= 256; n++) { try { provision.requireFoundationPlan(widePlan(n)); accepted = n; } catch { break; } }
+    expect(accepted).toBeGreaterThan(64); expect(accepted).toBeLessThan(256);
+    expect(() => provision.requireFoundationPlan(widePlan(accepted + 1))).toThrow('SETUP_OBSERVATION_CAPACITY');
+    const near = widePlan(accepted); expect(Buffer.byteLength(JSON.stringify(independentCostRows(near)))).toBeLessThan(1_048_576);
+    const h = await completedHarness(near); const receipt = await provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+    expect(receipt.status).toBe('FOUNDATION_PREPARED'); expect(Buffer.byteLength(JSON.stringify(h.snapshots.at(-1)))).toBeLessThan(1_048_576);
+    const payload: PrivateRecoveryPayload = { plan: h.plan, receipt, credentials: structuredClone(h.resume.recovery.credentials) };
+    payload.credentials.find(c => c.alias === 'mfa')!.mfa = (h.results.find(r => (r as { mfa?: unknown }).mfa) as { mfa: { factorId: string; secret: string } }).mfa;
+    const recovery = await import('../drawing-cutover-recovery.ts');
+    const envelopeBytes = Buffer.byteLength(JSON.stringify(recovery.encryptRecovery(payload, recoveryKeys.publicKey, receipt.context)));
+    expect(envelopeBytes).toBeLessThan(1_048_576);
+  }, 60_000);
+  it('setupFix1I3ReturnedProjectIdSurvivesFailedReadbackInUnknownCheckpoint', async () => {
+    const h = await completedHarness(); const observe = h.transports.observe;
+    h.transports.observe = async scope => { if (scope.projects.length) throw new Error('synthetic post-create readback loss'); return observe(scope); };
+    const receipt = await h.provision.runFoundation(h.plan, h.resume, h.transports, h.checkpoint);
+    const final = h.results.at(-1) as { result: setup.SetupResult; receipt: FoundationReceipt };
+    expect(receipt.status).toBe('UNKNOWN_COMMIT_STATE'); expect(h.writes.filter(w => w.startsWith('create-project:'))).toHaveLength(1);
+    expect(final.result.outcome).toBe('UNKNOWN'); expect(final.result.observedId).toBe(h.state.projects[0].id);
+    expect(final.receipt).toEqual(receipt); expect(final.receipt.projects).toEqual([]);
+    expect(final.receipt.census).toEqual((h.results.at(-2) as { receipt: FoundationReceipt }).receipt.census);
+    expect(() => setup.validateFoundationReceipt(final.receipt, h.plan)).not.toThrow();
+    for (const readbackFails of [false, true]) {
+      const loss = await completedHarness(); const persist = loss.checkpoint.persistResult; const observed = loss.transports.observe; let attempts = 0;
+      if (readbackFails) loss.transports.observe = async scope => { if (scope.projects.length) throw new Error('readback loss'); return observed(scope); };
+      loss.checkpoint.persistResult = async record => {
+        const intent = record.receipt.operations.at(-2) as SetupIntent;
+        if (intent.action === 'create-project') { attempts++; throw new Error('checkpoint may have persisted'); }
+        return persist(record);
+      };
+      const result = await loss.provision.runFoundation(loss.plan, loss.resume, loss.transports, loss.checkpoint);
+      expect(result.status).toBe('UNKNOWN_COMMIT_STATE'); expect(attempts).toBe(1);
+      expect(loss.writes.filter(w => w.startsWith('create-project:'))).toHaveLength(1);
+    }
+  });
+  it.each(['none', 'owner', 'expiry'] as const)('setupFix1I4BootstrapTerminal_%s', async defect => {
+      const h = await foundationHarness(); const persist = h.checkpoint.persistResult; let snapshotsAtLastCheckpoint = -1;
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        h.checkpoint.persistResult = async record => { await persist(record);
+          if (record.receipt.organizations.length === 2) {
+            snapshotsAtLastCheckpoint = h.snapshots.length;
+            if (defect === 'owner') h.state.organizations[1].ownerId = id(9999);
+            if (defect === 'expiry') vi.setSystemTime(Date.parse(h.plan.expiresAt));
+          }
+        };
+        const receipt = await h.provision.runFoundation(h.plan, null, h.transports, h.checkpoint);
+        expect(receipt.status).toBe(defect === 'none' ? 'AWAITING_ENTITLEMENT_REVIEW' : 'STOPPED');
+        expect(h.writes.filter(w => w.startsWith('create-organization:'))).toHaveLength(2);
+        expect(receipt.census).toEqual((h.results.at(-1) as { receipt: FoundationReceipt }).receipt.census);
+        if (defect !== 'expiry') expect(h.snapshots.length).toBe(snapshotsAtLastCheckpoint + 1);
+      } finally { vi.useRealTimers(); }
+  });
   it('setupRfc6238Sha1Vectors', async () => {
     const { computeTotp } = await import('../drawing-cutover-provision.ts'); const secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
     expect(computeTotp(secret, 59, 8)).toBe('94287082'); expect(computeTotp(secret, 1111111109, 8)).toBe('07081804');
