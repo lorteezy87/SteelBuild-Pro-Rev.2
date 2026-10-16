@@ -106,3 +106,10 @@ Owner-created profile inspected on 2026-10-16: OSX, exact bundle ID,
 App Store distribution, unexpired. No private key or password was uploaded in chat.
 The owner reports the three Mac secrets are stored in the app-store environment;
 actual import/signing validation must confirm their contents.
+
+First signed run 38965878832 confirmed both signing identities, the universal app
+signature, exact entitlements, and installer signature. Apple validation rejected
+the payload with error 90255 because the secret-protection umask also made bundled
+resources root-only. The release now normalizes the public app payload to readable
+files/traversable directories before signing, and uses normal permissions for newly
+generated signature resources. The temporary signing directory stays private.
