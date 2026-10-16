@@ -1,7 +1,7 @@
 -- UNINSTALLED SOURCE CANDIDATE. Third ordered component, after atomic commands
 -- and adopted-source protection. An empty review manifest deliberately leaves
 -- capabilities false. No customer backfill, ledger stamp or hosted authority.
-BEGIN;
+-- Transaction control belongs to the reviewed whole-package manual wrapper.
 
 -- Holds created before this contract remain unbound. Releasing one cannot
 -- restore any revision's distribution status by guessing its former target.
@@ -616,7 +616,7 @@ CREATE TABLE steelbuild_drawing_revision.package_review (
 ALTER TABLE steelbuild_drawing_revision.package_review ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON steelbuild_drawing_revision.package_review FROM PUBLIC,anon,authenticated,service_role;
 
-CREATE FUNCTION steelbuild_drawing_revision.catalog_fingerprint() RETURNS text
+CREATE FUNCTION steelbuild_drawing_revision.catalog_snapshot() RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_schemas oid[];v_tables oid[];v_catalog jsonb;
 BEGIN
@@ -645,8 +645,13 @@ BEGIN
     'defaults',(SELECT jsonb_agg(to_jsonb(d) ORDER BY oid) FROM pg_default_acl d),
     'settings',(SELECT jsonb_agg(to_jsonb(s) ORDER BY setdatabase,setrole) FROM pg_db_role_setting s)
   ) INTO v_catalog;
-  RETURN encode(sha256(convert_to(v_catalog::text,'UTF8')),'hex');
+  RETURN v_catalog;
 END $$;
+REVOKE ALL ON FUNCTION steelbuild_drawing_revision.catalog_snapshot() FROM PUBLIC,anon,authenticated,service_role;
+CREATE FUNCTION steelbuild_drawing_revision.catalog_fingerprint() RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
+  SELECT encode(sha256(convert_to(steelbuild_drawing_revision.catalog_snapshot()::text,'UTF8')),'hex')
+$$;
 REVOKE ALL ON FUNCTION steelbuild_drawing_revision.catalog_fingerprint() FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE OR REPLACE FUNCTION public.get_drawing_command_capabilities(p_project_id uuid) RETURNS jsonb
@@ -677,4 +682,3 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.get_drawing_command_capabilities(uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.get_drawing_command_capabilities(uuid) TO authenticated;
-COMMIT;

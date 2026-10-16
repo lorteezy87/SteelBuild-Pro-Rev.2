@@ -1,6 +1,6 @@
 -- UNINSTALLED CANDIDATE. Requires the reviewed drawing command package.
 -- Public caller-JWT reader only; no direct access to observations or receipts.
-BEGIN;
+-- Transaction control belongs to the reviewed whole-package manual wrapper.
 CREATE INDEX drawing_source_observations_project_cursor
   ON steelbuild_drawing_revision.source_observations(project_id,receipt_id,drawing_id);
 
@@ -67,4 +67,3 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.get_drawing_source_observations(uuid,uuid,uuid,text,integer) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.get_drawing_source_observations(uuid,uuid,uuid,text,integer) TO authenticated;
-COMMIT;

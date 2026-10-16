@@ -1,9 +1,28 @@
 import { readFile } from 'node:fs/promises';
+import { validateDrawingPackage, requiredPrerequisites } from '../../../scripts/drawing-cutover-package.ts';
 import { initialize as baseInitialize, ids, actor, migrationUrl, sourcePath, type Database } from '../submittal-revision-evidence/fixture.ts';
 export { ids, actor, type Database };
-export const candidateUrl=new URL('../../candidates/drawing-set-revision-transaction.sql',import.meta.url);
-export const sourceCandidateUrl=new URL('../../candidates/drawing-adopted-source-protection.sql',import.meta.url);
-export const boundaryCandidateUrl=new URL('../../candidates/drawing-command-write-boundary.sql',import.meta.url);
+export const reviewedPayloads=validateDrawingPackage();
+export const manualInstallUrl=new URL('../../drawing-cutover/install-manual.sql',import.meta.url);
+/** Synthetic fixture bindings ONLY. These hashes/classifications are never hosted approval. */
+export async function prepareFixtureInstall(db:Database){
+  await db.exec('create schema if not exists supabase_migrations;create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[])');
+  const prerequisites=[];
+  for(const identity of requiredPrerequisites){
+    const row=(await db.query("select encode(sha256(convert_to(pg_get_functiondef($1::regprocedure),'UTF8')),'hex') sha256",[identity])).rows[0];
+    prerequisites.push({identity,sha256:row.sha256});
+  }
+  await db.query("select set_config('drawing_cutover.project_ref',$1,false),set_config('drawing_cutover.reviewed_source_commit',$2,false),set_config('drawing_cutover.reviewed_classification_sha256',$3,false),set_config('drawing_cutover.expected_prerequisites',$4,false)",
+    ['syntheticfixtureonly', 'a'.repeat(40),'b'.repeat(64),JSON.stringify(prerequisites)]);
+}
+export async function installReviewedFixturePackage(db:Database){
+  await prepareFixtureInstall(db);
+  await db.exec(await readFile(manualInstallUrl,'utf8'));
+}
+/** TEST ONLY: permit existing positive command cases AFTER disabled-install negatives. */
+export async function enableFixtureMutations(db:Database){
+  await db.exec('grant execute on function public.create_drawing_set_from_review(uuid,jsonb),public.apply_drawing_set_revision(uuid,jsonb) to authenticated');
+}
 export const path=`${ids.org}/uploads/${ids.project}/reviewed-new.pdf`;
 export const zoneA='abababab-abab-4bab-8bab-abababababab',zoneB='bcbcbcbc-bcbc-4cbc-8cbc-bcbcbcbcbcbc';
 export async function initialize(db:Database){

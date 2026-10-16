@@ -117,6 +117,7 @@ jobs:
             supabase/tests/commercial-lifecycle/package-lock.json
             supabase/tests/commercial-postgres/package-lock.json
             supabase/tests/submittal-revision-evidence/package-lock.json
+            supabase/tests/drawing-set-revision-transaction/package-lock.json
       - name: Verify transactional create and reviewed lifecycle boundaries
         run: |
           npm ci --prefix supabase/tests/commercial-create --ignore-scripts
@@ -140,6 +141,17 @@ jobs:
           npm ci --prefix supabase/tests/submittal-revision-evidence --ignore-scripts
           npm test --prefix supabase/tests/submittal-revision-evidence
           npm run test:postgres --prefix supabase/tests/submittal-revision-evidence
+
+      - name: Verify required drawing package and concurrent PostgreSQL commands
+        env:
+          PGPASSWORD: commercial-fixture-only
+          DRAWING_UPLOAD_POSTGRES_TEST: "1"
+          DRAWING_UPLOAD_POSTGRES_URL: postgresql://postgres:commercial-fixture-only@127.0.0.1:5432/steelbuild_drawing_upload_test
+        run: |
+          createdb -h 127.0.0.1 -p 5432 -U postgres steelbuild_drawing_upload_test
+          npm ci --prefix supabase/tests/drawing-set-revision-transaction --ignore-scripts
+          node scripts/drawing-cutover-package.ts
+          npm run test:postgres --prefix supabase/tests/drawing-set-revision-transaction
 
       - name: Verify independent concurrent Stripe billing sessions
         env:
@@ -269,6 +281,12 @@ jobs:
 
       - name: Install Chromium for foundation acceptance
         run: npx playwright install --with-deps chromium
+
+      - name: Verify required drawing package and isolated SQL behavior
+        run: |
+          npm ci --prefix supabase/tests/drawing-set-revision-transaction --ignore-scripts
+          node scripts/drawing-cutover-package.ts
+          npm test --prefix supabase/tests/drawing-set-revision-transaction
 
       - name: Verify shell recovery (desktop and mobile, no backend)
         run: npm run test:e2e:foundation

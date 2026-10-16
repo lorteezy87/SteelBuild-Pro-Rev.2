@@ -1,18 +1,17 @@
-import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
-import { initialize, candidateUrl, sourceCandidateUrl, boundaryCandidateUrl } from './fixture.ts';
+import { initialize, enableFixtureMutations } from './fixture.ts';
 import { runCases } from './cases.ts';
 import { runCommandCases } from './commandCases.ts';
 import { runSourceCases } from './sourceCases.ts';
 import { runBoundaryCases } from './boundaryCases.ts';
-import { runExportCases, exportCandidateUrl } from './exportCases.ts';
+import { runExportCases } from './exportCases.ts';
+import { runPackageCases, runInstallationCases } from './packageCases.ts';
 const db=new PGlite();
 try{
   await initialize(db);
-  await db.exec(await readFile(candidateUrl,'utf8'));
-  await db.exec(await readFile(sourceCandidateUrl,'utf8'));
-  await db.exec(await readFile(boundaryCandidateUrl,'utf8'));
-  await db.exec(await readFile(exportCandidateUrl,'utf8'));
+  console.log(`${await runInstallationCases(db)} installation checks passed`);
+  console.log(`${await runPackageCases(db)} package checks passed`);
+  await enableFixtureMutations(db);
   console.log(`${await runExportCases(db)} observation export checks passed`);
   console.log(`${await runBoundaryCases(db)} write boundary checks passed`);
   console.log(`${await runSourceCases(db)} source protection checks passed`);

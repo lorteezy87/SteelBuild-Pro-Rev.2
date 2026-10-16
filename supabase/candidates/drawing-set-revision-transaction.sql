@@ -1,6 +1,6 @@
 -- UNINSTALLED SOURCE CANDIDATE. No migration/ledger or client cutover authority.
 -- Requires the committed exact-revision manifest; quarantine SQL stays untouched.
-BEGIN;
+-- Transaction control belongs to the reviewed whole-package manual wrapper.
 CREATE SCHEMA steelbuild_drawing_revision;
 REVOKE ALL ON SCHEMA steelbuild_drawing_revision FROM PUBLIC,anon,authenticated,service_role;
 -- Transaction-local authority is private state, never a caller-controlled GUC.
@@ -551,11 +551,10 @@ LANGUAGE sql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
   SELECT steelbuild_drawing_revision.apply_command(p_request_id,'revise_set',p_request)
 $$;
 REVOKE ALL ON FUNCTION public.apply_drawing_set_revision(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION public.apply_drawing_set_revision(uuid,jsonb) TO authenticated;
+-- Installed disabled: only a separate exact catalog/classification review may grant EXECUTE.
 CREATE FUNCTION public.create_drawing_set_from_review(p_request_id uuid,p_request jsonb) RETURNS jsonb
 LANGUAGE sql SECURITY DEFINER SET search_path='' SET lock_timeout='2s' AS $$
   SELECT steelbuild_drawing_revision.apply_command(p_request_id,'create_set',p_request)
 $$;
 REVOKE ALL ON FUNCTION public.create_drawing_set_from_review(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION public.create_drawing_set_from_review(uuid,jsonb) TO authenticated;
-COMMIT;
+-- Installed disabled: receipt/source reads remain available during review.

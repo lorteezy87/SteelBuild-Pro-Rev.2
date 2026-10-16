@@ -1,7 +1,7 @@
 -- UNINSTALLED SOURCE CANDIDATE. Install after drawing-set-revision-transaction.sql.
 -- Ordinary-role metadata protection only: Storage API/byte acceptance and the
 -- privileged-writer review remain release gates. No historic source backfill.
-BEGIN;
+-- Transaction control belongs to the reviewed whole-package manual wrapper.
 CREATE TABLE steelbuild_drawing_revision.adopted_sources (
   bucket_id text NOT NULL CHECK(bucket_id='app-files'),
   path text NOT NULL CHECK(length(path)<=512),
@@ -91,4 +91,3 @@ CREATE POLICY drawing_adopted_source_delete ON storage.objects AS RESTRICTIVE FO
 -- No SELECT policy changes: normal downloads retain their existing authorization.
 CREATE POLICY drawing_adopted_source_insert ON storage.objects AS RESTRICTIVE FOR INSERT TO authenticated
   WITH CHECK (public.drawing_source_mutation_allowed(bucket_id,name,name));
-COMMIT;

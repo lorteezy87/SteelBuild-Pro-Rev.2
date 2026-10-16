@@ -266,3 +266,67 @@ The exact saved-catalog schema is defined in the validator. Missing/malformed/em
 Remaining gates: implement/review atomic commands and source guards; prove exact disposable-PostgreSQL behavior and privilege denial; retire every reachable split writer; coordinate sibling callers/ownership; install only the complete staging package through reviewed backend release; perform authenticated source/PDF/page/receipt/export/erasure acceptance; prepare an exact production proposal. Production application/publication requires new exact-change approval and is outside this task.
 
 Primary deadline reference: [Supabase Postgres timeouts](https://supabase.com/docs/guides/database/postgres/timeouts). The Supabase changelog and current timeout/MFA documentation were consulted; installed catalog settings above, not documented defaults, establish this inventory.
+
+## Task 12 source package — not installed or approved for activation
+
+The ordered manifest is `supabase/drawing-cutover-package.json`. Supabase CLI
+2.120.0 was discovered in the existing local cache; `--version` and `migration
+new --help` were read before four separate successful `migration new` calls.
+No timestamps were invented or renamed. Exact resulting payloads:
+
+| Order / dependency | Migration path | SHA-256 |
+| --- | --- | --- |
+| 1 / prerequisite files and direct auth/workflow roster in manifest | `supabase/migrations/20261016061756_drawing_reviewed_atomic_commands.sql` | `05e6fd8f5fe3cd32c7cbd1797f543d9eaeb786068db04f3077ac2d6f36032adf` |
+| 2 / 20261016061756 | `supabase/migrations/20261016061808_drawing_adopted_source_protection.sql` | `515a9252a76642f9eea51968498cc6fc6f5faf617eda637f28bd3e0d57b32435` |
+| 3 / 20261016061808 | `supabase/migrations/20261016061825_drawing_command_write_boundary.sql` | `267522500056c715a0a413bb82dd6f79f4e53f7e8a633a23ee78eeca2699df4e` |
+| 4 / 20261016061825 | `supabase/migrations/20261016061838_drawing_source_observation_export.sql` | `0ab8cb29f3c26a0fe6eb1dd435b4628790a268a20ea09e2e6df9ffb4f95a0cf1` |
+
+All four previously UNINSTALLED candidates were explicitly amended to remove
+top-level BEGIN/COMMIT. Core create/revise EXECUTE grants were removed; existing
+revokes remain. The boundary candidate exposes a private operator-only full
+snapshot helper shared by the fingerprint; its physical catalog coverage was
+preserved. Previously stamped migration files were not edited. Candidate,
+promoted and embedded installer payload bytes must match exactly, including LF
+and final newline. Each ledger statement array contains one entire payload.
+
+The validator has no network/database/apply mode. Both required jobs now run
+drawing coverage: `ci` runs isolated PGlite behavior; `commercial-postgres` runs
+actual PG17 concurrency in a separately created guarded empty loopback database.
+The dedicated workflow preserves its four exact candidate filters and also
+tracks payload/dependency/package changes. The five production release gates
+remain unchanged. Missing/hash-drifted payloads fail, never skip.
+
+The manual procedure and test boundaries are in
+`supabase/tests/drawing-set-revision-transaction/README.md`. One transaction
+executes SHA-checked whole SQL texts and stamps those same texts, leaving both
+mutations effectively disabled and package_review empty. Tests prove a fourth
+stamp failure rolls back all payloads/stamps, inherited EXECUTE exposure refuses,
+and direct authenticated create/revise are denied without writes before any
+TEST-ONLY grants.
+
+Installation does not approve itself. Full source/ownership/caller/guard/helper
+classification remains mandatory, including all unresolved Task 1 findings and
+sibling compatibility. The manifest's eight direct prerequisite hashes come from
+the exact saved Task 1 captures above; they are historical observations with
+`approval:false`, not defaults or live approval. The fixed direct roster checks
+are supplemental to full classification, not a replacement for the 52 guard/
+helper reviews or 105/102 potentially privileged paths. The older collector's
+view/rewrite scope is narrower than the full physical runtime snapshot. Review
+must cover that full snapshot and the actual transitive dependency/privilege
+closure; absent classification remains a stop.
+
+Physical fingerprints cannot move between rehearsals, reinstalls or environments.
+After a committed disabled install, a grant-only rollback captures disabled and
+prospective enabled state on the SAME installed objects. Separately reviewed
+literal hashes control manual activation; mismatch rolls back grants and creates
+no approval. No capture auto-fills review inputs. Full snapshot exports contain
+function definitions and belong in private review artifacts.
+
+Local package/PGlite results are not hosted acceptance, actual PG17/Deno proof,
+or production readiness. New versions are intentionally pending production and
+may make production drift red; no ownership override hides them. Root reported
+a separate read-only discovery that Supabase GitHub automatic production deploy
+and branching were enabled at inspection. Their disablement/verification is a
+separate owner-approved prerequisite; this source package does not claim there
+is no automatic deployment path or authorize a push, merge, deployment or
+production change.

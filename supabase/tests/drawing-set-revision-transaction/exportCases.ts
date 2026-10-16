@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ids, actor, request, execute, type Database } from './fixture.ts';
+import { ids, actor, request, execute, reviewedPayloads, type Database } from './fixture.ts';
 import { denied, snapshot } from './cases.ts';
 import { readDrawingEvidence, type DrawingEvidenceExtension } from '../../../src/lib/drawingCommands/evidenceExport.ts';
 
-export const exportCandidateUrl = new URL('../../candidates/drawing-source-observation-export.sql', import.meta.url);
 export const recoveryUrl = new URL('./recovery.sql', import.meta.url);
 const client = (db: Database) => ({ rpc: async (_name: string, args: Record<string, unknown>) => {
   const result = await db.query('select public.get_drawing_source_observations($1,$2,$3,$4,$5) value',
@@ -115,7 +114,7 @@ export async function runExportCases(db: Database, actualPostgres = false) {
     // Explain the actual candidate statement, including a generic plan (PL/pgSQL
     // can switch after repeated calls). A simplified look-alike misses OR-cursor
     // plans that rescan the preceding history on every page.
-    const candidate = await readFile(exportCandidateUrl, 'utf8');
+    const candidate = reviewedPayloads[3].payload;
     const start = candidate.indexOf('WITH roster AS MATERIALIZED');
     let query = candidate.slice(start, candidate.indexOf('INTO v_result FROM roster;', start) + 'INTO v_result FROM roster;'.length).replace('INTO v_result', '');
     for (const [i, name] of ['p_project_id', 'p_after_receipt', 'p_after_drawing', 'p_snapshot_token', 'p_limit'].entries()) query = query.replaceAll(new RegExp(`\\b${name}\\b`, 'g'), `$${i + 1}`);

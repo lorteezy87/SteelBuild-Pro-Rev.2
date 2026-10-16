@@ -1,38 +1,95 @@
-# Atomic drawing revision candidate acceptance
+# Exact drawing cutover package acceptance
 
-This isolated harness verifies `supabase/candidates/drawing-set-revision-transaction.sql`.
-The candidate is **not a migration** and must remain uninstalled until the upload
-adapters, protected direct-write cutover, hosted rollback and release review pass.
-
-Run quick behavioral checks:
+`supabase/drawing-cutover-package.json` orders four promoted migration payloads,
+their identical reviewed candidates, dependencies and SHA-256 values. The offline
+validator `node scripts/drawing-cutover-package.ts` checks mandatory payloads,
+candidate equality, dependency ordering, prerequisite file hashes and the exact
+embedded manual installer. It has no network, database or apply mode. Missing
+files and byte/hash drift fail; no candidate is optional.
 
 ```powershell
 npm ci --prefix supabase/tests/drawing-set-revision-transaction --ignore-scripts
 npm test --prefix supabase/tests/drawing-set-revision-transaction
 ```
 
-The dedicated GitHub Actions workflow runs the same cases plus independent
-PostgreSQL 17 sessions. It uses a disposable synthetic loopback database, no
-Supabase credentials, no external storage bytes and no hosted database writes.
-Local actual-PostgreSQL execution requires both `DRAWING_UPLOAD_POSTGRES_TEST=1`
-and `DRAWING_UPLOAD_POSTGRES_URL` pointing at the exact empty loopback database
-`steelbuild_drawing_upload_test`. The runner recreates only that verified test
-database's fixture schemas between cases; never point it at an application DB.
+Required `ci` executes these PGlite behavior checks. Required `commercial-postgres`
+executes actual PostgreSQL 17 checks in the separately created empty loopback
+`steelbuild_drawing_upload_test` database. The dedicated drawing workflow remains
+useful but is not the only release blocker. Actual PostgreSQL execution requires
+`DRAWING_UPLOAD_POSTGRES_TEST=1` and `DRAWING_UPLOAD_POSTGRES_URL` with the exact
+loopback database path and no query. The initial empty-database census precedes
+any fixture setup. Never point the harness at an application database.
 
-The fixture extracts committed baseline drawing tables, constraints, FKs and
-relevant activity/count/watch/validation triggers, plus the exact revision-manifest
-migration and existing workflow helpers. Controllable test membership/MFA
-predicates represent revocation. This is not hosted-policy or authenticated UI
-acceptance. The full concurrent/boundary job and candidate source must be reviewed
-again before any promotion.
+The harness installs the complete checked-in manual SQL, using exact promoted
+bytes in dependency order. Its deliberately failing fourth ledger stamp proves
+all four components and stamps roll back together. Each successful ledger row
+contains one text-array element equal to the entire unmodified payload; SQL is
+never split on semicolons. Effective inherited mutation EXECUTE exposure aborts
+installation. Direct authenticated create/revise calls are denied without writes
+before any clearly marked TEST-ONLY positive grants. The fixture hashes and
+synthetic classification are never approval for a hosted database.
 
-Revised/added pages require explicit per-field extraction states. Tests distinguish
-unavailable (NULL) from inspected-empty, retain actual old parent observations
-privately, bind extraction to idempotent payloads, and preserve existing erasure
-and immutable-evidence behavior. The PostgreSQL maximum workload includes exactly
-4 MiB of serialized prior observations, over-bound refusal and late-write rollback.
-These private observations are not in the current v2 project export/restore.
+## Manual process boundary
 
-The four intentionally failing upload UI tests remain uncommitted in the owning
-worktree, pending the coordinated typed adapter. They are not waived, deleted or
-weakened by this server-only candidate.
+No hosted installation or activation is authorized by this package. Four CLI
+versions were issued by discovered Supabase CLI 2.120.0. Previously stamped
+migrations remain untouched. The four uninstalled candidates were explicitly
+amended to remove their top-level transaction controls before exact promotion.
+
+Before any install, an authorized operator must separately verify the connection
+target and freshly review the full preflight, callers (including the sibling),
+ownership, dependency closure, grants, guard bindings and source package. Missing
+classifications remain a stop. Bare SHA strings do not replace that evidence.
+The manifest's saved production/staging observations are historical evidence,
+not live validation or approved defaults. The eight fixed direct auth/workflow
+prerequisites are additional install preconditions, not a substitute for the
+full captured guard/helper and privileged-writer review.
+
+`supabase/drawing-cutover/install-manual.sql` requires externally supplied literal
+session settings `drawing_cutover.project_ref`, `reviewed_source_commit`,
+`reviewed_classification_sha256` and `expected_prerequisites` (each name prefixed
+by `drawing_cutover.`). The prerequisite JSON array must contain exactly the
+manifest's required identity roster, each with its separately reviewed SHA-256;
+empty, missing, extra, duplicate or changed entries refuse installation. The
+project-ref setting is an operator assertion, not proof of database origin.
+No tool populates these inputs from the observed state.
+
+One outer transaction executes each SHA-validated full payload and stamps that
+same text. It commits only with both new mutation entrypoints effectively denied
+to anon/authenticated/service_role and an empty package_review. Read receipts,
+source evidence, metadata/workflows and adopted-source guards remain available.
+
+After this disabled installation commits, `activation-capture.sql` exports the
+operator-only full catalog snapshot and disabled fingerprint, temporarily grants
+only the two mutations, exports the prospective fingerprint, and rolls back.
+It creates no objects or review row. Capture output includes complete function
+definitions and must stay in private review artifacts. Its snapshot is the SAME
+query used by the runtime fingerprint, including all non-system schemas,
+functions, tables/views/rewrite rules, columns/defaults, constraints/indexes,
+triggers/policies, roles/memberships, default privileges and role settings. This
+supplements the older preflight collector's narrower view/rewrite inventory;
+both actual dependency/privilege closure and exact snapshot require review.
+
+Physical OIDs/ACLs make fingerprints installation-specific. Never copy hashes
+from rollback-created objects, staging to production, or a previous install.
+The only prospective capture is a grant-only rollback against the SAME committed
+object instances. Any subsequent catalog change invalidates the reviewed hashes.
+
+Only after separate review may `activate-manual.sql` use externally supplied
+`drawing_cutover.expected_disabled_sha256` and `expected_enabled_sha256`, plus
+the reviewed source/classification/target bindings. It checks the disabled hash,
+grants only two entrypoints, checks the prospective enabled hash, and records
+approval in one transaction. Missing/mismatched inputs abort and roll back grants.
+No capture auto-approves itself. Capabilities are readiness/display, not the
+direct-RPC authorization stop; EXECUTE revocation provides that stop.
+
+## Evidence limits
+
+Fixtures extract actual committed drawing tables/constraints and reviewed
+workflow/erasure helpers, with synthetic membership/MFA predicates and data.
+They preserve unknown SQL NULL versus observed JSON null and legacy JSON keys;
+maximum observation/export and concurrency tests remain intact. These are not
+hosted RLS/Auth parity, physical PDF/page readback or production deadline proof.
+Actual PG17/Deno verification requires exact-SHA CI when unavailable locally.
+Pending production migration versions must remain visible to production drift;
+no ownership-manifest override or weakened release gate is permitted.

@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
-import { initialize, candidateUrl, sourceCandidateUrl, boundaryCandidateUrl, ids, actor, request, execute, createRequest, createSet, receipt, path, zoneA, zoneB, type Database } from './fixture.ts';
+import { initialize, installReviewedFixturePackage, enableFixtureMutations, ids, actor, request, execute, createRequest, createSet, receipt, path, zoneA, zoneB, type Database } from './fixture.ts';
 import { runCases, snapshot, tables } from './cases.ts';
 import { runCommandCases } from './commandCases.ts';
 import { runSourceCases } from './sourceCases.ts';
 import { runBoundaryCases } from './boundaryCases.ts';
-import { runExportCases, exportCandidateUrl } from './exportCases.ts';
+import { runExportCases } from './exportCases.ts';
+import { runInstallationCases, runPackageCases } from './packageCases.ts';
 import { command, parent, submit, checklist, execute as roundExecute } from '../submittal-revision-evidence/cases.ts';
 
 assert.equal(process.env.DRAWING_UPLOAD_POSTGRES_TEST,'1','Explicit disposable fixture opt-in required');
@@ -26,10 +26,10 @@ pool.on('release',(_error:unknown,client:pg.PoolClient)=>leased.delete(client));
 async function connect(){const client=await pool.connect();pids.set(client,(await client.query('select pg_backend_pid() pid')).rows[0].pid);return client;}
 const admin=await connect();
 function database(client:pg.PoolClient):Database{return {exec:sql=>client.query(sql),query:async<T extends Record<string,unknown>>(sql:string,parameters?:unknown[])=>({rows:(await client.query(sql,parameters)).rows as T[]})};}
-const db=database(admin),candidate=await readFile(candidateUrl,'utf8'),sourceCandidate=await readFile(sourceCandidateUrl,'utf8'),boundaryCandidate=await readFile(boundaryCandidateUrl,'utf8');
+const db=database(admin);
 async function reset(){
-  await admin.query('drop schema if exists public,auth,storage,steelbuild_security,extensions,steelbuild_workflow,steelbuild_drawing_revision cascade;create schema public');
-  await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);await db.exec(boundaryCandidate);
+  await admin.query('drop schema if exists public,auth,storage,steelbuild_security,extensions,steelbuild_workflow,steelbuild_drawing_revision,supabase_migrations cascade;create schema public');
+  await initialize(db);await installReviewedFixturePackage(db);await enableFixtureMutations(db);
 }
 async function session(){const c=await connect();await actor(database(c));await c.query('begin;set local role authenticated');return c;}
 async function finish(c:pg.PoolClient,p:Awaited<ReturnType<typeof request>>,key=randomUUID(),create=false){
@@ -55,11 +55,14 @@ try{
   // Only after the URL preflight and initial-empty census above. These are
   // operator fixture assertions, not a security boundary for hosted callers.
   await admin.query("select set_config('drawing_recovery.empty_fixture_verified','yes',false),set_config('drawing_recovery.client_loopback_verified','yes',false)");
-  await initialize(db);await db.exec(candidate);await db.exec(sourceCandidate);await db.exec(boundaryCandidate);console.log(`${await runCases(db)} actual PostgreSQL behavioral checks passed`);
+  await initialize(db);
+  console.log(`${await runInstallationCases(db)} actual PostgreSQL installation checks passed`);
+  console.log(`${await runPackageCases(db)} actual PostgreSQL package checks passed`);
+  await enableFixtureMutations(db);
+  console.log(`${await runCases(db)} actual PostgreSQL behavioral checks passed`);
   console.log(`${await runBoundaryCases(db)} actual PostgreSQL write boundary checks passed`);
   console.log(`${await runCommandCases(db)} actual PostgreSQL atomic command checks passed`);
   console.log(`${await runSourceCases(db)} actual PostgreSQL source protection checks passed`);
-  await db.exec(await readFile(exportCandidateUrl,'utf8'));
   console.log(`${await runExportCases(db,true)} actual PostgreSQL observation export checks passed`);
   for(const field of ['is_member','is_pm','mfa_satisfied'])await check(`governing approval final receipt wait rechecks ${field}`,async()=>{
     await roundExecute(db,command(await parent(db),submit));

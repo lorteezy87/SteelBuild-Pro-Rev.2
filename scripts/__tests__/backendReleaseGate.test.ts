@@ -56,4 +56,8 @@ describe('executed backend release gate', () => {
     const ci = load(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')) as Workflow;
     expect(ci.jobs['prepare-sites-release'].needs).toEqual(expect.arrayContaining(['ci', 'secret-scan', 'supabase-drift', 'edge-typecheck', 'commercial-postgres']));
   });
+  it('binds PR previews to all five production prerequisites too', () => {
+    const ci = load(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')) as Workflow;
+    expect(ci.jobs['preview-cloudflare'].needs).toEqual(expect.arrayContaining(['ci', 'secret-scan', 'supabase-drift', 'edge-typecheck', 'commercial-postgres']));
+  });
 });
