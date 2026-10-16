@@ -14,7 +14,7 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('@/lib/native/platform', () => ({ isNativePlatform: () => true }));
+vi.mock('@/lib/native/platform', () => ({ isNativePlatform: () => true, isStoreShell: () => true }));
 vi.mock('@/components/shared/OrgContext', () => ({
   useOrg: () => ({
     currentOrg: { id: 'org1', name: 'Acme Steel', stripe_customer_id: 'cus_1', current_period_end: null },
