@@ -9,6 +9,7 @@ const env = process.env;
 const cases: Array<{ name: string; status: string }> = [];
 let factorId: string | undefined;
 let cleanupToken: string | undefined;
+let stage = 'environment';
 const record = (name: string, passed: boolean) => { cases.push({ name, status: passed ? 'PASS' : 'FAIL' }); };
 
 // Fixed staging origin, closed request profiles, no redirects or response logging.
@@ -33,29 +34,35 @@ async function login() {
 try {
   assertEnvironment(env);
   if (env.E2E_USER !== 'staging.pm@steelbuild-pro.invalid') throw new Error('Synthetic identity required');
+  stage = 'initial synthetic login';
   const initial = await login();
   if (initial.identity.verifiedFactors !== 0 || !row(initial.user) ||
       (Array.isArray(initial.user.factors) && initial.user.factors.length !== 0)) throw new Error('Existing factors must not be altered');
   const organization = await request(`/rest/v1/organizations?id=eq.${ORG_ID}&select=id,name`, initial.identity.token);
   if (organization.status !== 200 || !Array.isArray(organization.value) || organization.value.length !== 1 ||
       !row(organization.value[0]) || organization.value[0].name !== 'Example Fabrication (staging)') throw new Error('Fixture identity not established');
+  stage = 'enroll temporary factor';
   cleanupToken = initial.identity.token;
   const enrolled = await request('/auth/v1/factors', cleanupToken,
     { factor_type: 'totp', friendly_name: `Acceptance-${randomUUID()}` });
   if (enrolled.status !== 200 || !row(enrolled.value) || typeof enrolled.value.id !== 'string') throw new Error('Enrollment failed');
   factorId = enrolled.value.id;
   if (!/^[a-f0-9-]{36}$/.test(factorId) || !row(enrolled.value.totp) || typeof enrolled.value.totp.secret !== 'string') throw new Error('Enrollment response invalid');
+  stage = 'challenge temporary factor';
   const challenge = await request(`/auth/v1/factors/${factorId}/challenge`, cleanupToken, {});
   if (!row(challenge.value) || typeof challenge.value.id !== 'string') throw new Error('Challenge failed');
+  stage = 'verify temporary factor';
   const verified = await request(`/auth/v1/factors/${factorId}/verify`, cleanupToken,
     { challenge_id: challenge.value.id, code: totp(enrolled.value.totp.secret) });
   if (verified.status !== 200 || !row(verified.value) || typeof verified.value.access_token !== 'string') throw new Error('Verification failed');
   cleanupToken = verified.value.access_token;
+  stage = 'verify assurance identities';
   const verifiedUser = await request('/auth/v1/user', cleanupToken);
   const high = verifyIdentity(verified.value, verifiedUser.value, env.E2E_USER!);
   const low = (await login()).identity;
   if (high.aal !== 'aal2' || low.aal !== 'aal1' || high.verifiedFactors !== 1 || low.verifiedFactors !== 1 || high.subject !== low.subject) throw new Error('Assurance identities not established');
   record('Auth-issued enrolled AAL1 and AAL2 for same synthetic user', true);
+  stage = 'probe assurance boundaries';
   const readPath = `/rest/v1/projects?id=eq.${PROJECT_ID}&select=id,org_id`;
   const denied = await request(readPath, low.token);
   record('Data API denies enrolled AAL1', denied.status === 403);
@@ -84,7 +91,7 @@ try {
   }
 } catch {
   // Never expose Auth tokens, passwords, secrets, fixture responses or provider data.
-  cases.push({ name: 'MFA acceptance prerequisites or execution', status: 'FAIL' });
+  cases.push({ name: `MFA acceptance: ${stage}`, status: 'FAIL' });
 } finally {
   if (factorId && cleanupToken) {
     try {

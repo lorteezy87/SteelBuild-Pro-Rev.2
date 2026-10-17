@@ -8,6 +8,17 @@ on:
         description: Exact reviewed 40-character commit already reachable from main
         required: true
         type: string
+      billing_action:
+        description: Optional disposable test billing probe (never release acceptance)
+        type: choice
+        default: none
+        options: [none, start, verify]
+      billing_org_id:
+        description: Disposable billing workspace ID for verify only
+        type: string
+      billing_session_id:
+        description: Exact cs_test session for verify only
+        type: string
 
 permissions:
   contents: read
@@ -78,6 +89,7 @@ jobs:
       # Pure Node + exact checked-in TypeScript; no install hooks or dependency
       # network is needed in the job which consumes staging credentials.
       - name: Run bounded reads and rejection checks
+        if: inputs.billing_action == 'none'
         env:
           ACCEPTANCE_CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
           E2E_TARGET: staging
@@ -88,7 +100,7 @@ jobs:
           E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
         run: node scripts/staging-backend-acceptance/run.ts
       - name: Exercise synthetic enrolled MFA sessions with cleanup
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.billing_action == 'none' }}
         env:
           ACCEPTANCE_CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
           E2E_TARGET: staging
@@ -98,6 +110,20 @@ jobs:
           E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
           E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
         run: node scripts/staging-backend-acceptance/mfa-run.ts
+      - name: Run disposable test-mode billing probe
+        if: ${{ !cancelled() && inputs.billing_action != 'none' }}
+        env:
+          ACCEPTANCE_CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
+          E2E_TARGET: staging
+          E2E_EXPECTED_SUPABASE_REF: ndyfjffsulfbwpmwdmic
+          E2E_USER: ${{ secrets.STAGING_E2E_USER }}
+          E2E_PASS: ${{ secrets.STAGING_E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+          BILLING_ACTION: ${{ inputs.billing_action }}
+          BILLING_ORG_ID: ${{ inputs.billing_org_id }}
+          BILLING_SESSION_ID: ${{ inputs.billing_session_id }}
+        run: node scripts/staging-backend-acceptance/billing-run.ts
       - name: Retain sanitized result only (INCOMPLETE is not a green release gate)
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -106,5 +132,6 @@ jobs:
           path: |
             test-results/backend-acceptance/summary.json
             test-results/backend-acceptance/mfa.json
+            test-results/backend-acceptance/billing.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1

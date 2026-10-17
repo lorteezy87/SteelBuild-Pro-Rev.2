@@ -260,3 +260,37 @@ operations remain separately identified coverage limits.
 The connected Stripe tool currently returns UNAUTHORIZED / requires reauthentication.
 An asynchronous reconnect request was presented. No live account was selected,
 no Stripe resource or key was provisioned, and no production configuration changed.
+
+### Isolated sandbox follow-up
+
+The stale connector was avoided using Stripe's officially supported anonymous CLI
+sandbox flow, with a separate task-local profile and the existing Git user identity.
+Sandbox `acct_1URGW3IfnOAuiBXv` expires October 24 unless claimed. The profile has
+no live key. Test Pro/Business prices and the staging-only webhook were created;
+each returned `livemode=false`. The CLI-restricted key cannot read Balance, so no
+balance access was used or represented as proof; the actual created objects prove
+test mode. No real payment or live Stripe configuration was touched.
+
+Staging's previously empty billing_config was populated with `livemode=false`,
+the two test prices and its own webhook signing secret. The test-only key is in
+the encrypted staging-backend environment secret STAGING_STRIPE_TEST_KEY. The
+reviewed deploy workflow provisions only STRIPE_SK_TEST and a fixed staging return
+origin, only when target=staging AND function=stripe-billing. Production's live
+key and configuration are outside that step. Gate tests assert this isolation.
+Task-local CLI credentials are under an access-restricted ignored directory;
+no secret values are stored in repository files or review evidence.
+
+The protected acceptance workflow includes optional start/verify billing probes.
+Start creates a disposable synthetic workspace through the authenticated creation
+RPC and checks repeat Checkout requests return the exact same test session URL.
+Verify reads exact-session status, workspace entitlement and receipts. Artifacts
+may intentionally contain a test Checkout URL for the browser operator, retained
+one day, but never Auth sessions or provider/webhook keys. These probes always
+remain INCOMPLETE as release acceptance; a URL or status snapshot is not proof of
+the full payment lifecycle. Real browser payment, signed webhook processing,
+replay, expiry, cancellation and hosted MFA results must still be recorded.
+
+The secret scan's RFC 6238 fixture match is covered by one exact known-public
+test-vector regex, with its RFC citation. It is not an API key and no broad path
+or rule exclusion was added. Current dependency and secret scans passed before
+the final staging-tooling additions; final exact-head CI must be checked again.

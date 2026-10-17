@@ -122,6 +122,28 @@ jobs:
           path: ${{ runner.temp }}/backend-before
           if-no-files-found: error
           retention-days: 30
+      - name: Configure isolated staging billing key and return origin
+        if: inputs.target == 'staging' && inputs.function == 'stripe-billing'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_BACKEND_ACCESS_TOKEN }}
+          STAGING_STRIPE_TEST_KEY: ${{ secrets.STAGING_STRIPE_TEST_KEY }}
+        run: |
+          node --input-type=module <<'NODE'
+          const key = process.env.STAGING_STRIPE_TEST_KEY;
+          if (!/^(sk|rk|rkcs)_test_/.test(key || '') || !process.env.SUPABASE_ACCESS_TOKEN) {
+            throw new Error('Isolated staging test key and scoped deployment token are required');
+          }
+          const response = await fetch('https://api.supabase.com/v1/projects/ndyfjffsulfbwpmwdmic/secrets', {
+            method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30000),
+            headers: { Authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify([
+              { name: 'STRIPE_SK_TEST', value: key },
+              { name: 'STEELBUILD_BASE_URL', value: 'https://steelbuild-pro-staging.n-lortz1987.workers.dev' },
+            ]),
+          });
+          if (!response.ok) throw new Error(`Staging secret provisioning failed (${response.status})`);
+          console.log('Staging test key and fixed return origin configured; no live key changed');
+          NODE
       - name: Deploy one function with its reviewed JWT mode
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_BACKEND_ACCESS_TOKEN }}
