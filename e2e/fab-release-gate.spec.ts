@@ -214,7 +214,10 @@ test.describe('rejected submittal advance recovery (staging only)', () => {
         const url = new URL(request.url());
         if (url.username || url.password || url.hash) { violations.push('invalid-url'); await route.abort(); return; }
         const forward = async () => {
-          const reply = await route.fetch({ maxRedirects: 0 });
+          // Never attach the credential-bearing Playwright fetch call log to
+          // the public CI failure output. A failed request remains a failure.
+          const reply = await route.fetch({ maxRedirects: 0, timeout: 15_000 }).catch(() => null);
+          if (!reply) { violations.push('staging-forward-failed'); await route.abort(); return; }
           try {
             if (reply.status() >= 300 && reply.status() < 400) {
               violations.push('redirect'); await route.abort(); return;
@@ -269,12 +272,17 @@ test.describe('rejected submittal advance recovery (staging only)', () => {
       if (scenario === 'concurrent-release') await expect(panel.getByText('Exact revision evidence verified', { exact: true })).toBeVisible();
       else await expect(panel.getByText('1 captured · 1 current · 1 missing · 1 superseded', { exact: true })).toBeVisible();
       const beforeReads = coverageReads;
-      const rejection = page.waitForResponse(response => response.url() === `${STAGING_ORIGIN}/rest/v1/rpc/apply_submittal_round_workflow`);
+      const rejection = page.waitForResponse(response => response.request().method() === 'POST'
+        && response.url() === `${STAGING_ORIGIN}/rest/v1/rpc/apply_submittal_round_workflow`, { timeout: 20_000 });
       await page.getByRole('button', { name: 'Release for Fabrication →', exact: true }).click();
       const response = await rejection;
       expect(response.ok()).toBe(false);
       const error = await response.json();
       expect(error.message).toContain(scenario === 'concurrent-release' ? 'ROUND_STALE:' : 'ROUND_LEGACY_RECONCILIATION_REQUIRED:');
+      if (scenario === 'concurrent-release') {
+        expect(response.status()).toBe(409);
+        expect(error.code).toBe('PT409');
+      }
       await expect.poll(() => coverageReads).toBeGreaterThan(beforeReads);
       if (scenario === 'concurrent-release') await expect(page.getByRole('button', { name: 'Released for Fab', exact: true })).toBeDisabled();
       else {

@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
 import { initialize, ids, actor, migrationUrl, sourcePath, type Database } from './fixture.ts';
 import { runCases, parent, command, execute, submit, coverage, checklist } from './cases.ts';
+import { installConflictMigration, runConflictCases, runConflictMigrationSafetyCases } from './conflicts.ts';
 
 const connectionString=process.env.ROUND_EVIDENCE_POSTGRES_URL;
 assert.equal(process.env.ROUND_EVIDENCE_POSTGRES_TEST,'1','Explicit isolated fixture opt-in required');
@@ -39,6 +40,7 @@ async function check(name:string,run:()=>Promise<void>){await run();checks++;con
 try{
   assert.equal((await admin.query("select count(*)::int as n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r'")).rows[0].n,0,'Fixture database must be empty');
   await initialize(db);await db.exec(await readFile(migrationUrl,'utf8'));
+  await runConflictMigrationSafetyCases(db);await installConflictMigration(db);await runConflictCases(db);
   console.log(`${await runCases(db)} PostgreSQL behavioral checks passed`);await admin.query('reset role');
 
   await check('identical retries serialize and return one round and identical receipt',async()=>{
@@ -53,7 +55,7 @@ try{
     const a=await session(),b=await session();const jobs=[finish(a,command(s,submit)),finish(b,command(s,submit))];const settled=Promise.allSettled(jobs);
     await waiting(a);await waiting(b);await lock.query('commit');lock.release();
     const results=await settled;assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
-    const rejected=results.find(r=>r.status==='rejected') as PromiseRejectedResult;assert.match(rejected.reason.message,/ROUND_STALE/);
+    const rejected=results.find(r=>r.status==='rejected') as PromiseRejectedResult;assert.match(rejected.reason.message,/ROUND_STALE/);assert.equal(rejected.reason.code,'PT409');
   });
   await check('a sheet inserted before locked snapshot causes stale-roster denial',async()=>{
     const id=await draft();const c=command(await parent(db,id),submit);const writer=await pool.connect();await writer.query('begin');
@@ -68,7 +70,7 @@ try{
     const newer=randomUUID();await writer.query('update public.drawing_revisions set is_current=false where id=$1',[ids.revision2]);
     await writer.query("insert into public.drawing_revisions(id,project_id,drawing_id,revision_code,sheet_number,sheet_title,version_number,is_current,file_url,pdf_page) values($1,$2,$3,'CONCURRENT','S2','Stairs',2,true,$4,2)",[newer,ids.project,ids.drawing2,sourcePath]);
     const consumer=await session();const result=finish(consumer,c).then(()=>null,e=>e);await waiting(consumer);await writer.query('commit');writer.release();
-    assert.match((await result).message,/ROUND_STALE_ROSTER/);
+    const conflict=await result;assert.match(conflict.message,/ROUND_STALE_ROSTER/);assert.equal(conflict.code,'PT409');
     await admin.query('delete from public.drawing_revisions where id=$1',[newer]);await admin.query('update public.drawing_revisions set is_current=true where id=$1',[ids.revision2]);
   });
   await check('new sheet cannot enter captured roster until the workflow transaction commits',async()=>{

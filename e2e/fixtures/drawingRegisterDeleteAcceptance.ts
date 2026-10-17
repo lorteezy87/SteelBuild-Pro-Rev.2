@@ -55,7 +55,8 @@ export function registerDrawingDeleteAcceptance() {
           const url = new URL(request.url());
           if (url.username || url.password || url.hash) { violations.push('invalid-url'); await route.abort(); return; }
           const forward = async () => {
-            const reply = await route.fetch({ maxRedirects: 0 });
+            const reply = await route.fetch({ maxRedirects: 0, timeout: 15_000 }).catch(() => null);
+            if (!reply) { violations.push('staging-forward-failed'); await route.abort(); return; }
             try {
               if (reply.status() >= 300 && reply.status() < 400) { violations.push('redirect'); await route.abort(); return; }
               await route.fulfill({ response: reply });
