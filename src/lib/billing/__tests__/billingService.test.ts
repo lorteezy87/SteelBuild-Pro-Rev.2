@@ -6,7 +6,20 @@ vi.mock("@/lib/supabase", () => ({
   supabase: { functions: { invoke: (...args: unknown[]) => invokeMock(...args) }, from: countQuery.from },
 }));
 
-import { startCheckout, openBillingPortal, getWorkspaceProjectCount, getWorkspaceMemberCount, getWorkspacePendingInvitationCount } from "../billingService";
+import { startCheckout, openBillingPortal, getCheckoutStatus, getWorkspaceProjectCount, getWorkspaceMemberCount, getWorkspacePendingInvitationCount } from "../billingService";
+
+describe('checkout status response contract', () => {
+  beforeEach(() => invokeMock.mockReset());
+  it('reads the exact session without creating another checkout', async () => {
+    invokeMock.mockResolvedValue({ data: { state: 'confirmed', plan: 'pro' }, error: null });
+    await expect(getCheckoutStatus('org1', 'cs_test_example123')).resolves.toEqual({ state: 'confirmed', plan: 'pro' });
+    expect(invokeMock).toHaveBeenCalledExactlyOnceWith('stripe-billing', { body: { action: 'checkout-status', org_id: 'org1', session_id: 'cs_test_example123' } });
+  });
+  it.each([{}, { state: 'confirmed', plan: 'enterprise' }, { state: 'success' }, null])('rejects malformed confirmation responses: %j', async data => {
+    invokeMock.mockResolvedValue({ data, error: null });
+    await expect(getCheckoutStatus('org1', 'cs_test_example123')).rejects.toThrow('Billing confirmation is unavailable');
+  });
+});
 
 describe.each([
   { name: 'members', table: 'organization_members', read: getWorkspaceMemberCount, pending: false },

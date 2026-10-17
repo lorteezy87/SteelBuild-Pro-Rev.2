@@ -28,6 +28,15 @@ function verify(options: { target?: string; slug?: string; ref?: string; failedJ
 }
 
 describe('executed backend release gate', () => {
+  it('keeps isolated Stripe key provisioning behind staging-only billing selection', () => {
+    const source = readFileSync(new URL('../../.github/workflows/supabase-deploy-reviewed.yml', import.meta.url), 'utf8');
+    const parsed = load(source) as { jobs: { deploy: { steps: Array<{ name?: string; if?: string; run?: string }> } } };
+    const step = parsed.jobs.deploy.steps.find(step => step.name === 'Configure isolated staging billing key and return origin');
+    expect(step?.if).toBe("inputs.target == 'staging' && inputs.function == 'stripe-billing'");
+    expect(step?.run).toContain('https://api.supabase.com/v1/projects/ndyfjffsulfbwpmwdmic/secrets');
+    expect(step?.run).not.toContain('kjrwqagyeswwoxpjkcko');
+    expect(step?.run).not.toContain("name: 'STRIPE_SECRET_KEY'");
+  });
   it('permits a checked production commit with matching staging evidence', async () => {
     await expect(verify()).resolves.toBeUndefined();
   });

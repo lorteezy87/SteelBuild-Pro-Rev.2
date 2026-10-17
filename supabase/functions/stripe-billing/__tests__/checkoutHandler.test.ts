@@ -150,7 +150,7 @@ describe('checkout entrypoint duplicate-charge boundary', () => {
     expect(responses.map(r => r.status)).toEqual(Array(8).fill(200));
     expect(app.customers).toHaveLength(1); expect(app.checkouts).toHaveLength(1);
     expect(app.rpcCalls.every(call => call.args.p_actor_id === 'fixture-owner')).toBe(true);
-    expect(app.checkouts[0].params.success_url).toBe('https://www.steelbuild-pro.com/Billing?status=success');
+    expect(app.checkouts[0].params.success_url).toBe(`https://www.steelbuild-pro.com/Billing?status=success&session_id={CHECKOUT_SESSION_ID}&checkout_org=${orgId}`);
   });
   it.each(['Customer', 'Session'] as const)('retries a lost %s response using the same provider idempotency key', async kind => {
     const app = fixture(null); app.free();

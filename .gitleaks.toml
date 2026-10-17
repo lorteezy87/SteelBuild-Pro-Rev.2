@@ -31,6 +31,10 @@ paths = [
 ]
 
 regexes = [
+  # Public RFC 6238 Appendix B SHA-1 vector (ASCII 12345678901234567890,
+  # base32 encoded). Used only by stagingTotp.test.ts, never an enrolled secret.
+  # https://www.rfc-editor.org/rfc/rfc6238#appendix-B
+  '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',
   # Supabase PROJECT REF, not a key. It appears in package.json's `types:db`
   # script, function deploy comments, and test fixtures. It is the public
   # subdomain of the API URL and grants nothing on its own.

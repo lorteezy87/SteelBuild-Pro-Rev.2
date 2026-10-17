@@ -158,7 +158,7 @@ export async function createDurableCheckout(db: CheckoutDatabase, stripe: Checko
     subscription_data: { metadata: { org_id: request.orgId, plan: intent.plan } },
     allow_promotion_codes: true, automatic_tax: { enabled: true }, tax_id_collection: { enabled: true },
     billing_address_collection: 'required', customer_update: { address: 'auto', name: 'auto' },
-    success_url: `${intent.return_base}/Billing?status=success`, cancel_url: `${intent.return_base}/Billing?status=cancel`,
+    success_url: `${intent.return_base}/Billing?status=success&session_id={CHECKOUT_SESSION_ID}&checkout_org=${encodeURIComponent(intent.org_id)}`, cancel_url: `${intent.return_base}/Billing?status=cancel`,
   }, { idempotencyKey: `sbp-checkout-v1-${intent.operation_id}` });
   validateSession(session, intent);
   if (session.status === 'complete') portal();

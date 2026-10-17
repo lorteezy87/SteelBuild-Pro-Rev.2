@@ -1,5 +1,45 @@
 import { expect, test } from '@playwright/test';
 
+test('Tailwind build retains responsive utilities and configured theme tokens', async ({ page }, testInfo) => {
+  await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+  await page.goto('/dev/foundation.html');
+  await expect(page.getByRole('heading', { name: 'Foundation verification' })).toBeVisible();
+  await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.id = 'utility-compat-probe';
+    probe.className = 'grid grid-cols-2 gap-4 rounded-lg border border-border bg-background text-foreground';
+    probe.style.width = '300px';
+    probe.innerHTML = '<span>Theme token check</span><span>Second column</span>';
+    document.querySelector('main')!.append(probe);
+  });
+  const probe = page.locator('#utility-compat-probe');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+    const style = await probe.evaluate(node => {
+      const actual = getComputedStyle(node);
+      const expected = document.createElement('div');
+      expected.style.backgroundColor = 'hsl(var(--background))';
+      expected.style.color = 'hsl(var(--foreground))';
+      expected.style.borderColor = 'hsl(var(--border))';
+      node.append(expected);
+      const tokens = getComputedStyle(expected);
+      const result = { display: actual.display, columns: actual.gridTemplateColumns.split(' ').length,
+        gap: actual.gap, expectedGap: getComputedStyle(document.documentElement).fontSize,
+        background: actual.backgroundColor, expectedBackground: tokens.backgroundColor,
+        color: actual.color, expectedColor: tokens.color, border: actual.borderTopColor, expectedBorder: tokens.borderTopColor };
+      expected.remove();
+      return result;
+    });
+    expect(style.display).toBe('grid');
+    expect(style.columns).toBe(2);
+    expect(style.gap).toBe(style.expectedGap);
+    expect(style.background).toBe(style.expectedBackground);
+    expect(style.color).toBe(style.expectedColor);
+    expect(style.border).toBe(style.expectedBorder);
+    await page.screenshot({ path: testInfo.outputPath(`tailwind-${theme}.png`), fullPage: false });
+  }
+});
+
 // This is explicitly fixture acceptance of real shell primitives. Authenticated
 // project navigation and RLS are separate gates, not simulated by these tests.
 test('shell primitives load, retain theme, navigate, and recover from a render error', async ({ page }, testInfo) => {

@@ -23,6 +23,11 @@ CREATE FUNCTION pg_temp.record_checkout(p_session text DEFAULT 'cs_checkout_roll
  SELECT public.record_billing_checkout_session('91da0000-0000-4000-8000-000000000011','91da0000-0000-4000-8000-000000000001',
  (SELECT operation_id FROM checkout_context),'cus_checkout_rollback',p_session,'https://checkout.stripe.com/c/pay/rollback',
  (SELECT expires_at FROM checkout_context)) $$;
+-- Explicit grants make rollback-only helpers independent of hosted defaults.
+GRANT EXECUTE ON FUNCTION pg_temp.assert_checkout(text,boolean),
+ pg_temp.expect_checkout_error(text,text,text),pg_temp.begin_checkout(uuid,text),
+ pg_temp.bind_checkout(text),pg_temp.record_checkout(text)
+ TO authenticated,service_role,anon;
 INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES
  ('91da0000-0000-4000-8000-000000000001','checkout-owner-rollback@example.invalid','{}'),
  ('91da0000-0000-4000-8000-000000000002','checkout-stranger-rollback@example.invalid','{}');

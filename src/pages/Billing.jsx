@@ -20,6 +20,7 @@ import { getWorkspaceProjectCount, getWorkspaceMemberCount, getWorkspacePendingI
 import { isStoreShell } from "@/lib/native/platform";
 import BillingControlCenter from "./billing/BillingControlCenter";
 import { useBillingActions } from "./billing/useBillingActions";
+import { CheckoutConfirmation } from "./billing/CheckoutConfirmation";
 
 export default function Billing() {
   const { currentOrg, currentRole, refetchOrgs } = useOrg();
@@ -58,6 +59,7 @@ export default function Billing() {
   // Presentation cannot diverge from billing behavior.
   const planContent = (
     <>
+      <CheckoutConfirmation orgId={orgId} canManage={canManage} native={native} refetchOrgs={refetchOrgs} />
       {/* Current plan banner */}
       <div className="sbd-card" style={{ padding: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>

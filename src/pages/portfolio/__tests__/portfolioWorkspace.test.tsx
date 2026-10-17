@@ -95,6 +95,37 @@ function renderSurface(Surface: ComponentType) {
   return { ...result, refresh: () => result.rerender(tree()) };
 }
 
+describe('ExecutiveView labor reporting', () => {
+  it('does not report portfolio burn when another project has no labor records', async () => {
+    mocks.projects.mockResolvedValue([...projectFixtures, { id: 'empty', org_id: 'org-a', name: 'No labor' }]);
+    mocks.rows.mockResolvedValue([{ project_id: 'project-a', shop_hours_budget: 100,
+      field_hours_budget: 0, shop_hours_actual: 0, field_hours_actual: 0 }]);
+    renderSurface(ExecutiveView);
+    const summary = await screen.findByTestId('summary');
+    const labor = JSON.parse(summary.textContent ?? '[]').find((k: { label: string }) => k.label === 'Labor Burn');
+    expect(labor).toMatchObject({ value: 'Not available', sub: 'Projects missing work-package labor: 1' });
+  });
+  it('labels incomplete actuals and does not publish a zero burn', async () => {
+    mocks.rows.mockResolvedValue([{ project_id: 'project-a', shop_hours_budget: 100,
+      field_hours_budget: 0, shop_hours_actual: null, field_hours_actual: 0 }]);
+    renderSurface(ExecutiveView);
+    const summary = await screen.findByTestId('summary');
+    const labor = JSON.parse(summary.textContent ?? '[]').find((k: { label: string }) => k.label === 'Labor Burn');
+    expect(labor).toMatchObject({ value: 'Not available', sub: '1 of 1 work packages incomplete' });
+    expect(screen.getByText(/Missing hours are omitted from the chart/)).toBeInTheDocument();
+  });
+  it('keeps explicitly recorded zero hours distinct from missing actuals', async () => {
+    mocks.rows.mockResolvedValue([{ project_id: 'project-a', shop_hours_budget: 100,
+      field_hours_budget: 0, shop_hours_actual: 0, field_hours_actual: 0 }]);
+    renderSurface(ExecutiveView);
+    const summary = await screen.findByTestId('summary');
+    const labor = JSON.parse(summary.textContent ?? '[]').find((k: { label: string }) => k.label === 'Labor Burn');
+    expect(labor.value).not.toBe('Not available');
+    expect(labor.sub).toBe('0 hrs actual');
+    expect(screen.queryByText(/Missing hours are omitted from the chart/)).toBeNull();
+  });
+});
+
 describe.each([
   { name: "Dashboard", Surface: Dashboard, executive: false },
   { name: "PortfolioHub", Surface: PortfolioHub, executive: false },

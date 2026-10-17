@@ -1,0 +1,74 @@
+{
+  "observedDate": "2026-10-16",
+  "projectRef": "kjrwqagyeswwoxpjkcko",
+  "ledgerPayloads": [
+    {
+      "version": "20260922015713",
+      "sha256": "5e91c05e0d37e2775f11f5d734df7d5cc955b471f1bd2bbed9c84c43f94f1b80"
+    },
+    {
+      "version": "20260927150000",
+      "sha256": "34500dcf125e3b10432dcfb44c3d10705b77a491263dcd95f155e3c1160550c5"
+    },
+    {
+      "version": "20260927160000",
+      "sha256": "e67a55a414277691c20599003cedcafc79bad51ccc447b47930ff06d3602215c"
+    },
+    {
+      "version": "20261005100745",
+      "sha256": "e05b215cc397e96d41bf10d037d491ff1b2078db62fd60762c13b1fdcdd9839d"
+    },
+    {
+      "version": "20261007073051",
+      "sha256": "8354f2ff700eb49b4d3e6580419c07087bc1e6cfbbe6222dec58bc1a52162e9e"
+    },
+    {
+      "version": "20261007084117",
+      "sha256": "870c0bd5e93e6fc042971a49f1814fa0753d41fc0aa836ac92906fa34e3f8c3f"
+    },
+    {
+      "version": "20261007090057",
+      "sha256": "6f26bbec42ca29e33accb246f38a3fa9ecbf34d1f0b10ec51eda9152015aeb2d"
+    },
+    {
+      "version": "20261007112918",
+      "sha256": "29e8db4bd72c6f036aa8acc8437a73b4ef0defdad83787e6b809e50ba7a76eb6"
+    },
+    {
+      "version": "20261007113400",
+      "sha256": "8a4bee23c1d23c1308ef8b92d736a55ec43ffb0fb1a3fe0c05dffccae86ae613"
+    },
+    {
+      "version": "20261007120658",
+      "sha256": "63c398ee01f119b747b4b6fe6b20ae721f2278d6b39e110640fe3fec4c6b46b8"
+    },
+    {
+      "version": "20261008071019",
+      "sha256": "3dfc1339eb999c33b5bad396d439958c8a6e6820071a612e33e686db9d5bbe44"
+    },
+    {
+      "version": "20261009070300",
+      "sha256": "b4b77581e51a0c61ee63d47fa34d1010a123bb1759bee6889e0ca0ec719b0ea7"
+    },
+    {
+      "version": "20261009125901",
+      "sha256": "ba0d72e62e8df02777f53d653593d7d9f41811798e0cfb0d551e367ce034eebb"
+    },
+    {
+      "version": "20261009140000",
+      "sha256": "b22297e7d1c6fd1f3e2f5ae1af080695a28404cf450c563085a73754743f0311"
+    },
+    {
+      "version": "20261013083754",
+      "sha256": "3a7bcfba9dce84edec270263f080332537b8026a54ae6939506e77b62fe68b4d"
+    },
+    {
+      "version": "20261013085637",
+      "sha256": "a874fc4073b7fcc257acef1363a4bfea517e44fd4ae7b04c1ec6983aa3da60e6"
+    },
+    {
+      "version": "20261013093000",
+      "sha256": "cfc8faafb40f554cd379565a1454be6ede80a0cdf54279a0dc469dcfc62114bc"
+    }
+  ]
+}

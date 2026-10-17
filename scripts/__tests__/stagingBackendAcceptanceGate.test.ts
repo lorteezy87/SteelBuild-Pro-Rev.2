@@ -48,14 +48,22 @@ describe('executed bounded backend acceptance source gate', () => {
     expect(checkout?.with).toEqual({ ref: '${{ needs.verify.outputs.candidate_sha }}', 'persist-credentials': false });
     const steps = Object.values(workflow.jobs).flatMap(job => job.steps);
     const credentialSteps = steps.filter(step => Object.values(step.env ?? {}).some(value => value.includes('secrets.')));
-    expect(credentialSteps).toHaveLength(1);
-    expect(Object.values(credentialSteps[0].env ?? {}).filter(value => value.includes('secrets.')).sort()).toEqual([
+    expect(credentialSteps).toHaveLength(3);
+    for (const step of credentialSteps) expect(Object.values(step.env ?? {}).filter(value => value.includes('secrets.')).sort()).toEqual([
       '${{ secrets.STAGING_E2E_PASS }}', '${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}', '${{ secrets.STAGING_E2E_SUPABASE_URL }}', '${{ secrets.STAGING_E2E_USER }}',
     ]);
     expect(credentialSteps[0].run).toBe('node scripts/staging-backend-acceptance/run.ts');
+    expect(credentialSteps[1].run).toBe('node scripts/staging-backend-acceptance/mfa-run.ts');
+    expect(credentialSteps[1].if).toBe("${{ !cancelled() && inputs.billing_action == 'none' }}");
+    expect(credentialSteps[1].env).toEqual(credentialSteps[0].env);
+    expect(credentialSteps[0].if).toBe("inputs.billing_action == 'none'");
+    expect(credentialSteps[2].run).toBe('node scripts/staging-backend-acceptance/billing-run.ts');
+    expect(credentialSteps[2].if).toBe("${{ !cancelled() && inputs.billing_action != 'none' }}");
     expect(steps.some(step => /npm|npx|curl|supabase functions|continue-on-error/.test(step.run ?? ''))).toBe(false);
     const upload = steps.find(step => step.uses === 'actions/upload-artifact@v7');
-    expect(upload?.with?.path).toBe('test-results/backend-acceptance/summary.json');
+    expect(String(upload?.with?.path).trim().split('\n')).toEqual([
+      'test-results/backend-acceptance/summary.json', 'test-results/backend-acceptance/mfa.json', 'test-results/backend-acceptance/billing.json',
+    ]);
     expect(upload?.if).toBe('${{ !cancelled() }}');
   });
   it('does not import the executable into general CI, and cannot turn INCOMPLETE into exit zero', () => {
@@ -63,6 +71,8 @@ describe('executed bounded backend acceptance source gate', () => {
     expect(cli).toContain("process.exitCode = report.status === 'FAIL' ? 1 : 2");
     const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
     expect(ci).not.toContain('staging-backend-acceptance/run.ts');
+    expect(ci).not.toContain('staging-backend-acceptance/mfa-run.ts');
+    expect(ci).not.toContain('staging-backend-acceptance/billing-run.ts');
     expect(cli).not.toMatch(/JSON\.stringify\((process\.env|session|response|error)/);
   });
 });

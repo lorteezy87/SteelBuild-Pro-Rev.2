@@ -9,10 +9,11 @@
  *  - responsive.css — Density toggle, breakpoints, mobile overrides
  *  - tailwind-compat.css — shadcn/ui HSL bridge, Tailwind class remaps
  *
- * PostCSS requires @import before @tailwind directives.
+ * Tailwind v4 loads the existing JavaScript theme through @config.
  * Font loading is done in index.html <link> tags instead.
  */
 
+@import 'tailwindcss';
 @import './styles/tokens.css';
 @import './styles/base.css';
 @import './styles/components.css';
@@ -30,6 +31,4 @@
  * so both legacy theme overlays resolve to the same brand contract. */
 @import './styles/brand-theme.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config '../tailwind.config.js';
