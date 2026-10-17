@@ -4,6 +4,9 @@ import { assertDisposableMutationEnvironment } from "./environment";
 import { createStagingFabPackage } from './fixtures/stagingFabPackage.js';
 import { randomUUID } from 'node:crypto';
 import { allowsStagingBrowserRequest, APP_ORIGIN, STAGING_ORIGIN, isLocalTelemetryDiscard } from './stagingNetworkGuard.js';
+import { registerDrawingDeleteAcceptance } from './fixtures/drawingRegisterDeleteAcceptance.js';
+
+registerDrawingDeleteAcceptance();
 
 /**
  * e2e/fab-release-gate.spec.ts — the mutation-aware fab-release gate contract.
