@@ -23,6 +23,11 @@ RETURNS text LANGUAGE sql SECURITY INVOKER AS $$
  jsonb_build_object('plan',p_plan,'subscription_status',p_status,'stripe_customer_id','cus_rollback_billing',
  'stripe_subscription_id','sub_rollback_billing','current_period_end',p_end));
 $$;
+-- Hosted default privileges need not grant PUBLIC execution to temporary helpers.
+-- Grant only this rollback-scoped harness; application RPC grants stay unchanged.
+GRANT EXECUTE ON FUNCTION pg_temp.assert_billing(text,boolean),
+ pg_temp.expect_billing_error(text,text,text),pg_temp.apply_billing(text,bigint,text,text,text)
+ TO authenticated,service_role,anon;
 INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES
  ('91d90000-0000-4000-8000-000000000001','billing-owner-rollback@example.invalid','{}'),
  ('91d90000-0000-4000-8000-000000000002','billing-foreign-rollback@example.invalid','{}');

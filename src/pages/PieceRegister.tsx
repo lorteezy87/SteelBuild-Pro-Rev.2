@@ -1260,10 +1260,10 @@ export default function PieceRegister() {
                 onSelect={handleLifecycleSelect}
               />
             </DecisionPanel>
-            <DecisionPanel title="Needs attention">
+            <DecisionPanel title="Assignments, weights & holds">
               <PieceAttentionPanel
                 items={presentation.attention}
-                emptyMessage="No piece exceptions."
+                emptyMessage="No assignment, weight or hold issues. Review Changes & Risks for revision exposure."
                 onSelect={handleAttentionSelect}
               />
             </DecisionPanel>

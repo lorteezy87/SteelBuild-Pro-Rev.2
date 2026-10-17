@@ -3,6 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { buildExecutiveDistributions } from "./executive/executiveChartData";
+import { summarizeExecutiveLabor } from "./executive/executiveLabor";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatBudgetPercent } from "../components/shared/formatters";
 import { computeRevisedBudget, resolveProjectSpend } from "@/services/costRollup";
@@ -141,14 +142,15 @@ export default function ExecutiveView() {
     ).actual,
   ]));
   const totalSpend = [...spendByProjectId.values()].reduce((s, v) => s + v, 0);
-  const totalBudgetHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0), 0);
-  const totalActualHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0) + (Number(w.field_hours_actual) || 0), 0);
+  const labor = summarizeExecutiveLabor(wps);
+  const projectsWithoutLabor = projects.filter((p) => !wps.some((w) => w.project_id === p.id)).length;
+  const laborIncomplete = labor.incompletePackages > 0 || projectsWithoutLabor > 0;
 
   const kpis = [
     { label: "Portfolio Value", value: formatCurrency(revisedTotal), color: "green" },
-    { label: "Total Spend", value: formatCurrency(totalSpend), sub: `of ${formatCurrency(totalBudget)} budget`, color: totalSpend > totalBudget ? "rose" : "blue" },
+    { label: "Recorded Spend", value: formatCurrency(totalSpend), sub: codes.length ? `of ${formatCurrency(totalBudget)} recorded budget` : "Budget not recorded", color: codes.length && totalSpend > totalBudget ? "rose" : "blue" },
     { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${cos.filter(isApprovedCO).length} orders`, color: "purple" },
-    { label: "Labor Burn", value: formatBudgetPercent(totalBudgetHrs > 0 ? totalActualHrs / totalBudgetHrs * 100 : 0), sub: `${totalActualHrs.toLocaleString()} hrs actual`, color: "amber" },
+    { label: "Labor Burn", value: laborIncomplete || labor.burnPercent === null ? "Not available" : formatBudgetPercent(labor.burnPercent), sub: !wps.length ? "No work-package labor recorded" : projectsWithoutLabor ? `Projects missing work-package labor: ${projectsWithoutLabor}` : labor.incompletePackages ? `${labor.incompletePackages} of ${wps.length} work packages incomplete` : labor.budget === 0 ? "No positive labor budget recorded" : `${labor.actual?.toLocaleString()} hrs actual`, color: "amber" },
     { label: "Open RFIs", value: rfis.filter(isRfiOpen).length, color: "blue" },
     { label: "At Risk Projects", value: projects.filter((p) => p.health_status === "At Risk").length, color: "rose" },
     {
@@ -186,10 +188,11 @@ export default function ExecutiveView() {
 
   const laborData = projects.map((p) => {
     const pw = wps.filter((w) => w.project_id === p.id);
+    const projectLabor = summarizeExecutiveLabor(pw);
     return {
       name: p.project_number || p.name?.slice(0, 8),
-      budget: pw.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0), 0),
-      actual: pw.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0) + (Number(w.field_hours_actual) || 0), 0),
+      budget: projectLabor.budget,
+      actual: projectLabor.actual,
     };
   });
 
@@ -318,6 +321,13 @@ export default function ExecutiveView() {
 
         <div style={CARD_STYLE}>
           <div style={CARD_TITLE}>Labor Hours: Budget vs Actual</div>
+          {(laborIncomplete || !wps.length) && (
+            <p role="status" style={{ color: "var(--text-muted)", fontSize: 12 }}>
+              Labor reporting is incomplete. Missing hours are omitted from the chart; they are not zero.
+              {wps.length > 0 && ` ${labor.enteredActual.toLocaleString()} actual hours entered so far across ${wps.length} work packages.`}
+              {projectsWithoutLabor > 0 && ` Projects without work-package labor records: ${projectsWithoutLabor}.`}
+            </p>
+          )}
           {laborData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={laborData}>

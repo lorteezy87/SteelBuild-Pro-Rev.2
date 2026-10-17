@@ -100,7 +100,9 @@ effective hosted-behavior acceptance.
 6. After approval, deploy one production function at a time through the same
    gated workflow, retaining each before-source artifact and inventory. Read back
    and verify bytes/JWT modes and non-destructive production controls. Release the
-   frontend only through its five-job-gated Cloudflare path, after billing is ready.
+   frontend only through the current five-job-gated Sites release handoff in
+   `docs/runbooks/sites-release.md`, after billing is ready. Cloudflare remains
+   staging/preview infrastructure; it is not the production publisher.
 
 The workflow already captures rollback source before replacement. If a release
 fails, stop further publication and evaluate rollback of the affected function
@@ -132,3 +134,87 @@ toolchain advisories remain separate work; no dependency override was weakened.
 Executive actuals completeness, verified backups/restores, first-project onboarding,
 connector prioritization and paid-pilot measurement follow this security/billing
 slice in audit priority order.
+
+## Authorized follow-up: staging and reporting
+
+The follow-up retains PR #557 as a draft production review candidate. No production
+deployment, merge, production database write or Stripe charge was performed.
+The shared original checkout and its staged edits were left untouched.
+
+### Staging results and release boundary
+
+On the existing staging project `ndyfjffsulfbwpmwdmic`:
+
+- `server-mfa/readiness.sql` returned no configuration gaps. This establishes
+  installed hook/policy configuration, not real Auth-issued AAL1/AAL2 HTTP behavior.
+- All 17 sampled prerequisite migration ledger payload hashes match the earlier
+  production evidence. Staging has 144 public tables, all with RLS; the table count
+  differs from production and is not a claim of complete schema parity.
+- `stripe-billing/staging-acceptance.sql` passed all 20 assertions against installed
+  functions, grants, policies and guards. The checkout companion passed all 20.
+  They cover duplicate/stale events, cancellation, unauthorized receipt/plan writes,
+  foreign-workspace reads, durable reservations, conflicting bindings and erasure.
+- Both suites initially failed on their own temporary helper permissions under
+  hosted default privileges. Explicit EXECUTE grants now apply only to the
+  rollback-scoped `pg_temp` helpers. Application grants and default privileges
+  were not changed. Rerunning both suites passed.
+- All fixtures rolled back. A fresh read confirmed zero fixture users and zero
+  fixture organizations remaining. These were sequential transactions, not a new
+  hosted concurrency test and not a Stripe delivery test.
+
+Sanitized evidence: `evidence/security-billing-2026-10-16/staging-followup.json`.
+The seven backend source closures remain unchanged: all 49 manifest entries match.
+
+Hosted acceptance remains **INCOMPLETE** for concrete reasons:
+
+1. `staging-backend` has a `main`-only branch policy and a required owner reviewer.
+   This draft candidate is not merged to main. The bounded acceptance workflow also
+   requires a main-reachable candidate. Neither protection was weakened or bypassed.
+2. Staging's `billing_config` returned zero rows. Real test-mode checkout cannot
+   proceed until isolated Stripe test prices, webhook secret and `livemode=false`
+   configuration are provisioned, with test-key availability verified through the
+   secret-management flow. No production configuration or secret was copied.
+3. Candidate deployment/readback, enrolled AAL1/AAL2 HTTP checks, successful
+   service-specific operations, real signed Stripe delivery, delayed/replayed
+   webhook confirmation and browser payment lifecycle therefore remain open.
+
+### Executive reporting correction
+
+`executiveLabor.ts` distinguishes missing/blank/invalid hours from explicitly
+recorded zero. Budget and actual series are independently withheld when incomplete;
+partial entered hours are labeled as partial. Labor Burn is unavailable for missing
+inputs, a nonpositive budget, no work packages, or a portfolio project with no labor
+records. The chart explains missing values instead of drawing zero-hour claims.
+The spend KPI is labeled Recorded Spend, and an absent cost-code budget says Budget
+not recorded. Canonical spend arithmetic is preserved. Recorded/defaulted zero in
+the database cannot be distinguished from a human-attested zero by these columns;
+this change does not invent provenance or certify ledger completeness.
+
+### Piece Register correction
+
+The limited attention panel is now Assignments, weights & holds. Its empty state
+says No assignment, weight or hold issues and directs users to Changes & Risks
+for revision exposure. No risk calculations, release gates, permissions or piece
+states were changed.
+
+### Production review sequence
+
+Review the complete PR and function manifest first. After integration to main and
+all five required exact-commit jobs passing, use the existing reviewed deployment
+workflow for the seven staging functions, satisfy the owner-review environment
+gate, verify deployed bytes/JWT settings, and configure isolated Stripe test mode.
+Complete the hosted cases above before considering production approval. The final
+main SHA, CI run, source readback and hosted acceptance must be added to this packet;
+this document is not approval to publish an untested candidate.
+
+Follow-up local verification: 35 focused tests across three files passed, including
+rendered ExecutiveView tests for unknown actuals, explicit zero, and projects
+without labor records. The local SQL fixture suites passed 22 atomic-billing and
+28 durable-checkout checks after installing their pinned test-only dependencies
+with lifecycle scripts disabled. Lint, TypeScript, JavaScript typecheck, both
+shrink-only typing gates, no-new-JavaScript, build and bundle budgets passed.
+Initial assets are 124.5 KB gzip; total generated assets are 3228.6 KB gzip.
+The two new production UI changes have component/source-wiring coverage; an
+authenticated rendered browser review of the new candidate is still pending.
+The earlier CI counts belong to the earlier SHA; they are not the final follow-up
+commit's CI result. Use the new PR checks for the latter.
