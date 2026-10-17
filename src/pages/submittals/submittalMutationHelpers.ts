@@ -57,6 +57,9 @@ export function formatSubmittalWriteError(
     return "That submittal number already exists in this project — use a different number.";
   }
   const detail = toUserErrorMessage(err, "Unknown error");
+  if (/\bROUND_LEGACY_RECONCILIATION_REQUIRED\b/.test(detail)) {
+    return 'Revision evidence blocked this change. Check the current package status and Revision evidence panel. If evidence is missing, a PM must compare the original transmitted PDFs before reconciling; changed PDFs require a new review submission. Do not repeat release if the package is already released.';
+  }
   switch (verb) {
     case "Create":
       return `Create failed: ${detail}`;
