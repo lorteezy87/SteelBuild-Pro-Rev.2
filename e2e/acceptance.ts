@@ -97,7 +97,7 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
       return;
     }
     if (response.request().method() !== "GET" || !response.ok()
-      || !projectId || url.searchParams.get("project_id") !== `eq.${projectId}`) return;
+      || !projectId || ![`eq.${projectId}`, `in.(${projectId})`].includes(url.searchParams.get("project_id") || '')) return;
     const table = /^\/rest\/v1\/([^/]+)$/.exec(url.pathname)?.[1];
     if (!table) return;
     const read = (async () => {
@@ -239,8 +239,8 @@ export async function visitRegister(page: Page, register: RegisterName, options:
   if (contract.fixtureTable && options.fixtureText) {
     const fixtureText = options.fixtureText;
     const fixtureField = register === "drawings" ? "set_name" : "title";
-    expect(probe.rows.get(contract.fixtureTable)?.some(row => row[fixtureField] === fixtureText),
-      "The successful response must contain the known fixture row").toBe(true);
+    await expect.poll(() => probe.rows.get(contract.fixtureTable)?.some(row => row[fixtureField] === fixtureText),
+      { message: "The successful response must contain the known fixture row", timeout }).toBe(true);
     // Drawing names share a span with a nested set-number badge. Match the
     // exact title text node instead of the whole span or a row substring.
     const exactTitle = page.locator(`xpath=.//*[text()[normalize-space(.)=${xpathLiteral(fixtureText)}]]`);

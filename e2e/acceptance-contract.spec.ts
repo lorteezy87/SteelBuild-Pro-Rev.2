@@ -47,6 +47,26 @@ test("accepts a loaded authenticated register with its scoped response and fixtu
   await visitRegister(page, "submittals", options);
 });
 
+test('accepts a singleton project IN filter', async ({ page }) => {
+  await fixture(page, { request: false, extraScript: `await fetch(${JSON.stringify(`${API}/rest/v1/submittals?project_id=in.(${PROJECT})`)});` });
+  await visitRegister(page, 'submittals', options);
+});
+
+test('refuses a multi-project IN filter even when only the fixture row is returned', async ({ page }) => {
+  await fixture(page, { request: false, extraScript: `await fetch(${JSON.stringify(`${API}/rest/v1/submittals?project_id=in.(${PROJECT},22222222-2222-4222-8222-222222222222)`)});` });
+  await expect(visitRegister(page, 'submittals', options)).rejects.toThrow(/successful project-scoped JSON/);
+});
+
+test('waits for refreshed fixture rows after an initial empty response', async ({ page }) => {
+  const url = `${API}/rest/v1/submittals?project_id=eq.${PROJECT}`;
+  await fixture(page, { request: false, extraScript: `await fetch(${JSON.stringify(url)}); setTimeout(() => fetch(${JSON.stringify(url)}), 150);` });
+  let requests = 0;
+  await page.context().route(`${API}/rest/v1/submittals*`, route => route.fulfill({ contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(requests++ ? [ROW] : []) }));
+  await visitRegister(page, 'submittals', options);
+  expect(requests).toBe(2);
+});
+
 test('waits for a pending detail read before navigation while preserving network failure detection', async ({ page }) => {
   await fixture(page, { request: false });
   let release: () => void = () => {};
