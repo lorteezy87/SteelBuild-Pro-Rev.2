@@ -77,10 +77,13 @@ workspace membership revocation, project scoping, session handoff token
 audience/expiry, and synthetic account deletion after the erasure SQL fixes.
 Do not send customer email or delete customer records for a release smoke test.
 
-The workflow downloads the previous function into an isolated runner directory
-and uploads it with the deployment inventory before publishing. Failure to
-download or retain an existing source stops deployment. A missing production
-function also stops deployment; staging permits a first installation.
+The workflow downloads the previous function's original ESZIP bundle as inert
+bytes into an isolated runner directory, retaining response headers, SHA-256
+checksums and the deployment/JWT inventory before publishing. It never extracts
+or executes downloaded code. This also preserves imports outside the functions
+folder, which the CLI's safe extraction boundary correctly refuses to write.
+Failure to download or retain an existing bundle stops deployment. A missing
+production function also stops deployment; staging permits a first installation.
 
 ## Rollback and limits
 
@@ -96,8 +99,12 @@ Production rejected unauthenticated gateway/export/billing requests with 401,
 unsupported billing methods with 405 and unsigned webhooks with 400. Billing
 remains in test mode. No payment or paid AI request was made during verification.
 
-Redeploy the captured previous source with its original JWT mode after explicit
-approval. A frontend rollback does not revert functions or database migrations.
+Before rollback, verify SHA256SUMS and review the captured inventory. Use the
+official Supabase Edge Runtime ESZIP unbundle tooling in a dedicated temporary
+workspace, inspect every output path and source file, and typecheck before
+redeploying the captured source with its original JWT mode after explicit
+approval. Do not extract remote paths into a live checkout or run the downloaded
+application code. A frontend rollback does not revert functions or migrations.
 Prefer a reviewed forward fix over removing tenant-access or ownership guards.
 
 The gateway quota remains an aggregate of recorded usage, not an atomic

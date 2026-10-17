@@ -171,7 +171,7 @@ test("keeps blocking delayed writes after register acceptance returns", async ({
   expect(() => probe.assertHealthy()).toThrow(/runtime, network, or write failures/);
 });
 
-for (const rpc of ["get_submittal_revision_coverage", "get_submittal_revision_coverages"]) {
+for (const rpc of ["get_my_feature_flags", "get_submittal_revision_coverage", "get_submittal_revision_coverages"]) {
   test(`allows the inspected ${rpc} POST read`, async ({ page }) => {
     const backend = await fixture(page);
     await visitRegister(page, "submittals", options);
@@ -201,6 +201,8 @@ for (const rpc of ["get_submittal_revision_coverage", "get_submittal_revision_co
 
 for (const [method, rpc] of [
   ["POST", "get_submittal_revision_coverages_unreviewed"],
+  ["POST", "get_my_feature_flags_unreviewed"],
+  ["PATCH", "get_my_feature_flags"],
   ["POST", "apply_submittal_round_workflow"],
   ["PUT", "get_submittal_revision_coverage"],
   ["PATCH", "get_submittal_revision_coverages"],

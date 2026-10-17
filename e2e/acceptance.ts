@@ -19,6 +19,7 @@ const pageProbes = new WeakMap<Page, { origin: string; allowAuthLogout: boolean;
 // Individually inspected read-only RPCs; names beginning with "get" are not
 // sufficient evidence. Keep this list explicit as application reads evolve.
 const readOnlyRpcPaths = new Set([
+  "/rest/v1/rpc/get_my_feature_flags",
   "/rest/v1/rpc/get_my_project_role",
   "/rest/v1/rpc/get_submittal_revision_coverage",
   "/rest/v1/rpc/get_submittal_revision_coverages",

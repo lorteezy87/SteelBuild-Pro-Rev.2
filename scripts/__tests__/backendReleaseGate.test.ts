@@ -28,6 +28,14 @@ function verify(options: { target?: string; slug?: string; ref?: string; failedJ
 }
 
 describe('executed backend release gate', () => {
+  it('retains the original bundle without extracting server-controlled paths', () => {
+    const source = readFileSync(new URL('../../.github/workflows/supabase-deploy-reviewed.yml', import.meta.url), 'utf8');
+    expect(source).toContain('/functions/$FUNCTION/body');
+    expect(source).toContain('function-before.eszip');
+    expect(source).toContain('sha256sum');
+    expect(source).not.toContain('functions download');
+    expect(source).toContain('if-no-files-found: error');
+  });
   it('keeps isolated Stripe key provisioning behind staging-only billing selection', () => {
     const source = readFileSync(new URL('../../.github/workflows/supabase-deploy-reviewed.yml', import.meta.url), 'utf8');
     const parsed = load(source) as { jobs: { deploy: { steps: Array<{ name?: string; if?: string; run?: string }> } } };

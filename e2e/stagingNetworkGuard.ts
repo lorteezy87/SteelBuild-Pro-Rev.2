@@ -18,6 +18,7 @@ export function isLocalTelemetryDiscard(raw: string, method: string): boolean {
   } catch { return false; }
 }
 const READ_RPCS = new Set([
+  '/rest/v1/rpc/get_my_feature_flags',
   '/rest/v1/rpc/get_my_project_role',
   '/rest/v1/rpc/get_submittal_revision_coverage',
   '/rest/v1/rpc/get_submittal_revision_coverages',
