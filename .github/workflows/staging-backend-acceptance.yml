@@ -66,7 +66,7 @@ jobs:
     # Repository environment settings must restrict this environment to main.
     environment: staging-backend
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v7
         with:
@@ -87,11 +87,24 @@ jobs:
           E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
           E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
         run: node scripts/staging-backend-acceptance/run.ts
+      - name: Exercise synthetic enrolled MFA sessions with cleanup
+        if: ${{ !cancelled() }}
+        env:
+          ACCEPTANCE_CANDIDATE_SHA: ${{ needs.verify.outputs.candidate_sha }}
+          E2E_TARGET: staging
+          E2E_EXPECTED_SUPABASE_REF: ndyfjffsulfbwpmwdmic
+          E2E_USER: ${{ secrets.STAGING_E2E_USER }}
+          E2E_PASS: ${{ secrets.STAGING_E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.STAGING_E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.STAGING_E2E_SUPABASE_ANON_KEY }}
+        run: node scripts/staging-backend-acceptance/mfa-run.ts
       - name: Retain sanitized result only (INCOMPLETE is not a green release gate)
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: backend-acceptance-${{ needs.verify.outputs.candidate_sha }}
-          path: test-results/backend-acceptance/summary.json
+          path: |
+            test-results/backend-acceptance/summary.json
+            test-results/backend-acceptance/mfa.json
           if-no-files-found: error
           retention-days: 7

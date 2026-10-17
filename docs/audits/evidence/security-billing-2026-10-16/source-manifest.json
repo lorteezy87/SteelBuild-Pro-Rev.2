@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "candidateSourceCommit": "8dbce73babd86f9a99619dcc7584a96e72b632da",
-  "baseCommit": "fd8c0f0b1",
+  "candidateSourceCommit": "8d8425fb2d83f8d0885d566e52737171ba7a2fae",
+  "baseCommit": "ca12570f7e3731da3a0f541e5a8cdc10d633b450",
   "projectRef": "kjrwqagyeswwoxpjkcko",
   "functions": [
     {
       "slug": "llm-proxy",
       "verify_jwt": false,
       "productionBeforeVersion": 44,
-      "sourceClosureSha256": "0c330ee7569909be9abf3d923ff016e8b7f40cf44f58e5be0e5b2f2383c57c72",
+      "sourceClosureSha256": "d3eb018c7ab169ea2a45494079852216c2353181e0180dc455a1b5240d00f01c",
       "files": [
         {
           "path": "supabase/functions/_shared/cors.ts",
-          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+          "sha256": "bea0f209d77b4fb449966ddc1be109104ea8c34ee6d2cbe1d9951928a8eda1d4"
         },
         {
           "path": "supabase/functions/_shared/mfa.ts",
@@ -68,7 +68,7 @@
       "slug": "email-send",
       "verify_jwt": true,
       "productionBeforeVersion": 31,
-      "sourceClosureSha256": "ce28b5b76c2815ad496310d8d58dc645cacfe2b00cb521a81a578e3457791454",
+      "sourceClosureSha256": "660982e520db5f599bc08c531ce35d66332e769f6e7c03dff6ce017d3621eaba",
       "files": [
         {
           "path": "supabase/functions/_shared/attachments.ts",
@@ -76,7 +76,7 @@
         },
         {
           "path": "supabase/functions/_shared/cors.ts",
-          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+          "sha256": "bea0f209d77b4fb449966ddc1be109104ea8c34ee6d2cbe1d9951928a8eda1d4"
         },
         {
           "path": "supabase/functions/_shared/mfa.ts",
@@ -104,11 +104,11 @@
       "slug": "project-export",
       "verify_jwt": true,
       "productionBeforeVersion": 31,
-      "sourceClosureSha256": "d2ac8cd1559d46e0899f55b22794b24d64bf947160c8e73cbd918f80a10cbb81",
+      "sourceClosureSha256": "f7749e5c729f59f876752c05035a98c14d11943ea3c0d831516910503f566ca2",
       "files": [
         {
           "path": "supabase/functions/_shared/cors.ts",
-          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+          "sha256": "bea0f209d77b4fb449966ddc1be109104ea8c34ee6d2cbe1d9951928a8eda1d4"
         },
         {
           "path": "supabase/functions/_shared/mfa.ts",
@@ -141,7 +141,7 @@
       "slug": "command-center-read",
       "verify_jwt": false,
       "productionBeforeVersion": 14,
-      "sourceClosureSha256": "b742646f718ca437dc70f9fc5f24205eec3215502ace718046c49f58a8444e32",
+      "sourceClosureSha256": "a3e2f33b60ddc93c1c57e7f88cca03be59e6f9f424253270ba9068053ad70838",
       "files": [
         {
           "path": "src/lib/recordLinks.ts",
@@ -149,7 +149,7 @@
         },
         {
           "path": "supabase/functions/_shared/cors.ts",
-          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+          "sha256": "bea0f209d77b4fb449966ddc1be109104ea8c34ee6d2cbe1d9951928a8eda1d4"
         },
         {
           "path": "supabase/functions/_shared/mfa.ts",
@@ -176,11 +176,11 @@
       "slug": "command-center-session-handoff",
       "verify_jwt": false,
       "productionBeforeVersion": 15,
-      "sourceClosureSha256": "f217849cbdbcf8716500ae417017da18b099139249b6d2b6d16a622b8fe3b0f3",
+      "sourceClosureSha256": "b925a6ba59707cf3a67cf44d54f76f71685272b800ff87caa6468c9a5e5854d1",
       "files": [
         {
           "path": "supabase/functions/_shared/cors.ts",
-          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+          "sha256": "bea0f209d77b4fb449966ddc1be109104ea8c34ee6d2cbe1d9951928a8eda1d4"
         },
         {
           "path": "supabase/functions/_shared/mfa.ts",
@@ -203,11 +203,11 @@
       "slug": "stripe-billing",
       "verify_jwt": false,
       "productionBeforeVersion": 31,
-      "sourceClosureSha256": "7b050e3550d53cbffb8de3849f919bec8cac30f02ed89260f8eb9e7d3124f84d",
+      "sourceClosureSha256": "513389d3221febbd6ae3ed0bd0fdbb452955dc863397fd4ff8a25099c476fce9",
       "files": [
         {
           "path": "supabase/functions/_shared/cors.ts",
-          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+          "sha256": "bea0f209d77b4fb449966ddc1be109104ea8c34ee6d2cbe1d9951928a8eda1d4"
         },
         {
           "path": "supabase/functions/_shared/mfa.ts",
@@ -248,11 +248,11 @@
       "slug": "account-delete",
       "verify_jwt": true,
       "productionBeforeVersion": 4,
-      "sourceClosureSha256": "f62d232c4ead1c78fb5935d56d21503594f98e1ae46e07474d2a681082e384f0",
+      "sourceClosureSha256": "46f155704334acc60c0c64f1b1e808afeb2a552730e1f70074002c780820f904",
       "files": [
         {
           "path": "supabase/functions/_shared/cors.ts",
-          "sha256": "b78f7b7b58fdbd5af32bfeaec9ca147d83a25e0c657a20cb343fc53478fea499"
+          "sha256": "bea0f209d77b4fb449966ddc1be109104ea8c34ee6d2cbe1d9951928a8eda1d4"
         },
         {
           "path": "supabase/functions/_shared/mfa.ts",
@@ -285,5 +285,6 @@
       ]
     }
   ],
-  "authorization": "Prepared for review only. No deployment performed."
+  "authorization": "Prepared for review only. No deployment performed.",
+  "sourceClosureAlgorithm": "SHA-256 of sorted UTF-8 path + NUL + lowercase file SHA-256 + LF entries"
 }

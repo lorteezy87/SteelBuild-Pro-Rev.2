@@ -218,3 +218,45 @@ The two new production UI changes have component/source-wiring coverage; an
 authenticated rendered browser review of the new candidate is still pending.
 The earlier CI counts belong to the earlier SHA; they are not the final follow-up
 commit's CI result. Use the new PR checks for the latter.
+
+## CI and staging closeout continuation (2026-10-17)
+
+The user authorized reviewing/merging PR #557 and staging testing while explicitly
+holding production. Current main was merged into the isolated branch, preserving
+the new macOS/store-shell restrictions and the reviewed CORS changes. The seven
+function manifests were regenerated against those source bytes, with the closure
+hash algorithm now stated explicitly. The earlier 49-file equality claim is a
+historical checkpoint, not a claim that CORS stayed byte-identical after integration.
+
+The remaining dependency failure was GHSA-vfj7-8cjw-p6xm in braces, inherited by
+Tailwind 3, chokidar, fast-glob and micromatch. Upstream reports no patched braces
+release. Tailwind/PostCSS were upgraded together to 4.3.3; the vulnerable chain is
+removed and npm audit reports zero vulnerabilities. No advisory allowlist, scanner
+exception, fabricated package version or local dependency fork was introduced.
+The existing JavaScript theme config is explicitly loaded; application token/theme
+files remain authoritative. Tailwind 4 requires modern browsers (Safari 16.4+,
+Chrome 111+, Firefox 128+). This is a build integration upgrade, not proof that
+every authenticated screen has received visual acceptance.
+
+Local build, lint and TS/JS checks passed. The existing 120 fixture browser checks
+passed. An added utility test initially assumed a 16px root font instead of the
+app's 14px; after correcting that assertion, both desktop/mobile checks passed,
+including actual grid spacing and light/dark configured token colors. Screenshots
+were inspected. The fixture is not an authenticated production workflow.
+An additional 101 focused tests passed, including checkout confirmation and the
+RFC 6238 TOTP vectors used by the staging acceptance runner.
+
+The existing main-only staging acceptance workflow now also exercises Auth-issued
+enrolled AAL1/AAL2 sessions on the synthetic staging.pm account. It refuses an
+unexpected fixture or existing factor, enrolls a temporary TOTP factor, probes
+Data API and bounded Edge boundaries, and removes/readbacks the temporary factor
+in finally. It retains sanitized outcomes only; secrets and provider/user response
+bodies are not logged. The probes do not send email, invoke a real model, create
+handoff tokens, charge Stripe or request account erasure. AAL2 validation rejection
+is not described as successful provider operation acceptance. Missing Stripe
+configuration remains INCOMPLETE, not PASS. Storage/Realtime and full provider
+operations remain separately identified coverage limits.
+
+The connected Stripe tool currently returns UNAUTHORIZED / requires reauthentication.
+An asynchronous reconnect request was presented. No live account was selected,
+no Stripe resource or key was provisioned, and no production configuration changed.
