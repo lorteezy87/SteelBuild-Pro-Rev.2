@@ -24,6 +24,16 @@ attestation, subsequent revision invalidation, historical persistence and
 archived publish denial. Concurrent sessions cover identical/different request
 keys, incoming sheets, revision swaps, post-capture insert blocking and removals.
 
+The harness also applies the exact committed
+`20261017081234_nonretryable_submittal_revision_conflicts.sql` patch. Three
+behavioral cases require `PT409` for stale parent, stale workflow roster and
+inactive revision parent, with unchanged parent/round/revision/evidence/receipt
+snapshots after rejection. Function definitions, owners, ACLs and configuration
+must remain identical except for the three SQLSTATE literals. Missing or duplicate
+reviewed guards reject the entire patch, including earlier replacements. The
+independent-session PostgreSQL stale-parent and revision-swap races also require
+`PT409`. These checks do not themselves prove hosted PostgREST/browser behavior.
+
 `node hosted-rollback.ts` prints JSON containing a SHA-256 and reviewable SQL.
 It does not connect or read credentials. The SQL runs the exact candidate plus
 synthetic fixtures and 31 assertions in a transaction ending in ROLLBACK, then

@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261017081234",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - 2026-10-17 nonretryable submittal/revision review conflicts. Exact-guard-count patch preserves installed function bodies, owners and grants while changing only three deterministic ROUND_STALE/ROUND_STALE_ROSTER SQLSTATEs from 40001 to PT409. Hosted staging PostgREST 14.5 repeatedly retries 40001; source harness verifies conflict codes, unchanged records and atomic drift rejection. Requires reviewed exact-file manual staging application and authenticated browser conflict recovery; production remains on hold until separately authorized manual application and matching ledger payload verification."
+      },
+      {
         "version": "20261013093000",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - caller-scoped feature-flag read candidate. Replaces the cross-tenant authenticated raw-table read with system-admin-only selection and an authenticated SECURITY DEFINER RPC that returns only each caller's effective key and boolean. Requires exact SQL review, hosted staging checks for admin management and ordinary-user reads, manual application, and a matching ledger stamp before production release."
