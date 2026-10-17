@@ -9,7 +9,7 @@ import { assertTermsAccepted, TERMS_VERSION } from '@/lib/signupClickwrap';
 import { passwordResetRedirect } from '@/lib/authRedirects';
 import { ACTIVE_PROJECT_ID_KEY, PROJECTS_CACHE_KEY } from '@/lib/projectSelection';
 import { setActiveOrgId } from '@/lib/activeOrg';
-import { isNativePlatform } from '@/lib/native/platform';
+import { isStoreShell } from '@/lib/native/platform';
 import {
   getPasswordRecoveryHold, subscribePasswordRecovery, capturePasswordRecovery,
   recoveryAppliesTo, markRecoveryPasswordUpdated, clearPasswordRecoveryAfterSignOut, refreshPasswordRecovery,
@@ -446,7 +446,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const redirectTo = passwordResetRedirect(
         typeof window !== 'undefined' ? window.location.origin : undefined,
-        isNativePlatform(),
+        isStoreShell(),
       );
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;

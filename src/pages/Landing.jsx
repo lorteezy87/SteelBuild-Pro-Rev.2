@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { BrandLogo } from "@/components/nav/BrandLogo";
 import MarketingLanding from "@/components/landing/MarketingLanding";
-import { isNativePlatform } from "@/lib/native/platform";
+import { isStoreShell } from "@/lib/native/platform";
 
 const C = {
   // Dual-theme hex allowlist: public landing uses a fixed executive-light brand palette.
@@ -43,7 +43,7 @@ const monoLabel = (extra = {}) => ({
 export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitting, loginError }) {
   // The native App Store shell is sign-in only. Account creation and billing
   // remain on the web, so native users never enter the marketing/pricing flow.
-  const native = isNativePlatform();
+  const native = isStoreShell();
   const [showLogin, setShowLogin] = useState(native);
   const [authMode, setAuthMode] = useState("signin"); // "signin" | "signup" | "forgot"
   const [email, setEmail] = useState("");

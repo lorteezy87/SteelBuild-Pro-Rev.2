@@ -16,7 +16,7 @@ import { useOrg } from "@/components/shared/OrgContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
 import { seatCapacity } from "@/lib/billing/plans";
-import { isNativePlatform } from "@/lib/native/platform";
+import { isStoreShell } from "@/lib/native/platform";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
@@ -61,7 +61,7 @@ export default function OrgMembers() {
   // Sign-in-only native build: hide the "Upgrade" (→ billing) upsells, in
   // buttons and in toast text alike; plans are managed on the web. The
   // seat/plan-limit messages themselves still show.
-  const native = isNativePlatform();
+  const native = isStoreShell();
   const memberLimit = plan.limits.members;
   const cap = seatCapacity(members.length, invites.length, memberLimit);
   const atMemberLimit = cap.atLimit;

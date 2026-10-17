@@ -10,7 +10,7 @@ const { setActiveProject, shareCurrentReport, useProjectContext } = vi.hoisted((
   useProjectContext: vi.fn(),
 }));
 
-vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => true }));
+vi.mock("@/lib/native/platform", () => ({ isNativePlatform: () => true, isStoreShell: () => true }));
 vi.mock("@/lib/native/capabilities", () => ({
   shareCurrentReport,
   isNativeActionCancelled: () => false,

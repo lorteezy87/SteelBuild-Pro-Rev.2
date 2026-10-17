@@ -17,7 +17,7 @@ import { useOrg } from "@/components/shared/OrgContext";
 import { usePlan } from "@/hooks/usePlan";
 import { PLANS } from "@/lib/billing/plans";
 import { getWorkspaceProjectCount, getWorkspaceMemberCount, getWorkspacePendingInvitationCount } from "@/lib/billing/billingService";
-import { isNativePlatform } from "@/lib/native/platform";
+import { isStoreShell } from "@/lib/native/platform";
 import BillingControlCenter from "./billing/BillingControlCenter";
 import { useBillingActions } from "./billing/useBillingActions";
 import { CheckoutConfirmation } from "./billing/CheckoutConfirmation";
@@ -26,7 +26,7 @@ export default function Billing() {
   const { currentOrg, currentRole, refetchOrgs } = useOrg();
   const { plan, planKey, status, isActive } = usePlan();
   const canManage = currentRole === "owner" || currentRole === "admin";
-  const native = isNativePlatform();
+  const native = isStoreShell();
   const orgId = currentOrg?.id;
 
   const { busy, upgrade, manage } = useBillingActions({ orgId, canManage, native, refetchOrgs });

@@ -14,7 +14,7 @@ vi.mock('@/components/shared/OrgContext', () => ({ useOrg: () => ({
   currentRole: mocks.role, refetchOrgs: mocks.refetch,
 }) }));
 vi.mock('@/hooks/usePlan', () => ({ usePlan: () => ({ plan: { name: 'Free' }, planKey: 'free', status: null as string | null, isActive: false }) }));
-vi.mock('@/lib/native/platform', () => ({ isNativePlatform: () => mocks.native }));
+vi.mock('@/lib/native/platform', () => ({ isNativePlatform: () => mocks.native, isStoreShell: () => mocks.native }));
 vi.mock('@/lib/billing/billingService', () => ({ startCheckout: mocks.checkout, openBillingPortal: mocks.portal, getWorkspaceProjectCount: mocks.count, getWorkspaceMemberCount: mocks.members, getWorkspacePendingInvitationCount: mocks.invites }));
 vi.mock('@/api/supabaseClient', () => ({ entities: { Project: { list: mocks.list } } }));
 vi.mock('sonner', () => ({ toast: { success: mocks.success, message: mocks.message, error: mocks.error } }));

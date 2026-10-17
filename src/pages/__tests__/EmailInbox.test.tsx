@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const { nativeState } = vi.hoisted(() => ({ nativeState: { enabled: false } }));
 
 vi.mock("@/lib/native/platform", () => ({
-  isNativePlatform: () => nativeState.enabled,
+  isNativePlatform: () => nativeState.enabled, isStoreShell: () => nativeState.enabled,
 }));
 
 vi.mock("@/hooks/useProjectId", () => ({

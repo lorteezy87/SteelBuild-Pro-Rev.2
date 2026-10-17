@@ -36,6 +36,7 @@ Notes:
 
 
 
+
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
 | 2026-10-09 | codex-telemetry-viewport-integration | Reviewed telemetry, audit, calculator and protected acceptance integration | Exact source from PR #534, #535, #536 and #537; scoped drawing UI/acceptance corrections after separate review; docs/audits/STAGING_EDGE_ACCEPTANCE_2026-10-09.md | Integrate frozen reviewed changes and retain actual 32cf staging deployment and acceptance results; preserve production publication hold and all release gates. |

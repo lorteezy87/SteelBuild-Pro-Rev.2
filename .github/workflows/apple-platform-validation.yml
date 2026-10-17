@@ -1,0 +1,63 @@
+name: Apple platform validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Native development build to validate
+        type: choice
+        default: all
+        options: [all, ipad, mac]
+  push:
+    branches: [claude/mac-ipad-build-20261016]
+    paths:
+      - '.github/workflows/apple-platform-validation.yml'
+      - 'scripts/apple-platform-validation.sh'
+      - 'scripts/macos-build.sh'
+      - 'macos/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-platform-validation-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Development ${{ matrix.platform }} build
+    runs-on: macos-latest
+    timeout-minutes: 40
+    environment: app-store
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.platform == 'ipad' && '["ipad"]' || inputs.platform == 'all' && '["ipad","mac"]' || '["mac"]') }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build and capture native evidence
+        run: bash scripts/apple-platform-validation.sh "${{ matrix.platform }}"
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_APP_VERSION: ${{ github.sha }}
+      - name: Save validation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apple-platform-${{ matrix.platform }}-${{ github.run_id }}
+          path: |
+            apple-platform-output/*.json
+            apple-platform-output/*.txt
+            apple-platform-output/*.log
+            apple-platform-output/*.png
+            apple-platform-output/*.zip
+          retention-days: 14
+          if-no-files-found: warn

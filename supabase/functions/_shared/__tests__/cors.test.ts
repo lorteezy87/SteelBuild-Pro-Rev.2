@@ -56,6 +56,30 @@ describe("shared Edge Function CORS", () => {
     expect(headers["Access-Control-Allow-Origin"]).toBe(stagingOrigin);
   });
 
+  it.each(["capacitor://localhost", "steelbuild://localhost"])(
+    "accepts the exact native CORS origin %s without authorizing redirects",
+    origin => {
+      env.set("ALLOWED_ORIGINS", stagingOrigin);
+      expect(corsHeaders(new Request("https://functions.example.test", {
+        headers: { Origin: origin },
+      }))["Access-Control-Allow-Origin"]).toBe(origin);
+      expect(isAllowedOrigin(origin)).toBe(false);
+      expect(parseAllowedOrigins(origin)).toEqual([]);
+    },
+  );
+
+  it.each([
+    "null", "capacitor://evil.example", "steelbuild://evil.example",
+    "steelbuild://localhost:1234", "steelbuild://localhost/app",
+    "steelbuild://localhost/", "capacitor://localhost.evil.example",
+    "steelbuild://user@localhost", "file://localhost", "*",
+  ])("rejects untrusted or malformed native origins: %s", origin => {
+    expect(corsHeaders(new Request("https://functions.example.test", {
+      headers: { Origin: origin },
+    }))["Access-Control-Allow-Origin"]).toBeUndefined();
+    expect(isAllowedOrigin(origin)).toBe(false);
+  });
+
   // Previously: with no ALLOWED_ORIGINS the helper emitted `*` and matched any
   // *.vercel.app host. Both are removed — an unset secret now degrades to the
   // fixed production + loopback list, never to "anyone". stripe-billing feeds

@@ -1,6 +1,6 @@
 // Shared CORS helpers for browser-facing Edge Functions.
 //
-// When ALLOWED_ORIGINS is set, it is the complete allowlist. Origins are
+// When ALLOWED_ORIGINS is set, it is the complete web-origin allowlist. Shipped native WebView origins\n// have a separate exact CORS-only list; they never qualify as redirect URLs. Origins are
 // normalized and matched exactly.
 //
 // When it is UNSET we fall back to DEFAULT_ALLOWED_ORIGINS — the production
@@ -30,6 +30,13 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://127.0.0.1:5173",
   "http://127.0.0.1:4173",
 ];
+
+// Native WebView origins are trusted only for CORS. They must never become
+// accepted billing/portal redirect URLs through isAllowedOrigin().
+const NATIVE_CORS_ORIGINS = new Set([
+  "capacitor://localhost",
+  "steelbuild://localhost",
+]);
 
 const ALLOW_HEADERS =
   "authorization, x-client-info, apikey, content-type, x-supabase-auth, sentry-trace, baggage, stripe-signature, x-webhook-secret";
@@ -87,13 +94,17 @@ export function corsHeaders(
     "Access-Control-Allow-Methods": methods,
     "Vary": "Origin",
   };
-  // Reflect the caller's origin only when it is on the allowlist. A disallowed
+  // Reflect only configured web origins or the exact shipped native origins. A disallowed
   // or missing Origin gets NO Access-Control-Allow-Origin header at all, which
   // the browser treats as a refusal — the previous `*` fallback is gone.
   const origin = req?.headers.get("Origin");
-  const normalized = origin ? normalizeOrigin(origin) : null;
-  if (normalized && effectiveOrigins().includes(normalized)) {
-    headers["Access-Control-Allow-Origin"] = normalized;
+  if (origin && NATIVE_CORS_ORIGINS.has(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  } else {
+    const normalized = origin ? normalizeOrigin(origin) : null;
+    if (normalized && effectiveOrigins().includes(normalized)) {
+      headers["Access-Control-Allow-Origin"] = normalized;
+    }
   }
   return headers;
 }
