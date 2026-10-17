@@ -13,7 +13,9 @@ export async function assertBackendBundle(status: number, bytes: Uint8Array, con
     if (typeof value === 'string') return;
     if (!value.size) throw new Error('Invalid rollback source parts');
     files++;
-    if (value.name === 'index.ts') entrypoint = true;
+    // Supabase exports full source paths in Content-Disposition filenames.
+    // Inspect the terminal component only; this string never becomes a disk path.
+    if (/(?:^|\/)index\.ts$/.test(value.name)) entrypoint = true;
   });
   const metadata = form.getAll('metadata');
   if (metadata.length > 1) throw new Error('Ambiguous source metadata');

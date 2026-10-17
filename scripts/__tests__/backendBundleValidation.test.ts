@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { assertBackendBundle } from '../validate-backend-bundle.js';
 
-async function bundle(options: { index?: boolean; metadata?: string } = {}) {
+async function bundle(options: { index?: boolean; filename?: string; metadata?: string } = {}) {
   const form = new FormData();
-  form.append('source', new File(['export const example = true;'], options.index === false ? 'other.ts' : 'index.ts'));
+  form.append('source', new File(['export const example = true;'], options.filename ?? (options.index === false ? 'other.ts' : 'index.ts')));
   if (options.metadata !== undefined) form.append('metadata', options.metadata);
   const response = new Response(form);
   return { bytes: new Uint8Array(await response.arrayBuffer()), type: response.headers.get('content-type')! };
 }
 describe('inert rollback bundle response validation', () => {
+  it.each(['file:///tmp/source/supabase/functions/example/index.ts', '/tmp/source/supabase/functions/example/index.ts',
+    'supabase/functions/example/index.ts'])('accepts an inert full-path source filename %s', async filename => {
+    const source = await bundle({ filename });
+    await expect(assertBackendBundle(200, source.bytes, source.type)).resolves.toBeUndefined();
+  });
+  it.each(['not-index.ts', 'source/index.ts.bak', 'source/index.ts/other.ts'])('rejects a misleading entrypoint filename %s', async filename => {
+    const source = await bundle({ filename });
+    await expect(assertBackendBundle(200, source.bytes, source.type)).rejects.toThrow('Missing rollback entrypoint');
+  });
   it.each([undefined, JSON.stringify({ deno2_entrypoint_path: 'file:///source/supabase/functions/example/index.ts' })])('parses official source parts without filesystem extraction', async metadata => {
     const source = await bundle({ metadata });
     await expect(assertBackendBundle(200, source.bytes, source.type)).resolves.toBeUndefined();
