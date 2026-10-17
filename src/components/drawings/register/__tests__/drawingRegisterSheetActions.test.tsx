@@ -9,13 +9,13 @@ import { DrawingRegisterGridPanel } from '../DrawingRegisterGridPanel';
 let canDelete = true;
 let recordedStage = "IFC";
 vi.mock('@/pages/drawingSubmittalHub/format', () => ({ fmtDate: (value: string) => value }));
-vi.mock('../registerProvision', () => ({ rowsNeedingProvisioning: () => [], provisionRegisterRevision: vi.fn() }));
-vi.mock('@/hooks/useDrawingRegister', () => ({ useDrawingRegister: () => ({ data: [{ drawing_id: 'd1', project_id: 'p1', sheet_number: 'S101', stage: recordedStage, current_status: 'pending_review', current_revision_id: 'r1' }, { drawing_id: 'd2', project_id: 'p1', sheet_number: 'S102', stage: null, current_status: null }] }) }));
+vi.mock('../registerProvision', () => ({ rowsNeedingProvisioning: (): unknown[] => [], provisionRegisterRevision: vi.fn() }));
+vi.mock('@/hooks/useDrawingRegister', () => ({ useDrawingRegister: () => ({ data: [{ drawing_id: 'd1', project_id: 'p1', sheet_number: 'S101', stage: recordedStage, current_status: 'pending_review', current_revision_id: 'r1' }, { drawing_id: 'd2', project_id: 'p1', sheet_number: 'S102', stage: null as string | null, current_status: null as string | null }] }) }));
 vi.mock('@/hooks/usePublishRevision', () => ({ usePublishRevision: () => ({}) }));
 vi.mock('@/hooks/useDrawingWatch', () => ({ useMyDrawingWatches: () => ({}), useToggleDrawingWatch: () => ({}) }));
 vi.mock('@/services/permissions', () => ({ usePermissions: () => ({ can: (action: string) => action === 'delete' && canDelete }) }));
-vi.mock('@/components/shared/useAppSecurity', () => ({ useAppSecurity: () => ({ user: null }) }));
-vi.mock('../SheetContextPanel', () => ({ SheetContextPanel: () => null }));
+vi.mock('@/components/shared/useAppSecurity', () => ({ useAppSecurity: () => ({ user: null as { id: string } | null }) }));
+vi.mock('../SheetContextPanel', () => ({ SheetContextPanel: (): null => null }));
 afterEach(() => { cleanup(); canDelete = true; recordedStage = "IFC"; });
 function mount(onDeleteSheet = vi.fn(), props: Partial<DrawingRegisterGridPanelProps> = {}) {
  render(<MemoryRouter><QueryClientProvider client={new QueryClient()}><DrawingRegisterGridPanel projectId="p1" onDeleteSheet={onDeleteSheet} {...props} /></QueryClientProvider></MemoryRouter>);

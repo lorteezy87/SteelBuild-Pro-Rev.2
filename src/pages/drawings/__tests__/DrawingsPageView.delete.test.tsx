@@ -4,14 +4,14 @@ import { expect, it, vi } from 'vitest';
 import DrawingsPageView from '../DrawingsPageView';
 import type { ComponentProps } from 'react';
 const modal = vi.hoisted(() => ({ confirm: null as null | (() => Promise<void>) }));
-vi.mock('../DrawingsPageModals', () => ({ default: (props: { onConfirmDelete: () => Promise<void> }) => { modal.confirm = props.onConfirmDelete; return null; } }));
-vi.mock('../DrawingsPageToolbar', () => ({ default: () => null }));
-vi.mock('@/components/drawings/DrawingsToolbar', () => ({ DisciplineChips: () => null, FilterBar: () => null, BulkActionsBar: () => null }));
-vi.mock('@/components/drawings/ActiveFilterPills', () => ({ default: () => null }));
-vi.mock('@/components/drawings/DrawingContextMenu', () => ({ default: () => null }));
-vi.mock('@/components/drawings/DrawingsTable', () => ({ default: () => null }));
-vi.mock('@/components/drawings/DrawingsGrid', () => ({ default: () => null }));
-vi.mock('@/components/submittals/AttachRevisionToSubmittalModal', () => ({ default: () => null }));
+vi.mock('../DrawingsPageModals', () => ({ default: (props: { onConfirmDelete: () => Promise<void> }): null => { modal.confirm = props.onConfirmDelete; return null; } }));
+vi.mock('../DrawingsPageToolbar', () => ({ default: (): null => null }));
+vi.mock('@/components/drawings/DrawingsToolbar', () => ({ DisciplineChips: (): null => null, FilterBar: (): null => null, BulkActionsBar: (): null => null }));
+vi.mock('@/components/drawings/ActiveFilterPills', () => ({ default: (): null => null }));
+vi.mock('@/components/drawings/DrawingContextMenu', () => ({ default: (): null => null }));
+vi.mock('@/components/drawings/DrawingsTable', () => ({ default: (): null => null }));
+vi.mock('@/components/drawings/DrawingsGrid', () => ({ default: (): null => null }));
+vi.mock('@/components/submittals/AttachRevisionToSubmittalModal', () => ({ default: (): null => null }));
 
 type Props = ComponentProps<typeof DrawingsPageView>;
 function mount(run: () => Promise<void>) {
