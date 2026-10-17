@@ -142,7 +142,7 @@ export function useSubmittalsPageMutations(args: {
       const updated = (result as any)?.submittal || ((result as any)?.id ? result : null);
       onAdvanceSettled?.(updated);
     },
-    onError: (err: unknown, variables) => {
+    onError: async (err: unknown, variables) => {
       // A blocked "Release for Fabrication" opens the override dialog with the
       // pending move so a PM can release with a reason (or cancel + resolve).
       if (err instanceof FabReleaseBlockedError) {
@@ -150,6 +150,14 @@ export function useSubmittalsPageMutations(args: {
         setReleaseBlock({ input: variables, rfis: err.blockingRfiNumbers || [] });
       } else {
         onAdvanceError?.();
+        // A rejected command may have been reviewed in an older tab. Refresh
+        // the authoritative state, but never reissue an approval automatically.
+        // Keep the original rejection visible even if a refetch also fails.
+        await Promise.allSettled([
+          invalidate(),
+          qc.invalidateQueries({ queryKey: ['submittal-revision-coverage', variables.submittal.id] }),
+          qc.invalidateQueries({ queryKey: ['submittal-revision-documents', variables.submittal.id] }),
+        ]);
         toast.error(formatSubmittalWriteError(err, "Advance"));
       }
     },
