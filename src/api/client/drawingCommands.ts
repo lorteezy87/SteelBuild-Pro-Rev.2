@@ -2,64 +2,21 @@ import { z } from 'zod';
 import { supabase } from '@/lib/supabase';
 import { buildCreateSetRequest, buildReviseSetRequest, validateDrawingSourcePath } from '@/lib/drawingCommands/requestBuilders';
 import { classifyDrawingCommandError, DrawingCommandPreflightError, DrawingCommandResponseError } from '@/lib/drawingCommands/errors';
+import { parseDrawingCommandReceipt, parseDrawingCommandResult } from '@/lib/drawingCommands/responses';
+export { parseDrawingCommandResult } from '@/lib/drawingCommands/responses';
 import type {
-  DrawingCommandCapabilities, DrawingCommandOutcome, DrawingCommandReceipt, DrawingCommandResult,
+  DrawingCommandCapabilities, DrawingCommandOutcome, DrawingCommandReceipt,
   DrawingSourceObject, ReviewedDrawingCommand,
 } from '@/lib/drawingCommands/types';
 import type { Json } from '@/types/supabase';
 
 const uuid = z.string().uuid();
 const hash = z.string().regex(/^[0-9a-f]{64}$/);
-const boundedCount = (max: number) => z.number().int().min(0).max(max);
 const capabilitiesSchema = z.object({
   contract_version: z.literal(1), new_set: z.boolean(), revision: z.boolean(), write_boundary: z.boolean(),
   source_protection: z.boolean(), receipt_lookup: z.boolean(),
 }).strict();
 const sourceSchema = z.object({ path: z.string(), token: hash }).strict();
-const resultSchema = z.object({
-  applied: z.literal(true), contract_version: z.literal(1), operation: z.enum(['create_set', 'revise_set']), payload_sha256: hash,
-  request_id: uuid, project_id: uuid, set_id: uuid,
-  revised: boundedCount(250), added: boundedCount(250), removed: boundedCount(250), sheet_count: boundedCount(250),
-  zones_cloned: boundedCount(1000), links_cloned: boundedCount(2000), dependencies_cloned: boundedCount(2000),
-  source_pages: z.array(z.object({ drawing_id: uuid, revision_id: uuid, file_path: z.string(), pdf_page: z.number().int().min(1).max(999999) }).strict()).max(250),
-}).strict();
-
-/** Validate complete response identity and reconcile counts/source pages against the reviewed roster. */
-export function parseDrawingCommandResult(value: unknown, draft: ReviewedDrawingCommand): DrawingCommandResult {
-  const parsed = resultSchema.safeParse(value);
-  if (!parsed.success) throw new DrawingCommandResponseError();
-  const result = parsed.data;
-  const roster = draft.payload.sheets;
-  const changed = roster.filter((sheet) => sheet.action === 'added' || sheet.action === 'revised');
-  const count = (action: string) => roster.filter((sheet) => sheet.action === action).length;
-  const seenDrawings = new Set<string>();
-  const seenRevisions = new Set<string>();
-  const existingIds = new Set(roster.flatMap((sheet) => sheet.action === 'added' ? [] : [sheet.drawing_id]));
-  const priorRevisions = new Set(roster.flatMap((sheet) => sheet.action === 'added' || !sheet.expected_revision_id ? [] : [sheet.expected_revision_id]));
-  if (result.request_id !== draft.requestId || result.operation !== draft.operation || result.project_id !== draft.owner.projectId
-    || result.project_id !== draft.payload.project_id
-    || (draft.operation === 'revise_set' && result.set_id !== draft.payload.set_id)
-    || result.added !== count('added') || result.revised !== count('revised') || result.removed !== count('removed')
-    || result.sheet_count !== roster.length - count('removed') || result.source_pages.length !== changed.length
-    || result.sheet_count === 0 || result.revised + result.added + result.removed === 0
-    || (result.revised === 0 && (result.zones_cloned !== 0 || result.links_cloned !== 0 || result.dependencies_cloned !== 0))) {
-    throw new DrawingCommandResponseError();
-  }
-  // SQL appends changed source pages in reviewed roster order, excluding same/removed.
-  result.source_pages.forEach((page, index) => {
-    const sheet = changed[index];
-    if (sheet.action !== 'added' && sheet.action !== 'revised') throw new DrawingCommandResponseError();
-    if (page.file_path !== sheet.file_path || page.pdf_page !== sheet.pdf_page
-      || !validateDrawingSourcePath(page.file_path, draft.owner.projectId, draft.owner.orgId)
-      || seenDrawings.has(page.drawing_id) || seenRevisions.has(page.revision_id) || priorRevisions.has(page.revision_id)
-      || (sheet.action === 'revised' ? page.drawing_id !== sheet.drawing_id : existingIds.has(page.drawing_id))) {
-      throw new DrawingCommandResponseError();
-    }
-    seenDrawings.add(page.drawing_id);
-    seenRevisions.add(page.revision_id);
-  });
-  return result as DrawingCommandResult;
-}
 
 /** The capability endpoint is readiness only, never a client authorization decision. */
 export async function getDrawingCommandCapabilities(projectId: string): Promise<DrawingCommandCapabilities> {
@@ -163,11 +120,5 @@ export async function getDrawingCommandReceipt(draft: ReviewedDrawingCommand, fe
     p_request_id: snapshot.requestId, p_operation: snapshot.operation, p_request: snapshot.payload as unknown as Json,
   });
   if (error) throw new DrawingCommandResponseError();
-  const parsed = z.discriminatedUnion('state', [
-    z.object({ state: z.literal('committed'), result: z.unknown() }).strict(),
-    z.object({ state: z.literal('pending') }).strict(), z.object({ state: z.literal('not_committed') }).strict(),
-  ]).safeParse(data);
-  if (!parsed.success) throw new DrawingCommandResponseError();
-  if (parsed.data.state === 'committed') return { state: 'committed', result: parseDrawingCommandResult(parsed.data.result, snapshot) };
-  return { state: parsed.data.state };
+  return parseDrawingCommandReceipt(data, snapshot);
 }

@@ -114,6 +114,32 @@ it('a send closure cannot escape its dispatch guard lifetime', async () => {
 });
 
 describe('strict response parsing', () => {
+  it('accepts PostgreSQL-normalized UUID spelling without changing returned strings or reviewed source paths', () => {
+    const draft = draftFixture();
+    const requestId = 'abcdefab-7777-4777-8777-777777777777';
+    const reviewed = { ...draft, requestId: requestId.toUpperCase() };
+    const result = { ...resultFixture(), request_id: requestId };
+    expect(parseDrawingCommandResult(result, reviewed)).toEqual(result);
+    expect(reviewed.requestId).toBe(requestId.toUpperCase());
+  });
+  it.each(['drawing_id', 'revision_id'] as const)('rejects alternate-case duplicate returned %s identities', field => {
+    const first = draftFixture();
+    if (first.operation !== 'create_set') throw new Error('fixture');
+    const draft: ReviewedDrawingCommand = { ...first, payload: { ...first.payload,
+      sheets: [first.payload.sheets[0], { ...first.payload.sheets[0], sheet_number: 'S2', pdf_page: 4 }] } };
+    const duplicate = 'abcdefab-4444-4444-8444-444444444444';
+    const page1 = { ...resultFixture().source_pages[0], [field]: duplicate };
+    const page2 = { drawing_id: actor, revision_id: org, file_path: path, pdf_page: 4, [field]: duplicate.toUpperCase() };
+    expect(() => parseDrawingCommandResult({ ...resultFixture(), added: 2, sheet_count: 2, source_pages: [page1, page2] }, draft)).toThrow();
+  });
+  it('rejects a returned revision reusing a prior UUID under alternate casing', () => {
+    const create = draftFixture();
+    if (create.operation !== 'create_set') throw new Error('fixture');
+    const prior = 'abcdefab-5555-4555-8555-555555555555';
+    const draft = revisionDraftFixture([{ ...create.payload.sheets[0], ...existingSheet, action: 'revised', expected_revision_id: prior.toUpperCase() }]);
+    expect(() => parseDrawingCommandResult({ ...resultFixture(), operation: 'revise_set', revised: 1, added: 0,
+      source_pages: [{ ...resultFixture().source_pages[0], revision_id: prior }] }, draft)).toThrow();
+  });
   it('matches complete reviewed project and accepts only server supplied hash', () => {
     const draft = draftFixture();
     const parsed = parseDrawingCommandResult(resultFixture(), draft);

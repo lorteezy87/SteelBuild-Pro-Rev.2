@@ -1,5 +1,58 @@
 # Drawing backend staging acceptance — incomplete
 
+## Parent Task 13 command/receipt source prerequisite — no transport admission
+
+The production result parser and strict committed/pending/not_committed receipt
+parser now share the pure `src/lib/drawingCommands/responses.ts` module. The
+application adapter keeps its existing exported result parser and uses these
+same functions. Actual failing UUID regressions reproduced PostgreSQL-normalized
+UUID false rejection, alternate-case duplicate drawing/revision acceptance and
+prior-revision reuse. Comparison keys now canonicalize only schema-validated
+UUID identities; reviewed/returned spelling, Storage namespace, notes, tokens,
+roster order, counts and hash-format validation stay intact. No JavaScript
+PostgreSQL JSONB hash calculation or hash-correctness claim is made.
+
+The new pure `e2e/drawingCutoverCommandTransport.ts` revalidates the complete
+existing three-slot intake book, recognizes only exact PM/A1 create/revise/receipt
+POST envelopes, preserves exact payload/scalar/array identity and freezes detached
+bindings. It proposes at most 502 exact GETs for the parent project, returned set
+and changed drawing/revision pairs only after direct success or a committed
+receipt passes the production parser. Pending/not_committed cannot create a
+readback plan or authorize retry. Complete supplied observations must match every
+exact path, contain exactly one strict projected row and preserve all required
+parent/source/page/live/current/received relationships.
+
+The project projection is the actual generated `projects.id,org_id` contract.
+There is no `projects.created_by` column in the generated schema. Foundation
+`createdBy` records creation-session provenance and separately observed owner
+membership; this pure validator cannot certify a database creator. The existing
+live network guard's `created_by` parent expectation is a concrete outstanding
+ownership/admission defect requiring a separate reviewed correction before any
+live unlock. That unclaimed guard and all setup/CLI/readiness stops are unchanged.
+
+These are proposed requests and supplied-content checks, not authentic transport,
+ownership, authorization, immutable PDF/page-byte, source-token, JSONB-hash,
+same/removed-sheet-effect or topology proof. Returned IDs never enter the fixture
+manifest/registry, grant later writes or become ordinary network-guard authority.
+Local tests exercise real pure functions and unchanged guard refusal; no local
+guard throw is SQL rejection evidence. Exact-source CI, independently reviewed
+runner/ownership admission, the pending UI request-admission design and full
+authenticated staging acceptance remain required. No fixture creation, private
+approval-state change, hosted request, SQL, deployment or production write was
+performed by this source prerequisite.
+
+Local verification for this bounded source passed 331 focused tests, all six
+static gates and covering lint. One production build exited 0 (52.02 seconds),
+with mixed static/dynamic-import and large-chunk warnings. The ONE complete full
+application test run exited 1: 917 files passed and two failed; 9,610 tests passed
+and three failed. The inert-asset bundle case returned a null child-process
+status; the loaded-script bundle case and official-record-number assignment
+safeguard each reported a 5,000 ms timeout. Causes remain unproved. These full
+suite failures remain open; no timeout increase, test weakening or full-suite
+retry was performed. The source commit is a bounded review candidate requiring
+fresh independent review and exact-head CI, not Task 13, staging or release
+completion. All live readiness/admission stops remain closed.
+
 ## Parent Task 13 CI integration repair — source verification only
 
 The isolated SQL helper now imports the root setup contracts as types only, so
@@ -57,11 +110,13 @@ provisions accounts. Separate guarded foundation phases are described below.
 
 The manifest binds two organizations/four projects, seven distinct synthetic actors,
 known drawing entities and source objects. Names or purpose metadata confer no
-authority. The underlying mutation validation rereads the exact parent
-through its independently authenticated creator and compares id/org/creator.
-It also rereads each exact referenced entity and verifies its project binding.
-This verifies these bindings, not every lifecycle relationship or role;
-those remaining requirements are listed below. All app clients still use user JWTs.
+authority. The existing underlying mutation validation attempts to reread the
+exact parent through its creation-session actor and compare id/org/created_by.
+The generated projects schema has no created_by column, so this expectation
+cannot establish the claimed parent/creator proof and needs the separately
+reviewed ownership/admission repair described above before live use. It also
+describes exact referenced-entity project checks; those checks alone do not prove
+every lifecycle relationship or role. All app clients still use user JWTs.
 
 The finite classifier recognizes bounded fixture reads, protected-field rejection
 probes and the original fab-gate operations. A shared final prerequisite gate now
