@@ -260,8 +260,10 @@ test.describe('rejected submittal advance recovery (staging only)', () => {
       });
       await page.goto('/Submittals');
       await expect.poll(() => page.evaluate(() => localStorage.getItem('activeProjectId'))).toBe(PROJECT_ID);
+      await expect(page.getByRole('main', { name: 'Main content', exact: true })).toBeVisible();
+      await page.getByPlaceholder('Search # / title / spec section', { exact: true }).fill(parent.submittal_number);
       await page.getByRole('region', { name: 'Submittal register list', exact: true })
-        .getByRole('button', { name: `Open submittal ${parent.submittal_number}`, exact: true }).click();
+        .getByRole('button', { name: `Open submittal ${parent.submittal_number}`, exact: true }).click({ timeout: 15_000 });
       const panel = page.getByRole('region', { name: 'Exact revision evidence', exact: true });
       await expect(panel).toBeVisible();
       if (scenario === 'concurrent-release') await expect(panel.getByText('Exact revision evidence verified', { exact: true })).toBeVisible();
