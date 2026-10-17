@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-17 | codex-production-integration | Reviewed release integration | AGENT_CLAIMS.md; supabase/production-ownership-manifest.json; reviewed drawing/SQL branches | Integrate reviewed changes and verify exact production release; user authorized publication. |
+
 
 
 
