@@ -110,8 +110,20 @@ jobs:
           curl --fail --silent --show-error -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             "https://api.supabase.com/v1/projects/$project/functions" > "$RUNNER_TEMP/backend-before/inventory.json"
           if jq -e --arg slug "$FUNCTION" 'any(.[]; .slug == $slug)' "$RUNNER_TEMP/backend-before/inventory.json" > /dev/null; then
-            npx --yes supabase@2.117.0 functions download "$FUNCTION" --project-ref "$project" --use-api --workdir "$RUNNER_TEMP/backend-before"
-            test -s "$RUNNER_TEMP/backend-before/supabase/functions/$FUNCTION/index.ts"
+            # Preserve the original ESZIP as inert bytes. CLI extraction rejects
+            # legitimate imports outside supabase/functions (e.g. src/lib).
+            # Never relax its path boundary or execute downloaded source here.
+            backup_status=$(curl --fail --silent --show-error --compressed --max-time 60 \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              -D "$RUNNER_TEMP/backend-before/body-headers.txt" \
+              "https://api.supabase.com/v1/projects/$project/functions/$FUNCTION/body" \
+              -o "$RUNNER_TEMP/backend-before/function-before.eszip" --write-out '%{http_code}')
+            BUNDLE_HTTP_STATUS="$backup_status" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { assertBackendBundle } from './scripts/validate-backend-bundle.ts';
+          assertBackendBundle(Number(process.env.BUNDLE_HTTP_STATUS), readFileSync(`${process.env.RUNNER_TEMP}/backend-before/function-before.eszip`));
+          NODE
+            (cd "$RUNNER_TEMP/backend-before" && sha256sum function-before.eszip inventory.json > SHA256SUMS)
           elif [ "$TARGET" = production ]; then
             echo 'Reviewed production function is missing; investigate before replacing it'; exit 1
           fi

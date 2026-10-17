@@ -11,7 +11,7 @@ describe('shared staging browser policy', () => {
     [STAGING_ORIGIN + '/rest/v1/drawings?project_id=eq.fixture', 'OPTIONS'],
     [STAGING_ORIGIN + '/auth/v1/user', 'GET'],
     [STAGING_ORIGIN + '/auth/v1/token?grant_type=refresh_token', 'POST'],
-    ...['get_my_project_role', 'get_submittal_revision_coverage', 'get_submittal_revision_coverages']
+    ...['get_my_feature_flags', 'get_my_project_role', 'get_submittal_revision_coverage', 'get_submittal_revision_coverages']
       .map(name => [STAGING_ORIGIN + '/rest/v1/rpc/' + name, 'POST']),
     ['https://fonts.googleapis.com/css2?family=Inter', 'GET'],
     ['https://fonts.gstatic.com/font.woff2', 'GET'],
@@ -25,6 +25,8 @@ describe('shared staging browser policy', () => {
     [STAGING_ORIGIN + '/rest/v1/projects', 'PATCH'],
     [STAGING_ORIGIN + '/rest/v1/projects', 'DELETE'],
     [STAGING_ORIGIN + '/rest/v1/rpc/apply_submittal_round_workflow', 'POST'],
+    [STAGING_ORIGIN + '/rest/v1/rpc/get_my_feature_flags_unreviewed', 'POST'],
+    [STAGING_ORIGIN + '/rest/v1/rpc/get_my_feature_flags', 'PATCH'],
     [STAGING_ORIGIN + '/rest/v1/rpc/get_my_project_role', 'GET'],
     [STAGING_ORIGIN + '/rest/v1/rpc/get_my_project_role?override=1', 'POST'],
     [STAGING_ORIGIN + '/storage/v1/object/app-files/test', 'GET'],
