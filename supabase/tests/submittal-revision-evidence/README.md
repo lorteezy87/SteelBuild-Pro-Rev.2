@@ -60,3 +60,16 @@ from seeing that interval, and the guard is re-enabled before assertions.
 All other policies/triggers remain enabled. Always verify fixture cleanup and
 the enabled guard independently afterward. No actual PDF bytes are uploaded or
 deleted. Production application and browser acceptance are separate steps.
+
+
+The package also runs `verify-drawing-set-recount.mjs`. It executes the captured
+production `recount_drawing_set(uuid)` helper to reproduce the last-sheet
+soft-delete/Undo failure, then runs migration `20261017081417` against that
+helper through a trigger fixture. It checks retained active-parent/governing
+submittal linkage, unchanged revision and approval-manifest rows, all four count
+columns, preserved owner/ACL/function configuration, idempotence, explicit
+parent tombstones, absent-helper baseline replay and rejection of unreviewed
+helper bodies/configuration. The fixture uses reduced tables and grants, not
+the complete hosted RLS/trigger graph. Exact-file staging rehearsal with the
+normal PM client remains required. This test never connects to a hosted
+database and the migration repairs no historical rows.
