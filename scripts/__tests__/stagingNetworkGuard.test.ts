@@ -11,7 +11,7 @@ describe('shared staging browser policy', () => {
     [STAGING_ORIGIN + '/rest/v1/drawings?project_id=eq.fixture', 'OPTIONS'],
     [STAGING_ORIGIN + '/auth/v1/user', 'GET'],
     [STAGING_ORIGIN + '/auth/v1/token?grant_type=refresh_token', 'POST'],
-    ...['get_my_feature_flags', 'get_my_project_role', 'get_submittal_revision_coverage', 'get_submittal_revision_coverages']
+    ...['evaluate_fab_release_set', 'get_my_feature_flags', 'get_my_project_role', 'get_submittal_revision_coverage', 'get_submittal_revision_coverages']
       .map(name => [STAGING_ORIGIN + '/rest/v1/rpc/' + name, 'POST']),
     ['https://fonts.googleapis.com/css2?family=Inter', 'GET'],
     ['https://fonts.gstatic.com/font.woff2', 'GET'],

@@ -1,4 +1,5 @@
 import { expect, test as baseTest, type Page, type Request, type Response, type Route } from "@playwright/test";
+import { isCompletedHeadAbort } from './readOnlyRequestFailure.js';
 
 type Row = Record<string, unknown>;
 type RegisterName = "drawings" | "submittals" | "rfis";
@@ -19,6 +20,7 @@ const pageProbes = new WeakMap<Page, { origin: string; allowAuthLogout: boolean;
 // Individually inspected read-only RPCs; names beginning with "get" are not
 // sufficient evidence. Keep this list explicit as application reads evolve.
 const readOnlyRpcPaths = new Set([
+  "/rest/v1/rpc/evaluate_fab_release_set",
   "/rest/v1/rpc/get_my_feature_flags",
   "/rest/v1/rpc/get_my_project_role",
   "/rest/v1/rpc/get_submittal_revision_coverage",
@@ -71,6 +73,7 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
   const rows = new Map<string, Row[]>();
   const pending = new Set<Promise<void>>();
   const inFlight = new Set<Request>();
+  const successfulHeads = new WeakSet<Request>();
   const onRequest = (request: Request) => {
     if (new URL(request.url()).origin === origin) inFlight.add(request);
   };
@@ -81,12 +84,14 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
   };
   const onRequestFailed = (request: Request) => {
     inFlight.delete(request);
+    if (isCompletedHeadAbort(request.method(), request.failure()?.errorText, successfulHeads.has(request))) return;
     const url = new URL(request.url());
     if (url.origin === origin) fail('request-failed', `Supabase request failed: ${url.pathname}`);
   };
   const onResponse = (response: Response) => {
     const url = new URL(response.url());
     if (url.origin !== origin) return;
+    if (response.ok() && response.request().method() === 'HEAD') successfulHeads.add(response.request());
     if (response.status() >= 400) {
       fail('http-error', `Supabase HTTP ${response.status()}: ${url.pathname}`);
       return;

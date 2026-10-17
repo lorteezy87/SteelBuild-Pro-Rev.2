@@ -86,6 +86,16 @@ test('still rejects an aborted detail read and exposes only its closed category'
   expect(probe.diagnostics().every(category => !category.includes('/'))).toBe(true);
 });
 
+test('accepts a successful bodyless HEAD count response', async ({ page }) => {
+  await fixture(page, { request: false });
+  const probe = await observeReadOnlyPage(page, API);
+  await page.goto('/Drawings');
+  const status = await page.evaluate(async api => (await fetch(`${api}/rest/v1/model_elements`, { method: 'HEAD' })).status, API);
+  expect(status).toBe(200);
+  await probe.settle();
+  probe.assertHealthy();
+});
+
 async function drawingFixture(page: Page, tab = "drawings", setName = TITLE) {
   await fixture(page, {
     table: "drawing_sets", body: [{ id: "fixture-set", project_id: PROJECT, set_name: setName, description: TITLE }],
@@ -171,7 +181,7 @@ test("keeps blocking delayed writes after register acceptance returns", async ({
   expect(() => probe.assertHealthy()).toThrow(/runtime, network, or write failures/);
 });
 
-for (const rpc of ["get_my_feature_flags", "get_submittal_revision_coverage", "get_submittal_revision_coverages"]) {
+for (const rpc of ["evaluate_fab_release_set", "get_my_feature_flags", "get_submittal_revision_coverage", "get_submittal_revision_coverages"]) {
   test(`allows the inspected ${rpc} POST read`, async ({ page }) => {
     const backend = await fixture(page);
     await visitRegister(page, "submittals", options);

@@ -184,6 +184,15 @@ fixture does not validate authenticated queries or live data completeness.
 
 ## Staging post-deploy CI
 
+For the fixed STG-0001 fixture, the mutation suite creates a fresh synthetic
+clean package in staging CI. Its private PDF is explicitly marked NOT FOR
+CONSTRUCTION and verified by byte hash. A normal synthetic PM submits and approves
+the exact revision through the round workflow, distributes it to the shop, and
+requires an empty server gate before CLEAN and viewer-denial assertions. These
+rows/PDF remain with the append-only release audit. Historical fixture approvals
+are never silently rewritten to satisfy a newer gate. The helper refuses other
+projects, identities, app/database hosts and non-staging-push contexts.
+
 The staging pipeline has a separate `staging-e2e-readonly` job, enabled by the
 `STAGING_E2E_ENABLED` variable and the four `STAGING_E2E_*` credentials. It
 runs `smoke.spec.ts` and `daily-workflow.spec.ts` first, then runs

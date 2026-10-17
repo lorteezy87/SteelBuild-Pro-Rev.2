@@ -1,9 +1,26 @@
-// Non-extracting format sanity check, not a restore rehearsal. Magic values:
-// https://docs.rs/crate/eszip/0.109.0/source/src/v2.rs
-export function assertBackendBundle(status: number, bytes: Uint8Array): void {
-  const magic = Buffer.from(bytes.subarray(0, 8)).toString('ascii');
+// Same multipart source export used by the pinned CLI's readForm downloader:
+// https://github.com/supabase/cli/blob/v2.117.0/apps/cli-go/internal/functions/download/download.go
+// Parse inert parts only: never extract server-controlled paths or execute code.
+export async function assertBackendBundle(status: number, bytes: Uint8Array, contentType: string): Promise<void> {
   if (status !== 200 || bytes.length < 64 || bytes.length > 32 * 1024 * 1024
-      || !['ESZIP_V2', 'ESZIP2.1', 'ESZIP2.2', 'ESZIP2.3'].includes(magic)) {
-    throw new Error('Rollback response must be HTTP 200 and a recognized ESZIP bundle');
+      || !/^multipart\/form-data;\s*boundary=/i.test(contentType)) throw new Error('Invalid rollback source response');
+  const form = await new Response(new Uint8Array(bytes).buffer, { headers: { 'Content-Type': contentType } }).formData();
+  let files = 0;
+  let parts = 0;
+  let entrypoint = false;
+  form.forEach(value => {
+    if (++parts > 256) throw new Error('Too many rollback source parts');
+    if (typeof value === 'string') return;
+    if (!value.size) throw new Error('Invalid rollback source parts');
+    files++;
+    if (value.name === 'index.ts') entrypoint = true;
+  });
+  const metadata = form.getAll('metadata');
+  if (metadata.length > 1) throw new Error('Ambiguous source metadata');
+  if (metadata.length) {
+    if (typeof metadata[0] !== 'string') throw new Error('Invalid source metadata');
+    const parsed: unknown = JSON.parse(metadata[0]);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid source metadata');
   }
+  if (!files || !entrypoint) throw new Error('Missing rollback entrypoint');
 }

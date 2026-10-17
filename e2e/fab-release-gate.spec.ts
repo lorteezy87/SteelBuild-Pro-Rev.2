@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { signInAsTestUser, signInAsViewerOrNull } from "./fixtures/supabaseUser";
 import { assertDisposableMutationEnvironment } from "./environment";
+import { createStagingFabPackage } from './fixtures/stagingFabPackage.js';
 
 /**
  * e2e/fab-release-gate.spec.ts — the mutation-aware fab-release gate contract.
@@ -31,6 +32,7 @@ import { assertDisposableMutationEnvironment } from "./environment";
 const PROJECT_ID = process.env.E2E_FAB_PROJECT_ID || "";
 const BLOCKED_DRAWING_ID = process.env.E2E_BLOCKED_DRAWING_ID || "";
 const CLEAN_DRAWING_ID = process.env.E2E_CLEAN_DRAWING_ID || "";
+let cleanDrawingId = CLEAN_DRAWING_ID;
 
 const FAB_RELEASE_BLOCKED_PREFIX = "FAB_RELEASE_BLOCKED";
 
@@ -41,7 +43,13 @@ test.describe("fab-release gate (server-arbitrated)", () => {
     process.env.E2E_MUTATIONS_ENABLED !== "true",
     "Mutation E2E is explicitly opt-in and staging-only.",
   );
-  test.beforeAll(() => assertDisposableMutationEnvironment());
+  test.beforeAll(async () => {
+    assertDisposableMutationEnvironment();
+    if (PROJECT_ID === '6573ede6-e29d-4d15-8855-403029735231' && CLEAN_DRAWING_ID) {
+      const { supabase } = await signInAsTestUser();
+      cleanDrawingId = await createStagingFabPackage(supabase, PROJECT_ID, CLEAN_DRAWING_ID);
+    }
+  });
   test.skip(
     !PROJECT_ID || !BLOCKED_DRAWING_ID || !CLEAN_DRAWING_ID,
     "Set E2E_FAB_PROJECT_ID / E2E_BLOCKED_DRAWING_ID / E2E_CLEAN_DRAWING_ID to run. See e2e/README.md.",
@@ -106,7 +114,7 @@ test.describe("fab-release gate (server-arbitrated)", () => {
         project_id: PROJECT_ID,
         package_kind: "fab_release",
         package_name: "E2E clean package",
-        drawing_ids: [CLEAN_DRAWING_ID],
+        drawing_ids: [cleanDrawingId],
         drawing_count: 1,
         override_reason: null,
       })
@@ -129,7 +137,7 @@ test.describe("fab-release gate (server-arbitrated)", () => {
         project_id: PROJECT_ID,
         package_kind: "fab_release",
         package_name: "E2E viewer should be denied",
-        drawing_ids: [CLEAN_DRAWING_ID],
+        drawing_ids: [cleanDrawingId],
         drawing_count: 1,
         override_reason: null,
       })

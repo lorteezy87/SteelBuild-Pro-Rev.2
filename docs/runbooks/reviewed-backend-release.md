@@ -77,12 +77,15 @@ workspace membership revocation, project scoping, session handoff token
 audience/expiry, and synthetic account deletion after the erasure SQL fixes.
 Do not send customer email or delete customer records for a release smoke test.
 
-The workflow downloads the previous function's original ESZIP bundle as inert
+The workflow downloads the previous function's official multipart source export as inert
 bytes into an isolated runner directory, retaining response headers, SHA-256
 checksums and the deployment/JWT inventory before publishing. It never extracts
-or executes downloaded code. Exact HTTP 200 and a recognized ESZIP signature are
-required; redirects, error documents and truncated headers stop replacement.
-This lightweight check is not a full archive parse or restore rehearsal.
+or executes downloaded code. Exact HTTP 200, a parseable multipart envelope,
+source file parts including index.ts and valid metadata (when present) are
+required; redirects, error documents and truncated bodies stop replacement.
+This format check is not a restore rehearsal. The export matches the pinned
+CLI's server-side source download format, avoiding assumptions about old/new
+compressed deployment bundle representations.
 This also preserves imports outside the functions
 folder, which the CLI's safe extraction boundary correctly refuses to write.
 Failure to download or retain an existing bundle stops deployment. A missing
@@ -102,9 +105,11 @@ Production rejected unauthenticated gateway/export/billing requests with 401,
 unsupported billing methods with 405 and unsigned webhooks with 400. Billing
 remains in test mode. No payment or paid AI request was made during verification.
 
-Before rollback, verify SHA256SUMS and review the captured inventory. Use the
-official Supabase Edge Runtime ESZIP unbundle tooling in a dedicated temporary
-workspace, inspect every output path and source file, and typecheck before
+Before rollback, verify SHA256SUMS and review the captured inventory. Use
+the captured Content-Type boundary to parse the multipart parts as inert data.
+In a dedicated temporary workspace, inspect every source path (including the
+Supabase-Path header), explicitly map only reviewed paths inside that workspace,
+write source files and typecheck before
 redeploying the captured source with its original JWT mode after explicit
 approval. Do not extract remote paths into a live checkout or run the downloaded
 application code. A frontend rollback does not revert functions or migrations.
