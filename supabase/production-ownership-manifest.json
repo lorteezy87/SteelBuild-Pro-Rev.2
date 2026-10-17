@@ -25,6 +25,11 @@
     ],
     "migrationOverrides": [
       {
+        "version": "20261017081417",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - 2026-10-17 reviewed drawing-set recount repair. Removes only the captured helper auto-archive side effect when the last sheet is soft-deleted; retains counts, owner, ACL and all function configuration. Does not restore historical parent tombstones or change explicit admin set deletion. Exact-body and baseline-lineage guards fail closed on unreviewed definitions, and no helper is created in count-only baseline replay. Requires independent SQL review, authenticated staging last-sheet delete/Undo with immutable evidence, manual application and matching ledger stamp; keep missing until applied."
+      },
+      {
         "version": "20261013093000",
         "lifecycle": "required",
         "evidence": "PENDING PRODUCTION APPLY - caller-scoped feature-flag read candidate. Replaces the cross-tenant authenticated raw-table read with system-admin-only selection and an authenticated SECURITY DEFINER RPC that returns only each caller's effective key and boolean. Requires exact SQL review, hosted staging checks for admin management and ordinary-user reads, manual application, and a matching ledger stamp before production release."
