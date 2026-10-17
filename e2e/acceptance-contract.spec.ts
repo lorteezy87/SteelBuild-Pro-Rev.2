@@ -286,6 +286,29 @@ test("rejects an unsuccessful explicitly allowed logout", async ({ page }) => {
   expect(() => probe.assertHealthy()).toThrow(/Supabase HTTP 500: \/auth\/v1\/logout/);
 });
 
+test('accepts a completed bodyless explicit logout', async ({ page }) => {
+  await fixture(page, { request: false });
+  await page.context().route(`${API}/auth/v1/logout`, route => route.fulfill({ status: 204,
+    headers: { 'access-control-allow-origin': '*' } }));
+  const probe = await observeReadOnlyPage(page, API, undefined, { allowAuthLogout: true });
+  await page.goto('/Submittals');
+  const response = page.waitForResponse(`${API}/auth/v1/logout`);
+  await page.evaluate(api => fetch(`${api}/auth/v1/logout`, { method: 'POST' }), API);
+  expect((await response).status()).toBe(204);
+  await probe.settle();
+  probe.assertHealthy();
+});
+
+test('rejects an explicit logout aborted before a successful response', async ({ page }) => {
+  await fixture(page, { request: false });
+  await page.context().route(`${API}/auth/v1/logout`, route => route.abort('aborted'));
+  const probe = await observeReadOnlyPage(page, API, undefined, { allowAuthLogout: true });
+  await page.goto('/Submittals');
+  await page.evaluate(api => fetch(`${api}/auth/v1/logout`, { method: 'POST' }).catch(() => {}), API);
+  await probe.settle();
+  expect(() => probe.assertHealthy()).toThrow('Supabase request failed: /auth/v1/logout');
+});
+
 test("rejects a runtime error despite successful data and a rendered register", async ({ page }) => {
   await fixture(page, { extraScript: "queueMicrotask(() => { throw new Error('intentional acceptance failure'); });" });
   await expect(visitRegister(page, "submittals", options)).rejects.toThrow(/runtime, network, or write failures/);

@@ -6,7 +6,9 @@ test.describe("staging authentication boundary", () => {
     process.env.E2E_TARGET !== "staging",
     "Authentication boundary checks are staging-only.",
   );
-  test.describe.configure({ mode: "serial" });
+  // Global setup seeds one session. A successful logout revokes it, so a
+  // retry must not reuse that same stored session and obscure the first fault.
+  test.describe.configure({ mode: "serial", retries: 0 });
 
   test.describe("without a session", () => {
     test.use({ storageState: { cookies: [], origins: [] } });

@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// The read-only command launches navigation and sign-out separately, with a
+// fresh login each time. Preserve both reports instead of overwriting the first.
+const reportSuite = process.argv.some(arg => arg.endsWith('staging-auth-boundary.spec.ts')) ? 'auth-boundary' : 'main';
+
 /**
  * Playwright E2E smoke harness for the daily-driver workflow
  * (drawings → submittals → RFIs → fab release).
@@ -26,12 +30,13 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI
-    ? [["github"], ["html", { open: "never" }]]
+    ? [["github"], ["html", { open: "never", outputFolder: `playwright-report/${reportSuite}` }]]
     : [["list"]],
+  outputDir: `test-results/staging-${reportSuite}`,
   use: {
     baseURL: process.env.E2E_BASE_URL || "https://steelbuild-pro.com",
     storageState: "e2e/.auth/state.json",
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },

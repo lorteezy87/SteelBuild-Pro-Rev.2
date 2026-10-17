@@ -1,5 +1,5 @@
 import { expect, test as baseTest, type Page, type Request, type Response, type Route } from "@playwright/test";
-import { isCompletedHeadAbort } from './readOnlyRequestFailure.js';
+import { isCompletedHeadAbort, isCompletedLogoutAbort } from './readOnlyRequestFailure.js';
 
 type Row = Record<string, unknown>;
 type RegisterName = "drawings" | "submittals" | "rfis";
@@ -74,6 +74,7 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
   const pending = new Set<Promise<void>>();
   const inFlight = new Set<Request>();
   const successfulHeads = new WeakSet<Request>();
+  const completedLogouts = new WeakSet<Request>();
   const onRequest = (request: Request) => {
     if (new URL(request.url()).origin === origin) inFlight.add(request);
   };
@@ -86,11 +87,15 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
     inFlight.delete(request);
     if (isCompletedHeadAbort(request.method(), request.failure()?.errorText, successfulHeads.has(request))) return;
     const url = new URL(request.url());
+    if (url.origin === origin && isCompletedLogoutAbort(request.method(), url.pathname,
+      request.failure()?.errorText, options.allowAuthLogout === true, completedLogouts.has(request))) return;
     if (url.origin === origin) fail('request-failed', `Supabase request failed: ${url.pathname}`);
   };
   const onResponse = (response: Response) => {
     const url = new URL(response.url());
     if (url.origin !== origin) return;
+    if (options.allowAuthLogout && response.status() === 204 && response.request().method() === 'POST'
+      && url.pathname === '/auth/v1/logout') completedLogouts.add(response.request());
     if (response.ok() && response.request().method() === 'HEAD') successfulHeads.add(response.request());
     if (response.status() >= 400) {
       fail('http-error', `Supabase HTTP ${response.status()}: ${url.pathname}`);
