@@ -30,6 +30,8 @@ Notes:
 
 ## Active claims
 
+| 2026-10-17 | codex-staging-conflict-acceptance | Stale conflict browser acceptance | e2e/fab-release-gate.spec.ts; e2e/fixtures/drawingRegisterDeleteAcceptance.ts | Verify prompt real409 refusal and sanitize request forwarding failures; production held. |
+
 
 
 
