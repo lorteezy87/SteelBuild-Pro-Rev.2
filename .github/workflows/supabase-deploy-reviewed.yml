@@ -113,13 +113,16 @@ jobs:
             # Preserve the original ESZIP as inert bytes. CLI extraction rejects
             # legitimate imports outside supabase/functions (e.g. src/lib).
             # Never relax its path boundary or execute downloaded source here.
-            curl --fail --silent --show-error --max-time 60 \
+            backup_status=$(curl --fail --silent --show-error --compressed --max-time 60 \
               -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-              -H 'Accept-Encoding: identity' \
               -D "$RUNNER_TEMP/backend-before/body-headers.txt" \
               "https://api.supabase.com/v1/projects/$project/functions/$FUNCTION/body" \
-              -o "$RUNNER_TEMP/backend-before/function-before.eszip"
-            test -s "$RUNNER_TEMP/backend-before/function-before.eszip"
+              -o "$RUNNER_TEMP/backend-before/function-before.eszip" --write-out '%{http_code}')
+            BUNDLE_HTTP_STATUS="$backup_status" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { assertBackendBundle } from './scripts/validate-backend-bundle.ts';
+          assertBackendBundle(Number(process.env.BUNDLE_HTTP_STATUS), readFileSync(`${process.env.RUNNER_TEMP}/backend-before/function-before.eszip`));
+          NODE
             (cd "$RUNNER_TEMP/backend-before" && sha256sum function-before.eszip inventory.json > SHA256SUMS)
           elif [ "$TARGET" = production ]; then
             echo 'Reviewed production function is missing; investigate before replacing it'; exit 1

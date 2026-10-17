@@ -33,6 +33,8 @@ describe('executed backend release gate', () => {
     expect(source).toContain('/functions/$FUNCTION/body');
     expect(source).toContain('function-before.eszip');
     expect(source).toContain('sha256sum');
+    expect(source).toContain("--write-out '%{http_code}'");
+    expect(source).toContain('assertBackendBundle(Number(process.env.BUNDLE_HTTP_STATUS)');
     expect(source).not.toContain('functions download');
     expect(source).toContain('if-no-files-found: error');
   });

@@ -80,7 +80,10 @@ Do not send customer email or delete customer records for a release smoke test.
 The workflow downloads the previous function's original ESZIP bundle as inert
 bytes into an isolated runner directory, retaining response headers, SHA-256
 checksums and the deployment/JWT inventory before publishing. It never extracts
-or executes downloaded code. This also preserves imports outside the functions
+or executes downloaded code. Exact HTTP 200 and a recognized ESZIP signature are
+required; redirects, error documents and truncated headers stop replacement.
+This lightweight check is not a full archive parse or restore rehearsal.
+This also preserves imports outside the functions
 folder, which the CLI's safe extraction boundary correctly refuses to write.
 Failure to download or retain an existing bundle stops deployment. A missing
 production function also stops deployment; staging permits a first installation.
