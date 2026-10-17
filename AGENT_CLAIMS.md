@@ -30,7 +30,7 @@ Notes:
 
 ## Active claims
 
-| 2026-10-17 | codex-staging-recovery-navigation | Disposable staging acceptance | e2e/fab-release-gate.spec.ts; e2e/fixtures/drawingRegisterDeleteAcceptance.ts | Diagnose hosted fixture navigation failures and verify rejection/delete acceptance; production held. |
+| 2026-10-17 | codex-staging-recovery-navigation | Disposable staging acceptance | .github/workflows/ci.yml; e2e/fab-release-gate.spec.ts; e2e/fixtures/drawingRegisterDeleteAcceptance.ts | Diagnose hosted fixture navigation failures and verify rejection/delete acceptance; production held. |
 
 
 
