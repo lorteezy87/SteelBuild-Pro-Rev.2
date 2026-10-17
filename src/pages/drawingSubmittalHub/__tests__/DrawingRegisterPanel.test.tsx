@@ -6,6 +6,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DrawingRegisterPanel from '../DrawingRegisterPanel';
+import { entities } from '@/api/supabaseClient';
+import { toast } from 'sonner';
 import type { DrawingRegisterRow } from '@/hooks/useDrawingRegister';
 import type { DrawingReviewRow } from '@/hooks/useDrawingReviews';
 let canEdit = true;
@@ -352,3 +354,41 @@ describe('Drawing register workbench — the retired "full editor"', () => {
     expect(screen.queryByRole('checkbox', { name: /Select all visible sheets/i })).not.toBeInTheDocument();
   });
 });
+
+describe('Register deletion discoverability', () => {
+  it('offers recoverable set deletion through the existing confirmation dialog', async () => {
+    canEdit = true;
+    mount({ entries: [`${HUB}&hub_view=sets`] });
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete drawing set Main steel' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Delete drawing set "Main steel"?');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('undo');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+});
+
+ it('confirms sheet deletion, retains a denied dialog, and offers Undo after a successful soft delete', async () => {
+    canEdit = true;
+    registerRows = [{ drawing_id: 'dwg-1', project_id: 'p1', sheet_number: 'S101', stage: 'IFC' } as DrawingRegisterRow];
+    const update = vi.spyOn(entities.Drawing, 'update').mockRejectedValueOnce(new Error('Not authorized'));
+    const invalidate = vi.spyOn(QueryClient.prototype, 'invalidateQueries').mockResolvedValue();
+    const success = vi.spyOn(toast, 'success');
+    const error = vi.spyOn(toast, 'error');
+    try {
+      mount();
+      await userEvent.click(screen.getByRole('button', { name: 'Delete sheet S101' }));
+      expect(update).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      await vi.waitFor(() => expect(error).toHaveBeenCalled());
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      update.mockResolvedValue({ id: 'dwg-1', is_deleted: true } as Awaited<ReturnType<typeof entities.Drawing.update>>);
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      await vi.waitFor(() => expect(success).toHaveBeenCalledWith('Sheet deleted', expect.anything()));
+      expect(update).toHaveBeenLastCalledWith('dwg-1', { is_deleted: true, deleted_at: expect.any(String) });
+      const options = success.mock.calls.find(([message]) => message === 'Sheet deleted')?.[1];
+      if (options?.action && typeof options.action === "object" && "onClick" in options.action) {
+        await options.action.onClick({} as React.MouseEvent<HTMLButtonElement>);
+      } else { throw new Error("Undo action missing"); }
+      expect(update).toHaveBeenLastCalledWith('dwg-1', { is_deleted: false, deleted_at: null });
+    } finally { invalidate.mockRestore(); update.mockRestore(); success.mockRestore(); error.mockRestore(); }
+ });

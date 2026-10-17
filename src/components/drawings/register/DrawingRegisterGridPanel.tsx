@@ -19,7 +19,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
-import { Star, Loader2, ChevronDown, ChevronRight, Eye, FileUp } from "lucide-react";
+import { Star, Loader2, ChevronDown, ChevronRight, Eye, FileUp, Trash2 } from "lucide-react";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevision";
 import { useMyDrawingWatches, useToggleDrawingWatch } from "@/hooks/useDrawingWatch";
@@ -68,6 +68,7 @@ export interface DrawingRegisterGridPanelProps {
   onRevisionUploaded?: (pkgKey: string) => void | Promise<void>;
   onOpenSummary?: (summary: SavedRevisionSummary["summary"]) => void;
   onMarkTitleblock?: (setId: string) => void;
+  onDeleteSheet?: (drawingId: string) => void;
   /**
    * Sheet selection, owned by the workbench above this panel so the Bulk edit
    * action can act on it. Omitted (the standalone case) hides the column
@@ -97,7 +98,7 @@ const EMPTY_SUMMARIES = new Map<string, SavedRevisionSummary>();
 export const DRAWING_REGISTER_VIRTUALIZE_THRESHOLD = 100;
 
 const REGISTER_GRID_COLUMNS =
-  "28px minmax(76px,.75fr) minmax(220px,2fr) minmax(64px,.65fr) minmax(180px,1.5fr) minmax(56px,.55fr) minmax(118px,1fr) 72px 72px minmax(108px,1fr) 56px";
+  "28px minmax(76px,.75fr) minmax(220px,2fr) minmax(64px,.65fr) minmax(180px,1.5fr) minmax(56px,.55fr) minmax(340px,1.3fr) minmax(118px,1fr) 72px 72px minmax(108px,1fr) 100px";
 
 function registerGridColumns(canRelease: boolean, selectable: boolean) {
   const base = selectable ? `32px ${REGISTER_GRID_COLUMNS}` : REGISTER_GRID_COLUMNS;
@@ -166,6 +167,7 @@ export function DrawingRegisterGridPanel({
   onRevisionUploaded,
   onOpenSummary,
   onMarkTitleblock,
+  onDeleteSheet,
   selected,
   onToggleSelect,
   onToggleSelectAll,
@@ -193,6 +195,7 @@ export function DrawingRegisterGridPanel({
   const contextPanelRef = useRef<HTMLElement>(null);
   const { can } = usePermissions();
   const canEdit = can("edit", "drawing");
+  const canDelete = can("delete", "drawing");
   const canRelease = can("approve", "drawing");
   const publish = usePublishRevision();
   const { data: watches } = useMyDrawingWatches(projectId);
@@ -312,7 +315,7 @@ export function DrawingRegisterGridPanel({
     });
   };
 
-  const colCount = (canRelease ? 12 : 11) + (selectable ? 1 : 0);
+  const colCount = (canRelease ? 13 : 12) + (selectable ? 1 : 0);
 
   const renderSheetCells = (entry: IndexedRegisterRow, virtual: boolean) => {
     const r = entry.row;
@@ -424,6 +427,14 @@ export function DrawingRegisterGridPanel({
           )}
         </RegisterCell>
         <RegisterCell virtual={virtual} style={{ fontVariantNumeric: "tabular-nums", color: "var(--cmd-text)", whiteSpace: "nowrap" }}>{r.current_revision || "—"}</RegisterCell>
+        <RegisterCell virtual={virtual} style={virtual ? { display: "block" } : undefined}>
+          <span title="Workflow status includes submittals and recorded drafting or erection markers; verify the server fabrication release gate before release.">
+            <Pill tone="neutral">Package workflow: {entry.packageWorkflow}</Pill>
+          </span>
+          <span style={{ display: "block", marginTop: 4, fontSize: 11, color: "var(--cmd-text-muted)" }}>
+            Recorded sheet: {r.stage?.trim() || "Unknown"}
+          </span>
+        </RegisterCell>
         <RegisterCell virtual={virtual}><StatusCell status={r.current_status} /></RegisterCell>
         <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}><Count n={r.open_impact_count} danger /></RegisterCell>
         <RegisterCell virtual={virtual} style={{ textAlign: "center", justifyContent: "center" }}><Count n={r.pending_review_count} info /></RegisterCell>
@@ -441,6 +452,16 @@ export function DrawingRegisterGridPanel({
           >
             <Eye size={14} />
           </Link>
+          {canDelete && onDeleteSheet && r.project_id === projectId && (
+            <button type="button" className="cmd-btn cmd-btn--ghost"
+              aria-label={`Delete sheet ${r.sheet_number || r.drawing_id}`}
+              title={pkg?.parent?.is_locked ? "Unlock the set before deletion" : "Delete sheet (recoverable)"}
+              disabled={!!pkg?.parent?.is_locked}
+              onClick={() => { if (!pkg?.parent?.is_locked) onDeleteSheet(r.drawing_id); }}
+              style={{ padding: "4px 8px", color: "var(--cmd-danger)" }}>
+              <Trash2 size={14} />
+            </button>
+          )}
         </RegisterCell>
         {canRelease && (
           <RegisterCell virtual={virtual}>
@@ -501,7 +522,7 @@ export function DrawingRegisterGridPanel({
         <div>
           <h3 style={{ margin: 0, color: "var(--cmd-text)", fontSize: 16, fontWeight: 700 }}>Drawing Register</h3>
           <p style={{ margin: "4px 0 0", color: "var(--cmd-text-muted)", fontSize: 12 }}>
-            Current revision, distribution, impacts, and reviews per sheet. Inspect a sheet for approval and hold evidence.
+            Package workflow includes submittals and recorded drafting or erection markers. Recorded sheet stage and revision distribution are shown separately. Inspect a sheet for approval and hold evidence.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -623,11 +644,12 @@ export function DrawingRegisterGridPanel({
                 <th>Disc.</th>
                 <th>Set</th>
                 <th>Rev</th>
+                <th>Status</th>
                 <th>Distribution</th>
                 <th style={{ textAlign: "center" }}>Impacts</th>
                 <th style={{ textAlign: "center" }}>Reviews</th>
                 <th>Last activity</th>
-                <th style={{ width: 56 }}>View</th>
+                <th style={{ minWidth: 90 }}>Actions</th>
                 {canRelease && <th>Set distribution</th>}
               </tr>
             </thead>
@@ -713,11 +735,12 @@ function VirtualRegisterRows({
     { label: "Disc." },
     { label: "Set" },
     { label: "Rev" },
+    { label: "Status" },
     { label: "Distribution" },
     { label: "Impacts", align: "center" },
     { label: "Reviews", align: "center" },
     { label: "Last activity" },
-    { label: "View", align: "center" },
+    { label: "Actions", align: "center" },
     ...(canRelease ? [{ label: "Set distribution" }] : []),
   ];
   const gridTemplateColumns = registerGridColumns(canRelease, selectable);
@@ -730,7 +753,7 @@ function VirtualRegisterRows({
       aria-rowcount={rows.length + 1}
       style={{ overflowX: "auto", overflowY: "hidden" }}
     >
-      <div role="rowgroup" style={{ minWidth: 1400 }}>
+      <div role="rowgroup" style={{ minWidth: 1800 }}>
         <div
           role="row"
           aria-rowindex={1}
@@ -766,7 +789,7 @@ function VirtualRegisterRows({
         ref={parentRef}
         role="rowgroup"
         data-testid="drawing-register-virtual-body"
-        style={{ maxHeight: 600, overflowY: "auto", minWidth: 1400 }}
+        style={{ maxHeight: 600, overflowY: "auto", minWidth: 1800 }}
       >
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {

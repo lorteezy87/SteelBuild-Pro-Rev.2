@@ -26,7 +26,7 @@ import {
   resolveDrawingPackageDue,
   registerStatusTone,
 } from "./format";
-import type { CurrentRevisionInfo } from "./types";
+import type { SetPackage, CurrentRevisionInfo } from "./types";
 import {
   DueChip,
   GridCell,
@@ -60,6 +60,7 @@ interface RegisterRowHandlers {
   aiDiffEnabled: boolean;
   onOpenSummary?: (summary: any) => void;
   onMarkTitleblock?: (setId: string) => void;
+  onDeleteSet?: (pkg: SetPackage) => void;
   setHealthDetail: (h: any) => void;
   setRevisionSet: (pkg: any) => void;
   setReportSet: (pkg: any) => void;
@@ -106,7 +107,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
       <GridCell style={{ color: textMuted }}>{r.releasedCount}/{r.sheetCount}</GridCell>
       <GridCell><DueChip info={r.due} /></GridCell>
       <GridCell align="right" style={{ color: textMuted }}>{r.maxRev || "—"}</GridCell>
-      <GridCell align="right" style={{ whiteSpace: "nowrap" }}>
+      <GridCell align="right" style={{ whiteSpace: "nowrap", flexWrap: "wrap", gap: 4 }}>
         {h.canEdit && r.pkg.parent && h.onMarkTitleblock && (
           <TitleblockActionButton setId={r.pkg.parent.id} setName={r.pkg.name}
             locked={r.locked} onMarkTitleblock={h.onMarkTitleblock} style={{ ...h.rowBtn, marginRight: 6 }} />
@@ -119,6 +120,12 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
             onClick={() => { if (!r.locked) h.setRevisionSet(r.pkg); }}
             style={{ ...h.rowBtn, opacity: r.locked ? 0.45 : 1, cursor: r.locked ? "not-allowed" : "pointer" }}
           >New Rev</button>
+        )}
+        {h.onDeleteSet && r.pkg.parent && (
+          <button type="button" disabled={r.locked} aria-label={`Delete drawing set ${r.pkg.name}`}
+            title={r.locked ? "Unlock the set before deletion" : "Delete set and its sheets (recoverable)"}
+            onClick={() => { if (!r.locked) h.onDeleteSet?.(r.pkg); }}
+            style={{ ...h.rowBtn, marginLeft: 6, color: "var(--cmd-danger)" }}>Delete set</button>
         )}
         {h.aiDiffEnabled && (
           <button type="button" title="AI Revision Impact Report" onClick={() => h.setReportSet(r.pkg)} style={{ ...h.rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>
@@ -215,7 +222,7 @@ function RegisterVirtualList({
  * Full sheet-level management still lives on the standalone Drawings page.
  */
 export function DrawingRegisterTable({
-  setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey, currentRevByDrawingId, summariesBySet, onRevisionUploaded, onOpenSummary, onMarkTitleblock,
+  setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey, currentRevByDrawingId, summariesBySet, onRevisionUploaded, onOpenSummary, onMarkTitleblock, onDeleteSet,
   hasLinkedSet = false, linkedSetId = null, onClearLinkedSet,
 }: {
   setPackages: any[]; projectId?: string; activeProject?: any; drawingSets?: any[]; isLoading?: boolean;
@@ -227,6 +234,7 @@ export function DrawingRegisterTable({
   onRevisionUploaded?: (pkgKey: string) => void;
   onOpenSummary?: (summary: any) => void;
   onMarkTitleblock?: (setId: string) => void;
+  onDeleteSet?: (pkg: SetPackage) => void;
   hasLinkedSet?: boolean;
   linkedSetId?: string | null;
   onClearLinkedSet?: () => void;
@@ -342,7 +350,7 @@ export function DrawingRegisterTable({
   const VIRTUALIZE_THRESHOLD = 100;
   const shouldVirtualize = rows.length > VIRTUALIZE_THRESHOLD;
   const rowHandlers: RegisterRowHandlers = {
-    rowBtn, canEdit, aiDiffEnabled, onOpenSummary, onMarkTitleblock, setHealthDetail, setRevisionSet, setReportSet,
+    rowBtn, canEdit, aiDiffEnabled, onOpenSummary, onMarkTitleblock, onDeleteSet, setHealthDetail, setRevisionSet, setReportSet,
   };
 
   if (isLoading) return <LoadingSkeleton />;
@@ -479,6 +487,12 @@ export function DrawingRegisterTable({
                       onClick={() => { if (!r.locked) setRevisionSet(r.pkg); }}
                       style={{ ...rowBtn, opacity: r.locked ? 0.45 : 1, cursor: r.locked ? "not-allowed" : "pointer" }}
                     >New Rev</button>
+                  )}
+                  {onDeleteSet && r.pkg.parent && (
+                    <button type="button" disabled={r.locked} aria-label={`Delete drawing set ${r.pkg.name}`}
+                      title={r.locked ? "Unlock the set before deletion" : "Delete set and its sheets (recoverable)"}
+                      onClick={() => { if (!r.locked) onDeleteSet(r.pkg); }}
+                      style={{ ...rowBtn, marginLeft: 6, color: "var(--cmd-danger)" }}>Delete set</button>
                   )}
                   {aiDiffEnabled && (
                     <button type="button" title="AI Revision Impact Report" onClick={() => setReportSet(r.pkg)} style={{ ...rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>

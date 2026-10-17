@@ -66,7 +66,7 @@ export function buildDeleteSheetConfirm(
   return {
     title: `Delete ${label}?`,
     description:
-      "The sheet will be removed from the project. You can undo this from the toast that appears after deletion.",
+      "The sheet will be removed from the active register. Its files, revision history and approval evidence are retained. You can undo this from the toast that appears after deletion.",
   };
 }
 

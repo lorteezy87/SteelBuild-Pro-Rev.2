@@ -360,10 +360,10 @@ export default function DrawingsPageView({
         onCloseExport={() => state.setExportPkgKind(null)}
         confirmState={state.confirmState}
         onCloseConfirm={() => state.setConfirmState(null)}
-        onConfirmDelete={() => {
+        onConfirmDelete={async () => {
           const run = state.confirmState?.run;
+          if (run) await run();
           state.setConfirmState(null);
-          if (run) void run();
         }}
       />
 

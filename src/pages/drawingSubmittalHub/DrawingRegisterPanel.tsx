@@ -81,8 +81,8 @@ export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
   return <>
     <HubViewToggle label="Drawing register view" options={VIEWS} value={view} onChange={changeView} />
     {view === "sheets" && (
-      <DrawingRegisterWorkbench projectId={projectId} activeProject={props.activeProject}>
-        {({ selected, onToggleSelect, onToggleSelectAll, onMarkTitleblock }) => (
+      <DrawingRegisterWorkbench key={projectId ?? "no-project"} projectId={projectId} activeProject={props.activeProject}>
+        {({ selected, onToggleSelect, onToggleSelectAll, onMarkTitleblock, onDeleteSheet }) => (
           <DrawingRegisterGridPanel
             projectId={projectId}
             activeProject={props.activeProject}
@@ -95,16 +95,17 @@ export default function DrawingRegisterPanel(props: DrawingRegisterPanelProps) {
             onToggleSelect={onToggleSelect}
             onToggleSelectAll={onToggleSelectAll}
             onMarkTitleblock={onMarkTitleblock}
+            onDeleteSheet={onDeleteSheet}
           />
         )}
       </DrawingRegisterWorkbench>
     )}
     {view === "sets" && (
-      <DrawingRegisterWorkbench projectId={projectId} activeProject={props.activeProject}>
-        {({ onMarkTitleblock }) => (
+      <DrawingRegisterWorkbench key={projectId ?? "no-project"} projectId={projectId} activeProject={props.activeProject}>
+        {({ onMarkTitleblock, onDeleteSet }) => (
           <Suspense fallback={<p role="status">Loading drawing sets…</p>}>
             <DrawingRegisterTable {...props} projectId={projectId ?? undefined} setPackages={props.setPackages ?? []}
-              onMarkTitleblock={onMarkTitleblock} hasLinkedSet={hasLinkedSet} linkedSetId={linkedSetId} onClearLinkedSet={clearLinkedSet} />
+              onMarkTitleblock={onMarkTitleblock} onDeleteSet={onDeleteSet} hasLinkedSet={hasLinkedSet} linkedSetId={linkedSetId} onClearLinkedSet={clearLinkedSet} />
           </Suspense>
         )}
       </DrawingRegisterWorkbench>
