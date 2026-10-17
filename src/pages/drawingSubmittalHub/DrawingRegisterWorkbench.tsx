@@ -36,6 +36,7 @@ import { useDrawingsPageData } from "@/pages/drawings/useDrawingsPageData";
 import { useDrawingsPageController } from "@/pages/drawings/useDrawingsPageController";
 import { buildSubmittalNavigationSearch, toggleSelectAllIds } from "@/pages/drawings/drawingActionHelpers";
 import type { DrawingsPageFilters } from "@/pages/drawings/drawingsPageDerive";
+import type { SetPackage } from "./types";
 import DrawingRegisterActions from "./DrawingRegisterActions";
 
 export interface DrawingRegisterWorkbenchProps {
@@ -50,6 +51,8 @@ export interface DrawingRegisterWorkbenchProps {
     onToggleSelect: (id: string) => void;
     onToggleSelectAll: (ids: string[]) => void;
     onMarkTitleblock?: (setId: string) => void;
+    onDeleteSheet?: (id: string) => void;
+    onDeleteSet?: (pkg: SetPackage) => void;
   }) => ReactNode;
 }
 
@@ -65,6 +68,8 @@ export default function DrawingRegisterWorkbench({
   const workdayDues = useFlag("submittal_workday_dues");
 
   const canCreateDrawing = can("create", "drawing");
+  const canDeleteDrawing = can("delete", "drawing");
+  const canDeleteSet = can("bulk_delete", "drawing");
   const canEditDrawing = can("edit", "drawing");
 
   const state = useDrawingsPageState(searchParams);
@@ -164,6 +169,14 @@ export default function DrawingRegisterWorkbench({
 
       {children({
         selected: state.selected,
+        onDeleteSheet: canDeleteDrawing && !data.isLoading && !data.queryError ? (id) => {
+          if (!data.drawings.some((drawing) => drawing.id === id && drawing.project_id === projectId)) return;
+          controller.handleDelete(id);
+        } : undefined,
+        onDeleteSet: canDeleteSet && !data.isLoading && !data.queryError ? (pkg) => {
+          if (!pkg.setId || !data.drawingSetRecords.some((set) => set.id === pkg.setId && set.project_id === projectId)) return;
+          controller.handleDeleteSet({ ...pkg, sheets: data.drawings.filter((drawing) => drawing.drawing_set_id === pkg.setId) });
+        } : undefined,
         onMarkTitleblock: canEditDrawing && !data.isLoading && !data.queryError ? openTitleblock : undefined,
         onToggleSelect: controller.toggleSelect,
         // NOT controller.toggleSelectAll: that one selects the controller's own
@@ -239,10 +252,10 @@ export default function DrawingRegisterWorkbench({
         onCloseExport={() => state.setExportPkgKind(null)}
         confirmState={state.confirmState}
         onCloseConfirm={() => state.setConfirmState(null)}
-        onConfirmDelete={() => {
+        onConfirmDelete={async () => {
           const run = state.confirmState?.run;
+          if (run) await run();
           state.setConfirmState(null);
-          if (run) void run();
         }}
       />
 

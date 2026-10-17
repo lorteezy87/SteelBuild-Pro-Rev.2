@@ -1,3 +1,4 @@
+import { deleteRegisterSheet } from "./drawingRegisterDeletion";
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
@@ -108,6 +109,7 @@ export function useDrawingsPageController({
   const invalidate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["drawings", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["drawing-register", projectId] }),
       invalidateEntity(queryClient, "drawingSet", projectId),
       invalidateEntity(queryClient, "submittal", projectId),
     ]);
@@ -154,7 +156,7 @@ export function useDrawingsPageController({
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: string) => entities.Drawing.delete(id),
+    mutationFn: (id: string) => deleteRegisterSheet(drawings.find((drawing) => drawing.id === id), projectId),
     onSuccess: async (_result, id) => {
       await invalidate();
       setSelected(new Set());
@@ -283,7 +285,7 @@ export function useDrawingsPageController({
     const confirm = buildDeleteSheetConfirm(
       drawings.find((drawing) => drawing.id === id),
     );
-    setConfirmState({ ...confirm, run: () => deleteMut.mutate(id) });
+    setConfirmState({ ...confirm, run: async () => { await deleteMut.mutateAsync(id); } });
   };
 
   const handleDeleteSet = (group: DrawingSetGroupLike) => {
@@ -292,7 +294,7 @@ export function useDrawingsPageController({
     setConfirmState({
       title: plan.title,
       description: plan.description,
-      run: () => deleteSetMut.mutate(plan.mutateArgs),
+      run: async () => { await deleteSetMut.mutateAsync(plan.mutateArgs); },
     });
   };
 

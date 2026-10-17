@@ -8,6 +8,7 @@
  * Independently typed + unit-tested so the panels stay strict-null / no-implicit-any
  * clean without pulling any JSX into the tests.
  */
+import { effectiveDetailingState } from "@/lib/detailingPackageState";
 import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import type { DrawingReviewRow } from "@/hooks/useDrawingReviews";
 import type { DrawingImpactRow } from "@/hooks/useDrawingImpacts";
@@ -34,6 +35,7 @@ export interface IndexedRegisterRow {
   setName: string | null;
   searchText: string;
   pkg: SetPackage | null;
+  packageWorkflow: string;
 }
 
 export interface DrawingRegisterIndex {
@@ -52,9 +54,11 @@ export function createDrawingRegisterIndex(
   rows: DrawingRegisterRow[],
   setPackages: SetPackage[] = [],
 ): DrawingRegisterIndex {
+  const workflowByPackage = new Map<SetPackage, string>();
   const packageByDrawingId = new Map<string, SetPackage>();
   const packageBySetId = new Map<string, SetPackage>();
   for (const pkg of setPackages) {
+    workflowByPackage.set(pkg, effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets));
     if (pkg.setId) packageBySetId.set(String(pkg.setId), pkg);
     for (const drawing of [...pkg.sheets, ...pkg.supersededSheets]) {
       if (drawing.id) packageByDrawingId.set(String(drawing.id), pkg);
@@ -79,12 +83,15 @@ export function createDrawingRegisterIndex(
       row,
       setName,
       pkg,
+      packageWorkflow: pkg ? workflowByPackage.get(pkg) || "Unknown" : "Unknown",
       searchText: [
         row.sheet_number,
         row.sheet_title,
         row.discipline,
         row.drawing_set_name,
         row.current_status,
+        row.stage,
+        pkg ? workflowByPackage.get(pkg) : null,
       ].map((value) => value || "").join("\n").toLowerCase(),
     };
   });
