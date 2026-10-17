@@ -33,6 +33,13 @@ describe("isSubmittalDuplicateNumberError", () => {
 });
 
 describe("formatSubmittalWriteError", () => {
+  it('explains evidence recovery without treating it as an overridable fabrication blocker', () => {
+    const message = formatSubmittalWriteError(new Error('ROUND_LEGACY_RECONCILIATION_REQUIRED: Missing or stale revision evidence'), 'Advance');
+    expect(message).toContain('Revision evidence');
+    expect(message).toContain('original transmitted PDFs');
+    expect(message).not.toContain('ROUND_LEGACY');
+    expect(formatSubmittalWriteError(new Error('ROUND_STALE: changed'), 'Advance')).toContain('changed');
+  });
   it("maps duplicate create/update errors to plain English", () => {
     expect(formatSubmittalWriteError(new Error("duplicate key"), "Create")).toMatch(/already exists/);
     expect(formatSubmittalWriteError(new Error("boom"), "Create")).toBe("Create failed: boom");
