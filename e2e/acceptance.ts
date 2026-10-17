@@ -113,7 +113,10 @@ export async function observeReadOnlyPage(page: Page, supabaseUrl: string, proje
           fail('invalid-project-response', `Invalid project-scoped rows: ${table}`);
           return;
         }
-        rows.set(table, body as Row[]);
+        // ID-scoped detail/existence reads are validated above, but are not
+        // register lists. An id-only detail must not erase the current list's
+        // fixture evidence or substitute for a missing list read.
+        if (!url.searchParams.has('id')) rows.set(table, body as Row[]);
       } catch {
         fail('invalid-json', `Invalid JSON response: ${table}`);
       }

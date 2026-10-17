@@ -67,6 +67,33 @@ test('waits for refreshed fixture rows after an initial empty response', async (
   expect(requests).toBe(2);
 });
 
+test('preserves list evidence after an id-only detail response', async ({ page }) => {
+  await fixture(page, { extraScript: `await fetch(${JSON.stringify(`${API}/rest/v1/submittals?project_id=eq.${PROJECT}&select=id&id=eq.fixture-submittal`)});` });
+  await page.context().route(`${API}/rest/v1/submittals*`, route => route.fulfill({ contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(new URL(route.request().url()).searchParams.has('id') ? [{ id: ROW.id }] : [ROW]) }));
+  await visitRegister(page, 'submittals', options);
+});
+
+test('rejects detail-only evidence despite a convincing cached register', async ({ page }) => {
+  await fixture(page, { request: false, extraScript: `await fetch(${JSON.stringify(`${API}/rest/v1/submittals?project_id=eq.${PROJECT}&id=eq.fixture-submittal`)});` });
+  await expect(visitRegister(page, 'submittals', options)).rejects.toThrow(/successful project-scoped JSON/);
+});
+
+test('still validates tenant scope on ignored detail evidence', async ({ page }) => {
+  await fixture(page, { extraScript: `await fetch(${JSON.stringify(`${API}/rest/v1/submittals?project_id=eq.${PROJECT}&id=eq.fixture-submittal`)});` });
+  await page.context().route(`${API}/rest/v1/submittals*`, route => route.fulfill({ contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(new URL(route.request().url()).searchParams.has('id')
+      ? [{ ...ROW, project_id: '22222222-2222-4222-8222-222222222222' }] : [ROW]) }));
+  await expect(visitRegister(page, 'submittals', options)).rejects.toThrow(/runtime, network, or write failures/);
+});
+
+test('rejects a later authoritative list response that loses the fixture', async ({ page }) => {
+  await fixture(page, { extraScript: `await fetch(${JSON.stringify(`${API}/rest/v1/submittals?project_id=eq.${PROJECT}&refresh=true`)});` });
+  await page.context().route(`${API}/rest/v1/submittals*`, route => route.fulfill({ contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(new URL(route.request().url()).searchParams.has('refresh') ? [] : [ROW]) }));
+  await expect(visitRegister(page, 'submittals', options)).rejects.toThrow(/response must contain the known fixture row/);
+});
+
 test('waits for a pending detail read before navigation while preserving network failure detection', async ({ page }) => {
   await fixture(page, { request: false });
   let release: () => void = () => {};
@@ -256,6 +283,17 @@ test("accepts an exact drawing name beside its nested number badge and quote cha
     extraScript: `history.replaceState(null, '', '/DrawingSubmittalHub?hub_tab=drawings'); await fetch(${JSON.stringify(`${API}/rest/v1/drawings?project_id=eq.${PROJECT}`)});`,
     html: `<main aria-label="Main content"><h1>Drawing Control</h1><button aria-pressed="true">Sets &amp; revisions</button><table><tbody><tr><td><span>${name}<span>STG-001</span></span></td></tr></tbody></table></main>` });
   await visitRegister(page, "drawings", { ...options, fixtureText: name });
+});
+
+test('preserves drawing-set list evidence after its id-only existence check', async ({ page }) => {
+  const name = 'STG Erection Drawings';
+  await fixture(page, { table: 'drawing_sets', body: [{ id: 'set', project_id: PROJECT, set_name: name }],
+    extraScript: `history.replaceState(null, '', '/DrawingSubmittalHub?hub_tab=drawings'); await fetch(${JSON.stringify(`${API}/rest/v1/drawings?project_id=eq.${PROJECT}`)}); await fetch(${JSON.stringify(`${API}/rest/v1/drawing_sets?select=id&id=eq.set&project_id=eq.${PROJECT}`)});`,
+    html: `<main aria-label="Main content"><h1>Drawing Control</h1><button aria-pressed="true">Sets &amp; revisions</button><table><tbody><tr><td><span>${name}<span>STG-001</span></span></td></tr></tbody></table></main>` });
+  await page.context().route(`${API}/rest/v1/drawing_sets*`, route => route.fulfill({ contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(new URL(route.request().url()).searchParams.has('id')
+      ? [{ id: 'set' }] : [{ id: 'set', project_id: PROJECT, set_name: name }]) }));
+  await visitRegister(page, 'drawings', { ...options, fixtureText: name });
 });
 
 test("blocks auth logout unless this page explicitly opts in", async ({ page }) => {
