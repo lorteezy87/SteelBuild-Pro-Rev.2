@@ -769,10 +769,15 @@ jobs:
   # They are staging-only and are never selected by staging-e2e-readonly.
   staging-e2e-mutations:
     name: E2E gates (staging, disposable mutations)
-    needs: deploy-staging-cloudflare
+    # Read-only acceptance includes global sign-out for the shared PM account.
+    # Finish that revocation before mutation setup creates its fresh session.
+    needs: [deploy-staging-cloudflare, staging-e2e-readonly]
     # Same load-bearing branch/event gate as staging-e2e-readonly above — see
     # the comment there for why dropping it broke pull requests.
     if: >-
+      always() &&
+      needs.deploy-staging-cloudflare.result == 'success' &&
+      (needs.staging-e2e-readonly.result == 'success' || needs.staging-e2e-readonly.result == 'skipped') &&
       github.ref == 'refs/heads/staging' &&
       github.event_name == 'push' &&
       vars.STAGING_E2E_MUTATIONS_ENABLED == 'true' &&
