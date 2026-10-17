@@ -151,6 +151,24 @@ describe('finite proposed drawing command envelopes', () => {
     if (kind === 'toJSON') body.toJSON = () => { calls++; return {}; };
     expect(() => bindDrawingCommandEnvelope(f, req)).toThrow('COMMAND_ENVELOPE_REFUSED'); expect(calls).toBe(0);
   });
+  it.each(['custom-method', 'custom-getter', 'subclass-method', 'subclass-getter', 'null-prototype'])('refuses %s arrays without invoking inherited serialization callbacks', kind => {
+    const f = fixture(); const req = request(f);
+    const payload = (req.body as { p_request: { sheets: unknown[] } }).p_request;
+    let methodCalls = 0; let getterCalls = 0;
+    const toJSON = () => { methodCalls++; return []; };
+    if (kind === 'null-prototype') Object.setPrototypeOf(payload.sheets, null);
+    else {
+      class ExoticSheets extends Array<unknown> {}
+      const prototype = kind.startsWith('subclass') ? ExoticSheets.prototype : Object.create(Array.prototype);
+      Object.defineProperty(prototype, 'toJSON', kind.endsWith('getter')
+        ? { get: () => { getterCalls++; return toJSON; } }
+        : { value: toJSON });
+      if (kind.startsWith('subclass')) payload.sheets = new ExoticSheets(...payload.sheets);
+      else Object.setPrototypeOf(payload.sheets, prototype);
+    }
+    expect(() => bindDrawingCommandEnvelope(f, req)).toThrow('COMMAND_ENVELOPE_REFUSED');
+    expect(methodCalls).toBe(0); expect(getterCalls).toBe(0);
+  });
   it('revalidates the complete book at every public boundary and never accepts a fabricated binding', () => {
     const f = fixture(); const req = request(f); const binding = bindDrawingCommandEnvelope(f, req);
     Object.assign(f.intakeBindings.commands.manualIntake, { actor: 'admin' });

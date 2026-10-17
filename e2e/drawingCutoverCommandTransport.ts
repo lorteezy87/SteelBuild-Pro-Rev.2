@@ -46,7 +46,8 @@ function copyJson(value: unknown): unknown {
     }
     requireEnvelope(typeof current === 'object' && current !== null && !types.isProxy(current) && !ancestors.has(current));
     const array = Array.isArray(current);
-    requireEnvelope(array || Object.getPrototypeOf(current) === Object.prototype || Object.getPrototypeOf(current) === null);
+    const prototype = Object.getPrototypeOf(current);
+    requireEnvelope(array ? prototype === Array.prototype : prototype === Object.prototype || prototype === null);
     ancestors.add(current);
     const names = Reflect.ownKeys(current);
     requireEnvelope(names.every(key => typeof key === 'string' && key !== '__proto__'));
