@@ -907,6 +907,8 @@ function DetailingControlCenter() {
             currentRevisionIdByDrawingId={currentRevisionIdByDrawingId}
             lastSentStatus={lastSentStatus}
             canCreateSubmittal={can("create", "submittal")}
+            projectMeta={activeProject?.metadata ?? null}
+            projectLabel={[activeProject?.project_number, activeProject?.name].filter(Boolean).join(" ")}
           />
         )}
         {activeTab === "revimpact" && (

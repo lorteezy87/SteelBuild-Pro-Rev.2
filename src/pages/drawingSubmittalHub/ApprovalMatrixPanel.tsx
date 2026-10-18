@@ -22,6 +22,9 @@ import { AlertTriangle, ClipboardList, FileQuestion, MessageSquareWarning, Shiel
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
+import ReviewDelayCard from "@/components/submittals/ReviewDelayCard";
+import type { LedgerRound, LedgerSubmittal } from "@/lib/reviewDelayLedger";
+import { localToday } from "@/utils/dates";
 import StageChipRaw from "@/components/drawings/StageChip";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import type { DrawingHoldRow } from "@/hooks/useDrawingHolds";
@@ -109,6 +112,10 @@ interface ApprovalMatrixPanelProps {
   lastSentStatus?: LastSentStatus;
   /** Gates the "+ Create submittal" link on sets with none. */
   canCreateSubmittal?: boolean;
+  /** projects.metadata — supplies the contract review period for the delay log. */
+  projectMeta?: { detailing_lead_days?: Record<string, unknown> } | null;
+  /** Job label written into the delay-log export. */
+  projectLabel?: string;
 }
 
 function statusTone(status?: string | null): PillTone {
@@ -162,6 +169,8 @@ export function ApprovalMatrixPanel({
   currentRevisionIdByDrawingId = NO_REVISION_IDS,
   lastSentStatus,
   canCreateSubmittal = false,
+  projectMeta = null,
+  projectLabel = "",
 }: ApprovalMatrixPanelProps) {
   // An undefined log is unknown, not empty: never "Not sent yet" off it.
   const lastSentState: LastSentStatus = lastSentStatus ?? (transmittals === undefined ? "loading" : "ready");
@@ -298,6 +307,15 @@ export function ApprovalMatrixPanel({
         <CycleTimeCard submittals={submittals} roundsBySubmittal={roundsBySubmittal} isLoading={isLoading} />
         <AgingReportTable submittals={submittals} isLoading={isLoading} />
       </div>
+      <ReviewDelayCard
+        submittals={submittals as unknown as LedgerSubmittal[]}
+        roundsBySubmittal={roundsBySubmittal as unknown as Record<string, LedgerRound[]>}
+        today={localToday()}
+        projectMeta={projectMeta}
+        basis={useWorkdays ? "working" : "calendar"}
+        projectLabel={projectLabel}
+        isLoading={isLoading}
+      />
     </section>
   );
 }
