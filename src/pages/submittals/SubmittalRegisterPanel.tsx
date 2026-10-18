@@ -39,6 +39,9 @@ import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { BIC_CHOICES, STATUSES } from "./format";
 import type { SubmittalStats } from "./submittalRegister.derive";
 import type { Submittal } from "./types";
+import SavedViewsControl from "@/components/shared/SavedViewsControl";
+import { viewValue } from "@/lib/savedRegisterViews";
+import type { SavedRegisterView } from "@/lib/savedRegisterViews";
 
 type KpiTone = "neutral" | "good" | "warn" | "danger" | "info";
 
@@ -264,6 +267,15 @@ export default function SubmittalRegisterPanel({
               <option value="all">Any Ball-in-Court</option>
               {BIC_CHOICES.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
+            <SavedViewsControl
+              register="submittal_register"
+              currentFilters={{ filterStatus, filterBIC, search }}
+              onApply={(view: SavedRegisterView) => {
+                onFilterStatus(viewValue(view, "filterStatus", "all", ["all", "__pending", "__approved", "__rejected", "__pending_eor", ...STATUSES]));
+                onFilterBIC(viewValue(view, "filterBIC", "all", ["all", ...BIC_CHOICES]));
+                onSearch(viewValue(view, "search", ""));
+              }}
+            />
           </>
         }
       />
