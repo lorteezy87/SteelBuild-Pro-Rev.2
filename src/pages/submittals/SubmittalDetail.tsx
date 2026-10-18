@@ -45,6 +45,10 @@ import { LinkedDrawingSets } from "./LinkedDrawingSets";
 import { SubmittalDrawingTypeComponents } from "./SubmittalDrawingTypeComponents";
 import type { DrawingSet, Submittal, SubmittalRoundRecord } from "./types";
 import SubmittalRevisionEvidence from './SubmittalRevisionEvidence';
+import WhyWaitingWhoPanel from "@/components/shared/WhyWaitingWhoPanel";
+import { SUBMITTAL_TRACKED_FIELDS } from "@/lib/recordMovement";
+import { submittalWaitingOn } from "@/lib/submittalWaitingOn";
+import type { WaitingOnRfi } from "@/lib/submittalWaitingOn";
 
 type GenericProps = Record<string, unknown>;
 
@@ -376,6 +380,25 @@ export function SubmittalDetail({
           rfis={allRfis}
           rounds={rounds}
           projectName={projectName}
+        />
+
+        <WhyWaitingWhoPanel
+          entityTable="submittals"
+          recordId={submittal.id}
+          projectId={submittal.project_id as string | undefined}
+          fields={SUBMITTAL_TRACKED_FIELDS}
+          waitingOn={submittalWaitingOn(submittal, {
+            rfis: allRfis as unknown as WaitingOnRfi[],
+            commentDispositions,
+          })}
+          ballInCourt={submittal.ball_in_court}
+          person={(submittal.reviewer as string | null | undefined) ?? null}
+          dueDate={(submittal.required_date as string | null | undefined) ?? null}
+          nextMove={(() => {
+            const action = nextSubmittalAction(submittal, { approvedRoutesToScrub });
+            return action.disabled ? null : action.label;
+          })()}
+          today={today || undefined}
         />
 
         {splittingEnabled && (lineage.parent || lineage.children.length > 0) && (

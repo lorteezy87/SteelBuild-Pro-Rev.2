@@ -6,6 +6,7 @@ import type { IndexedRegisterRow } from "../docControl.derive";
 
 const mocks = vi.hoisted(() => ({ evidence: vi.fn(), sheetTransmittal: vi.fn(), retry: vi.fn() }));
 vi.mock("../useSheetSetEvidence", () => ({ useSheetSetEvidence: mocks.evidence }));
+vi.mock("@/api/client/recordAudit", () => ({ fetchRecordAudit: async () => [] }));
 vi.mock("../useSheetTransmittalEvidence", () => ({ useSheetTransmittalEvidence: mocks.sheetTransmittal }));
 
 import { SheetContextPanel } from "../SheetContextPanel";

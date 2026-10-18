@@ -8,6 +8,7 @@ import type { DrawingRegisterGridPanelProps } from '../DrawingRegisterGridPanel'
 import { DrawingRegisterGridPanel } from '../DrawingRegisterGridPanel';
 let canDelete = true;
 let recordedStage = "IFC";
+vi.mock("@/api/client/recordAudit", () => ({ fetchRecordAudit: async () => [] }));
 vi.mock('@/pages/drawingSubmittalHub/format', () => ({ fmtDate: (value: string) => value }));
 vi.mock('../registerProvision', () => ({ rowsNeedingProvisioning: (): unknown[] => [], provisionRegisterRevision: vi.fn() }));
 vi.mock('@/hooks/useDrawingRegister', () => ({ useDrawingRegister: () => ({ data: [{ drawing_id: 'd1', project_id: 'p1', sheet_number: 'S101', stage: recordedStage, current_status: 'pending_review', current_revision_id: 'r1' }, { drawing_id: 'd2', project_id: 'p1', sheet_number: 'S102', stage: null as string | null, current_status: null as string | null }] }) }));
