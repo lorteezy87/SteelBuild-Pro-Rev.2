@@ -116,7 +116,7 @@ export default function WhyWaitingWhoPanel({
         ) : waitingOn.length === 0 ? (
           <span style={muted}>No recorded blockers.</span>
         ) : (
-          <ul style={{ margin: 0, paddingLeft: 16 }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {waitingOn.map((w, i) => (
               <li key={`${w.what}-${i}`} style={{ marginBottom: 3 }}>
                 <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{w.what}</span>

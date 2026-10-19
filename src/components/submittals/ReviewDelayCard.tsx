@@ -129,7 +129,7 @@ export default function ReviewDelayCard({
             <>
               <div style={sectionLabel}>By reviewer</div>
               <div style={{ overflowX: "auto", marginBottom: 16 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(90px,1fr) repeat(5, 54px)", gap: "4px 10px", fontFamily: "var(--font-mono)", fontSize: 11, minWidth: 380 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(90px,1fr) repeat(5, 64px)", gap: "4px 10px", fontFamily: "var(--font-mono)", fontSize: 11, minWidth: 430 }}>
                   <Hdr>Reviewer</Hdr>
                   <Hdr right>Rounds</Hdr>
                   <Hdr right>Late</Hdr>
