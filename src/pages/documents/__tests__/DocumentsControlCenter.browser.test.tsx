@@ -164,6 +164,17 @@ describe("Documents browser", () => {
     expect(props.onRestoreDoc).toHaveBeenCalledWith(expect.objectContaining({ id: "x" }));
   });
 
+  it("in a controlled quick view, shows the shell's rows and reports view changes", () => {
+    const onViewChange = vi.fn();
+    setup({ view: "review", onViewChange, filteredDocs: [docs[0]] });
+    expect(screen.getByRole("heading", { level: 2, name: "Needs review" })).toBeInTheDocument();
+    // Rows come from filteredDocs (the shell applied Add filter), not a local re-derivation.
+    expect(screen.getByRole("row", { name: /AISC Code/ })).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /S-101\.pdf/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Recycle bin/ }));
+    expect(onViewChange).toHaveBeenCalledWith("recycle");
+  });
+
   it("never shows a failed read as an empty folder", () => {
     const { props } = setup({ allDocuments: [], filteredDocs: [], folders: [], loadError: "network down", onRetry: vi.fn() });
     expect(screen.getByRole("alert")).toHaveTextContent("Couldn’t load documents. network down");

@@ -97,8 +97,15 @@ type FolderWithDate = FolderRecord & { created_at?: string | null; created_by?: 
 export interface DocumentsControlCenterProps {
   projectName: string;
   allDocuments: DocumentRecord[];
-  /** Filtered list for the current folder (or across folders while searching). */
+  /**
+   * The documents the table shows for the active view, already filtered by
+   * the shell: the open folder (or every folder while searching), or the
+   * quick view's project-wide set. Selection and export use the same list.
+   */
   filteredDocs: DocumentRecord[];
+  /** Active view. When omitted the component manages it locally. */
+  view?: QuickView;
+  onViewChange?: (view: QuickView) => void;
   search: string;
   onSearch: (v: string) => void;
   onOpenDoc: (doc: DocumentRecord) => void;
@@ -169,6 +176,7 @@ export interface DocumentsControlCenterProps {
 export default function DocumentsControlCenter(props: DocumentsControlCenterProps) {
   const {
     projectName, allDocuments, filteredDocs, search, onSearch, onOpenDoc, onExport, onUpload,
+    view: viewProp, onViewChange,
     selectedIds, onToggleSelect, onToggleAll,
     folders, currentFolderId, onNavigateFolder, onCreateFolder, onRenameFolder, onDeleteFolder,
     onBulkDeleteFolders, onBulkMoveFolders, onOpenBulkCreateFolders,
@@ -181,7 +189,14 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
 
   useCommandSkin();
 
-  const [view, setView] = useState<QuickView>("folder");
+  const [localView, setLocalView] = useState<QuickView>("folder");
+  const controlled = viewProp !== undefined;
+  const view: QuickView = controlled ? viewProp : localView;
+  const setView = (v: QuickView) => {
+    if (v === view) return;
+    if (!controlled) setLocalView(v);
+    onViewChange?.(v);
+  };
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -243,15 +258,13 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
   }, [view, isSearching, folders, search, index, currentFolderId, sortKey, sortDir]);
 
   const docRows: DocumentRecord[] = useMemo(() => {
+    // Controlled: the shell has already derived (and filtered) the rows for
+    // the active view, so the table, selection and export see one list.
+    if (controlled) return sortDocuments(filteredDocs, sortKey, sortDir);
     if (view === "recycle") return sortDocuments(deletedDocs, sortKey, sortDir);
-    if (view === "recent" || view === "review") {
-      // Quick views span every folder. Typing in search returns to the folder
-      // view (which searches everything), so search never applies here.
-      const base = quickViewDocs(allDocuments, view);
-      return sortDocuments(base, sortKey, sortDir);
-    }
+    if (view === "recent" || view === "review") return sortDocuments(quickViewDocs(allDocuments, view), sortKey, sortDir);
     return sortDocuments(filteredDocs, sortKey, sortDir);
-  }, [view, deletedDocs, allDocuments, filteredDocs, sortKey, sortDir]);
+  }, [controlled, view, deletedDocs, allDocuments, filteredDocs, sortKey, sortDir]);
 
   const showLocation = isSearching || view !== "folder";
   const selectable = view !== "recycle" && !!(selectedIds && onToggleSelect && onToggleAll);

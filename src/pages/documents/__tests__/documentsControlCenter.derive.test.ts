@@ -229,6 +229,11 @@ describe("filterDocuments", () => {
     expect(filterDocuments({ ...base, currentFolderId: "f1" }).map((d) => d.id)).toEqual(["2", "3"]);
   });
 
+  it("scope 'all' keeps every folder's documents (quick views, recycle bin)", () => {
+    const r = filterDocuments({ ...base, scope: "all", activeFilters: { status: ["Approved"] } });
+    expect(r.map((d) => d.id).sort()).toEqual(["1", "3", "4"]);
+  });
+
   it("searches across all folders, ignoring folder scope", () => {
     const r = filterDocuments({ ...base, currentFolderId: "f4", search: "beam" });
     expect(r.map((d) => d.id)).toEqual(["2", "3"]);

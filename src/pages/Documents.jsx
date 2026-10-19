@@ -29,7 +29,7 @@ import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/Fold
 import { batchProcess } from "@/utils/batchProcess";
 import DocumentsControlCenter from "./documents/DocumentsControlCenter";
 import { filterDocuments, planFolderDeletion } from "./documents/documentsControlCenter.derive";
-import { restorePatch } from "./documents/documentsBrowser.derive";
+import { quickViewDocs, restorePatch } from "./documents/documentsBrowser.derive";
 
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
 import BatchActionBar from "./documents/BatchActionBar";
@@ -56,8 +56,12 @@ export default function Documents() {
   const [editingDoc, setEditingDoc]       = useState(null);
   const [selectedIds, setSelectedIds]     = useState(new Set());
   const [isDragOver, setIsDragOver]       = useState(false);
+  // Which list the browser shows: the open folder, or a project-wide quick
+  // view. Owned here so selection, export and filters act on the same rows
+  // the table displays.
+  const [docView, setDocView]             = useState("folder");
   // The recycle bin is only read once the user opens it.
-  const [recycleOpen, setRecycleOpen]     = useState(false);
+  const recycleOpen = docView === "recycle";
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [transmittalOpen, setTransmittalOpen]     = useState(false);
   const [transmittalForm, setTransmittalForm]     = useState({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
@@ -73,7 +77,7 @@ export default function Documents() {
   const dragCounter = useRef(0);
   // Reset folder navigation when the user switches projects so we never
   // accidentally show a folder from a different project.
-  React.useEffect(() => { setCurrentFolderId(null); setRecycleOpen(false); }, [activeProject?.id]);
+  React.useEffect(() => { setCurrentFolderId(null); setDocView("folder"); }, [activeProject?.id]);
 
   /* ── Data ── */
   const { data: rawDocuments = [], isLoading, isError: docsError, error: docsErrorDetail, refetch: refetchDocs } = useQuery({
@@ -107,8 +111,10 @@ export default function Documents() {
     error: deletedErrorDetail,
   } = useQuery({
     queryKey: ["documents-deleted", activeProject?.id],
+    // Complete read: a capped page would hide older tombstones with no way
+    // to reach or restore them.
     queryFn: () =>
-      entities.Document.filter({ project_id: activeProject.id, is_deleted: true }, "-deleted_at", 500),
+      entities.Document.filterAll({ project_id: activeProject.id, is_deleted: true }, "-deleted_at"),
     enabled: !!activeProject?.id && recycleOpen,
   });
   const deletedDocs = useMemo(() => (rawDeletedDocs || []).map(normalizeDocument), [rawDeletedDocs]);
@@ -339,14 +345,16 @@ export default function Documents() {
   };
 
   /* ── Filter (sorting lives in the browser) ── */
-  const filteredDocs = useMemo(() => filterDocuments({
-    docs: allDocuments,
-    search: searchQuery,
-    category: "All",
-    statusTab: "all",
-    currentFolderId,
-    activeFilters,
-  }), [allDocuments, searchQuery, activeFilters, currentFolderId]);
+  // `filteredDocs` is exactly what the table shows for the active view.
+  const filteredDocs = useMemo(() => {
+    if (docView === "recycle") {
+      return filterDocuments({ docs: deletedDocs, search: "", category: "All", statusTab: "all", currentFolderId: null, scope: "all", activeFilters });
+    }
+    if (docView === "recent" || docView === "review") {
+      return filterDocuments({ docs: quickViewDocs(allDocuments, docView), search: "", category: "All", statusTab: "all", currentFolderId: null, scope: "all", activeFilters });
+    }
+    return filterDocuments({ docs: allDocuments, search: searchQuery, category: "All", statusTab: "all", currentFolderId, activeFilters });
+  }, [docView, deletedDocs, allDocuments, searchQuery, activeFilters, currentFolderId]);
 
   React.useEffect(() => {
     const allowedIds = new Set(filteredDocs.map((doc) => doc.id));
@@ -666,7 +674,9 @@ export default function Documents() {
           deletedDocs={deletedDocs}
           deletedLoading={recycleOpen && deletedLoading}
           deletedError={deletedIsError ? toUserErrorMessage(deletedErrorDetail, "Couldn’t read the recycle bin.") : null}
-          onOpenRecycleBin={() => setRecycleOpen(true)}
+          view={docView}
+          onViewChange={(v) => { setDocView(v); setSelectedIds(new Set()); }}
+          onOpenRecycleBin={() => setDocView("recycle")}
           onRestoreDoc={(d) => restoreDocMut.mutate(d)}
           batchActions={batchActions}
           isDragOver={isDragOver}
