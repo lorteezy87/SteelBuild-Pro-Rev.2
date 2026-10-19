@@ -56,7 +56,7 @@ export function groupBlockersByOwner(items: readonly ExplainedBlocker[]): Explai
     list.push(item.what);
     groups.set(key, list);
   }
-  return [...groups.entries()].map(([owner, whats]) => ({
+  return [...groups.entries()].map(([owner, whats]): ExplainedBlocker => ({
     what: owner || "Owner not recorded",
     why: `${whats.length} blocker${whats.length === 1 ? "" : "s"}: ${whats.join("; ")}`,
     owner: null,

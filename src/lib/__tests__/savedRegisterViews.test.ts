@@ -14,8 +14,8 @@ function memoryStorage() {
   const data = new Map<string, string>();
   return {
     data,
-    getItem: (k: string) => data.get(k) ?? null,
-    setItem: (k: string, v: string) => void data.set(k, v),
+    getItem: (k: string): string | null => data.get(k) ?? null,
+    setItem: (k: string, v: string): void => void data.set(k, v),
   };
 }
 

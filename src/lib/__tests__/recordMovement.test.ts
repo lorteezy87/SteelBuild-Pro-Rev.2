@@ -49,7 +49,7 @@ describe("buildRecordMoves", () => {
     const rows: AuditRow[] = Array.from({ length: 8 }, (_, i) => ({
       created_at: `2026-07-${String(i + 1).padStart(2, "0")}`,
       action: "UPDATE",
-      old_values: { is_locked: false, status: "a", revision: String(i), detailing_state: "x", locked_reason: null },
+      old_values: { is_locked: false, status: "a", revision: String(i), detailing_state: "x", locked_reason: null as string | null },
       new_values: { is_locked: true, status: "b", revision: String(i + 1), detailing_state: "y", locked_reason: "QA" },
     }));
     const moves = buildRecordMoves(rows, DRAWING_SET_TRACKED_FIELDS, 3);
