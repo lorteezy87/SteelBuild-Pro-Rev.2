@@ -88,6 +88,8 @@ export interface SubmittalDetailProps {
   drawingSets?: DrawingSet[];
   rounds?: SubmittalRoundRecord[];
   allRfis?: LinkedRfiRecord[];
+  /** Whether the RFI and comment-disposition reads behind "Waiting on" are complete. Unknown = not ready. */
+  blockerSourcesStatus?: "ready" | "loading" | "unavailable" | "incomplete";
   allTasks?: LinkedTaskRecord[];
   projectName?: string;
   project?: GenericProps | null;
@@ -149,6 +151,7 @@ export function SubmittalDetail({
   drawingSets = [],
   rounds = [],
   allRfis = [],
+  blockerSourcesStatus = "unavailable",
   allTasks = [],
   projectName = "Project",
   project = null,
@@ -391,6 +394,7 @@ export function SubmittalDetail({
             rfis: allRfis as unknown as WaitingOnRfi[],
             commentDispositions,
           })}
+          waitingOnStatus={blockerSourcesStatus}
           ballInCourt={submittal.ball_in_court}
           person={(submittal.reviewer as string | null | undefined) ?? null}
           dueDate={(submittal.required_date as string | null | undefined) ?? null}

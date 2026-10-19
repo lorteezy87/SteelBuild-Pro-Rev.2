@@ -67,4 +67,11 @@ describe("WhyWaitingWhoPanel", () => {
     expect(screen.getByText("No recorded blockers.")).toBeInTheDocument();
     expect(screen.getByText("No ball in court recorded")).toBeInTheDocument();
   });
+
+  it("never reports a capped blocker read as complete", async () => {
+    filter.mockResolvedValue([]);
+    renderPanel({ waitingOnStatus: "incomplete", waitingOn: [{ what: "RFI 014 open" }] });
+    expect(await screen.findByText(/Blocker check incomplete/)).toHaveTextContent("Found so far: RFI 014 open.");
+    expect(screen.queryByText("No recorded blockers.")).not.toBeInTheDocument();
+  });
 });

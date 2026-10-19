@@ -31,6 +31,8 @@ export interface ReviewDelayCardProps {
   roundsBySubmittal: Record<string, readonly LedgerRound[]>;
   today: string;
   projectMeta?: LeadBag;
+  /** drawing_sets.metadata by set id: a set's own approval lead overrides the project's. */
+  packageMetaBySetId?: ReadonlyMap<string, LeadBag> | null;
   /** Matches the hub's working-day setting so due dates agree with the rest of the page. */
   basis?: DayBasis;
   projectLabel?: string;
@@ -60,6 +62,7 @@ export default function ReviewDelayCard({
   roundsBySubmittal,
   today,
   projectMeta,
+  packageMetaBySetId = null,
   basis = "working",
   projectLabel = "",
   isLoading = false,
@@ -70,8 +73,8 @@ export default function ReviewDelayCard({
   const ledger = useMemo(() => {
     const rounds: LedgerRound[] = [];
     for (const list of Object.values(roundsBySubmittal || {})) rounds.push(...list);
-    return buildReviewDelayLedger({ submittals, rounds, today, projectMeta, basis });
-  }, [submittals, roundsBySubmittal, today, projectMeta, basis]);
+    return buildReviewDelayLedger({ submittals, rounds, today, projectMeta, packageMetaBySetId, basis });
+  }, [submittals, roundsBySubmittal, today, projectMeta, packageMetaBySetId, basis]);
 
   const unit = basis === "working" ? "working days" : "calendar days";
   const late = ledger.entries.filter((e) => (e.daysOver ?? 0) > 0);
@@ -98,7 +101,7 @@ export default function ReviewDelayCard({
         <div>
           <div style={eyebrow}>Approval Delay Log</div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>
-            Review period {ledger.allowanceDays} {unit} from sent · escalate at 7 / 14 / 21 days over
+            Review period {ledger.allowanceDays} {unit} from sent{ledger.entries.some((e) => e.allowanceDays !== ledger.allowanceDays) ? " (some drawing sets set their own)" : ""} · escalate at 7 / 14 / 21 days over
           </div>
         </div>
         <button

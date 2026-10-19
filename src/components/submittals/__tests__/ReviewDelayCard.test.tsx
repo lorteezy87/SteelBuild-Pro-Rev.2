@@ -68,4 +68,19 @@ describe("ReviewDelayCard", () => {
     expect(text.split("\n")).toHaveLength(4);
     expect(text).toContain('"SUB-010"');
   });
+
+  it("measures a round against its drawing set's own review period", () => {
+    render(
+      <ReviewDelayCard
+        submittals={[{ id: "b", submittal_number: "SUB-011", status: "Approved", drawing_set_ids: ["set-1"] }]}
+        roundsBySubmittal={{ b: [{ submittal_id: "b", round_number: 1, status: "Approved", submitted_date: "2026-07-06", returned_date: "2026-07-15" }] }}
+        today={TODAY}
+        packageMetaBySetId={new Map([["set-1", { detailing_lead_days: { approval: 3 } }]])}
+      />,
+    );
+    // 3 working days from Mon 07-06 → due Thu 07-09; back Wed 07-15 → 4 over.
+    expect(screen.getByText(/some drawing sets set their own/)).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("SUB-011")).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("4")).toBeInTheDocument();
+  });
 });

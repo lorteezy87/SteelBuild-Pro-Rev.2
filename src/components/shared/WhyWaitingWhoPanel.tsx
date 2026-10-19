@@ -29,7 +29,7 @@ export interface WhyWaitingWhoPanelProps {
   fields: readonly TrackedField[];
   waitingOn: readonly WaitingItem[];
   /** Until the blocker source is known, say so instead of "No recorded blockers". */
-  waitingOnStatus?: "ready" | "loading" | "unavailable";
+  waitingOnStatus?: "ready" | "loading" | "unavailable" | "incomplete";
   /** null = nobody recorded. Shown as such, never guessed. */
   ballInCourt: string | null | undefined;
   person?: string | null;
@@ -113,6 +113,11 @@ export default function WhyWaitingWhoPanel({
           <span style={muted}>Checking blockers…</span>
         ) : waitingOnStatus === "unavailable" ? (
           <span style={{ color: "var(--status-warning)" }}>Blocker check unavailable.</span>
+        ) : waitingOnStatus === "incomplete" ? (
+          <span style={{ color: "var(--status-warning)" }}>
+            Blocker check incomplete: this project has more RFI or comment records than one read returns. Check the RFI log and returned comments directly.
+            {waitingOn.length > 0 && <> Found so far: {waitingOn.map((w) => w.what).join("; ")}.</>}
+          </span>
         ) : waitingOn.length === 0 ? (
           <span style={muted}>No recorded blockers.</span>
         ) : (

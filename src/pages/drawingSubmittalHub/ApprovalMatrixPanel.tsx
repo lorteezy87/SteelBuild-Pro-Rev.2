@@ -177,6 +177,12 @@ export function ApprovalMatrixPanel({
   const [search, setSearch] = useState("");
   const { filter, setFilter } = useMatrixFilter();
 
+  // A drawing set's own approval lead (metadata.detailing_lead_days.approval)
+  // overrides the project's review period in the delay log.
+  const setMetaById = useMemo(
+    () => new Map(drawingSets.filter((set) => set?.id).map((set) => [set.id, (set.metadata ?? null) as { detailing_lead_days?: Record<string, unknown> } | null])),
+    [drawingSets],
+  );
   const baseRows = useMemo(
     () => buildApprovalMatrixRows(drawingSets, submittals, search, useWorkdays),
     [drawingSets, submittals, search, useWorkdays],
@@ -308,6 +314,7 @@ export function ApprovalMatrixPanel({
         <AgingReportTable submittals={submittals} isLoading={isLoading} />
       </div>
       <ReviewDelayCard
+        packageMetaBySetId={setMetaById}
         submittals={submittals as unknown as LedgerSubmittal[]}
         roundsBySubmittal={roundsBySubmittal as unknown as Record<string, LedgerRound[]>}
         today={localToday()}
