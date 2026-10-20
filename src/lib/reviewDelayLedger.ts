@@ -33,6 +33,7 @@
 
 import { addWorkingDays, diffCalendarDays, formatISO, parseLocalDate, workingDaysBetween } from "@/lib/workingDays";
 import { resolveWorkdayLead } from "@/lib/submittalWorkdayDue";
+import { normalizeBallInCourt } from "@/lib/ballInCourt";
 
 export type DayBasis = "working" | "calendar";
 
@@ -147,6 +148,24 @@ export interface DelayLedger {
 }
 
 const UNASSIGNED = "Unassigned";
+
+/** Ball-in-court parties that review a submittal (not our own side). */
+const REVIEWER_PARTIES: ReadonlySet<string> = new Set(["GC", "EOR", "AOR", "Architect", "Owner"]);
+
+/**
+ * Who held one review round. The round's own record wins over the submittal's
+ * current fields, which describe only the latest round: a reviewer changed
+ * between rounds must not inherit the earlier rounds' delay. A round's ball in
+ * court counts only when it names a reviewing party, since a returned round's
+ * ball sits with the fabricator or detailer.
+ */
+export function roundReviewer(
+  round: { reviewer?: string | null; ball_in_court?: string | null },
+  submittal: { reviewer?: string | null },
+): string {
+  const bic = normalizeBallInCourt(round.ball_in_court);
+  return clean(round.reviewer) || (bic && REVIEWER_PARTIES.has(bic) ? bic : "") || clean(submittal.reviewer) || UNASSIGNED;
+}
 
 function clean(s: string | null | undefined): string {
   return String(s ?? "").trim();
@@ -274,7 +293,7 @@ export function buildReviewDelayLedger(args: {
               title,
               roundNumber: r.round_number ?? 1,
               source: "round",
-              reviewer: clean(r.reviewer) || clean(sub.reviewer) || clean(r.ball_in_court) || UNASSIGNED,
+              reviewer: roundReviewer(r, sub),
               status,
               sentDate: isoDay(r.submitted_date),
               returnedDate: isoDay(r.returned_date),

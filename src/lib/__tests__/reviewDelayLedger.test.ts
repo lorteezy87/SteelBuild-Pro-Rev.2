@@ -6,6 +6,7 @@ import {
   type LedgerRound,
   type LedgerSubmittal,
 } from "../reviewDelayLedger";
+import { roundReviewer } from "../reviewDelayLedger";
 
 // 2026-07-06 is a Monday.
 const TODAY = "2026-08-03"; // Monday
@@ -241,5 +242,17 @@ describe("buildDelayLedgerCsv", () => {
     expect(csv).toContain(`"'=HYPERLINK(1)"`);
     expect(csv).toContain("No sent date recorded; excluded from totals");
     expect(lines[1]).toContain('"Job 26314"');
+  });
+});
+
+describe("roundReviewer", () => {
+  it("credits a round to its own reviewer or reviewing party before the submittal's current reviewer", () => {
+    expect(roundReviewer({ reviewer: "Jane EOR" }, { reviewer: "New GC PM" })).toBe("Jane EOR");
+    expect(roundReviewer({ ball_in_court: "EOR" }, { reviewer: "New GC PM" })).toBe("EOR");
+  });
+
+  it("ignores a round ball in court on our own side, then falls back", () => {
+    expect(roundReviewer({ ball_in_court: "Detailer" }, { reviewer: "GC PM" })).toBe("GC PM");
+    expect(roundReviewer({}, {})).toBe("Unassigned");
   });
 });

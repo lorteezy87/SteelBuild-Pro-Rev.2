@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties, ReactNode } from "react";
 import { fetchRecordAudit } from "@/api/client/recordAudit";
 import { buildRecordMoves, describeMove } from "@/lib/recordMovement";
+import type { AuditRow } from "@/lib/recordMovement";
 import type { TrackedField } from "@/lib/recordMovement";
 import { formatShortDate } from "@/utils/dates";
 
@@ -38,7 +39,10 @@ export interface WhyWaitingWhoPanelProps {
   today?: string;
 }
 
-const AUDIT_LIMIT = 40;
+/** Audit rows read per page, and the most the panel will page through. */
+const AUDIT_PAGE = 50;
+const AUDIT_MAX_ROWS = 500;
+const MOVES_SHOWN = 4;
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -68,14 +72,29 @@ export default function WhyWaitingWhoPanel({
   today,
 }: WhyWaitingWhoPanelProps) {
   const audit = useQuery({
-    queryKey: ["record-audit", entityTable, recordId, projectId],
+    queryKey: ["record-audit-pages", entityTable, recordId, projectId],
     enabled: Boolean(recordId && projectId),
     staleTime: 30_000,
-    queryFn: () =>
-      fetchRecordAudit({ projectId: projectId as string, table: entityTable, recordId: recordId as string, limit: AUDIT_LIMIT }),
+    // Untracked edits (title, notes, metadata) share the audit table with
+    // workflow moves, so one short page can hold none. Page on until enough
+    // moves are found, the history ends, or the cap is hit; a capped read
+    // that found nothing says so instead of claiming there are no moves.
+    queryFn: async () => {
+      const rows: AuditRow[] = [];
+      for (let offset = 0; offset < AUDIT_MAX_ROWS; offset += AUDIT_PAGE) {
+        const page = await fetchRecordAudit({
+          projectId: projectId as string, table: entityTable, recordId: recordId as string, limit: AUDIT_PAGE, offset,
+        });
+        rows.push(...page);
+        if (page.length < AUDIT_PAGE || buildRecordMoves(rows, fields, MOVES_SHOWN).length >= MOVES_SHOWN) {
+          return { rows, truncated: false };
+        }
+      }
+      return { rows, truncated: true };
+    },
   });
 
-  const moves = buildRecordMoves(audit.data ?? [], fields, 4);
+  const moves = buildRecordMoves(audit.data?.rows ?? [], fields, MOVES_SHOWN);
   const last = moves[0];
   const dueIn = dueDate && today ? daysBetween(today, dueDate) : null;
 
@@ -87,7 +106,11 @@ export default function WhyWaitingWhoPanel({
         ) : audit.isError ? (
           <span role="alert" style={{ color: "var(--status-warning)" }}>Audit trail unavailable. Refresh to retry.</span>
         ) : !last ? (
-          <span style={muted}>No recorded workflow moves yet.</span>
+          <span style={muted}>
+            {audit.data?.truncated
+              ? `No workflow moves in the latest ${AUDIT_MAX_ROWS} audit entries. Older history was not read.`
+              : "No recorded workflow moves yet."}
+          </span>
         ) : (
           <>
             <div style={{ color: "var(--text-primary)" }}>{describeMove(last)}</div>
