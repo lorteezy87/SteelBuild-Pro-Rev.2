@@ -22,6 +22,7 @@ export async function fetchRecordAudit(args: {
   table: AuditedTable;
   recordId: string;
   limit?: number;
+  offset?: number;
 }): Promise<AuditRow[]> {
   const { data, error } = await supabase
     .from(AUDIT_TABLE)
@@ -30,7 +31,8 @@ export async function fetchRecordAudit(args: {
     .eq("entity_type", args.table)
     .eq("entity_id", args.recordId)
     .order("created_at", { ascending: false })
-    .limit(args.limit ?? 40);
+    .order("id", { ascending: false })
+    .range(args.offset ?? 0, (args.offset ?? 0) + (args.limit ?? 40) - 1);
   if (error) throw error;
   return (data ?? []) as AuditRow[];
 }

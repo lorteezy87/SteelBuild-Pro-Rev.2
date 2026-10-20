@@ -45,7 +45,7 @@ describe("WhyWaitingWhoPanel", () => {
       nextMove: "Record return (BFA)",
     });
     expect(await screen.findByText("Status Submitted → Under Review · Ball in court GC → EOR")).toBeInTheDocument();
-    expect(filter).toHaveBeenCalledWith({ projectId: "p1", table: "submittals", recordId: "s1", limit: 40 });
+    expect(filter).toHaveBeenCalledWith({ projectId: "p1", table: "submittals", recordId: "s1", limit: 50, offset: 0 });
     expect(screen.getByText("Reviewer response")).toBeInTheDocument();
     expect(screen.getByText("EOR", { selector: "strong" })).toBeInTheDocument();
     expect(screen.getByText(/J\. Smith/)).toBeInTheDocument();
@@ -73,5 +73,30 @@ describe("WhyWaitingWhoPanel", () => {
     renderPanel({ waitingOnStatus: "incomplete", waitingOn: [{ what: "RFI 014 open" }] });
     expect(await screen.findByText(/Blocker check incomplete/)).toHaveTextContent("Found so far: RFI 014 open.");
     expect(screen.queryByText("No recorded blockers.")).not.toBeInTheDocument();
+  });
+
+  it("pages past untracked edits to find the last workflow move", async () => {
+    const noise = (n: number) => Array.from({ length: 50 }, (_, k) => ({
+      created_at: `2026-07-${String(20 - n).padStart(2, "0")}T${String(23 - (k % 23)).padStart(2, "0")}:00:00Z`,
+      action: "UPDATE", old_values: { title: "a" }, new_values: { title: "b" },
+    }));
+    filter
+      .mockResolvedValueOnce(noise(0))
+      .mockResolvedValueOnce([
+        { created_at: "2026-07-01T17:00:00Z", action: "UPDATE", old_values: { status: "Submitted" }, new_values: { status: "Under Review" } },
+      ]);
+    renderPanel();
+    expect(await screen.findByText(/Under Review/)).toBeInTheDocument();
+    expect(filter).toHaveBeenCalledTimes(2);
+    expect(filter.mock.calls[1][0]).toMatchObject({ offset: 50, limit: 50 });
+  });
+
+  it("says when a capped read found no moves instead of claiming there are none", async () => {
+    filter.mockResolvedValue(Array.from({ length: 50 }, () => ({
+      created_at: "2026-07-10T17:00:00Z", action: "UPDATE", old_values: { title: "a" }, new_values: { title: "b" },
+    })));
+    renderPanel();
+    expect(await screen.findByText(/No workflow moves in the latest 500 audit entries/)).toBeInTheDocument();
+    expect(filter).toHaveBeenCalledTimes(10);
   });
 });
