@@ -32,11 +32,11 @@ const roundsBySubmittal = {
 };
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-queryClient.setQueryData(["record-audit", "submittals", "sub-2", projectId], [
+queryClient.setQueryData(["record-audit-pages", "submittals", "sub-2", projectId], { truncated: false, rows: [
   { created_at: "2026-09-08T16:10:00Z", action: "UPDATE", old_values: { status: "Revise and Resubmit", ball_in_court: "Detailer", round_number: 1 }, new_values: { status: "Under Review", ball_in_court: "EOR", round_number: 2 } },
   { created_at: "2026-08-03T21:40:00Z", action: "UPDATE", old_values: { status: "Under Review", ball_in_court: "EOR" }, new_values: { status: "Revise and Resubmit", ball_in_court: "Detailer" } },
-]);
-queryClient.setQueryData(["record-audit", "drawing_sets", "set-1", projectId], []);
+] });
+queryClient.setQueryData(["record-audit-pages", "drawing_sets", "set-1", projectId], { truncated: false, rows: [] });
 
 function DocControlPreview() {
   // The Approvals tab and both registers render inside the command skin.
