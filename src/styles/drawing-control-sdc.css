@@ -1,0 +1,499 @@
+/* Drawing Control — Steel Document Control layout.
+   Dense register language: a joined KPI band, a single "Needs action" list
+   (Record / Where it stands / Waiting on / Who), a stage pipeline and an
+   open-RFI rail. Square 2px corners, mono numerals, gold as the only accent.
+   Colors come only from the command-skin tokens, so light and dark both work. */
+
+[data-skin="command"] .detailing-cc {
+  --sdc-r: var(--sbd-radius-sm, 8px);
+  --sdc-line: var(--cmd-border);
+  --sdc-surface: var(--cmd-surface);
+  --sdc-sunk: var(--cmd-chip-bg);
+  --sdc-hover: var(--cmd-row-hover);
+  --sdc-muted: var(--cmd-text-muted);
+  --sdc-gold: var(--cmd-gold);
+}
+
+/* ── Header and tab rail ─────────────────────────────────────────────────── */
+[data-skin="command"] .detailing-cc .detailing-cc__header {
+  border-radius: 0;
+  box-shadow: none;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+[data-skin="command"] .detailing-cc .detailing-cc__subtitle {
+  max-width: 90ch;
+  font-size: 13px;
+  color: var(--sdc-muted);
+}
+
+[data-skin="command"] .detailing-cc .detailing-cc__tab {
+  border-radius: 0;
+  font-weight: 500;
+  color: var(--sdc-muted);
+}
+
+[data-skin="command"] .detailing-cc .detailing-cc__tab.is-active,
+[data-skin="command"] .detailing-cc .detailing-cc__tab:hover {
+  color: var(--cmd-text);
+}
+
+[data-skin="command"] .detailing-cc .detailing-cc__tab-count {
+  background: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sdc-muted);
+}
+
+[data-skin="command"] .detailing-cc .detailing-cc__tab-count.is-alert {
+  color: var(--cmd-danger-text);
+}
+
+/* ── KPI band (shared operational summary) ─────────────────────── */
+[data-skin="command"] .detailing-cc .sbp-operational-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 0;
+  background: var(--sdc-surface);
+  border: 1px solid var(--sdc-line);
+  border-radius: var(--sdc-r);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+[data-skin="command"] .detailing-cc .sbp-operational-summary__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px 13px;
+  border: 0;
+  border-radius: 0;
+  background: var(--sdc-surface);
+  box-shadow: 1px 0 0 var(--sdc-line), 0 1px 0 var(--sdc-line);
+  text-align: left;
+  color: var(--cmd-text);
+  font: inherit;
+}
+
+[data-skin="command"] .detailing-cc .sbp-operational-summary__label {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--sdc-muted);
+}
+
+[data-skin="command"] .detailing-cc .sbp-operational-summary__value {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-skin="command"] .detailing-cc .sbp-operational-summary__sub {
+  font-size: 11.5px;
+  color: var(--sdc-muted);
+}
+
+
+
+
+
+
+/* ── Board layout ────────────────────────────────────────────────────────── */
+[data-skin="command"] .detailing-cc .sdc-board {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+[data-skin="command"] .detailing-cc .sdc-ov-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+[data-skin="command"] .detailing-cc .sdc-ov-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  [data-skin="command"] .detailing-cc .sdc-ov-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+[data-skin="command"] .detailing-cc .sdc-sec-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+[data-skin="command"] .detailing-cc .sdc-sec-h h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--cmd-text);
+}
+
+[data-skin="command"] .detailing-cc .sdc-sec-h--gap { margin-top: 20px; }
+
+[data-skin="command"] .detailing-cc .sdc-sec-h__tools {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+
+[data-skin="command"] .detailing-cc .sdc-panel .sdc-sec-h {
+  padding: 12px 14px 0;
+}
+
+[data-skin="command"] .detailing-cc .sdc-muted { color: var(--sdc-muted); font-size: 12px; }
+[data-skin="command"] .detailing-cc .sdc-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+[data-skin="command"] .detailing-cc .sdc-over { color: var(--cmd-danger-text); }
+[data-skin="command"] .detailing-cc .sdc-note { margin: 10px 0 0; font-size: 12px; color: var(--sdc-muted); }
+
+[data-skin="command"] .detailing-cc .sdc-eyebrow {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sdc-muted);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+[data-skin="command"] .detailing-cc .sdc-panel {
+  background: var(--sdc-surface);
+  border: 1px solid var(--sdc-line);
+  border-radius: var(--sdc-r);
+  overflow: hidden;
+}
+
+/* ── Filter chips ───────────────────────────────────────────────────────── */
+[data-skin="command"] .detailing-cc .sdc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 14px 10px;
+}
+
+[data-skin="command"] .detailing-cc .sdc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--sdc-line);
+  border-radius: var(--sdc-r);
+  background: var(--sdc-surface);
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+[data-skin="command"] .detailing-cc .sdc-chip b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--sdc-muted);
+}
+
+[data-skin="command"] .detailing-cc .sdc-chip[aria-pressed="true"] {
+  border-color: var(--sdc-gold);
+  background: var(--cmd-chip-warn-bg);
+}
+
+[data-skin="command"] .detailing-cc .sdc-chip[aria-pressed="true"] b { color: var(--cmd-text); }
+
+[data-skin="command"] .detailing-cc .sdc-chip:focus-visible {
+  outline: 2px solid var(--sdc-gold);
+  outline-offset: 1px;
+}
+
+/* ── Stage strip (Next decision's approval lifecycle) ────────────────────── */
+[data-skin="command"] .detailing-cc .sbp-workflow-stage {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: 2px !important;
+}
+
+[data-skin="command"] .detailing-cc .sbp-workflow-stage > li {
+  justify-content: center;
+  min-height: 0 !important;
+  padding: 6px 4px 5px;
+  border-radius: 0;
+  background: var(--sdc-sunk);
+  color: var(--sdc-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+[data-skin="command"] .detailing-cc .sbp-workflow-stage > li > span:first-child { font-weight: 500 !important; }
+
+/* The state word stays for assistive tech; the strip's fill shows it visually. */
+[data-skin="command"] .detailing-cc .sbp-workflow-stage > li .cmd-row__meta {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+[data-skin="command"] .detailing-cc .sbp-workflow-stage > li[data-stage-state="complete"] {
+  background: var(--sdc-line);
+  color: var(--cmd-text);
+}
+
+[data-skin="command"] .detailing-cc .sbp-workflow-stage > li[data-stage-state="current"] {
+  background: var(--sdc-gold);
+  color: var(--cmd-on-gold);
+}
+
+[data-skin="command"] .detailing-cc .sbp-workflow-stage > li[data-stage-state="blocked"] {
+  background: var(--cmd-chip-danger-bg);
+  color: var(--cmd-danger-text);
+}
+
+/* ── Needs action ───────────────────────────────────────────────────────── */
+[data-skin="command"] .detailing-cc .sdc-na-head,
+[data-skin="command"] .detailing-cc .sdc-na__row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1.1fr) minmax(0, 1.2fr) 140px;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+[data-skin="command"] .detailing-cc .sdc-na-head {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--sdc-line);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sdc-muted);
+  font-weight: 600;
+}
+
+[data-skin="command"] .detailing-cc .sdc-na {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+[data-skin="command"] .detailing-cc .sdc-na > li { border-top: 1px solid var(--sdc-line); }
+[data-skin="command"] .detailing-cc .sdc-na > li:first-child { border-top: 0; }
+
+[data-skin="command"] .detailing-cc .sdc-na__row {
+  width: 100%;
+  align-items: start;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--cmd-text);
+}
+
+[data-skin="command"] .detailing-cc .sdc-na__row:hover { background: var(--sdc-hover); }
+
+[data-skin="command"] .detailing-cc .sdc-na__row:focus-visible {
+  outline: 2px solid var(--sdc-gold);
+  outline-offset: -2px;
+}
+
+[data-skin="command"] .detailing-cc .sdc-na > li.sdc-empty {
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--sdc-muted);
+}
+
+[data-skin="command"] .detailing-cc .sdc-na__t { font-weight: 600; }
+[data-skin="command"] .detailing-cc .sdc-na__sub { font-size: 12px; color: var(--sdc-muted); margin-top: 2px; }
+[data-skin="command"] .detailing-cc .sdc-na__who { font-size: 12px; }
+
+@media (max-width: 760px) {
+  [data-skin="command"] .detailing-cc .sdc-na-head,
+  [data-skin="command"] .detailing-cc .sdc-na__row { grid-template-columns: 112px minmax(0, 1fr); }
+  [data-skin="command"] .detailing-cc .sdc-na__row .c3,
+  [data-skin="command"] .detailing-cc .sdc-na__row .c4 { grid-column: 2; }
+  [data-skin="command"] .detailing-cc .sdc-na-head .c3,
+  [data-skin="command"] .detailing-cc .sdc-na-head .c4 { display: none; }
+}
+
+/* ── Pills and flags ────────────────────────────────────────────────────── */
+[data-skin="command"] .detailing-cc .sdc-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--sdc-r);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-skin="command"] .detailing-cc .sdc-pill--NS,
+[data-skin="command"] .detailing-cc .sdc-pill--none { color: var(--sdc-muted); border-color: var(--sdc-line); }
+[data-skin="command"] .detailing-cc .sdc-pill--IFA,
+[data-skin="command"] .detailing-cc .sdc-pill--OFS { color: var(--cmd-info-text); background: var(--cmd-chip-info-bg); }
+[data-skin="command"] .detailing-cc .sdc-pill--OFA { color: var(--cmd-warn-text); background: var(--cmd-chip-warn-bg); }
+[data-skin="command"] .detailing-cc .sdc-pill--BFA { color: var(--cmd-text); background: var(--cmd-chip-warn-bg); }
+[data-skin="command"] .detailing-cc .sdc-pill--IFC { color: var(--cmd-text); background: var(--cmd-chip-warn-bg); border-color: var(--sdc-gold); }
+[data-skin="command"] .detailing-cc .sdc-pill--REL { color: var(--cmd-good-text); background: var(--cmd-chip-good-bg); }
+[data-skin="command"] .detailing-cc .sdc-pill--bad { color: var(--cmd-danger-text); background: var(--cmd-chip-danger-bg); }
+
+[data-skin="command"] .detailing-cc .sdc-flag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+[data-skin="command"] .detailing-cc .sdc-flag--over { color: var(--cmd-danger-text); }
+[data-skin="command"] .detailing-cc .sdc-flag--warn { color: var(--cmd-warn-text); }
+
+/* ── Pipeline ───────────────────────────────────────────────────────────── */
+[data-skin="command"] .detailing-cc .sdc-pipe { padding: 14px; }
+[data-skin="command"] .detailing-cc .sdc-pipe__rows { display: grid; gap: 4px; }
+
+[data-skin="command"] .detailing-cc .sdc-pipe__row {
+  display: grid;
+  grid-template-columns: 44px 1fr 32px;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-skin="command"] .detailing-cc .sdc-pipe__row:hover .sdc-mono:first-child { text-decoration: underline; }
+
+[data-skin="command"] .detailing-cc .sdc-pipe__row:focus-visible {
+  outline: 2px solid var(--sdc-gold);
+  outline-offset: 1px;
+}
+
+[data-skin="command"] .detailing-cc .sdc-pipe__bar {
+  position: relative;
+  height: 8px;
+  background: var(--sdc-sunk);
+}
+
+[data-skin="command"] .detailing-cc .sdc-pipe__bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sdc-gold);
+}
+
+[data-skin="command"] .detailing-cc .sdc-pipe__n { text-align: right; }
+
+/* ── Open RFIs ──────────────────────────────────────────────────────────── */
+[data-skin="command"] .detailing-cc .sdc-links { display: flex; flex-direction: column; gap: 6px; }
+
+[data-skin="command"] .detailing-cc .sdc-lnk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--sdc-line);
+  border-radius: var(--sdc-r);
+  background: var(--sdc-surface);
+  color: var(--cmd-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-skin="command"] .detailing-cc .sdc-lnk:hover:not(:disabled) { border-color: var(--sdc-muted); }
+[data-skin="command"] .detailing-cc .sdc-lnk:disabled { cursor: default; }
+
+[data-skin="command"] .detailing-cc .sdc-lnk__grow {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Registers (release review and other kit tables in this hub) ─────────── */
+[data-skin="command"] .detailing-cc .cmd-table th {
+  background: var(--sdc-hover);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sdc-muted);
+  font-weight: 600;
+  padding: 8px 10px;
+}
+
+[data-skin="command"] .detailing-cc .cmd-table td {
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+[data-skin="command"] .detailing-cc .cmd-panel__title,
+[data-skin="command"] .detailing-cc .sbp-work-panel__head h2 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ── Register toolbars: one compact row that wraps, not stacked full-width selects ── */
+[data-skin="command"] .detailing-cc .cmd-filterbar {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--sdc-r);
+}
+
+[data-skin="command"] .detailing-cc .cmd-filterbar .cmd-search {
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+
+[data-skin="command"] .detailing-cc .cmd-filterbar__filters {
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+}
+
+[data-skin="command"] .detailing-cc .cmd-filterbar .sbd-select {
+  width: auto;
+  min-width: 150px;
+  max-width: 260px;
+}
+
+[data-skin="command"] .detailing-cc .cmd-filterbar__actions { margin-left: auto; }
+
+[data-skin="command"] .detailing-cc .cmd-table .cmd-pill,
+[data-skin="command"] .detailing-cc .cmd-table .cmd-chip { white-space: nowrap; }
+
+@media (max-width: 600px) {
+  [data-skin="command"] .detailing-cc .cmd-filterbar .cmd-search { max-width: none; }
+  [data-skin="command"] .detailing-cc .cmd-filterbar .sbd-select { flex: 1 1 140px; max-width: none; }
+}
