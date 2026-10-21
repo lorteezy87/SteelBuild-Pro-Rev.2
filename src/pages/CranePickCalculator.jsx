@@ -54,6 +54,17 @@ import { useOptionalOrg } from "@/components/shared/OrgContext";
 import CraneChartSource from "@/components/calculators/CraneChartSource";
 import CraneLibraryPanel from "@/components/calculators/CraneLibraryPanel";
 import GroundBearingPanel from "@/components/calculators/GroundBearingPanel";
+import {
+  lbOrDash,
+  tonsOrDash,
+  pctOrDash,
+  capturedLabel,
+  legsSummaryValue,
+  legsCarryingNote,
+  grossLoadNote,
+  buildSummaryText,
+  STATUS_LABEL,
+} from "@/lib/crane/pickSummaryFormat";
 
 // Three.js is ~600 KB — keep it out of the calculator chunk until the 3D view renders.
 const CranePick3D = lazyWithRetry(() => import("@/components/calculators/CranePick3D"));
@@ -102,11 +113,6 @@ const STATUS_COLOR = {
   green:  "var(--status-success-bright)",
   yellow: "var(--status-warning-bright)",
   red:    "var(--status-error-bright)",
-};
-const STATUS_LABEL = {
-  green:  "OK",
-  yellow: "CAUTION",
-  red:    "CRITICAL",
 };
 
 // Angle entry modes — degrees from a protractor / angle finder, height over
@@ -1039,60 +1045,6 @@ export default function CranePickCalculator() {
  * in a lift plan or a pre-lift email, so the assumption has to travel with the
  * number, not just live on the calculator screen.
  */
-function legsSummaryValue(d) {
-  const legs = Number(d?.numLegs);
-  const carrying = Number(d?.legsAssumedCarrying);
-  const offset = d?.cgMode === CG_MODES.OFFSET ? " — offset CG" : "";
-  if (Number.isFinite(carrying) && Number.isFinite(legs) && carrying !== legs) {
-    return `${legs} (${carrying} assumed carrying)${offset}`;
-  }
-  return `${d?.numLegs ?? "—"}${offset}`;
-}
-
-/**
- * The line printed under "Tension per Leg".
- *
- * Two cases:
- *   - A current 4-leg snapshot: state the ASME B30.9 rigid-load assumption.
- *   - A 4-leg snapshot recalled from the persisted history tape that predates
- *     this fix: it has no `legsAssumedCarrying` field, and its stored tension
- *     was computed by dividing the load by FOUR — understated by exactly 2x.
- *     Recalculating it here would silently rewrite a recorded pick, so instead
- *     the stale value is labelled as unsafe and the planner is told to re-run
- *     it. A recalled pick is read-only by design.
- */
-function legsCarryingNote(d) {
-  const legs = Number(d?.numLegs);
-  if (legs !== 4) return "";
-  if (!Number.isFinite(Number(d?.legsAssumedCarrying))) {
-    return "⚠ RECORDED BEFORE THE 4-LEG CORRECTION — this tension assumed all 4 legs shared the load and is understated by ~2x. Re-run this pick before using it.";
-  }
-  return "Rigid load: only 2 of 4 legs assumed carrying (ASME B30.9). Rate every leg for the full value above.";
-}
-
-/**
- * Picks saved before the gross-load fix have no `slingLoad`, and their
- * `totalLoad` excluded the hook block. Say so rather than letting the recalled
- * utilization read as if it had been checked against the gross load.
- */
-function grossLoadNote(d) {
-  if (d && d.slingLoad === undefined) {
-    return "⚠ RECORDED BEFORE HOOK-BLOCK DEDUCTIONS WERE SUPPORTED — this load excludes the hook block and chart deductions, so utilization may be understated. Re-run this pick.";
-  }
-  return "";
-}
-
-/** When the pick was captured — recalled picks must not show "now". */
-function capturedLabel(d) {
-  if (d?.capturedAt) {
-    const t = new Date(d.capturedAt);
-    if (!Number.isNaN(t.getTime())) return t.toLocaleString();
-  }
-  return "Capture time not recorded";
-}
-
-const pctOrDash = (n) => (Number.isFinite(Number(n)) ? `${Number(n).toFixed(1)}%` : "—");
-
 function PickSummaryModal({ onClose, data }) {
   const copySummary = async () => {
     try {
@@ -1105,6 +1057,18 @@ function PickSummaryModal({ onClose, data }) {
 
   const doPrint = () => {
     window.print();
+  };
+
+  // jsPDF is ~390 KB — same rule as the 3D view's Three.js: it is fetched when
+  // somebody actually exports, never as part of the calculator chunk.
+  const doPdf = async () => {
+    try {
+      const { downloadCranePickPdf } = await import("@/lib/crane/cranePickPdf");
+      downloadCranePickPdf(data);
+      toast.success("Pick Summary PDF created");
+    } catch {
+      toast.error("Could not create the PDF");
+    }
   };
 
   const personnel = data.liftType === LIFT_TYPES.PERSONNEL;
@@ -1239,7 +1203,7 @@ function PickSummaryModal({ onClose, data }) {
             </SummarySection>
           )}
 
-          {data.warnings.length > 0 && (
+          {(data.warnings?.length ?? 0) > 0 && (
             <SummarySection title="Warnings">
               {data.warnings.map((w, i) => (
                 <div key={i} style={{
@@ -1264,7 +1228,8 @@ function PickSummaryModal({ onClose, data }) {
         }}>
           <button type="button" onClick={onClose}    style={keycapButtonStyle("ghost", { compact: true })}>Close</button>
           <button type="button" onClick={copySummary} style={keycapButtonStyle("ghost", { compact: true })}>Copy</button>
-          <button type="button" onClick={doPrint}     style={keycapButtonStyle("accent", { compact: true })}>Print</button>
+          <button type="button" onClick={doPrint}     style={keycapButtonStyle("ghost", { compact: true })}>Print</button>
+          <button type="button" onClick={doPdf}       style={keycapButtonStyle("accent", { compact: true })}>Download PDF</button>
         </div>
       </div>
     </div>
@@ -1272,82 +1237,6 @@ function PickSummaryModal({ onClose, data }) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
-function lbOrDash(n) {
-  if (!Number.isFinite(Number(n))) return "—";
-  return `${Number(n).toLocaleString(undefined, { maximumFractionDigits: 1 })} lb`;
-}
-function tonsOrDash(n) {
-  if (!Number.isFinite(Number(n))) return "—";
-  return `${(Number(n) / 2000).toFixed(3)} T`;
-}
-
-function buildSummaryText(d) {
-  const lines = [];
-  lines.push("PICK SUMMARY — PLANNING TOOL ONLY");
-  lines.push("Does not replace an engineered lift plan.");
-  lines.push(capturedLabel(d));
-  lines.push("");
-  lines.push("LOAD");
-  lines.push(`  Piece Weight:        ${lbOrDash(d.pieceWeight)}`);
-  lines.push(`  Rigging Weight:      ${lbOrDash(d.riggingWeight)}`);
-  if (d.slingLoad !== undefined) {
-    lines.push(`  Load on Slings:      ${lbOrDash(d.slingLoad)}  (${tonsOrDash(d.slingLoad)})`);
-    lines.push(`  Hook Block / Ball:   ${lbOrDash(d.hookBlockWeight)}`);
-    lines.push(`  Other Deductions:    ${lbOrDash(d.otherDeductions)}`);
-  }
-  lines.push(`  Gross Load (chart):  ${lbOrDash(d.totalLoad)}  (${tonsOrDash(d.totalLoad)})`);
-  const grossNote = grossLoadNote(d);
-  if (grossNote) lines.push(`                       ${grossNote}`);
-  lines.push("");
-  lines.push("RIGGING");
-  lines.push(`  Number of Legs:      ${legsSummaryValue(d)}`);
-  if (d.offset) {
-    lines.push(`  Geometry:            H ${d.offset.H} ft, CG→pick 1 ${d.offset.d1} ft, CG→pick 2 ${d.offset.d2} ft`);
-    lines.push(`  Leg 1:               ${lbOrDash(d.offset.tension1)} @ ${d.offset.angle1.toFixed(1)}°`);
-    lines.push(`  Leg 2:               ${lbOrDash(d.offset.tension2)} @ ${d.offset.angle2.toFixed(1)}°`);
-  } else if (d.numLegs === 1) {
-    lines.push(`  Sling Angle:         Single vertical pick`);
-  } else {
-    lines.push(`  Sling Angle:         ${Number(d.angleDegrees).toFixed(1)}°`);
-  }
-  if (!d.offset) lines.push(`  Load Angle Factor:   ${Number.isFinite(d.laf) ? d.laf.toFixed(3) : "—"}`);
-  lines.push(`  ${d.offset ? "Max Leg Tension:    " : "Tension per Leg:    "} ${lbOrDash(d.tensionPerLeg)}  (${tonsOrDash(d.tensionPerLeg)})`);
-  const carryNote = legsCarryingNote(d);
-  if (carryNote) lines.push(`                       ${carryNote}`);
-  if (Number.isFinite(d.slingUtil)) lines.push(`  Sling WLL:           ${lbOrDash(d.slingWll)}  (${pctOrDash(d.slingUtil)} used)`);
-  if (Number.isFinite(d.shackleUtil)) lines.push(`  Shackle WLL:         ${lbOrDash(d.shackleWll)}  (${pctOrDash(d.shackleUtil)} used)`);
-  lines.push("");
-  lines.push("CAPACITY");
-  if (d.liftType) lines.push(`  Lift Type:           ${d.liftType === LIFT_TYPES.PERSONNEL ? "Personnel platform (50% limit, 29 CFR 1926.1431)" : "Standard"}`);
-  lines.push(`  Rated Capacity:      ${lbOrDash(d.craneCapacity)}`);
-  if (d.chart) {
-    lines.push(`  Capacity Source:     Load chart — ${d.chart.configuration}`);
-    lines.push(`  Chart:               ${d.chart.summary}`);
-    lines.push(`  Chart Reference:     ${d.chart.source}`);
-    if (d.chart.serial) lines.push(`  Crane S/N:           ${d.chart.serial}`);
-    lines.push(`  Chart Reading:       ${d.chart.basis}`);
-  } else if (d.capacitySource === CAP_SOURCES.MANUAL) {
-    lines.push(`  Capacity Source:     Entered by hand`);
-  }
-  lines.push(`  Utilization:         ${Number(d.utilization).toFixed(1)}%  (${STATUS_LABEL[d.capacityStatus] || "—"})`);
-  if (d.craneModel || d.boomLength || d.workingRadius || d.counterweight) {
-    lines.push("");
-    lines.push("CRANE");
-    if (d.craneModel)    lines.push(`  Make / Model:        ${d.craneModel}`);
-    if (d.boomLength)    lines.push(`  Boom Length:         ${d.boomLength} ft`);
-    if (d.workingRadius) lines.push(`  Working Radius:      ${d.workingRadius} ft`);
-    if (Number.isFinite(d.boomAngle)) lines.push(`  Boom Angle (approx): ${d.boomAngle.toFixed(1)}°`);
-    if (Number.isFinite(d.tipHeight)) lines.push(`  Tip above Foot:      ${d.tipHeight.toFixed(1)} ft (approx)`);
-    if (d.counterweight) lines.push(`  Counterweight:       ${d.counterweight}`);
-  }
-  if (d.warnings?.length) {
-    lines.push("");
-    lines.push("WARNINGS");
-    d.warnings.forEach((w) => lines.push(`  [${w.severity.toUpperCase()}] ${w.message}`));
-  }
-  return lines.join("\n");
-}
-
 /** Sling / shackle utilization with its own (no-critical-band) status pill. */
 function GearValue({ pct }) {
   const s = getRiggingStatus(pct);
