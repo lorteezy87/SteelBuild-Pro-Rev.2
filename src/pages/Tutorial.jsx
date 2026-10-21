@@ -194,8 +194,28 @@ export default function Tutorial() {
               li: ({ children, ...rest }) => (
                 <li style={{ margin: "3px 0" }} {...rest}>{children}</li>
               ),
-              code: ({ inline, children, ...rest }) =>
-                inline ? (
+              // react-markdown v9 dropped the `inline` prop: blocks arrive as
+              // <pre><code>, so style the block on `pre` and keep `code` inline.
+              // Reading `inline` made every inline span a <pre> inside a <p>.
+              pre: ({ children }) => (
+                <pre
+                  style={{
+                    fontFamily: "var(--font-mono)", fontSize: 12,
+                    background: "var(--bg-surface-low)",
+                    border: "1px solid var(--border-default)",
+                    borderRadius: 4,
+                    padding: "10px 12px",
+                    overflowX: "auto",
+                    margin: "0 0 12px 0",
+                  }}
+                >
+                  {children}
+                </pre>
+              ),
+              code: ({ className, children, node: _node, ...rest }) =>
+                className || String(children).includes("\n") ? (
+                  <code className={className} {...rest}>{children}</code>
+                ) : (
                   <code
                     style={{
                       fontFamily: "var(--font-mono)", fontSize: 12,
@@ -209,20 +229,6 @@ export default function Tutorial() {
                   >
                     {children}
                   </code>
-                ) : (
-                  <pre
-                    style={{
-                      fontFamily: "var(--font-mono)", fontSize: 12,
-                      background: "var(--bg-surface-low)",
-                      border: "1px solid var(--border-default)",
-                      borderRadius: 4,
-                      padding: "10px 12px",
-                      overflowX: "auto",
-                      margin: "0 0 12px 0",
-                    }}
-                  >
-                    <code {...rest}>{children}</code>
-                  </pre>
                 ),
               a: ({ children, ...rest }) => (
                 <a style={{ color: "var(--accent)", textDecoration: "underline" }} {...rest}>{children}</a>

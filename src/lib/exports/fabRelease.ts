@@ -114,7 +114,7 @@ export interface RfiLike {
   rfi_number?: string | null;
   title?: string | null;
   status?: string | null;
-  author?: string | null;
+  submitted_by?: string | null;
   created_by?: string | null;
   question?: string | null;
   submitted_date?: string | Date | null;
@@ -127,19 +127,22 @@ export interface ChangeOrderLike {
   title?: string | null;
   description?: string | null;
   status?: string | null;
-  issued_by?: string | null;
+  submitted_by?: string | null;
   created_by?: string | null;
-  issued_date?: string | Date | null;
+  submitted_date?: string | Date | null;
   created_at?: string | Date | null;
 }
 
+/** Shapes match the real rfis / change_orders / photos columns. */
 export interface PhotoLike {
   id?: string | null;
-  caption?: string | null;
+  title?: string | null;
+  description?: string | null;
   file_name?: string | null;
-  uploaded_by?: string | null;
-  linked_drawing_id?: string | null;
-  taken_at?: string | Date | null;
+  created_by?: string | null;
+  work_package_id?: string | null;
+  daily_log_id?: string | null;
+  taken_date?: string | Date | null;
   created_at?: string | Date | null;
 }
 
@@ -444,30 +447,31 @@ export function buildClaimsManifestCsv({
       r.id || "",
       `${r.rfi_number || ""} ${r.title || ""}`.trim(),
       r.status || "",
-      r.author || r.created_by || "",
+      r.submitted_by || r.created_by || "",
       r.question || "",
     ]);
   }
   for (const c of changeOrders) {
     rows.push([
-      formatIsoDate(c.issued_date || c.created_at || Date.now()),
+      formatIsoDate(c.submitted_date || c.created_at || Date.now()),
       "change_order",
       c.id || "",
       `${c.co_number || ""} ${c.title || c.description || ""}`.trim(),
       c.status || "",
-      c.issued_by || c.created_by || "",
+      c.submitted_by || c.created_by || "",
       c.description || "",
     ]);
   }
   for (const p of photos) {
     rows.push([
-      formatIsoDate(p.taken_at || p.created_at || Date.now()),
+      formatIsoDate(p.taken_date || p.created_at || Date.now()),
       "photo",
       p.id || "",
-      p.caption || p.file_name || "",
+      p.title || p.file_name || "",
       "",
-      p.uploaded_by || "",
-      p.linked_drawing_id ? `drawing:${p.linked_drawing_id}` : "",
+      p.created_by || "",
+      [p.description, p.work_package_id ? `work_package:${p.work_package_id}` : "", p.daily_log_id ? `daily_log:${p.daily_log_id}` : ""]
+        .filter(Boolean).join(" · "),
     ]);
   }
   rows.sort((a, b) => String(b[0]).localeCompare(String(a[0])));

@@ -51,7 +51,7 @@ export const RELATIONSHIP_LABEL = {
 // Linkable types the MVP picker can seed from. Each maps to an entity
 // client + a label + the field used in the picker's search box.
 export const PICKER_TYPES = [
-  { key: "rfi",          label: "RFI",          entity: "RFI",          numberField: "rfi_number",  titleField: "subject" },
+  { key: "rfi",          label: "RFI",          entity: "RFI",          numberField: "rfi_number",  titleField: "title" },
   { key: "work_package", label: "Work Package", entity: "WorkPackage",  numberField: "wp_number",   titleField: "name" },
   { key: "delivery",     label: "Delivery",     entity: "Delivery",     numberField: "delivery_number", titleField: "description" },
   { key: "change_order", label: "Change Order", entity: "ChangeOrder",  numberField: "co_number",   titleField: "title" },
