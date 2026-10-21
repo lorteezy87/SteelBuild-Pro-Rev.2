@@ -5,6 +5,8 @@ import {
   DAYS_OUT_SCALE,
   ackColor,
   ackState,
+  alertBox,
+  impactPill,
   addDays,
   badgeLabel,
   badgeStyle,
@@ -16,6 +18,7 @@ import {
   formatShortDay,
   humanizeWait,
   isPastContractReturn,
+  isPastDue,
   parseCalendarDay,
   releasedPct,
   routingSteps,
@@ -196,21 +199,41 @@ describe("transmittal acknowledgement", () => {
 
 describe("RFI impact", () => {
   it("ranks a fab hold above cost above schedule", () => {
-    expect(rfiImpact({ holds_released_count: 2, cost_impact: true })).toBe("Fab hold");
+    expect(rfiImpact({ metadata: { fab_hold: true }, cost_impact: true })).toBe("Fab hold");
+    expect(rfiImpact({ metadata: { fab_impact: true } })).toBe("Fab hold");
     expect(rfiImpact({ cost_impact: true, schedule_impact: true })).toBe("Cost");
     expect(rfiImpact({ schedule_impact: true })).toBe("Schedule");
+  });
+
+  /**
+   * The live signal is the operator's tick in metadata. `holds_released_count`
+   * counts holds RELEASED when an RFI was answered, so reading it got the
+   * question backwards both ways: an active blocker read Info and vanished
+   * from the hold KPI, while an answered RFI was paraded as a current one.
+   */
+  it("reads the live fab-hold tick, not released-hold history", () => {
+    expect(rfiImpact({ metadata: { fab_hold: true } })).toBe("Fab hold");
+    expect(rfiImpact({ metadata: {}, holds_released_count: 94 } as Parameters<typeof rfiImpact>[0])).toBe("Info");
   });
 
   it("falls back to Info rather than inventing an impact", () => {
     expect(rfiImpact({})).toBe("Info");
     expect(rfiImpact({ cost_impact: null, schedule_impact: "" })).toBe("Info");
     expect(rfiImpact({ cost_impact: "none" })).toBe("Info");
+    expect(rfiImpact({ metadata: { fab_hold: false } })).toBe("Info");
   });
 
   it("reds a due date only once it is actually past", () => {
     const today = day(2026, 10, 18);
     expect(dueDateColor(day(2026, 10, 18), today)).toBe(dueDateColor(day(2026, 10, 25), today));
     expect(dueDateColor(day(2026, 10, 17), today)).not.toBe(dueDateColor(day(2026, 10, 25), today));
+  });
+
+  it("agrees with the past-due predicate the filter uses", () => {
+    const today = day(2026, 10, 18);
+    expect(isPastDue(day(2026, 10, 17), today)).toBe(true);
+    expect(isPastDue(day(2026, 10, 18), today)).toBe(false);
+    expect(isPastDue(null, today)).toBe(false);
   });
 
   it("does not color an unknown due date as late", () => {
@@ -247,6 +270,20 @@ describe("register status", () => {
 });
 
 describe("submittal status", () => {
+  /**
+   * Lifecycle before age. A Draft was never sent so it cannot be late, a Void
+   * one is dead, and a Rejected one is a resubmit. Ageing them first put all
+   * three into the default "Out for review" list and the headline counts.
+   */
+  it("decides lifecycle before applying the age rule", () => {
+    expect(submittalStatus("Draft", 400, null)).toBe("DET");
+    expect(submittalStatus(null, 400, null)).toBe("DET");
+    expect(submittalStatus("Void", 400, null)).toBe("NONE");
+    expect(submittalStatus("Rejected", 400, null)).toBe("R&R");
+    expect(submittalStatus("Approved", 400, null)).toBe("REL");
+    expect(submittalStatus("Approved as Noted", 400, null)).toBe("REL");
+  });
+
   it("is late only when it is both unreturned and past the window", () => {
     expect(submittalStatus("Under Review", 20, null)).toBe("LATE");
     // Returned on time-out day: it came back, so it is not late.
@@ -268,6 +305,17 @@ describe("chrome", () => {
 
   it("gives light and dark their own badge treatments", () => {
     expect(badgeStyle("REL", false)).not.toEqual(badgeStyle("REL", true));
+  });
+
+  /**
+   * AGENTS.md: the app is dual-theme and a page may not force itself light.
+   * Every colour helper has to actually answer differently in dark.
+   */
+  it("answers differently in dark for every colour helper that takes a skin", () => {
+    expect(daysOutBar(5, "REV", false).countColor).not.toBe(daysOutBar(5, "REV", true).countColor);
+    expect(alertBox("ok", false).background).not.toBe(alertBox("ok", true).background);
+    expect(impactPill("Info", false).background).not.toBe(impactPill("Info", true).background);
+    expect(rowChrome(true, false).background).not.toBe(rowChrome(true, true).background);
   });
 });
 

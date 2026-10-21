@@ -18,6 +18,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
+  theme: "light" as string,
   orgName: "Harbor Fabrication" as string | null,
   register: [
     {
@@ -85,7 +86,10 @@ const m = vi.hoisted(() => ({
       question: "A-501 and S-201 differ by 1.5 inches.",
       description: "Hold S-201 and take the difference in the finish build-up.",
       status: "Open",
-      holds_released_count: 3,
+      // The live signal is the operator's tick in metadata; holds_released_count
+      // is released-hold history and must NOT read as a current blocker.
+      metadata: { fab_hold: true, proposed_solution: "Hold S-201 and take the difference in the finish build-up." },
+      holds_released_count: 0,
     },
   ],
   transmittals: [
@@ -117,6 +121,7 @@ vi.mock("@/hooks/useDrawingRegister", () => ({
 
 vi.mock("@/hooks/useProjectId", () => ({ useProjectId: () => "p1" }));
 vi.mock("@/hooks/useDocumentTitle", () => ({ default: () => {} }));
+vi.mock("@/components/shared/ThemeContext", () => ({ useTheme: () => ({ theme: m.theme }) }));
 vi.mock("@/components/shared/OrgContext", () => ({
   useOptionalOrg: () => (m.orgName === null ? undefined : { currentOrg: { name: m.orgName } }),
 }));
@@ -217,6 +222,29 @@ describe("Document Control Board Report", () => {
     // The sentence is derived from the same counts the metrics are, so it
     // cannot contradict them. Both must say it — that agreement IS the test.
     expect(screen.getAllByText(/holding fabrication/i)).toHaveLength(2);
+  });
+
+  /**
+   * AGENTS.md: "SteelBuild is dual-theme. Do not force command pages
+   * light-only." The body used to read a fixed light palette, which put a
+   * bright report inside dark application chrome.
+   */
+  it("follows the application theme instead of forcing itself light", async () => {
+    const { container: light } = renderPage();
+    await goTo("Register");
+    const lightHtml = light.innerHTML;
+
+    m.theme = "dark";
+    try {
+      const { container: darkC } = renderPage();
+      expect(darkC.innerHTML).not.toBe(lightHtml);
+      // jsdom serialises inline colours as rgb(). #0C0F12 is the dark page
+      // surface; #FAFAF8 (250,250,248) is the light one it must not use.
+      expect(darkC.innerHTML).toContain("rgb(12, 15, 18)");
+      expect(lightHtml).toContain("rgb(250, 250, 248)");
+    } finally {
+      m.theme = "light";
+    }
   });
 
   it("asks for a project rather than rendering an empty board", async () => {

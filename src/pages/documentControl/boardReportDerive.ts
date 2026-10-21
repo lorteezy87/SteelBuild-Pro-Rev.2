@@ -21,6 +21,9 @@
 
 import { DC_DARK, DC_LIGHT, DC_SIGNAL, type DcSkin } from "./boardReportTheme";
 
+/** The active skin. Every colour below resolves through this, never through DC_LIGHT directly. */
+export const skinFor = (dark: boolean): DcSkin => (dark ? DC_DARK : DC_LIGHT);
+
 /* ─── dates ──────────────────────────────────────────────────────────────── */
 
 /** A calendar day with no time and no zone. The only date type this module trades in. */
@@ -195,7 +198,7 @@ export interface DaysOutBar {
  * The bar is the whole point of the submittals screen: how long a package has
  * been out, against the 14-day contract return marked at the midpoint.
  */
-export function daysOutBar(days: number, status: DcStatus): DaysOutBar {
+export function daysOutBar(days: number, status: DcStatus, dark = false): DaysOutBar {
   const pct = Math.min(Math.max(days, 0) / DAYS_OUT_SCALE, 1) * 100;
   const fill =
     status === "LATE"
@@ -208,7 +211,7 @@ export function daysOutBar(days: number, status: DcStatus): DaysOutBar {
   return {
     width: `${pct.toFixed(1)}%`,
     fill,
-    countColor: status === "LATE" ? DC_SIGNAL.redText : DC_LIGHT.textSecondary,
+    countColor: status === "LATE" ? DC_SIGNAL.redText : skinFor(dark).textSecondary,
   };
 }
 
@@ -249,7 +252,8 @@ export interface RoutingInput {
  * detailer → GC (+1 day) → current holder (+2 days, when it is not the GC) →
  * contract return (sent + 14) → return. The design's five steps.
  */
-export function routingSteps(input: RoutingInput): RouteStep[] {
+export function routingSteps(input: RoutingInput, dark = false): RouteStep[] {
+  const skin = skinFor(dark);
   const { sentOn, ballInCourt, status, detailer, gc, holder, returnTo } = input;
   const raw: Array<[string, string, CalendarDay | null, RouteState]> = [];
 
@@ -279,10 +283,10 @@ export function routingSteps(input: RoutingInput): RouteStep[] {
     who,
     date: formatDay(date),
     state,
-    dot: state === "done" ? "#17191C" : state === "late" ? red : "#fff",
-    ring: state === "done" ? "#17191C" : state === "late" ? red : "#A3A6A9",
-    titleColor: state === "todo" ? DC_LIGHT.textMuted : DC_LIGHT.text,
-    dateColor: state === "late" ? DC_SIGNAL.redText : DC_LIGHT.textMuted,
+    dot: state === "done" ? skin.text : state === "late" ? red : skin.paneBg,
+    ring: state === "done" ? skin.text : state === "late" ? red : skin.dashedFg,
+    titleColor: state === "todo" ? skin.textMuted : skin.text,
+    dateColor: state === "late" ? DC_SIGNAL.redText : skin.textMuted,
   }));
 }
 
@@ -297,7 +301,7 @@ export interface AlertBox {
   titleColor: string;
 }
 
-const ALERT: Record<AlertTone, Omit<AlertBox, "tone">> = {
+const alertPalette = (dark: boolean): Record<AlertTone, Omit<AlertBox, "tone">> => ({
   late: {
     background: "oklch(0.6 0.18 28 / .08)",
     border: "1px solid oklch(0.6 0.18 28 / .25)",
@@ -308,11 +312,15 @@ const ALERT: Record<AlertTone, Omit<AlertBox, "tone">> = {
     border: "1px solid oklch(0.76 0.14 75 / .4)",
     titleColor: "oklch(0.45 0.1 65)",
   },
-  ok: { background: DC_LIGHT.wellBg, border: `1px solid ${DC_LIGHT.wellBorder}`, titleColor: DC_LIGHT.text },
-};
+  ok: {
+    background: skinFor(dark).wellBg,
+    border: `1px solid ${skinFor(dark).wellBorder}`,
+    titleColor: skinFor(dark).text,
+  },
+});
 
-export function alertBox(tone: AlertTone): AlertBox {
-  return { tone, ...ALERT[tone] };
+export function alertBox(tone: AlertTone, dark = false): AlertBox {
+  return { tone, ...alertPalette(dark)[tone] };
 }
 
 /** Late beats due-soon beats quiet. Returns null when there is nothing to say. */
@@ -333,21 +341,27 @@ export interface PillStyle {
   background: string;
 }
 
-const IMPACT: Record<RfiImpact, PillStyle> = {
+const impactPalette = (dark: boolean): Record<RfiImpact, PillStyle> => ({
   "Fab hold": { color: "#C2410C", background: "rgba(255,90,31,.12)" },
   Cost: { color: "oklch(0.5 0.11 65)", background: "oklch(0.76 0.14 75 / .2)" },
   Schedule: { color: "oklch(0.42 0.1 245)", background: "oklch(0.62 0.11 245 / .14)" },
-  Info: { color: DC_LIGHT.badgeNeutralFg, background: DC_LIGHT.badgeNeutralBg },
-};
+  Info: { color: skinFor(dark).badgeNeutralFg, background: skinFor(dark).badgeNeutralBg },
+});
 
-export function impactPill(impact: RfiImpact): PillStyle {
-  return IMPACT[impact];
+export function impactPill(impact: RfiImpact, dark = false): PillStyle {
+  return impactPalette(dark)[impact];
 }
 
 /** An RFI past its response date reads red; everything else reads normal. */
-export function dueDateColor(due: CalendarDay | null, today: CalendarDay): string {
-  if (!due) return DC_LIGHT.textSecondary;
-  return daysBetween(due, today) > 0 ? DC_SIGNAL.redText : DC_LIGHT.textSecondary;
+export function dueDateColor(due: CalendarDay | null, today: CalendarDay, dark = false): string {
+  const normal = skinFor(dark).textSecondary;
+  if (!due) return normal;
+  return daysBetween(due, today) > 0 ? DC_SIGNAL.redText : normal;
+}
+
+/** True when the due date has passed. The colour and the filter must agree, so both read this. */
+export function isPastDue(due: CalendarDay | null, today: CalendarDay): boolean {
+  return due !== null && daysBetween(due, today) > 0;
 }
 
 /* ─── transmittal acknowledgement ────────────────────────────────────────── */
@@ -363,8 +377,8 @@ export function ackState(acknowledged: boolean, hoursWaiting: number | null): Ac
   return (hoursWaiting ?? 0) >= ACK_OVERDUE_HOURS ? "overdue" : "waiting";
 }
 
-export function ackColor(state: AckState): string {
-  if (state === "acknowledged") return DC_LIGHT.textSecondary;
+export function ackColor(state: AckState, dark = false): string {
+  if (state === "acknowledged") return skinFor(dark).textSecondary;
   return state === "overdue" ? DC_SIGNAL.redText : "oklch(0.5 0.11 65)";
 }
 

@@ -27,6 +27,7 @@
 import { useMemo, useState } from "react";
 import { useProjectId } from "@/hooks/useProjectId";
 import useDocumentTitle from "@/hooks/useDocumentTitle";
+import { useTheme } from "@/components/shared/ThemeContext";
 import {
   BoardReportShell,
   useOrgName,
@@ -34,6 +35,7 @@ import {
   type Metric,
 } from "./documentControl/BoardReportShell";
 import {
+  BoardReportSkin,
   plural,
   BriefScreen,
   RegisterScreen,
@@ -42,7 +44,7 @@ import {
   TransmittalsScreen,
 } from "./documentControl/BoardReportScreens";
 import { DC_FONT, DC_LIGHT, DC_MASTHEAD, DC_SIGNAL } from "./documentControl/boardReportTheme";
-import { ackState, CONTRACT_RETURN_DAYS, dueDateColor } from "./documentControl/boardReportDerive";
+import { ackState, CONTRACT_RETURN_DAYS, isPastDue } from "./documentControl/boardReportDerive";
 import { countLabel, useBoardReportData } from "./documentControl/useBoardReportData";
 
 const INTAKE_HREF = "/DocumentIntake";
@@ -56,6 +58,10 @@ export default function DocumentControl() {
   const projectId = useProjectId();
   // No org in context means no company name to print — never a placeholder one.
   const orgName = useOrgName() ?? "Us";
+  // AGENTS.md: SteelBuild is dual-theme and a page may not force itself light.
+  // ThemeContext resolves "system" for us, so this is the real active theme.
+  const theme = useTheme() as { theme?: string } | undefined;
+  const dark = theme?.theme !== "light";
   const [tab, setTab] = useState<BoardReportTab>("Brief");
   const data = useBoardReportData(projectId ?? null);
   useDocumentTitle("Document Control");
@@ -73,8 +79,8 @@ export default function DocumentControl() {
     const late = subs.filter((s) => s.status === "LATE").length;
     const resubmit = subs.filter((s) => s.status === "R&R").length;
 
-    const open = data.rfis.rows.filter((r) => !/closed|answered|void/i.test(r.status));
-    const pastDue = open.filter((r) => dueDateColor(r.dueOn, data.today) === DC_SIGNAL.redText).length;
+    const open = data.rfis.rows.filter((r) => r.open);
+    const pastDue = open.filter((r) => isPastDue(r.dueOn, data.today)).length;
     const fabHold = open.filter((r) => r.impact === "Fab hold").length;
 
     const xm = data.transmittals.rows;
@@ -264,7 +270,9 @@ export default function DocumentControl() {
       metrics={metrics}
       emphasis={emphasis}
       mastheadRight={right}
+      dark={dark}
     >
+      <BoardReportSkin dark={dark}>
       {data.isError ? (
         <div style={{ padding: "28px 44px", font: `400 13px/1.6 ${DC_FONT.ui}`, color: DC_LIGHT.textSecondary }}>
           Some of this could not be read. The figures above cover only what loaded.
@@ -275,6 +283,7 @@ export default function DocumentControl() {
       {tab === "Submittals" ? <SubmittalsScreen data={data} orgName={orgName} /> : null}
       {tab === "RFIs" ? <RfiScreen data={data} orgName={orgName} /> : null}
       {tab === "Transmittals" ? <TransmittalsScreen data={data} /> : null}
+      </BoardReportSkin>
     </BoardReportShell>
   );
 }

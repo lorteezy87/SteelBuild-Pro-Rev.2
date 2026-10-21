@@ -11,7 +11,7 @@
  * the hub flow that already owns that write. See PaneButton.
  */
 
-import { useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import {
   BoardReportBody,
   DetailPane,
@@ -20,7 +20,7 @@ import {
   PaneButton,
   StatusBadge,
 } from "./BoardReportShell";
-import { DC_FONT, DC_LIGHT, DC_SIGNAL } from "./boardReportTheme";
+import { DC_DARK, DC_FONT, DC_LIGHT, type DcSkin } from "./boardReportTheme";
 import {
   ACK_BADGE,
   CONTRACT_RETURN_DAYS,
@@ -32,6 +32,7 @@ import {
   bicSlices,
   daysOutBar,
   dueDateColor,
+  isPastDue,
   formatDay,
   formatShortDay,
   humanizeWait,
@@ -46,9 +47,26 @@ import {
 } from "./boardReportDerive";
 import type { BoardReportData, RegisterRow, RfiRow, SubmittalRow, TransmittalRow } from "./useBoardReportData";
 
-const S = DC_LIGHT;
 const mono = DC_FONT.mono;
 const ui = DC_FONT.ui;
+
+/**
+ * The active skin, supplied by the page.
+ *
+ * AGENTS.md: "SteelBuild is dual-theme. Do not force command pages
+ * light-only." Every surface and text colour below used to read DC_LIGHT
+ * directly, which put a bright report body inside dark application chrome for
+ * anyone running dark mode. They read this instead, and the page resolves it
+ * from ThemeContext.
+ */
+const SkinContext = createContext<{ skin: DcSkin; dark: boolean }>({ skin: DC_LIGHT, dark: false });
+
+export function BoardReportSkin({ dark, children }: { dark: boolean; children: ReactNode }) {
+  const value = useMemo(() => ({ skin: dark ? DC_DARK : DC_LIGHT, dark }), [dark]);
+  return <SkinContext.Provider value={value}>{children}</SkinContext.Provider>;
+}
+
+const useSkin = () => useContext(SkinContext);
 
 /* ─── shared row scaffolding ─────────────────────────────────────────────── */
 
@@ -65,7 +83,8 @@ function LogRow({
   label: string;
   children: ReactNode;
 }) {
-  const chrome = rowChrome(selected);
+  const { skin: S, dark } = useSkin();
+  const chrome = rowChrome(selected, dark);
   const [hover, setHover] = useState(false);
   return (
     <div
@@ -100,6 +119,7 @@ function LogRow({
 }
 
 const Cell = ({ children, kind = "text" }: { children: ReactNode; kind?: "text" | "mono" | "id" | "clip" }) => {
+  const { skin: S } = useSkin();
   const style =
     kind === "id"
       ? { font: `600 13px/1 ${mono}` }
@@ -117,6 +137,7 @@ const Cell = ({ children, kind = "text" }: { children: ReactNode; kind?: "text" 
 };
 
 function PaneHeading({ eyebrow, title, desc, badge }: { eyebrow: ReactNode; title: string; desc?: string; badge?: ReactNode }) {
+  const { skin: S, dark } = useSkin();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -130,8 +151,9 @@ function PaneHeading({ eyebrow, title, desc, badge }: { eyebrow: ReactNode; titl
 }
 
 function EmptyPane({ what }: { what: string }) {
+  const { skin: S, dark } = useSkin();
   return (
-    <DetailPane>
+    <DetailPane dark={dark}>
       <span style={{ font: `400 13px/1.5 ${ui}`, color: S.textMuted }}>
         Select {what} to see its detail.
       </span>
@@ -140,6 +162,7 @@ function EmptyPane({ what }: { what: string }) {
 }
 
 function EmptyLog({ what }: { what: string }) {
+  const { skin: S, dark } = useSkin();
   return (
     <div
       style={{
@@ -155,9 +178,10 @@ function EmptyLog({ what }: { what: string }) {
 }
 
 function ChipBar({ chips, active, onPick, right }: { chips: string[]; active: string; onPick: (c: string) => void; right: ReactNode }) {
+  const { skin: S, dark } = useSkin();
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-      <FilterChips chips={chips} active={active} onPick={onPick} />
+      <FilterChips chips={chips} active={active} onPick={onPick} dark={dark} />
       <span style={{ marginLeft: "auto", font: `400 12px/1 ${ui}`, color: S.textMuted }}>{right}</span>
     </div>
   );
@@ -176,6 +200,7 @@ const Rows = ({ children }: { children: ReactNode }) => (
 const REGISTER_COLUMNS = "72px minmax(0,1fr) 56px 44px 96px 64px 64px 84px";
 
 export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; intakeHref: string }) {
+  const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("All sheets");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -201,8 +226,12 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
           right={`Showing ${rows.length.toLocaleString()} of ${data.register.rows.length.toLocaleString()}`}
         />
         <LogHeader
+          dark={dark}
           columns={REGISTER_COLUMNS}
-          labels={["Sheet", "Title", "Seq", "Rev", "Status", "Sent", "Back", "Ball in court"]}
+          // "Disc", not "Seq": this cell is fed by `drawings.discipline`. There
+          // is no sequence column on drawings, and labelling a discipline
+          // letter "Seq" invites a PM to read it as the erection sequence.
+          labels={["Sheet", "Title", "Disc", "Rev", "Status", "Sent", "Back", "Ball in court"]}
         />
         <Rows>
           {rows.length === 0 ? (
@@ -220,10 +249,10 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
                 <Cell kind="clip">{r.title}</Cell>
                 <Cell kind="mono">{r.seq}</Cell>
                 <Cell kind="mono">{r.rev}</Cell>
-                <StatusBadge label={badgeLabel(r.status)} style={badgeStyle(r.status)} />
+                <StatusBadge label={badgeLabel(r.status)} style={badgeStyle(r.status, dark)} />
                 <Cell kind="mono">{formatShortDay(r.sentOn)}</Cell>
                 <Cell kind="mono">{formatShortDay(r.backOn)}</Cell>
-                <Cell>{r.ballInCourt}</Cell>
+                <Cell>{r.ballInCourt ?? "—"}</Cell>
               </LogRow>
             ))
           )}
@@ -231,7 +260,7 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
       </LogColumn>
 
       {current ? (
-        <DetailPane>
+        <DetailPane dark={dark}>
           <PaneHeading
             eyebrow={
               <>
@@ -241,7 +270,7 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
                 </span>
               </>
             }
-            badge={<StatusBadge label={badgeLabel(current.status)} style={badgeStyle(current.status)} />}
+            badge={<StatusBadge label={badgeLabel(current.status)} style={badgeStyle(current.status, dark)} />}
             title={current.title}
           />
           <div
@@ -272,8 +301,8 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <PaneButton href="/DrawingSubmittalHub">Open in Drawing Control</PaneButton>
-            <PaneButton variant="secondary" href={intakeHref}>
+            <PaneButton dark={dark} href="/DrawingSubmittalHub">Open in Drawing Control</PaneButton>
+            <PaneButton dark={dark} variant="secondary" href={intakeHref}>
               Intake desk
             </PaneButton>
           </div>
@@ -290,6 +319,7 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
 const SUBMITTAL_COLUMNS = "118px minmax(0,1fr) 52px 92px minmax(0,1.1fr) 80px";
 
 export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; orgName: string }) {
+  const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("Out for review");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -320,13 +350,14 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
   );
 
   const tone = current ? submittalAlertTone(current.daysOut, current.status) : null;
-  const alert = tone ? alertBox(tone) : null;
+  const alert = tone ? alertBox(tone, dark) : null;
 
   return (
     <BoardReportBody>
       <LogColumn>
         <ChipBar chips={chips} active={filter} onPick={setFilter} right="Sorted by days out" />
         <LogHeader
+          dark={dark}
           columns={SUBMITTAL_COLUMNS}
           labels={["Package", "Title", "Sheets", "With", `Days out · ${CONTRACT_RETURN_DAYS} d contract`, "Status"]}
         />
@@ -335,7 +366,7 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
             <EmptyLog what="submittal packages" />
           ) : (
             rows.map((r) => {
-              const bar = daysOutBar(r.daysOut, r.status);
+              const bar = daysOutBar(r.daysOut, r.status, dark);
               return (
                 <LogRow
                   key={r.id}
@@ -358,7 +389,7 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
                       {r.daysOut}d
                     </span>
                   </div>
-                  <StatusBadge label={badgeLabel(r.status)} style={badgeStyle(r.status)} />
+                  <StatusBadge label={badgeLabel(r.status)} style={badgeStyle(r.status, dark)} />
                 </LogRow>
               );
             })
@@ -367,10 +398,10 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
       </LogColumn>
 
       {current ? (
-        <DetailPane>
+        <DetailPane dark={dark}>
           <PaneHeading
             eyebrow={<span style={{ font: `600 13px/1 ${mono}` }}>{current.pkg}</span>}
-            badge={<StatusBadge label={badgeLabel(current.status)} style={badgeStyle(current.status)} />}
+            badge={<StatusBadge label={badgeLabel(current.status)} style={badgeStyle(current.status, dark)} />}
             title={current.title}
             desc={`${current.sheets} sheet${current.sheets === 1 ? "" : "s"} · sent ${formatDay(current.sentOn)}`}
           />
@@ -405,8 +436,8 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
             </div>
           ) : null}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <PaneButton href="/Submittals">Open package</PaneButton>
-            <PaneButton variant="secondary">Send reminder</PaneButton>
+            <PaneButton dark={dark} href="/Submittals">Open package</PaneButton>
+            <PaneButton dark={dark} variant="secondary">Send reminder</PaneButton>
           </div>
         </DetailPane>
       ) : (
@@ -421,16 +452,18 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
 const RFI_COLUMNS = "96px minmax(0,1fr) 64px 92px 60px 48px 84px";
 
 export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: string }) {
+  const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("Open");
   const [selected, setSelected] = useState<string | null>(null);
 
   const chips = ["Open", "Past due", "Fab hold", "All"];
-  const isPastDue = (r: RfiRow) => r.dueOn !== null && dueDateColor(r.dueOn, data.today) === DC_SIGNAL.redText;
-  const isOpen = (r: RfiRow) => !/closed|answered|void/i.test(r.status);
+  // Both read canonical sources: `open` comes from isRfiOpen, past-due from
+  // the same predicate the due-date colour uses, so filter and colour agree.
+  const isOpen = (r: RfiRow) => r.open;
   const matches = (r: RfiRow) =>
     filter === "All" ||
     (filter === "Open" && isOpen(r)) ||
-    (filter === "Past due" && isOpen(r) && isPastDue(r)) ||
+    (filter === "Past due" && isOpen(r) && isPastDue(r.dueOn, data.today)) ||
     (filter === "Fab hold" && r.impact === "Fab hold");
 
   const rows = data.rfis.rows.filter(matches);
@@ -445,13 +478,13 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
           onPick={setFilter}
           right={`Showing ${rows.length.toLocaleString()} of ${data.rfis.rows.length.toLocaleString()}`}
         />
-        <LogHeader columns={RFI_COLUMNS} labels={["RFI", "Subject", "Ref", "With", "Due", "Open", "Impact"]} />
+        <LogHeader dark={dark} columns={RFI_COLUMNS} labels={["RFI", "Subject", "Ref", "With", "Due", "Open", "Impact"]} />
         <Rows>
           {rows.length === 0 ? (
             <EmptyLog what="RFIs" />
           ) : (
             rows.map((r) => {
-              const pill = impactPill(r.impact);
+              const pill = impactPill(r.impact, dark);
               return (
                 <LogRow
                   key={r.id}
@@ -464,7 +497,7 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
                   <Cell kind="clip">{r.subject}</Cell>
                   <Cell kind="mono">{r.ref}</Cell>
                   <Cell>{r.ballInCourt}</Cell>
-                  <span style={{ font: `500 12px/1 ${mono}`, color: dueDateColor(r.dueOn, data.today) }}>
+                  <span style={{ font: `500 12px/1 ${mono}`, color: dueDateColor(r.dueOn, data.today, dark) }}>
                     {formatShortDay(r.dueOn)}
                   </span>
                   <span style={{ font: `500 12px/1 ${mono}`, textAlign: "right", color: S.textSecondary }}>{r.daysOpen}d</span>
@@ -488,7 +521,7 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
       </LogColumn>
 
       {current ? (
-        <DetailPane gap={18}>
+        <DetailPane gap={18} dark={dark}>
           <PaneHeading
             eyebrow={<span style={{ font: `600 13px/1 ${mono}` }}>{current.number}</span>}
             badge={
@@ -497,8 +530,8 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
                   font: `600 11px/1 ${ui}`,
                   padding: "4px 7px",
                   borderRadius: 3,
-                  color: impactPill(current.impact).color,
-                  background: impactPill(current.impact).background,
+                  color: impactPill(current.impact, dark).color,
+                  background: impactPill(current.impact, dark).background,
                 }}
               >
                 {current.impact}
@@ -508,7 +541,7 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", font: `400 12px/1.3 ${ui}`, color: S.textMuted }}>
             <span>{current.ballInCourt}</span>
-            <span style={{ fontFamily: mono, color: dueDateColor(current.dueOn, data.today) }}>
+            <span style={{ fontFamily: mono, color: dueDateColor(current.dueOn, data.today, dark) }}>
               Open {current.daysOpen}d · due {formatDay(current.dueOn)}
             </span>
           </div>
@@ -526,8 +559,8 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
             </div>
           ) : null}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <PaneButton href="/RFIs">Open RFI</PaneButton>
-            <PaneButton variant="secondary">Send reminder</PaneButton>
+            <PaneButton dark={dark} href="/RFIs">Open RFI</PaneButton>
+            <PaneButton dark={dark} variant="secondary">Send reminder</PaneButton>
           </div>
         </DetailPane>
       ) : (
@@ -539,9 +572,17 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
 
 /* ─── 2d · Transmittals ──────────────────────────────────────────────────── */
 
-const XM_COLUMNS = "112px minmax(0,1.25fr) minmax(0,1fr) 52px 92px 112px";
+/**
+ * The design carries a Sheets column. `drawing_transmittals` holds no count
+ * and the contents live in `drawing_transmittal_items`, which this page does
+ * not read — so the column could only ever print an em dash. A column that
+ * can never fill is worse than one that is not there; restore it alongside a
+ * join on that table.
+ */
+const XM_COLUMNS = "112px minmax(0,1.25fr) minmax(0,1fr) 92px 112px";
 
 export function TransmittalsScreen({ data }: { data: BoardReportData }) {
+  const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("All");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -559,7 +600,7 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
     <BoardReportBody>
       <LogColumn>
         <ChipBar chips={chips} active={filter} onPick={setFilter} right="Newest first" />
-        <LogHeader columns={XM_COLUMNS} labels={["Transmittal", "To", "Purpose", "Sheets", "Sent", "Acknowledged"]} />
+        <LogHeader dark={dark} columns={XM_COLUMNS} labels={["Transmittal", "To", "Purpose", "Sent", "Acknowledged"]} />
         <Rows>
           {rows.length === 0 ? (
             <EmptyLog what="transmittals" />
@@ -582,10 +623,11 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
                     </span>
                   </div>
                   <Cell kind="clip">{r.purpose}</Cell>
-                  <span style={{ font: `400 13px/1 ${mono}`, textAlign: "right", color: S.textSecondary }}>—</span>
                   <Cell kind="mono">{formatShortDay(r.sentOn)}</Cell>
-                  <span style={{ font: `600 12px/1.3 ${mono}`, color: ackColor(state) }}>
-                    {state === "acknowledged" ? formatShortDay(r.sentOn) : `Waiting ${r.hoursWaiting ?? 0}h`}
+                  <span style={{ font: `600 12px/1.3 ${mono}`, color: ackColor(state, dark) }}>
+                    {/* acknowledgedOn, not sentOn — any acknowledgement that
+                        was not same-day showed the transmission date. */}
+                    {state === "acknowledged" ? formatShortDay(r.acknowledgedOn) : `Waiting ${r.hoursWaiting ?? 0}h`}
                   </span>
                 </LogRow>
               );
@@ -598,19 +640,19 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
         (() => {
           const state = stateOf(current);
           const badge = ACK_BADGE[state];
-          const box = alertBox(state === "acknowledged" ? "ok" : state === "overdue" ? "late" : "warn");
+          const box = alertBox(state === "acknowledged" ? "ok" : state === "overdue" ? "late" : "warn", dark);
           return (
-            <DetailPane>
+            <DetailPane dark={dark}>
               <PaneHeading
                 eyebrow={<span style={{ font: `600 13px/1 ${mono}` }}>{current.number}</span>}
-                badge={<StatusBadge label={badge.label} style={badgeStyle(badge.status)} />}
+                badge={<StatusBadge label={badge.label} style={badgeStyle(badge.status, dark)} />}
                 title={`${current.purpose} — ${current.recipient}`}
                 desc={`Sent ${formatDay(current.sentOn)}${current.contact ? ` · to ${current.contact}` : ""}`}
               />
               <div style={{ padding: "14px 16px", background: box.background, border: box.border, display: "flex", flexDirection: "column", gap: 6 }}>
                 <span style={{ font: `600 13px/1.3 ${ui}`, color: box.titleColor }}>
                   {state === "acknowledged"
-                    ? "Acknowledged"
+                    ? `Acknowledged ${formatDay(current.acknowledgedOn)}`
                     : `Not acknowledged after ${humanizeWait(current.hoursWaiting ?? 0)}`}
                 </span>
                 <span style={{ font: `400 13px/1.45 ${ui}`, color: S.textSecondary, textWrap: "pretty" }}>
@@ -622,8 +664,8 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
                 </span>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <PaneButton href="/Documents">Open set</PaneButton>
-                <PaneButton variant="secondary">Resend &amp; notify</PaneButton>
+                <PaneButton dark={dark} href="/Documents">Open set</PaneButton>
+                <PaneButton dark={dark} variant="secondary">Resend &amp; notify</PaneButton>
               </div>
             </DetailPane>
           );
@@ -653,6 +695,7 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
 const MATRIX_STATES: DcStatus[] = ["REL", "REV", "R&R", "HOLD", "DET"];
 
 export function BriefScreen({ data }: { data: BoardReportData }) {
+  const { skin: S, dark } = useSkin();
   const sets = useMemo(() => {
     const bySet = new Map<string, RegisterRow[]>();
     for (const row of data.register.rows) {
@@ -675,21 +718,27 @@ export function BriefScreen({ data }: { data: BoardReportData }) {
 
   const bic = useMemo(() => {
     const counts = new Map<string, number>();
+    // The caption below reads "open", so terminal records must not be counted.
+    // Answered, Closed and Void RFIs keep their ball_in_court, and counting
+    // them made this bar disagree with the Brief's own open-RFI metric.
     for (const r of data.rfis.rows) {
-      if (r.ballInCourt === "—") continue;
+      if (!r.open || r.ballInCourt === "—") continue;
       counts.set(r.ballInCourt, (counts.get(r.ballInCourt) ?? 0) + 1);
     }
-    for (const s of data.submittals.rows) {
-      if (s.ballInCourt === "—") continue;
-      counts.set(s.ballInCourt, (counts.get(s.ballInCourt) ?? 0) + 1);
+    for (const sub of data.submittals.rows) {
+      if (sub.status === "REL" || sub.status === "NONE" || sub.ballInCourt === "—") continue;
+      counts.set(sub.ballInCourt, (counts.get(sub.ballInCourt) ?? 0) + 1);
     }
-    return bicSlices([...counts.entries()].map(([party, count]) => ({ party, count })).sort((a, b) => b.count - a.count));
-  }, [data.rfis.rows, data.submittals.rows]);
+    return bicSlices(
+      [...counts.entries()].map(([party, count]) => ({ party, count })).sort((a, b) => b.count - a.count),
+      dark,
+    );
+  }, [data.rfis.rows, data.submittals.rows, dark]);
 
   const decisions = useMemo(
     () =>
       [...data.rfis.rows]
-        .filter((r) => r.impact === "Fab hold" || r.impact === "Cost")
+        .filter((r) => r.open && (r.impact === "Fab hold" || r.impact === "Cost"))
         .sort((a, b) => b.daysOpen - a.daysOpen)
         .slice(0, 4),
     [data.rfis.rows],
@@ -744,7 +793,7 @@ export function BriefScreen({ data }: { data: BoardReportData }) {
               {s.counts.map((count, i) => {
                 // An empty state reads as the dashed "not started" cell rather
                 // than as a zero, which would imply the state was measured.
-                const cell = matrixCell(count === 0 ? "NONE" : MATRIX_STATES[i]);
+                const cell = matrixCell(count === 0 ? "NONE" : MATRIX_STATES[i], dark);
                 return (
                   <div
                     key={MATRIX_STATES[i]}
@@ -770,7 +819,7 @@ export function BriefScreen({ data }: { data: BoardReportData }) {
         <div style={{ display: "flex", gap: 18, flexWrap: "wrap", paddingTop: 6 }}>
           {legend.map((st) => (
             <div key={st} style={{ display: "flex", alignItems: "center", gap: 7, font: `400 12px/1 ${ui}`, color: S.textSecondary }}>
-              <StatusBadge label={badgeLabel(st)} style={badgeStyle(st)} />
+              <StatusBadge label={badgeLabel(st)} style={badgeStyle(st, dark)} />
               {matrixLegendText(st)}
             </div>
           ))}
@@ -806,8 +855,8 @@ export function BriefScreen({ data }: { data: BoardReportData }) {
                       font: `600 11px/1 ${ui}`,
                       padding: "4px 8px",
                       borderRadius: 3,
-                      color: impactPill(d.impact).color,
-                      background: impactPill(d.impact).background,
+                      color: impactPill(d.impact, dark).color,
+                      background: impactPill(d.impact, dark).background,
                     }}
                   >
                     {d.impact}

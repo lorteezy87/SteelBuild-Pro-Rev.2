@@ -23,6 +23,8 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities, EFFECTIVE_LIST_CAP } from "@/api/supabaseClient";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
+import { isRfiOpen } from "@/lib/entityPredicates";
+import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import {
   type CalendarDay,
   type DcStatus,
@@ -44,7 +46,8 @@ export interface RegisterRow {
   status: DcStatus;
   sentOn: CalendarDay | null;
   backOn: CalendarDay | null;
-  ballInCourt: string;
+  /** null when nothing in the data says who holds it. Never a guess. */
+  ballInCourt: string | null;
   setName: string;
   onHold: boolean;
   holdReason: string | null;
@@ -75,6 +78,8 @@ export interface RfiRow {
   question: string;
   proposedSolution: string;
   status: string;
+  /** From the canonical isRfiOpen, not a local regex. */
+  open: boolean;
 }
 
 export interface TransmittalRow {
@@ -86,6 +91,8 @@ export interface TransmittalRow {
   sentOn: CalendarDay | null;
   sentLabel: string;
   acknowledged: boolean;
+  /** When receipt was confirmed — NOT the send date. */
+  acknowledgedOn: CalendarDay | null;
   acknowledgedBy: string;
   hoursWaiting: number | null;
 }
@@ -130,11 +137,27 @@ export function registerStatus(row: Pick<DrawingRegisterRow, "stage" | "current_
   return "DET";
 }
 
-/** A package's badge: returned-for-revision first, then past the contract return, then in review. */
+/**
+ * A package's badge.
+ *
+ * LIFECYCLE IS DECIDED BEFORE AGE, and from explicit statuses rather than
+ * substring matching. A Draft has not been sent, so it cannot be "late"; a
+ * Void one is dead; a Rejected one is a resubmit, not a review in progress.
+ * Letting the age rule run first turned all three into REV or LATE and put
+ * them in the default "Out for review" list and the headline counts.
+ *
+ * Only a genuinely submitted, unreturned review package is aged.
+ */
 export function submittalStatus(status: string | null, daysOut: number, returnedDate: string | null): DcStatus {
-  const s = (status ?? "").toLowerCase();
-  if (s.includes("revise") || s.includes("resubmit")) return "R&R";
-  if (s.includes("approved") || s.includes("released")) return "REL";
+  const raw = (status ?? "").trim();
+  const s = raw.toLowerCase();
+
+  if (!raw || s === "draft") return "DET";
+  if (s === "void" || s === "cancelled" || s === "canceled") return "NONE";
+  if (s === "rejected" || s.includes("revise") || s.includes("resubmit")) return "R&R";
+  if (CLOSED_SUBMITTAL_STATUSES.has(raw) || s.startsWith("approved")) return "REL";
+
+  // Live review package: now age it.
   if (!returnedDate && daysOut > CONTRACT_RETURN_DAYS) return "LATE";
   return "REV";
 }
@@ -142,15 +165,24 @@ export function submittalStatus(status: string | null, daysOut: number, returned
 /**
  * An RFI's impact pill. Fab hold outranks cost outranks schedule; Info is the
  * floor, not a claim that the RFI is harmless.
+ *
+ * THE FAB-HOLD SIGNAL IS `metadata.fab_hold`, NOT `holds_released_count`.
+ * RFIFormModal writes the operator's "this holds fabrication" tick into
+ * metadata (see rfiFormDerivations); `holds_released_count` counts holds that
+ * were RELEASED when an RFI was answered, which is history. Reading the latter
+ * gets it backwards twice over: a live blocker reads Info and drops out of the
+ * hold KPI, the filter and the Brief's decision list, while an answered RFI
+ * whose holds were cleared is paraded as a current blocker.
  */
 export function rfiImpact(row: {
-  holds_released_count?: number | null;
+  metadata?: unknown;
   cost_impact?: boolean | string | null;
   schedule_impact?: boolean | string | null;
 }): RfiImpact {
-  const truthy = (v: boolean | string | null | undefined) =>
+  const truthy = (v: unknown) =>
     v === true || (typeof v === "string" && v.length > 0 && v.toLowerCase() !== "none" && v.toLowerCase() !== "no");
-  if ((row.holds_released_count ?? 0) > 0) return "Fab hold";
+  const meta = (row.metadata ?? {}) as Record<string, unknown>;
+  if (truthy(meta.fab_hold) || truthy(meta.fab_impact)) return "Fab hold";
   if (truthy(row.cost_impact)) return "Cost";
   if (truthy(row.schedule_impact)) return "Schedule";
   return "Info";
@@ -163,6 +195,16 @@ const text = (v: unknown, fallback = "—"): string => {
   if (typeof v === "number") return String(v);
   return fallback;
 };
+
+/** Total drawing rows across a submittal's linked sets. */
+function countSheetsInSets(ids: unknown, sheetsBySet: Map<string, number>): number {
+  if (!Array.isArray(ids)) return 0;
+  let total = 0;
+  for (const id of ids) {
+    if (typeof id === "string") total += sheetsBySet.get(id) ?? 0;
+  }
+  return total;
+}
 
 function hoursSince(iso: string | null | undefined, now: Date): number | null {
   if (!iso) return null;
@@ -189,14 +231,33 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
     queryFn: () => entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
   });
 
+  /**
+   * Scoped to OUTGOING, non-deleted rows. A project-only read also hands back
+   * incoming and internal headers, drafts, voids and soft-deleted rows — and
+   * every one of those lacking `acknowledged_at` would then be counted as
+   * awaiting acknowledgement, and aged into "overdue", for a transmission
+   * that never went out. Draft and void are dropped below, after the read,
+   * because a status filter cannot express "sent or acknowledged".
+   */
   const transmittals = useQuery({
     queryKey: ["board-report", "transmittals", projectId],
     enabled: Boolean(projectId),
-    queryFn: () => entities.DrawingTransmittal.filter({ project_id: projectId }, "-date_sent"),
+    queryFn: () =>
+      entities.DrawingTransmittal.filter(
+        { project_id: projectId, direction: "outgoing", is_deleted: false },
+        "-date_sent",
+      ),
   });
 
   return useMemo(() => {
     const now = new Date();
+
+    // How many drawing rows sit in each set, from the register's complete read.
+    const sheetsBySet = new Map<string, number>();
+    for (const r of register.data ?? []) {
+      if (!r.drawing_set_id) continue;
+      sheetsBySet.set(r.drawing_set_id, (sheetsBySet.get(r.drawing_set_id) ?? 0) + 1);
+    }
 
     const submittalSource = (submittals.data ?? []) as Array<Record<string, unknown>>;
     const packageBySet = new Map<string, { submitted: string | null; returned: string | null }>();
@@ -219,7 +280,10 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
       // A sheet's "sent" and "back" are the dates of the PACKAGE its drawing
       // set went out in, which is the only place those dates exist.
       const pkg = r.drawing_set_id ? packageBySet.get(r.drawing_set_id) : undefined;
-      const sentOn = parseCalendarDay(pkg?.submitted ?? r.current_issued_at);
+      // Package evidence only. Falling back to the revision's issue date put a
+      // date under "Sent" for sheets that were never transmitted — a different
+      // event wearing this column's name.
+      const sentOn = parseCalendarDay(pkg?.submitted ?? null);
       return {
         id: r.drawing_id,
         sheet: text(r.sheet_number),
@@ -229,7 +293,11 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         status: registerStatus(r),
         sentOn,
         backOn: parseCalendarDay(pkg?.returned ?? null),
-        ballInCourt: text(r.active_hold_id ? "Architect" : null, "—"),
+        // Nothing in DrawingRegisterRow says who holds a hold. It used to
+        // hardcode "Architect" for every held sheet, which misreported every
+        // GC-, EOR-, field- and internally-owned hold. Unknown is the honest
+        // answer until the hold carries a party.
+        ballInCourt: null,
         setName: text(r.drawing_set_name, "—"),
         onHold: Boolean(r.active_hold_id),
         holdReason: r.active_hold_reason ?? null,
@@ -245,7 +313,9 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         id: String(s.id),
         pkg: text(s.submittal_number),
         title: text(s.title, "Untitled package"),
-        sheets: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids.length : 0,
+        // Sheets, not sets. `drawing_set_ids.length` counted linked SETS, so a
+        // single 40-sheet set rendered as "1 sheet".
+        sheets: countSheetsInSets(s.drawing_set_ids, sheetsBySet),
         sentOn,
         ballInCourt: text(s.ball_in_court),
         daysOut,
@@ -267,12 +337,21 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         daysOpen: asked ? daysBetween(asked, today) : 0,
         impact: rfiImpact(r as Parameters<typeof rfiImpact>[0]),
         question: text(r.question, ""),
-        proposedSolution: text(r.description, ""),
+        // buildRfiFormPayload stores the proposal in metadata; `description` is
+        // a separate field, so reading it labelled unrelated prose as the
+        // proposed solution and dropped the real one.
+        proposedSolution: text((r.metadata as Record<string, unknown> | null)?.proposed_solution, ""),
         status: text(r.status, ""),
+        open: isRfiOpen(r as { status?: string | null }),
       };
     });
 
-    const xmRaw = (transmittals.data ?? []) as Array<Record<string, unknown>>;
+    const xmRaw = ((transmittals.data ?? []) as Array<Record<string, unknown>>).filter((t) => {
+      const status = String(t.status ?? "").toLowerCase();
+      // A draft was never transmitted and a void one was withdrawn; neither is
+      // awaiting anybody's acknowledgement.
+      return status !== "draft" && status !== "void";
+    });
     const transmittalRows: TransmittalRow[] = xmRaw.map((t): TransmittalRow => {
       const ackAt = (t.acknowledged_at as string | null) ?? null;
       return {
@@ -284,6 +363,7 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         sentOn: parseCalendarDay(t.date_sent as string | null),
         sentLabel: text(t.date_sent, "—").slice(0, 10),
         acknowledged: Boolean(ackAt),
+        acknowledgedOn: parseCalendarDay(ackAt),
         acknowledgedBy: text(t.acknowledged_by_name, ""),
         hoursWaiting: ackAt ? null : hoursSince(t.date_sent as string | null, now),
       };
