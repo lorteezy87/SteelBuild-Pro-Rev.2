@@ -17,10 +17,23 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   // set name change. Create waits for the check so nobody commits unseen.
   const crossSet = useCrossSetSupersede({ projectId, sheets, meta });
   const checkingOtherSets = crossSet.status === "loading";
+  // The ids actually sent to the create, derived once so the count shown beside
+  // Create cannot disagree with what gets written.
+  const supersedeIds = canSupersede && crossSet.status === "ready" ? crossSet.checkedIds : [];
   const handleCreateClick = () => {
-    const supersedeIds = canSupersede && crossSet.status === "ready" ? crossSet.checkedIds : [];
     onCreate(sheets.filter(s => s.selected), { supersedeIds, supersedeLabels: crossSet.labels });
   };
+
+  // Pages matched in another set that this create will LEAVE LIVE. Six separate
+  // conditions in planCrossSetSupersede can each leave a row unticked (locked
+  // set, set-name casing, missing or differing title, short sheet number, an
+  // older revision), and a locked row cannot be ticked at all — so the number
+  // was reachable only by reading the panel row by row. For a fabricator this
+  // is the number that matters: those are the sheets the shop can still pull.
+  // Stated next to Create so the consequence is visible at the moment of
+  // commit, not buried in a collapsed section above it.
+  const stayingLiveCount =
+    crossSet.status === "ready" ? crossSet.plan.rows.length - supersedeIds.length : 0;
 
   const setMetaField = (k, v) => setMeta(prev => ({ ...prev, [k]: v }));
   const anyAiFilled = Object.values(aiFilledFields).some(Boolean);
@@ -319,15 +332,22 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
-        <Button
-          onClick={handleCreateClick}
-          disabled={selectedCount === 0 || checkingOtherSets}
-          style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}
-        >
-          {checkingOtherSets
-            ? "Checking other sets…"
-            : <>Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} /></>}
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {stayingLiveCount > 0 && (
+            <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-warning)" }}>
+              {stayingLiveCount} old {stayingLiveCount === 1 ? "page stays" : "pages stay"} live
+            </span>
+          )}
+          <Button
+            onClick={handleCreateClick}
+            disabled={selectedCount === 0 || checkingOtherSets}
+            style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}
+          >
+            {checkingOtherSets
+              ? "Checking other sets…"
+              : <>Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} /></>}
+          </Button>
+        </div>
       </div>
     </div>
   );
