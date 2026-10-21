@@ -80,7 +80,7 @@ export default function DrawingSetUploadModal({
           {step === 0 && <ChoiceStep onNewSet={() => setStep(1)} onNewRevision={() => { handleClose(); if (onNewRevision) onNewRevision(); }} onClose={handleClose} />}
           {step === 1 && <SetInfoStep meta={meta} setMeta={setMeta} onBack={() => setStep(0)} onNext={() => setStep(2)} projectName={activeProject?.name} existingSetNames={existingSetNames} />}
           {step === 2 && <FileDropStep files={files} setFiles={setFiles} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} setName={meta.setName} />}
-          {step === 3 && <ProcessingStep processingStatus={processingStatus} onCancel={reset} error={processError} />}
+          {step === 3 && <ProcessingStep processingStatus={processingStatus} onCancel={reset} error={processError} fileResults={fileResults} />}
           {step === 4 && <ReviewStep sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} setMeta={setMeta} aiFilledFields={aiFilledFields} onBack={() => setStep(2)} onCreate={handleCreate} existingDrawings={existingDrawings} canSupersede={canSupersede} projectId={activeProject?.id ?? null} />}
           {step === 5 && <SuccessStep createdCount={createdCount} fileResults={fileResults} processError={processError} supersedeResult={supersedeResult} onViewLog={handleClose} onUploadAnother={reset} />}
         </div>

@@ -67,6 +67,12 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
           fileUrl = res?.file_url || res?.url;
           if (!fileUrl) throw new Error("Upload succeeded but no file URL was returned");
         } catch (err) {
+          // Log as well as record. This used to be recorded only, so when every
+          // file failed the real cause reached neither the screen nor the
+          // console and the user was left with "check the failed file details"
+          // and nowhere showing them. The error object is logged whole — the
+          // storage status code lives on it, not in `.message`.
+          console.error(`Drawing upload failed for ${file.name}:`, err);
           results.push({ fileName: file.name, sheetCount: 0, status: "failed", error: err.message });
           continue;
         }

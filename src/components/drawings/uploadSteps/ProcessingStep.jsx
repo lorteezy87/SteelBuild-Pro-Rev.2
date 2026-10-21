@@ -2,19 +2,66 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 
 // ─── Step 3: Processing UI ────────────────────────────────────────────
-export default function ProcessingStep({ processingStatus, onCancel, error }) {
+//
+// `fileResults` is passed so the error branch can show WHY each file failed.
+// Without it this screen was a dead end: when every file fails the controller
+// sets "No drawing sheets were extracted. Check the failed file details and
+// try again." and stops here — but the per-file `error` captured in
+// useFileUploadAndExtract was only ever rendered by SuccessStep, which that
+// path never reaches. The message named details the UI could not display.
+/**
+ * @param {{
+ *   processingStatus: {
+ *     steps?: Array<{ id: string, label: string, done?: boolean, warning?: boolean, detail?: string }>,
+ *     currentStepId?: string | null,
+ *     progress?: number,
+ *     message?: string,
+ *   },
+ *   onCancel: () => void,
+ *   error?: string | null,
+ *   fileResults?: Array<{ fileName: string, status?: string, error?: string, sheetCount?: number }>,
+ * }} props
+ */
+export default function ProcessingStep({ processingStatus, onCancel, error, fileResults = [] }) {
   const { steps = [], currentStepId, progress = 0, message = "" } = processingStatus;
 
   if (error) {
+    const failed = fileResults.filter((r) => r.status === "failed");
     return (
       <div style={{ padding: "20px 0", textAlign: "center" }}>
         <div style={{ fontSize: 36, marginBottom: 10 }}>⚠</div>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--status-error)", marginBottom: 8 }}>
           Processing Failed
         </div>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 24, maxWidth: 360, margin: "0 auto 24px" }}>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: failed.length ? 12 : 24, maxWidth: 360, margin: failed.length ? "0 auto 12px" : "0 auto 24px" }}>
           {error}
         </div>
+        {failed.length > 0 && (
+          <div style={{ maxWidth: 420, margin: "0 auto 20px", textAlign: "left" }}>
+            {failed.map((r) => (
+              <div key={r.fileName} style={{
+                display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px",
+                background: "var(--danger-muted)",
+                border: "1px solid var(--danger-border)",
+                borderRadius: 8, marginBottom: 8,
+              }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--status-error)", flexShrink: 0, marginTop: 1 }}>✗</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", fontWeight: 600, overflowWrap: "anywhere" }}>
+                    {r.fileName}
+                  </div>
+                  <div style={{
+                    marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9,
+                    color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4,
+                    letterSpacing: "0.04em", overflowWrap: "anywhere",
+                  }}>
+                    {r.error || "Upload failed for an unknown reason."}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <Button variant="outline" onClick={onCancel}>← Start Over</Button>
       </div>
     );
