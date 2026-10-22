@@ -39,6 +39,8 @@ import {
 
 export interface RegisterRow {
   id: string;
+  /** The sheet's own project — a soft delete checks it against the active one. */
+  projectId: string | null;
   sheet: string;
   title: string;
   seq: string;
@@ -126,6 +128,13 @@ export interface TransmittalRow {
    * Derived from the items, which is the only place the as-sent revision lives.
    */
   supersedes: TransmittalItem[];
+  /* Raw header fields the editor round-trips. Display reads the fields above. */
+  recipientCompany: string;
+  subject: string;
+  notes: string;
+  /** `date_sent` as stored, so an edit that does not touch it does not shift it. */
+  dateSentRaw: string | null;
+  acknowledgedNotes: string;
 }
 
 export interface BoardReportLog<T> {
@@ -380,6 +389,7 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
       const sentOn = parseCalendarDay(pkg?.submitted ?? null);
       return {
         id: r.drawing_id,
+        projectId: r.project_id ?? null,
         sheet: text(r.sheet_number),
         title: text(r.sheet_title, "Untitled sheet"),
         seq: text(r.discipline, "—"),
@@ -540,6 +550,11 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         sheetCount: itemsKnown ? contents.length : null,
         contents,
         supersedes: supersededByTransmittal.get(id) ?? [],
+        recipientCompany: text(t.recipient_company, ""),
+        subject: text(t.subject, ""),
+        notes: text(t.notes, ""),
+        dateSentRaw: (t.date_sent as string | null) ?? null,
+        acknowledgedNotes: text(t.acknowledged_notes, ""),
       };
     });
 

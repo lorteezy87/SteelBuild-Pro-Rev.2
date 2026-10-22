@@ -113,6 +113,19 @@ const DuplicateWarning = ({ matches }) => {
   );
 };
 
+/**
+ * Create or edit one RFI. Pass `rfi` to edit; omit it (or pass null) to create.
+ *
+ * @param {{
+ *   projectId?: string | null,
+ *   onClose: () => void,
+ *   onSave?: (payload: Record<string, unknown>, pdfFiles: File[]) => unknown,
+ *   saving?: boolean,
+ *   rfi?: Record<string, any> | null,
+ *   initialDrawingReference?: string,
+ *   prefill?: Record<string, any> | null,
+ * }} props
+ */
 export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "", prefill = null }) {
   const qc = useQueryClient();
   const trapRef = useFocusTrap(true);

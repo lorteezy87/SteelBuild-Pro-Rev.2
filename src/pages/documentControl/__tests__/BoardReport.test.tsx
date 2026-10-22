@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * The Board Report's two standing guarantees, asserted rather than trusted.
+ * The Board Report's standing guarantees, asserted rather than trusted.
  *
- * 1. READ-ONLY. The page this replaced wrote nothing, so reviewing a document
- *    was never an irreversible act. Every action here is a link out to the
- *    flow that owns the write, or disabled. A future change that wires a save
- *    button straight into this page should fail here first.
+ * 1. WRITES ARE GATED AND CONFIRMED. Create / edit / delete were approved on
+ *    2026-10-22. Every write control follows the project role (a viewer sees
+ *    them disabled, never failing on click), a delete always asks first, and
+ *    selecting a row still writes nothing.
  * 2. NO HARDCODED COMPANY. Every screen in the design comps shows a literal
  *    fabricator name in the masthead; CLAUDE.md records the owner's decision
  *    that no part of this product may name it. The wordmark reads the
@@ -18,6 +18,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
+  role: "pm" as "pm" | "viewer",
   theme: "light" as string,
   orgName: "Harbor Fabrication" as string | null,
   register: [
@@ -135,7 +136,11 @@ vi.mock("@/api/supabaseClient", () => ({
   entities: {
     Submittal: { filter: vi.fn(async () => m.submittals) },
     RFI: { filter: vi.fn(async () => m.rfis) },
-    DrawingTransmittal: { filter: vi.fn(async () => m.transmittals) },
+    DrawingTransmittal: {
+      filter: vi.fn(async () => m.transmittals),
+      create: vi.fn(async (row: Record<string, unknown>) => ({ id: "t-new", status: "sent", ...row })),
+      update: vi.fn(async (id: string, patch: Record<string, unknown>) => ({ id, ...patch })),
+    },
     DrawingTransmittalItem: {
       filter: vi.fn(async () => {
         // null stands for a read that does not land, so the pane and the
@@ -145,6 +150,13 @@ vi.mock("@/api/supabaseClient", () => ({
       }),
     },
   },
+}));
+
+vi.mock("@/services/permissions", () => ({
+  usePermissions: () => ({
+    // Mirrors the real floors closely enough for the gate: viewers do nothing.
+    can: () => m.role === "pm",
+  }),
 }));
 
 vi.mock("@/hooks/useDrawingRegister", () => ({
@@ -159,6 +171,7 @@ vi.mock("@/components/shared/OrgContext", () => ({
 }));
 
 import DocumentControl from "../../DocumentControl";
+import { entities } from "@/api/supabaseClient";
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -218,19 +231,113 @@ describe("Document Control Board Report", () => {
     expect(within(row).getByText("HOLD")).toBeInTheDocument();
   });
 
-  it("writes nothing: every pane action is a link out or disabled", async () => {
+  it("disables every write control for a role that may not write, and offers no create", async () => {
+    m.role = "viewer";
+    try {
+      renderPage();
+      for (const tab of ["Register", "Submittals", "RFIs", "Transmittals"]) {
+        await goTo(tab);
+        expect(screen.queryByRole("button", { name: /^\+ New/ })).toBeNull();
+        for (const name of [/^Edit/, /^Delete$/, /acknowledgement/i]) {
+          for (const control of screen.queryAllByRole("button", { name })) {
+            expect(control).toBeDisabled();
+            // It says why instead of silently failing.
+            expect(control).toHaveAttribute("title", expect.stringMatching(/project role cannot/));
+          }
+        }
+      }
+    } finally {
+      m.role = "pm";
+    }
+  });
+
+  it("offers create on each log for a role that may write", async () => {
+    renderPage();
+    for (const [tab, label] of [
+      ["Register", "+ New sheet"],
+      ["Submittals", "+ New submittal"],
+      ["RFIs", "+ New RFI"],
+      ["Transmittals", "+ New transmittal"],
+    ]) {
+      await goTo(tab);
+      expect(screen.getByRole("button", { name: label })).toBeEnabled();
+    }
+  });
+
+  it("asks before deleting, and deletes a transmittal softly so its audit trail survives", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    renderPage();
+    await goTo("Transmittals");
+    await screen.findByRole("button", { name: /Transmittal T-118-064/ });
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    // Nothing is written until the confirmation is accepted.
+    expect(entities.DrawingTransmittal.update).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(entities.DrawingTransmittal.update).toHaveBeenCalledWith("t1", { is_deleted: true }),
+    );
+  });
+
+  it("records who acknowledged a transmittal, and will not record an anonymous one", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    vi.mocked(entities.DrawingTransmittal.update).mockClear();
+    renderPage();
+    await goTo("Transmittals");
+    await screen.findByRole("button", { name: /Transmittal T-118-064/ });
+    fireEvent.click(screen.getByRole("button", { name: "Record acknowledgement" }));
+    const dialog = await screen.findByRole("dialog", { name: /Record acknowledgement/ });
+    const by = within(dialog).getByLabelText("Acknowledged by");
+    // Prefilled from the attention line; cleared, the save is refused.
+    expect(by).toHaveValue("R. Vega");
+    fireEvent.change(by, { target: { value: "  " } });
+    expect(within(dialog).getByRole("button", { name: "Record acknowledgement" })).toBeDisabled();
+    fireEvent.change(by, { target: { value: "M. Ortiz" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Record acknowledgement" }));
+    await waitFor(() =>
+      expect(entities.DrawingTransmittal.update).toHaveBeenCalledWith(
+        "t1",
+        expect.objectContaining({ acknowledged_by_name: "M. Ortiz", acknowledged_at: expect.any(String) }),
+      ),
+    );
+  });
+
+  it("logs a new transmittal as outgoing on the active project", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    renderPage();
+    await goTo("Transmittals");
+    fireEvent.click(screen.getByRole("button", { name: "+ New transmittal" }));
+    const dialog = await screen.findByRole("dialog", { name: "New transmittal" });
+    const save = within(dialog).getByRole("button", { name: "Log transmittal" });
+    expect(save).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Transmittal number"), { target: { value: "T-118-065" } });
+    fireEvent.change(within(dialog).getByLabelText("Recipient company"), { target: { value: "Erection crew 2" } });
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(entities.DrawingTransmittal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transmittal_number: "T-118-065",
+          direction: "outgoing",
+          recipient_company: "Erection crew 2",
+          project_id: "p1",
+        }),
+      ),
+    );
+  });
+
+  it("selecting a row writes nothing", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    vi.mocked(entities.DrawingTransmittal.update).mockClear();
+    vi.mocked(entities.DrawingTransmittal.create).mockClear();
     renderPage();
     for (const tab of ["Register", "Submittals", "RFIs", "Transmittals"]) {
       await goTo(tab);
-      // Buttons that are not tabs, rows or filter chips are pane actions.
-      const actions = screen
-        .getAllByRole("button")
-        .filter((b) => !b.hasAttribute("aria-pressed") && !b.hasAttribute("aria-current") && b.getAttribute("aria-label") === null)
-        .filter((b) => !["Brief", "Register", "Submittals", "RFIs", "Transmittals"].includes(b.textContent ?? ""));
-      for (const action of actions) {
-        expect(action).toBeDisabled();
+      for (const row of screen.getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"))) {
+        fireEvent.click(row);
       }
     }
+    expect(entities.DrawingTransmittal.update).not.toHaveBeenCalled();
+    expect(entities.DrawingTransmittal.create).not.toHaveBeenCalled();
   });
 
   it("keeps the intake desk reachable from the register pane", async () => {
@@ -412,9 +519,10 @@ describe("Document Control Board Report", () => {
   });
 
   /**
-   * The comps label the register's primary button by what the sheet needs
-   * next. It is still a link out — the page writes nothing — but the label is
-   * the design's, and a single generic one threw that away.
+   * The comps label the register's next-step button by what the sheet needs
+   * next. It is a link out to the flow that owns that step (editing the sheet
+   * itself is the pane's Edit button), but the label is the design's, and a
+   * single generic one threw that away.
    */
   it("labels the register's primary action by sheet status", async () => {
     renderPage();
