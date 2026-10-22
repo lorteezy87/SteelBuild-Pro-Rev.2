@@ -344,4 +344,8 @@ const LEDGER = new Set([
   // Applied immediately after its MFA prerequisite. The exact committed blob
   // is retained as statements[1] (sha256 29e8db4bd72c6f036aa8acc8437a73b4ef0defdad83787e6b809e50ba7a76eb6).
   '20261007112918',
+  // Site readiness atomic tick RPC (PR #583). Applied and stamped by hand
+  // 2026-10-22 at the owner's direction; statements[1] is the exact committed
+  // blob (3756 bytes, sha256 fa5d699a8645bee15fd8cf45eb23eb5d13916e20f5990cfc643b9baaf8d23a23).
+  '20261022064000',
 ]);
