@@ -106,8 +106,9 @@ export default function DelayLog() {
         setEditor({ record: null, draft: {
           ...d,
           crew: log.headcount != null ? String(log.headcount) : "",
-          hoursEach: log.delay_hours != null ? String(log.delay_hours) : "",
-          whatHappened: log.delays ?? "",
+          // The daily's delay_hours is not defined as hours per worker, so it
+          // is quoted for the PM to split rather than guessed into Hours each.
+          whatHappened: [log.delays, log.delay_hours != null ? `Daily log recorded ${log.delay_hours} delay hours.` : null].filter(Boolean).join("\n"),
           dailyLogId: log.id,
         } });
       }

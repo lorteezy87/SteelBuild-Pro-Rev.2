@@ -227,6 +227,65 @@ export function cycleReadinessMark(
   return next;
 }
 
+/** The state a click moves an item to, from the state the user saw. */
+export function nextReadinessState(current: ReadinessState | undefined): ReadinessState | null {
+  if (!current) return "done";
+  return current === "done" ? "na" : null;
+}
+
+/** Set one item to an explicit state (null = open) without touching the others. */
+export function setReadinessMark(
+  marks: Record<string, ReadinessMark>,
+  key: string,
+  state: ReadinessState | null,
+  by: string | null,
+  atIso: string,
+): Record<string, ReadinessMark> {
+  if (!READINESS_ITEMS.some((item) => item.key === key)) return marks;
+  const next = { ...marks };
+  if (state) next[key] = { state, by, at: atIso };
+  else delete next[key];
+  return next;
+}
+
+/**
+ * Apply one item change so that concurrent ticks by different users on the
+ * same checklist do not erase each other.
+ *
+ * action_items has no per-item column and this change adds no migration, so
+ * the checklist is one jsonb value. Each attempt re-reads the row from the
+ * server, sets ONLY this item on that fresh copy, writes, then re-reads to
+ * confirm the item stuck. If another user's write landed in between and
+ * dropped it, the item is re-applied on top of theirs.
+ *
+ * Residual window: if another writer completes its whole read-write-verify
+ * cycle between this attempt's read and its write (milliseconds), that
+ * writer's item can still be dropped without either side noticing. Closing it
+ * fully needs a server-side per-item update (an RPC), which is a migration.
+ */
+export async function applyReadinessMark(args: {
+  fetchRow: () => Promise<ActionItemLike | null>;
+  writePatch: (patch: { metadata: Record<string, Json>; status: string }) => Promise<unknown>;
+  key: string;
+  state: ReadinessState | null;
+  by: string | null;
+  atIso: string;
+  maxAttempts?: number;
+}): Promise<ActionItemLike> {
+  const { fetchRow, writePatch, key, state, by, atIso, maxAttempts = 3 } = args;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const row = await fetchRow();
+    if (!row) throw new Error("This checklist no longer exists. Refresh the page.");
+    const checklist = readChecklist(row.metadata);
+    const marks = setReadinessMark(checklist?.marks ?? {}, key, state, by, atIso);
+    await writePatch(readinessUpdatePatch(row, checklist?.sequence || textOrNull(row.title) || "", marks));
+    const after = await fetchRow();
+    const stuck = after ? readChecklist(after.metadata)?.marks[key]?.state ?? null : undefined;
+    if (after && stuck === state) return after;
+  }
+  throw new Error("Another update kept replacing this checklist. Refresh and try again.");
+}
+
 /** The update payload for a checklist change: metadata merged, status reconciled. */
 export function readinessUpdatePatch(
   row: ActionItemLike,

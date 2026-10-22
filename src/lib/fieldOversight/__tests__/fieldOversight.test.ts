@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeCalendar } from "@/lib/schedule/workingCalendar";
 import {
-  READINESS_CATEGORY, READINESS_ITEMS, buildReadinessRequest, cycleReadinessMark, deriveReadiness,
+  READINESS_CATEGORY, READINESS_ITEMS, applyReadinessMark, buildReadinessRequest, cycleReadinessMark, deriveReadiness, readChecklist,
   readinessCreateInput, readinessTone, readinessUpdatePatch, workingDaysToStart,
 } from "../readiness";
 import {
@@ -71,6 +71,20 @@ describe("site readiness", () => {
   it("snaps a weekend start to the next working day", () => {
     // Saturday 10-24 on Mon–Fri mobilizes Monday: one working day out from Friday, not "today".
     expect(workingDaysToStart({ start: "2026-10-24" }, FRI)).toBe(1);
+  });
+
+  it("re-applies an item that a concurrent write dropped", async () => {
+    let server: ActionItemLike = readinessRow({ project_id: "p" });
+    let clobbered = false;
+    const write = (patch: { metadata: unknown; status: string }) => {
+      server = { ...server, ...(patch as Partial<ActionItemLike>) };
+      if (!clobbered) { clobbered = true; server = { ...server, metadata: { site_readiness: { version: 1, sequence: "Seq 2", marks: { pad: { state: "done", by: "B", at: "t" } } } } }; }
+      return Promise.resolve();
+    };
+    const saved = await applyReadinessMark({ fetchRow: async () => ({ ...server }), writePatch: write, key: "anchors", state: "done", by: "A", atIso: "t" });
+    const marks = readChecklist(saved.metadata)?.marks ?? {};
+    expect(marks.anchors?.state).toBe("done");
+    expect(marks.pad?.state).toBe("done");
   });
 
   it("is Complete only when every item is done or N/A", () => {
@@ -234,9 +248,15 @@ describe("daily report coverage", () => {
     expect(missing).toEqual([{ date: FRI, reasons: ["Delivery DEL-7"] }]);
   });
 
+  it("reports hours_worked as the crew's total man-hours, never multiplied by headcount", () => {
+    const text = formatDailyReport({ id: "l", date: FRI, headcount: 6, hours_worked: 48 }, null, null);
+    expect(text).toContain("Manpower: 6 on site · 48 man-hours");
+    expect(text).not.toContain("288");
+  });
+
   it("formats a daily without inventing zeros", () => {
     const text = formatDailyReport({ id: "l", date: FRI, headcount: 6, activities: "Set 14 columns" }, { name: "Madison" }, "Example Erectors");
-    expect(text).toContain("Manpower: 6\n");
+    expect(text).toContain("Manpower: 6 on site\n");
     expect(text).not.toContain("man-hours");
     expect(text).not.toContain("Delay hours");
     expect(text).toContain("Work performed:\nSet 14 columns");

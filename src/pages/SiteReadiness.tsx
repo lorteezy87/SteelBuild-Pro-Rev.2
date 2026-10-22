@@ -29,8 +29,8 @@ import { OperationalSummary, PageHeader, Pill, useCommandSkin } from "@/componen
 import { CopyTextModal } from "@/components/fieldOversight/CopyTextModal";
 import { useFieldOversightSources, FIELD_OVERSIGHT_KEYS } from "@/hooks/useFieldOversightSources";
 import {
-  READINESS_ITEMS, buildReadinessRequest, cycleReadinessMark, defaultMobilizationDate, readChecklist,
-  isErectionTask, readinessCreateInput, readinessEditInput, readinessTone, readinessUpdatePatch,
+  READINESS_ITEMS, applyReadinessMark, buildReadinessRequest, defaultMobilizationDate, nextReadinessState, readChecklist,
+  isErectionTask, readinessCreateInput, readinessEditInput, readinessTone,
   workingDaysToStart,
 } from "@/lib/fieldOversight";
 import type { ActionItemLike, ProjectLike, ReadinessDraft, ReadinessRecord, ReadinessTone } from "@/lib/fieldOversight";
@@ -112,13 +112,21 @@ export default function SiteReadiness() {
     (qc.getQueryData<ActionItemLike[]>([...FIELD_OVERSIGHT_KEYS.readiness(projectId)]) ?? []).find((row) => row.id === id);
   const toggleMut = useMutation({
     mutationFn: async ({ record, key }: { record: ReadinessRecord; key: string }) => {
-      const row = latestRow(record.id) ?? record.raw;
-      if (row.project_id !== projectId) throw new Error("This checklist belongs to another project.");
-      const current = readChecklist(row.metadata)?.marks ?? record.marks;
-      const marks = cycleReadinessMark(current, key, by, new Date().toISOString());
-      const saved = await entities.ActionItem.update(record.id, readinessUpdatePatch(row, record.sequence, marks) as never);
+      if (record.raw.project_id !== projectId) throw new Error("This checklist belongs to another project.");
+      // Target state comes from what the user saw; the write re-reads the
+      // server row and sets only this item (see applyReadinessMark).
+      const target = nextReadinessState(record.marks[key]?.state);
+      const saved = await applyReadinessMark({
+        fetchRow: async () => {
+          const row = (await entities.ActionItem.get(record.id)) as unknown as ActionItemLike | null;
+          if (row && row.project_id !== projectId) throw new Error("This checklist belongs to another project.");
+          return row;
+        },
+        writePatch: (patch) => entities.ActionItem.update(record.id, patch as never),
+        key, state: target, by, atIso: new Date().toISOString(),
+      });
       qc.setQueryData<ActionItemLike[]>([...FIELD_OVERSIGHT_KEYS.readiness(projectId)], (rows) =>
-        (rows ?? []).map((r) => (r.id === record.id ? { ...r, ...(saved as ActionItemLike) } : r)));
+        (rows ?? []).map((r) => (r.id === record.id ? { ...r, ...saved } : r)));
       return saved;
     },
     onMutate: ({ record }) => setPending((p) => ({ ...p, [record.id]: true })),
