@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
+import { EFFECTIVE_LIST_CAP } from "@/api/client/entityClient";
 import { groupSubmittalRounds } from "@/hooks/submittals/queries";
 import type { DrawingSet, DrawingSetsById, Submittal, SubmittalRoundRecord } from "./types";
 
@@ -132,6 +133,10 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
   const isLoading = !!projectId && queries.some(query => query.isPending);
   const queryError = queries.find(query => query.isError)?.error ?? null;
   const refetch = () => Promise.all(queries.map(query => query.refetch()));
+  const blockerSourcesStatus = blockerSourcesStatusOf(
+    { pending: allRfisQuery.isPending, error: allRfisQuery.isError, rows: allRfis.length },
+    { pending: allCommentDispositionsQuery.isPending, error: allCommentDispositionsQuery.isError, rows: allCommentDispositions.length },
+  );
 
   const drawingSetsById = useMemo(() => indexDrawingSets(drawingSets), [drawingSets]);
   const roundsBySubmittal = useMemo(() => groupSubmittalRounds(allRounds), [allRounds]);
@@ -150,5 +155,23 @@ export function useSubmittalsPageQueries(projectId: string | undefined) {
     allDrawings,
     allSheetResponses,
     allCommentDispositions,
+    blockerSourcesStatus,
   };
+}
+
+export type BlockerSourcesStatus = "ready" | "loading" | "unavailable" | "incomplete";
+
+/**
+ * RFIs and comment dispositions are capped project-wide reads. A read that
+ * reached the server row ceiling may have dropped the very record that blocks
+ * the selected submittal, so its "Waiting on" list cannot claim to be
+ * complete. Compares against EFFECTIVE_LIST_CAP, the ceiling that actually bites.
+ */
+export function blockerSourcesStatusOf(
+  ...sources: Array<{ pending: boolean; error: boolean; rows: number }>
+): BlockerSourcesStatus {
+  if (sources.some((s) => s.pending)) return "loading";
+  if (sources.some((s) => s.error)) return "unavailable";
+  if (sources.some((s) => s.rows >= EFFECTIVE_LIST_CAP)) return "incomplete";
+  return "ready";
 }
