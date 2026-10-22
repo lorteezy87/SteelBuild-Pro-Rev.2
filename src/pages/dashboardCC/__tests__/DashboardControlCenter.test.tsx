@@ -100,4 +100,10 @@ describe("DashboardControlCenter", () => {
     expect(screen.getByRole("button", { name: /Fabrication & Logistics/i })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /Open command center/i })).not.toBeInTheDocument();
   });
+
+  it("does not offer the job status report when its module is switched off", () => {
+    render(<DashboardControlCenter project={{ id: "p1" }} onNavigate={vi.fn()} canOpenPage={(page) => page !== "JobStatusReport"} />);
+    expect(screen.queryByRole("button", { name: /Open job status report/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Open command center/i })).toBeInTheDocument();
+  });
 });

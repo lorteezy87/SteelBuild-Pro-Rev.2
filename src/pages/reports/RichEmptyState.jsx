@@ -10,10 +10,12 @@
 
 import React from "react";
 import { createPageUrl } from "@/utils";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { mono, body, CARD } from "./constants";
 import { SkeletonBar, SkeletonKPICard, SkeletonTableRow } from "./skeletons";
 
 export default function RichEmptyState({ navigate }) {
+  const { isPageVisible } = useModuleAccess();
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, padding: "60px 20px" }}>
       <div
@@ -74,24 +76,26 @@ export default function RichEmptyState({ navigate }) {
         >
           + Create Project
         </button>
-        <button
-          onClick={() => navigate(createPageUrl("DataExchange"))}
-          style={{
-            background: "transparent",
-            color: "var(--accent)",
-            border: "1px solid var(--accent-border)",
-            borderRadius: "var(--radius-btn)",
-            padding: "10px 20px",
-            ...mono,
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            cursor: "pointer",
-          }}
-        >
-          Import Data
-        </button>
+        {isPageVisible("DataExchange") && (
+          <button
+            onClick={() => navigate(createPageUrl("DataExchange"))}
+            style={{
+              background: "transparent",
+              color: "var(--accent)",
+              border: "1px solid var(--accent-border)",
+              borderRadius: "var(--radius-btn)",
+              padding: "10px 20px",
+              ...mono,
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              cursor: "pointer",
+            }}
+          >
+            Import Data
+          </button>
+        )}
       </div>
 
       <div style={{ width: "100%", maxWidth: 900, opacity: 0.35, marginTop: 16 }}>

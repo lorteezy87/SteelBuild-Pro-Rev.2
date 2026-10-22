@@ -79,6 +79,12 @@ const ROUTE_DOMAINS = {
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
     Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),
     DocumentControl:  r(lazyWithRetry(() => import("@/pages/DocumentControl")),  "Document Control",    { projectScoped: true }),
+    // The PDF intake desk. It used to BE DocumentControl; that route now
+    // serves the Board Report dashboard. Routable but deliberately absent
+    // from moduleRegistry — it is reached from the Drawing Control hub's
+    // "Open intake" action and from the Board Report's Register pane, not
+    // from the sidebar.
+    DocumentIntake:   r(lazyWithRetry(() => import("@/pages/documentControl/DocumentIntakeDesk")), "Document Intake", { projectScoped: true }),
     // Incoming, GC-issued documents. Separate from Drawings on purpose: that
     // register is OUR shop drawings and their submittal workflow.
     GcDocuments:      r(lazyWithRetry(() => import("@/pages/GcDocuments")),      "GC Documents",        { projectScoped: true }),

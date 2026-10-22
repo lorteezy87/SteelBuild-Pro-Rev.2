@@ -2,32 +2,13 @@ import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Bell, CheckCheck, RefreshCw, Loader2, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
+import { resolveAlertPath } from "./alertsCenter/alertPath";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 import { useAlerts } from "@/hooks/useAlerts";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
-
-const PAGE_MAP = {
-  RFI: "RFIs",
-  RFI_Overdue: "RFIs",
-  Drawing: "Drawings",
-  ChangeOrder: "ChangeOrders",
-  Delivery: "Deliveries",
-  WorkPackage: "WorkPackages",
-  ActionItem: "ActionItems",
-};
-
-function resolveAlertPath(alert) {
-  const recordType = alert.record_type || alert.alert_type;
-  const page = PAGE_MAP[recordType];
-  if (!page) return null;
-  const base = createPageUrl(page);
-  if (alert.related_record_id) return `${base}?id=${encodeURIComponent(String(alert.related_record_id))}`;
-  return base;
-}
 
 const SEVERITY_BG = {
   Critical: { bg: "var(--danger-muted)", border: "var(--status-error)" },

@@ -142,15 +142,23 @@ export default function ItemDetailDrawer({ item, onClose }) {
   // else derive one from the item's type + project — the canonical presentation path's
   // ActionItems don't carry quickAction, which is why the button used to be a
   // permanent no-op there. Routes map to the page registry (src/config/routes.js).
+  // Each page reads its own record parameter (useAutoOpenEdit callers): RFIs
+  // and WorkPackages `id`; Submittals, ChangeOrders and Schedule `recordId`.
+  // Without it the button opened the register, not the item.
   const PAGE_FOR_TYPE = {
-    RFI: "RFIs", SUB: "Submittals", DWG: "Drawings", CO: "ChangeOrders",
-    DEL: "Deliveries", WP: "WorkPackages", PAY: "SOV", NOTE: "ProductionNotes", TASK: "ScheduleHub",
+    RFI: ["RFIs", "id"], SUB: ["Submittals", "recordId"], DWG: ["DrawingSubmittalHub", null],
+    CO: ["ChangeOrders", "recordId"], DEL: ["Deliveries", null], WP: ["WorkPackages", "id"],
+    PAY: ["SOV", null], NOTE: ["ProductionNotes", null], TASK: ["ScheduleHub", "recordId"],
   };
   const targetRoute = (() => {
     if (item.quickAction?.route) return item.quickAction.route;
-    const page = PAGE_FOR_TYPE[item.itemType];
+    const [page, param] = PAGE_FOR_TYPE[item.itemType] || [];
     const pid = item.projectId || item.raw?.project_id || item.project_id;
-    return page && pid ? `/${page}?project=${pid}` : null;
+    if (!page || !pid) return null;
+    const qs = new URLSearchParams({ project: pid });
+    const recordId = item.raw?.id;
+    if (param && recordId) qs.set(param, String(recordId));
+    return `/${page}?${qs.toString()}`;
   })();
 
   return (

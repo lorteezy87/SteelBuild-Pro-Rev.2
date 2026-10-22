@@ -40,6 +40,7 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("@/lib/dateMath", () => ({ todayLocalISO: () => "2026-10-06" }));
 vi.mock("@/components/shared/OrgContext", () => ({ useOrg: () => ({ currentOrg: { id: "org-a" } }) }));
 vi.mock("@/lib/AuthContext", () => ({ useAuth: (): { user: null } => ({ user: null }) }));
+vi.mock("@/hooks/useModuleAccess", () => ({ useModuleAccess: () => ({ isPageVisible: (): boolean => true }) }));
 vi.mock("@/hooks/useUserPrefs", () => ({
   useUserPrefs: () => ({ auto_refresh_secs: 0 }),
   refetchIntervalFromPref: () => false,

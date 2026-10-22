@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { presentGeneratedFile } from "@/lib/native/fileExport";
 import {
   isRfiOpen,
@@ -101,6 +102,7 @@ function HealthBadge({ status }) {
 
 export default function ProjectDetails() {
   const navigate = useNavigate();
+  const { isPageVisible } = useModuleAccess();
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("project") || "";
 
@@ -639,7 +641,7 @@ export default function ProjectDetails() {
               initialSort={{ key: "due_date", dir: "asc" }}
               emptyText="No action items on this project."
               minWidth={900}
-              onRowClick={() => navigate(createPageUrl("ActionItems"))}
+              onRowClick={isPageVisible("ActionItems") ? () => navigate(createPageUrl("ActionItems")) : undefined}
             />
           </SectionCard>
         </>
