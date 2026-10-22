@@ -1,6 +1,7 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import React, { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import PhotoUploadModal from "@/components/photos/PhotoUploadModal";
@@ -15,6 +16,12 @@ export default function Photos() {
   const [showUpload, setShowUpload] = useState(false);
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterDate, setFilterDate] = useState("all");
+  // ?date=YYYY-MM-DD (Field Today's "Photos today" link) narrows to photos
+  // taken that calendar day — the same rule as Field Today's count.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dayParam = searchParams.get("date");
+  const filterDay = dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : null;
+  const clearDay = () => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete("date"); return next; }, { replace: true });
 
   // Auto-open the upload modal when QuickAddFAB navigated here with ?new=1.
   useAutoOpenCreate(() => setShowUpload(true));
@@ -47,6 +54,7 @@ export default function Photos() {
 
   // Date filtering logic
   const getFilteredByDate = () => {
+    if (filterDay) return photos.filter((p) => String(p.taken_date || "").slice(0, 10) === filterDay);
     if (filterDate === "all") return photos;
     const now = new Date();
     const ranges = {
@@ -168,13 +176,35 @@ export default function Photos() {
           >
             When:
           </span>
+          {filterDay && (
+            <button
+              type="button"
+              onClick={clearDay}
+              aria-label={`Clear filter: taken ${filterDay}`}
+              style={{
+                background: "var(--accent)",
+                color: "white",
+                border: "none",
+                borderRadius: "var(--radius-btn)",
+                padding: "5px 12px",
+                fontFamily: "var(--font-body)",
+                fontSize: "8px",
+                fontWeight: 700,
+                cursor: "pointer",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Taken {filterDay} ×
+            </button>
+          )}
           {dateRanges.map((range) => (
             <button
               key={range.value}
-              onClick={() => setFilterDate(range.value)}
+              onClick={() => { if (filterDay) clearDay(); setFilterDate(range.value); }}
               style={{
-                background: filterDate === range.value ? "var(--accent)" : "var(--bg-surface-low)",
-                color: filterDate === range.value ? "white" : "var(--text-secondary)",
+                background: !filterDay && filterDate === range.value ? "var(--accent)" : "var(--bg-surface-low)",
+                color: !filterDay && filterDate === range.value ? "white" : "var(--text-secondary)",
                 border: "none",
                 borderRadius: "var(--radius-btn)",
                 padding: "5px 12px",
