@@ -5,7 +5,7 @@
  * Data and mutations are owned by the parent Projects.jsx shell; this
  * component is presentation-only.
  */
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import {
   FolderKanban,
   AlertTriangle,
@@ -13,6 +13,7 @@ import {
   Activity,
   BarChart2,
   Clock,
+  Plus,
   TrendingUp,
 } from "lucide-react";
 import "@/styles/command.css";
@@ -113,6 +114,11 @@ export interface ProjectsControlCenterProps {
   filtered: ProjectRecord[];
 
   onCreate?: (() => void) | null;
+  /** Why creating a project is unavailable, when `onCreate` is null. The shell
+   *  passes the two together so the control is never simply missing: the plan
+   *  limit and a mid-refresh register are different problems and the user can
+   *  only act on the one they can read. */
+  createBlockedReason?: string | null;
   onOpenProject: (p: ProjectRecord) => void;
 }
 
@@ -140,10 +146,11 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
     phaseFilter, onPhaseFilter,
     healthFilter, onHealthFilter,
     filtered,
-    onCreate, onOpenProject,
+    onCreate, createBlockedReason = null, onOpenProject,
   } = props;
 
   useCommandSkin();
+  const blockedId = useId();
 
   const s = useMemo(
     () => buildProjectsSummary(
@@ -316,6 +323,32 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
         ]}
       />
 
+      {/* Starting a project was reachable only from the register's filter bar,
+          below the hero, six KPI tiles and three queues — on an empty
+          workspace, past three "nothing here" panels. The first thing a new
+          workspace needs is the first project, so the action is stated here
+          too. Inline style per this file's existing constraint (no
+          command.css layout edits). */}
+      {onCreate || createBlockedReason ? (
+        <div
+          className="projects-cc__actions"
+          style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0 0" }}
+        >
+          {createBlockedReason ? (
+            <span className="cmd-row__meta" id={blockedId}>{createBlockedReason}</span>
+          ) : null}
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--primary"
+            onClick={onCreate ?? undefined}
+            disabled={!onCreate}
+            aria-describedby={createBlockedReason ? blockedId : undefined}
+          >
+            <Plus size={14} /> New Project
+          </button>
+        </div>
+      ) : null}
+
       <KpiStrip cells={kpiCells} />
 
       <div className="cmd-panels">
@@ -410,6 +443,7 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
         searchPlaceholder="Search projects, clients, GC…"
         onPrimary={onCreate || null}
         primaryLabel="New Project"
+        primaryDisabledReason={createBlockedReason}
         filters={
           <>
             {/* Phase chips */}
@@ -444,7 +478,14 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
         columns={columns}
         rows={filtered}
         onRowClick={onOpenProject}
-        emptyMessage="No projects match your filters."
+        emptyMessage={
+          // An empty workspace is not a filter miss. Telling someone with no
+          // projects that none "match your filters" sends them to clear
+          // filters that were never set, and says nothing about what to do.
+          projects.length === 0
+            ? "No projects in this workspace yet — use New Project to add the first one."
+            : "No projects match your filters."
+        }
       />
     </div>
   );

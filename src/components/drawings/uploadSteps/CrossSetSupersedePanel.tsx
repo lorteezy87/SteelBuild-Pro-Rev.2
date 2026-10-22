@@ -261,7 +261,20 @@ export default function CrossSetSupersedePanel({
       </div>
     );
   }
-  if (status !== "ready" || plan.rows.length === 0) return null;
+  // An empty plan is STATED, not left blank. Rendering nothing made two
+  // different facts look identical: "no other set holds these numbers" and
+  // "matching found nothing to compare" — the latter being what you get when
+  // extraction produced no usable sheet numbers. Silence there is the
+  // "Absence is not evidence" rule in the one place where the absent thing is
+  // a live superseded sheet, so the read is reported either way.
+  if (status === "ready" && plan.rows.length === 0) {
+    return (
+      <p role="status" style={{ ...bodyText, color: "var(--text-muted)", margin: "0 0 14px" }}>
+        Checked the other sets on this project — no sheets in them match these numbers, so nothing will be superseded.
+      </p>
+    );
+  }
+  if (status !== "ready") return null;
 
   const selectable = plan.rows.filter((row) => !row.disabled);
   const checkedRows = plan.rows.filter(isChecked);
