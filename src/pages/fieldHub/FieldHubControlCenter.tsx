@@ -51,6 +51,22 @@ function activateDecisionRow(event: KeyboardEvent<HTMLDivElement>) {
   }
 }
 
+/**
+ * Row props for an openable queue row. With no opener (the register's module
+ * is switched off) the row is plain text: a row that looks clickable and does
+ * nothing is a dead end.
+ */
+function rowOpenProps(open: (() => void) | null) {
+  if (!open) return { className: "cmd-row" };
+  return {
+    className: "cmd-row is-clickable",
+    role: "button" as const,
+    tabIndex: 0,
+    onKeyDown: activateDecisionRow,
+    onClick: open,
+  };
+}
+
 const TYPE_CHIPS = ["All", "Daily Log", "Inspection", "Safety", "Punchlist"];
 const PHASE_CHIPS = ["All", ...FIELD_PHASES];
 
@@ -333,12 +349,8 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
           ) : (
             s.todayQueue.map((item: SiteCoordRow) => (
               <div
-                className="cmd-row is-clickable"
-                role="button"
-                tabIndex={0}
-                onKeyDown={activateDecisionRow}
                 key={item.id}
-                onClick={() => onOpenPunchlist?.(item.id)}
+                {...rowOpenProps(onOpenPunchlist ? () => onOpenPunchlist(item.id) : null)}
               >
                 <div>
                   <div
@@ -379,12 +391,8 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
               const soon = !overdue && insp.daysUntilDue !== null && insp.daysUntilDue <= 2;
               return (
                 <div
-                  className="cmd-row is-clickable"
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={activateDecisionRow}
                   key={insp.id}
-                  onClick={() => onOpenInspection?.(insp.id)}
+                  {...rowOpenProps(onOpenInspection ? () => onOpenInspection(insp.id) : null)}
                 >
                   <div>
                     <div
@@ -421,15 +429,12 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
           ) : (
             s.coordinationQueue.map((item: SiteCoordRow) => (
               <div
-                className="cmd-row is-clickable"
-                role="button"
-                tabIndex={0}
-                onKeyDown={activateDecisionRow}
                 key={item.id}
-                onClick={() => {
-                  if (item.type === "safety") onOpenIncident?.(item.id);
-                  else onOpenPunchlist?.(item.id);
-                }}
+                {...rowOpenProps(
+                  item.type === "safety"
+                    ? onOpenIncident ? () => onOpenIncident(item.id) : null
+                    : onOpenPunchlist ? () => onOpenPunchlist(item.id) : null,
+                )}
               >
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

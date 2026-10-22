@@ -20,6 +20,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { usePermissions } from "@/services/permissions";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import FieldHubControlCenter from "./fieldHub/FieldHubControlCenter";
 import WorkflowFetchState from "@/components/shared/WorkflowFetchState";
 
@@ -34,29 +35,36 @@ const PunchlistPage = lazyWithRetry(() => import("@/pages/Punchlist"));
 const QualityControlPage = lazyWithRetry(() => import("@/pages/QualityControl"));
 
 const TABS = [
-  { key: "today", label: "Today", Component: FieldTodayPage },
-  { key: "overview", label: "Overview", Component: FieldOverview },
-  { key: "dailylogs", label: "Daily Logs", Component: DailyLogsPage },
-  { key: "photos", label: "Photos", Component: PhotosPage },
-  { key: "lems", label: "LEMs", Component: LEMsPage },
-  { key: "inspections", label: "Inspections", Component: InspectionsPage },
-  { key: "punchlist", label: "Punchlist", Component: PunchlistPage },
-  { key: "quality", label: "Quality Control", Component: QualityControlPage },
-  { key: "safety", label: "Safety", Component: SafetyPage },
+  { key: "today", page: "FieldToday", label: "Today", Component: FieldTodayPage },
+  { key: "overview", page: "Field", label: "Overview", Component: FieldOverview },
+  { key: "dailylogs", page: "DailyLogs", label: "Daily Logs", Component: DailyLogsPage },
+  { key: "photos", page: "Photos", label: "Photos", Component: PhotosPage },
+  { key: "lems", page: "LEMs", label: "LEMs", Component: LEMsPage },
+  { key: "inspections", page: "Inspections", label: "Inspections", Component: InspectionsPage },
+  { key: "punchlist", page: "Punchlist", label: "Punchlist", Component: PunchlistPage },
+  { key: "quality", page: "QualityControl", label: "Quality Control", Component: QualityControlPage },
+  { key: "safety", page: "Safety", label: "Safety", Component: SafetyPage },
 ];
 
 export default function FieldHub() {
   const [params, setParams] = useSearchParams();
   const projectId = useProjectId();
   const { can } = usePermissions();
+  const { isPageVisible } = useModuleAccess();
 
+  // A tab follows the same module switch as its standalone page: with
+  // module_quality off, /Inspections says "disabled" and so must the hub.
   const visibleTabs = useMemo(
-    () => [{ key: "hub", label: "Command Center", Component: null }, ...TABS],
-    [],
+    () => [
+      { key: "hub", label: "Command Center", Component: null },
+      ...TABS.filter((t) => isPageVisible(t.page)),
+    ],
+    [isPageVisible],
   );
+  const tabOn = (key) => visibleTabs.some((t) => t.key === key);
   const param = params.get("field_tab");
   const activeKey = visibleTabs.some((t) => t.key === param) ? param : "hub";
-  const Active = TABS.find((t) => t.key === activeKey)?.Component ?? null;
+  const Active = visibleTabs.find((t) => t.key === activeKey)?.Component ?? null;
   const hubActive = activeKey === "hub";
 
   // Field Hub aggregate data mirrors the existing register sources and is only
@@ -207,10 +215,10 @@ export default function FieldHub() {
               )
           : null
       }
-      onOpenPunchlist={openRecord("punchlist")}
-      onOpenInspection={openRecord("inspections")}
-      onOpenIncident={openRecord("safety")}
-      onOpenDailyLog={openRecord("dailylogs")}
+      onOpenPunchlist={tabOn("punchlist") ? openRecord("punchlist") : null}
+      onOpenInspection={tabOn("inspections") ? openRecord("inspections") : null}
+      onOpenIncident={tabOn("safety") ? openRecord("safety") : null}
+      onOpenDailyLog={tabOn("dailylogs") ? openRecord("dailylogs") : null}
     />
   );
 
