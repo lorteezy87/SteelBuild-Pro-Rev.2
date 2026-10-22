@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -102,3 +104,55 @@ describe("schedule_tasks soft-delete registration", () => {
     }
   });
 });
+
+describe("tables whose database forbids hard deletes", () => {
+  // Each has no DELETE grant for `authenticated` and a guard trigger that
+  // raises on DELETE. A hard-delete branch can only ever fail for them.
+  const FORBID_HARD_DELETE = [
+    "action_items", "change_requests", "mitigation_actions", "mitigation_logs",
+    "project_closeout", "project_handoff_items", "vendors", "warranties",
+  ] as const;
+
+  beforeEach(() => {
+    updateSpy.mockClear();
+    deleteSpy.mockClear();
+    eqSpy.mockClear();
+  });
+
+  it.each(FORBID_HARD_DELETE)("%s is registered for soft delete", (table) => {
+    expect(SOFT_DELETE_TABLES.has(table)).toBe(true);
+  });
+
+  it.each([
+    ["Vendor", "vendors"],
+    ["Warranty", "warranties"],
+    ["ChangeRequest", "change_requests"],
+    ["ActionItem", "action_items"],
+  ] as const)("%s.delete() archives instead of deleting", async (entity, _table) => {
+    await (entities[entity] as { delete: (id: string) => Promise<unknown> }).delete("row-1");
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect((updateSpy.mock.calls[0]?.[0] as Record<string, unknown>).is_deleted).toBe(true);
+  });
+
+  it("Vendor.list() excludes archived vendors", async () => {
+    await entities.Vendor.list();
+    expect(eqSpy).toHaveBeenCalledWith("is_deleted", false);
+  });
+
+  it("vendors is org-scoped, so it is never embedded through a project FK", () => {
+    // projectScopedSelect would request projects!vendors_project_id_fkey, a
+    // relationship that does not exist, and PostgREST would reject every read.
+    expect(PROJECT_SCOPED_TABLES.has("vendors")).toBe(false);
+  });
+
+  it("every project-scoped table has the project FK its embed names", () => {
+    const types = readFileSync(resolve(__dirname, "../../../types/supabase.ts"), "utf8");
+    const missing = [...PROJECT_SCOPED_TABLES].filter((t) => !types.includes(`foreignKeyName: "${t}_project_id_fkey"`));
+    expect(missing).toEqual([]);
+  });
+
+  it("drawing_transmittals stays out: last-transmittal evidence must see archived headers", () => {
+    expect(SOFT_DELETE_TABLES.has("drawing_transmittals")).toBe(false);
+  });
+});
+
