@@ -12,7 +12,7 @@
  * the lift director and operator put their names on the plan they used.
  */
 import { jsPDF } from "jspdf";
-import { presentGeneratedFile } from "@/lib/native/fileExport";
+import { presentGeneratedFile, type GeneratedFilePresentation } from "@/lib/native/fileExport";
 import {
   pickSummarySections,
   pickWarnings,
@@ -57,6 +57,52 @@ function stamp(d: Date): string {
 }
 
 /**
+ * Characters the built-in PDF font cannot carry, and what to print instead.
+ *
+ * jsPDF draws with Helvetica under WinAnsiEncoding and embeds no Unicode font.
+ * Everything up to U+00FF comes out verbatim, but a single code point above it
+ * makes jsPDF widen the WHOLE string to UTF-16, which the simple Type 1 font
+ * then reads byte by byte: `CG\u2192pick` prints as ` C G! p i c k`. It is the
+ * line that is lost, not just the character — and the em dash alone appears in
+ * every unknown-value placeholder and in every page footer.
+ *
+ * The shared wording in `pickSummaryFormat` keeps its typography for the screen
+ * and the clipboard, which handle it correctly. This is the renderer's own
+ * limitation, so the transliteration lives here, at the one boundary that
+ * writes to the page.
+ */
+const PDF_TRANSLITERATION: ReadonlyArray<readonly [RegExp, string]> = [
+  [/[\u2014\u2013\u2012\u2011]/g, "-"],        // em, en and figure dash; non-breaking hyphen
+  [/[\u2018\u2019\u201B\u2032]/g, "'"],        // curly single quotes, prime
+  [/[\u201C\u201D\u201F\u2033]/g, '"'],        // curly double quotes, double prime
+  [/\u2192/g, "->"],
+  [/\u2190/g, "<-"],
+  [/\u2265/g, ">="],
+  [/\u2264/g, "<="],
+  [/\u2260/g, "!="],
+  [/\u2248/g, "~"],
+  [/\u26A0\uFE0F?/g, "!"],                      // warning sign, with or without the emoji selector
+  [/\u2026/g, "..."],
+  [/[\u2022\u2027]/g, "\u00B7"],                // bullets collapse onto the middle dot, which WinAnsi has
+  [/\u00A0/g, " "],
+  [/[\u200B-\u200D\uFEFF]/g, ""],               // zero-width joiners and the BOM
+];
+
+/**
+ * Make a string safe for the built-in font.
+ *
+ * The final sweep is the part that matters: free text reaches this sheet — job
+ * and crane names, chart references, whatever a detailer typed — so a character
+ * nobody listed has to degrade into one legible glyph instead of destroying the
+ * line it sits on.
+ */
+export function pdfSafe(value: unknown): string {
+  let out = String(value ?? "");
+  for (const [pattern, replacement] of PDF_TRANSLITERATION) out = out.replace(pattern, replacement);
+  return out.replace(/[^\u0000-\u00FF]+/g, "?");
+}
+
+/**
  * Build the PDF. Returns the jsPDF document so a caller can save, share or
  * inspect it; `downloadCranePickPdf` wraps this for the normal case.
  */
@@ -69,6 +115,11 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
   const color = (c: [number, number, number]) => pdf.setTextColor(c[0], c[1], c[2]);
   const fill = (c: [number, number, number]) => pdf.setFillColor(c[0], c[1], c[2]);
   const draw = (c: [number, number, number]) => pdf.setDrawColor(c[0], c[1], c[2]);
+
+  // Every write to the page goes through these three — see pdfSafe above.
+  const text = (value: unknown, x: number, yy: number) => pdf.text(pdfSafe(value), x, yy);
+  const split = (value: unknown, w: number) => pdf.splitTextToSize(pdfSafe(value), w) as string[];
+  const width = (value: unknown) => pdf.getTextWidth(pdfSafe(value));
 
   let y = 0;
 
@@ -87,20 +138,20 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
   pdf.rect(0, 0, PW, 62, "F");
   color(C.white);
   font(17, "bold");
-  pdf.text("PICK SUMMARY", M, 30);
+  text("PICK SUMMARY", M, 30);
   color([170, 186, 198]);
   font(8.5);
-  pdf.text(`Crane Pick Calculator · SteelBuild Pro · captured ${capturedLabel(data)}`, M, 46);
+  text(`Crane Pick Calculator · SteelBuild Pro · captured ${capturedLabel(data)}`, M, 46);
   if (options.projectName) {
     font(9, "bold");
     color(C.white);
     const label = String(options.projectName);
-    pdf.text(label, PW - M - pdf.getTextWidth(label), 30);
+    text(label, PW - M - width(label), 30);
   }
   y = 84;
 
   // ── Disclaimer — leads the page, repeats in the footer ────────────────────
-  const discLines = pdf.splitTextToSize(DISCLAIMER_BODY, PW - M * 2 - 20) as string[];
+  const discLines = split(DISCLAIMER_BODY, PW - M * 2 - 20);
   const discH = 20 + discLines.length * 11;
   fill(C.infoBg);
   draw(C.accent);
@@ -108,10 +159,10 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
   pdf.rect(M, y, PW - M * 2, discH, "FD");
   color(C.accent);
   font(8, "bold");
-  pdf.text(`${DISCLAIMER_HEAD} —`, M + 10, y + 14);
+  text(`${DISCLAIMER_HEAD} —`, M + 10, y + 14);
   color(C.ink);
   font(9);
-  discLines.forEach((line, i) => pdf.text(line, M + 10, y + 27 + i * 11));
+  discLines.forEach((line, i) => text(line, M + 10, y + 27 + i * 11));
   y += discH + 18;
 
   // ── Sections ──────────────────────────────────────────────────────────────
@@ -119,7 +170,7 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
     need(30);
     color(C.muted);
     font(8, "bold");
-    pdf.text(title.toUpperCase(), M, y);
+    text(title.toUpperCase(), M, y);
     draw(C.rule);
     pdf.setLineWidth(0.6);
     pdf.line(M, y + 5, PW - M, y + 5);
@@ -129,7 +180,7 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
   const row = (k: string, v: string, opts: { bold?: boolean; note?: boolean } = {}) => {
     const valueWidth = k ? VAL_W : PW - M * 2 - 12;
     font(opts.bold ? 10.5 : 9.5, opts.bold ? "bold" : "normal");
-    const lines = pdf.splitTextToSize(String(v ?? "—"), valueWidth) as string[];
+    const lines = split(String(v ?? "—"), valueWidth);
     const h = Math.max(14, lines.length * (opts.bold ? 13 : 12) + 2);
     need(h);
 
@@ -137,9 +188,9 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
       // A caveat about the value above it — indented, muted, no label column.
       color(C.muted);
       font(8.5, "normal");
-      const noteLines = pdf.splitTextToSize(String(v ?? ""), PW - M * 2 - 12) as string[];
+      const noteLines = split(String(v ?? ""), PW - M * 2 - 12);
       need(noteLines.length * 10 + 4);
-      noteLines.forEach((line, i) => pdf.text(line, M + 12, y + i * 10));
+      noteLines.forEach((line, i) => text(line, M + 12, y + i * 10));
       y += noteLines.length * 10 + 6;
       return;
     }
@@ -147,12 +198,12 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
     if (k) {
       color(C.muted);
       font(8.5, "normal");
-      const keyLines = pdf.splitTextToSize(k, KEY_W - 8) as string[];
-      keyLines.forEach((line, i) => pdf.text(line, M, y + i * 10));
+      const keyLines = split(k, KEY_W - 8);
+      keyLines.forEach((line, i) => text(line, M, y + i * 10));
     }
     color(C.ink);
     font(opts.bold ? 10.5 : 9.5, opts.bold ? "bold" : "normal");
-    lines.forEach((line, i) => pdf.text(line, VAL_X, y + i * (opts.bold ? 13 : 12)));
+    lines.forEach((line, i) => text(line, VAL_X, y + i * (opts.bold ? 13 : 12)));
     y += h;
   };
 
@@ -169,7 +220,7 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
     for (const w of warnings) {
       const red = w.severity === "red";
       font(9);
-      const lines = pdf.splitTextToSize(String(w.message), PW - M * 2 - 24) as string[];
+      const lines = split(String(w.message), PW - M * 2 - 24);
       const h = lines.length * 11 + 12;
       need(h + 4);
       fill(red ? C.redBg : C.amberBg);
@@ -178,10 +229,10 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
       pdf.rect(M, y - 9, 3, h, "F");
       color(red ? C.red : C.amber);
       font(7.5, "bold");
-      pdf.text(red ? "CRITICAL" : "CAUTION", M + 12, y + 1);
+      text(red ? "CRITICAL" : "CAUTION", M + 12, y + 1);
       color(C.ink);
       font(9);
-      lines.forEach((line, i) => pdf.text(line, M + 62, y + 1 + i * 11));
+      lines.forEach((line, i) => text(line, M + 62, y + 1 + i * 11));
       y += h + 6;
     }
     y += 4;
@@ -198,9 +249,9 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
     pdf.line(x, y + 24, x + colW, y + 24);
     color(C.muted);
     font(7.5, "bold");
-    pdf.text(label.toUpperCase(), x, y + 34);
+    text(label.toUpperCase(), x, y + 34);
     pdf.line(x, y + 52, x + colW, y + 52);
-    pdf.text("DATE", x, y + 62);
+    text("DATE", x, y + 62);
   });
   y += 70;
 
@@ -213,9 +264,9 @@ export function buildCranePickPdf(data: PickSnapshot, options: CranePickPdfOptio
     pdf.line(M, PH - 44, PW - M, PH - 44);
     color(C.muted);
     font(7.5);
-    pdf.text(`${DISCLAIMER_HEAD} — ${DISCLAIMER_BODY}`, M, PH - 32);
+    text(`${DISCLAIMER_HEAD} — ${DISCLAIMER_BODY}`, M, PH - 32);
     const pageLabel = `Page ${p} of ${pages}`;
-    pdf.text(pageLabel, PW - M - pdf.getTextWidth(pageLabel), PH - 32);
+    text(pageLabel, PW - M - width(pageLabel), PH - 32);
   }
 
   return pdf;
@@ -228,13 +279,23 @@ export function cranePickPdfFilename(data: PickSnapshot, options: CranePickPdfOp
   return `Pick-Summary-${job ? `${job}-` : ""}${stamp(when)}.pdf`;
 }
 
-/** Build and hand the PDF to the browser (or the native share sheet). */
-export function downloadCranePickPdf(data: PickSnapshot, options: CranePickPdfOptions = {}): jsPDF {
+/**
+ * Build and hand the PDF to the browser (or the native share sheet), resolving
+ * to what actually happened.
+ *
+ * `presentGeneratedFile` reports `"cancelled"` and `"failed"` by returning them
+ * rather than throwing, so a caller that discards this promise cannot tell a
+ * saved sheet from a refused one — and would claim success for both. Callers
+ * announce the export only on `"downloaded"` or `"shared"`.
+ */
+export async function downloadCranePickPdf(
+  data: PickSnapshot,
+  options: CranePickPdfOptions = {},
+): Promise<GeneratedFilePresentation> {
   const pdf = buildCranePickPdf(data, options);
-  void presentGeneratedFile({
+  return presentGeneratedFile({
     blob: pdf.output("blob") as Blob,
     filename: cranePickPdfFilename(data, options),
     title: "Pick Summary",
   });
-  return pdf;
 }

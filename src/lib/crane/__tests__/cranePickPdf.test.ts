@@ -46,7 +46,7 @@ vi.mock("jspdf", () => {
   return { jsPDF: FakePdf };
 });
 
-import { buildCranePickPdf, downloadCranePickPdf, cranePickPdfFilename } from "../cranePickPdf";
+import { buildCranePickPdf, downloadCranePickPdf, cranePickPdfFilename, pdfSafe } from "../cranePickPdf";
 import { buildSummaryText, pickSummarySections, type PickSnapshot } from "../pickSummaryFormat";
 
 const printed = () => textCalls.join("\n");
@@ -175,7 +175,9 @@ describe("the PDF carries everything the lift plan needs", () => {
 
   it("shows a dash rather than a wrong number when a value is missing", () => {
     buildCranePickPdf({ capturedAt: FULL.capturedAt, numLegs: 2 });
-    expect(printed()).toContain("—");
+    // An ASCII hyphen, not the em dash the screen shows: see pdfSafe.
+    expect(printed()).toContain("-");
+    expect(printed()).not.toContain("\u2014");
   });
 
   it("says so plainly when a snapshot has no capture time", () => {
@@ -208,8 +210,9 @@ describe("the PDF carries everything the lift plan needs", () => {
 });
 
 describe("download", () => {
-  it("hands a PDF blob to the file exporter under a dated name", () => {
-    downloadCranePickPdf(FULL, { now: new Date(2026, 9, 21) });
+  it("hands a PDF blob to the file exporter under a dated name", async () => {
+    presentGeneratedFile.mockResolvedValueOnce("downloaded");
+    await downloadCranePickPdf(FULL, { now: new Date(2026, 9, 21) });
     expect(presentGeneratedFile).toHaveBeenCalledTimes(1);
     const arg = presentGeneratedFile.mock.calls[0][0];
     expect(arg.filename).toBe("Pick-Summary-2026-10-21.pdf");
@@ -222,6 +225,16 @@ describe("download", () => {
     expect(name).toBe("Pick-Summary-AMS_Mesa_Seq_2-2026-01-05.pdf");
     expect(name).not.toMatch(/[/\\:]/);
   });
+
+  // presentGeneratedFile RETURNS "cancelled"/"failed" instead of throwing, so a
+  // caller that ignored the promise would report a sheet it never saved.
+  it.each(["downloaded", "shared", "cancelled", "failed"] as const)(
+    "resolves to the exporter's own outcome (%s)",
+    async (outcome) => {
+      presentGeneratedFile.mockResolvedValueOnce(outcome);
+      await expect(downloadCranePickPdf(FULL)).resolves.toBe(outcome);
+    },
+  );
 });
 
 describe("the PDF, the text export and the screen cannot disagree", () => {
@@ -232,7 +245,9 @@ describe("the PDF, the text export and the screen cannot disagree", () => {
     for (const section of pickSummarySections(FULL)) {
       for (const r of section.rows) {
         if (!r.v || r.v === "—") continue;
-        const head = r.v.split(" (")[0].replace(/\s+/g, " ").trim();
+        // The page cannot carry the shared wording's typography (pdfSafe), so
+        // parity is asserted against the transliteration, not the raw string.
+        const head = pdfSafe(r.v.split(" (")[0]).replace(/\s+/g, " ").trim();
         expect(out, `missing "${head}" from the PDF`).toContain(head);
       }
     }
@@ -253,5 +268,64 @@ describe("the PDF, the text export and the screen cannot disagree", () => {
     buildCranePickPdf(FULL);
     expect(text).toContain("10.975 T");       // 21,950 lb / 2000
     expect(printed()).toContain("10.975 T");
+  });
+});
+
+/**
+ * The built-in PDF font is Helvetica under WinAnsiEncoding with no Unicode face
+ * embedded. Everything up to U+00FF prints verbatim; one code point above it
+ * makes jsPDF widen the WHOLE string to UTF-16, which the simple Type 1 font
+ * then reads byte by byte — so a single arrow destroys the line it sits on,
+ * not just itself. These pin the transliteration and, more importantly, that
+ * nothing above U+00FF can reach the page from any field.
+ */
+describe("nothing unprintable reaches the built-in PDF font", () => {
+  const ABOVE_LATIN1 = /[^\u0000-\u00FF]/;
+
+  it("transliterates the characters the shared wording actually uses", () => {
+    expect(pdfSafe("CG\u2192pick 1")).toBe("CG->pick 1");
+    expect(pdfSafe("\u26a0 RECORDED BEFORE")).toBe("! RECORDED BEFORE");
+    expect(pdfSafe("Load chart \u2014 Main boom")).toBe("Load chart - Main boom");
+    expect(pdfSafe("\u2013")).toBe("-");
+    expect(pdfSafe("don\u2019t \u201cquoted\u201d")).toBe("don't \"quoted\"");
+    expect(pdfSafe("\u2026")).toBe("...");
+    expect(pdfSafe("\u2265 80%")).toBe(">= 80%");
+  });
+
+  it("keeps the characters the font does carry", () => {
+    // Degree and middle dot are load-bearing in the wording and are in WinAnsi.
+    expect(pdfSafe("58.2\u00b0 \u00b7 10.975 T")).toBe("58.2\u00b0 \u00b7 10.975 T");
+  });
+
+  it("degrades an unlisted character instead of losing the line", () => {
+    expect(pdfSafe("Bay \u4e2d\u6587 pick")).toBe("Bay ? pick");
+    expect(pdfSafe("crane \ud83c\udfd7\ufe0f 4100")).not.toMatch(ABOVE_LATIN1);
+  });
+
+  it("treats a missing value as an empty string, not \"undefined\"", () => {
+    expect(pdfSafe(undefined)).toBe("");
+    expect(pdfSafe(null)).toBe("");
+  });
+
+  it("writes nothing above U+00FF for an offset-CG pick with legacy caveats", () => {
+    buildCranePickPdf({
+      ...FULL,
+      numLegs: 4, legsAssumedCarrying: undefined, slingLoad: undefined,
+      cgMode: "offset",
+      offset: { tension1: 9000, tension2: 4500, angle1: 63.4, angle2: 36.9, share1: 0.667, share2: 0.333, H: 8, d1: 4, d2: 8 },
+    });
+    const out = printed();
+    expect(out).not.toMatch(ABOVE_LATIN1);
+    // and the geometry is still legible once transliterated
+    expect(out).toContain("CG->pick 1 4 ft");
+    expect(out).toMatch(/! RECORDED BEFORE THE 4-LEG CORRECTION/);
+  });
+
+  it("writes nothing above U+00FF when the job name and warnings carry it", () => {
+    buildCranePickPdf(
+      { ...FULL, warnings: [{ severity: "red", message: "Boom \u2192 obstruction \u2014 re-check \u2018clearance\u2019" }] },
+      { projectName: "Mesa \u2014 Seq\u00a02 \u4e2d" },
+    );
+    expect(printed()).not.toMatch(ABOVE_LATIN1);
   });
 });

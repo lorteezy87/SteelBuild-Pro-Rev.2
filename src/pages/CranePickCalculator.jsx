@@ -1064,8 +1064,16 @@ function PickSummaryModal({ onClose, data }) {
   const doPdf = async () => {
     try {
       const { downloadCranePickPdf } = await import("@/lib/crane/cranePickPdf");
-      downloadCranePickPdf(data);
-      toast.success("Pick Summary PDF created");
+      // A refused download and a cancelled share sheet come back as values, not
+      // throws, so announcing the sheet before awaiting this would claim one
+      // that was never saved.
+      const outcome = await downloadCranePickPdf(data);
+      if (outcome === "downloaded" || outcome === "shared") {
+        toast.success("Pick Summary PDF created");
+      } else if (outcome === "failed") {
+        toast.error("Could not create the PDF");
+      }
+      // "cancelled" — the user backed out of the share sheet; say nothing.
     } catch {
       toast.error("Could not create the PDF");
     }
