@@ -231,7 +231,11 @@ export async function fetchBaselineMap(
   baselineId: string | null | undefined,
 ): Promise<Record<string, BaselineRow>> {
   if (!baselineId) return {};
-  const rows = (await entities.ScheduleBaselineTask.filter({ baseline_id: baselineId })) as
+  // schedule_baseline_tasks has no created_at, so the entity client's default
+  // sort (created_at) was a PostgREST 400 on every read. Sort on a real column,
+  // and page to completeness: a baseline of a large schedule passes the
+  // 1000-row server cap, and a missing row reads as "no baseline" for its task.
+  const rows = (await entities.ScheduleBaselineTask.filterAll({ baseline_id: baselineId }, "task_id")) as
     | BaselineRow[]
     | null;
   const map: Record<string, BaselineRow> = {};
