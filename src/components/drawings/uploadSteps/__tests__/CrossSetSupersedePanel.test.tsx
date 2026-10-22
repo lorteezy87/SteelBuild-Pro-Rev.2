@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -259,12 +259,19 @@ describe("CrossSetSupersedePanel", () => {
     expect(screen.queryByText(/replaces? (a page|pages)|Compare the drawings/)).toBeNull();
   });
 
-  it("renders nothing when no other set shares these numbers", async () => {
+  // Inverted on purpose. This used to assert the panel rendered NOTHING when
+  // no other set matched, and that silence was the defect: it made "no other
+  // set holds these numbers" indistinguishable from "matching found nothing to
+  // compare" — which is what you get when extraction produced no usable sheet
+  // numbers. The absent thing here is a live superseded sheet, so the read is
+  // now reported either way. The loading line still clears first.
+  it("states that it checked and matched nothing, rather than going blank", async () => {
     repo.fetchCrossSetSource.mockResolvedValue({ sets: SOURCE.sets, drawings: [] });
-    const { container } = mount();
-    expect(screen.getByRole("status")).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    mount();
+    expect(screen.getByRole("status")).toHaveTextContent("Checking other sets for these sheet numbers…");
+    expect(
+      await screen.findByText(/no sheets in them match these numbers, so nothing will be superseded/i),
+    ).toBeInTheDocument();
     expect(repo.fetchCrossSetSource).toHaveBeenCalledWith("p1");
-    expect(container).toBeEmptyDOMElement();
   });
 });
