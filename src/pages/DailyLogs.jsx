@@ -26,6 +26,14 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import { usePermissions } from "@/services/permissions";
 import { localToday } from "@/utils/dates";
 import { createDailyLogDraft } from "@/lib/field/dailyLogDraft";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { todayLocalISO } from "@/lib/dateMath";
+import { formatDailyReport } from "@/lib/fieldOversight";
+import { useFieldOversightSources } from "@/hooks/useFieldOversightSources";
+import { DailyCoverage } from "@/components/fieldOversight/DailyCoverage";
+import { CopyTextModal } from "@/components/fieldOversight/CopyTextModal";
+import { useOrgName } from "@/pages/documentControl/BoardReportShell";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -95,6 +103,12 @@ export default function DailyLogs() {
 
   const qc = useQueryClient();
   const { enqueue: enqueueOutbox, flush: flushOutbox } = useOutbox();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const orgName = useOrgName();
+  const [copyLog, setCopyLog] = useState(null);
+  // Schedule + deliveries decide which past days were field days.
+  const field = useFieldOversightSources(projectId, null, { readiness: false, delays: false, logs: false, weather: false });
 
   useAutoOpenCreate(() => openForm(), { enabled: !!projectId });
 
@@ -293,6 +307,30 @@ export default function DailyLogs() {
     ? projects.find((p) => p.id === projectId)
     : null;
 
+  // Most recent log on this project, for crew/equipment defaults on a back-filled day.
+  const latestLog = useMemo(
+    () => [...logs].filter((l) => l.project_id === projectId).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] || null,
+    [logs, projectId],
+  );
+  const fileForDate = (date) => {
+    if (!projectId) return;
+    if (logs.some((l) => l.project_id === projectId && l.date === date)) {
+      toast.message(`A daily already exists for ${date}.`);
+      return;
+    }
+    openForm({ ...createDailyLogDraft(projectId, latestLog), date });
+  };
+
+  // Command Center's field gate links here with ?new_date=YYYY-MM-DD.
+  const newDate = searchParams.get("new_date");
+  useEffect(() => {
+    if (!newDate || isLoading || !projectId || !can("create", "daily_log")) return;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(newDate)) fileForDate(newDate);
+    searchParams.delete("new_date");
+    setSearchParams(searchParams, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newDate, isLoading, projectId]);
+
   const datePresets = [
     { key: "today", label: "Today" },
     { key: "week", label: "This Week" },
@@ -341,6 +379,16 @@ export default function DailyLogs() {
         <KpiTile compact label="Safety Incidents" value={metrics.safetyIncidents}                 color="var(--status-error)" />
         <KpiTile compact label="Delay Hours"      value={metrics.delayHours}                      color="var(--status-warning)" />
       </div>
+
+      <DailyCoverage
+        ready={!field.isLoading && !field.isError && !isLoading && !isError}
+        tasks={field.tasks}
+        deliveries={field.deliveries}
+        logs={logs}
+        today={todayLocalISO()}
+        calendar={field.calendar}
+        onFile={can("create", "daily_log") ? fileForDate : null}
+      />
 
       {/* Search and Date Range Filters */}
       <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
@@ -407,8 +455,18 @@ export default function DailyLogs() {
           logs={filteredLogs}
           onEdit={can("edit", "daily_log") ? (log) => openForm(log) : null}
           onDelete={can("delete", "daily_log") ? (log) => setDeleteTarget(log) : null}
+          onCopy={(log) => setCopyLog(log)}
+          onLogDelay={can("create", "delay") ? (log) => navigate(`${createPageUrl("DelayLog")}?from_log=${encodeURIComponent(log.id)}`) : null}
         />
       )}
+
+      <CopyTextModal
+        open={!!copyLog}
+        title={`Daily report — ${copyLog?.date ?? ""}`}
+        eyebrow="PASTE INTO YOUR EMAIL OR REPORT"
+        text={copyLog ? formatDailyReport(copyLog, selectedProject, orgName) : ""}
+        onClose={() => setCopyLog(null)}
+      />
 
       {/* Delete Confirmation */}
       <DeleteDialog

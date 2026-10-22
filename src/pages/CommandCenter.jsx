@@ -10,6 +10,10 @@ import EmptyState from "@/components/design-system/EmptyState";
 import CommandBar from "@/components/design-system/CommandBar";
 import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCenter";
 import { loadCommandSource } from "./commandCenter/commandCenterData";
+import { FieldGatePanel } from "@/components/fieldOversight/FieldGatePanel";
+import { useFieldOversightSources } from "@/hooks/useFieldOversightSources";
+import { readNoticeWindow } from "@/hooks/useNoticeWindow";
+import { todayLocalISO } from "@/lib/dateMath";
 
 /**
  * Command Center canonical cockpit.
@@ -101,6 +105,10 @@ export default function CommandCenter() {
     refetchOnWindowFocus: true,
   });
 
+  // Erector field gate: readiness, delay notices, dailies, weather. Loaded
+  // alongside — never blocking — the project briefing below.
+  const field = useFieldOversightSources(projectId, activeProject?.id === projectId ? activeProject : null);
+
   const queries = [rfiQuery, submittalQuery, changeOrderQuery, deliveryQuery, workPackageQuery, scheduleQuery];
   const sourceNames = ["RFIs", "Submittals", "Change orders", "Deliveries", "Work packages", "Schedule tasks"];
   const failedSources = queries.flatMap((query, index) => query.isError ? [sourceNames[index]] : []);
@@ -182,6 +190,27 @@ export default function CommandCenter() {
           onTypeChange={setCcTypeFilter}
           onOpenItem={(item) => setDetailItem(item)}
           onForwardLook={() => setForwardLookOpen(true)}
+          fieldGate={field.isError ? (
+            <div role="alert" className="fo-panel"><div className="fo-panel__body">
+              Field gate unavailable: readiness, delays or daily logs could not be loaded.{" "}
+              <button type="button" className="cmd-btn" onClick={field.refetch}>Retry</button>
+            </div></div>
+          ) : field.isLoading ? (
+            <LoadingSkeleton variant="table" rows={3} />
+          ) : (
+            <FieldGatePanel
+              project={projects[0]}
+              readiness={field.readiness}
+              delays={field.delays}
+              tasks={field.tasks}
+              deliveries={field.deliveries}
+              logs={field.logs}
+              weather={field.weather}
+              calendar={field.calendar}
+              today={todayLocalISO()}
+              noticeWindowDays={readNoticeWindow(projectId)}
+            />
+          )}
         />
         <ItemDetailDrawer item={detailItem?.projectId === projectId ? detailItem : null} onClose={() => setDetailItem(null)} />
         <ForwardLookDrawer
