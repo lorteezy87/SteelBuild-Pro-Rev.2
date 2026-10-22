@@ -35,6 +35,7 @@ import {
   isPastDue,
   formatDay,
   formatShortDay,
+  heldSheetsForRfi,
   humanizeWait,
   impactPill,
   matrixCell,
@@ -273,19 +274,38 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
             badge={<StatusBadge label={badgeLabel(current.status)} style={badgeStyle(current.status, dark)} />}
             title={current.title}
           />
-          <div
-            style={{
-              aspectRatio: "4 / 3",
-              background: S.rowHover,
-              border: `1px dashed ${S.dashed}`,
-              display: "grid",
-              placeItems: "center",
-              font: `400 12px/1 ${mono}`,
-              color: S.textFaint,
-            }}
-          >
-            sheet preview · {current.sheet}
-          </div>
+          {/* The design's 4:3 preview. The real thumbnail when the register
+              carries one, otherwise the placeholder the handoff allows — a
+              missing thumbnail says nothing about the sheet. */}
+          {current.thumbnailUrl ? (
+            <img
+              src={current.thumbnailUrl}
+              alt={`Sheet ${current.sheet}`}
+              loading="lazy"
+              style={{
+                aspectRatio: "4 / 3",
+                width: "100%",
+                objectFit: "cover",
+                background: S.rowHover,
+                border: `1px solid ${S.paneBorder}`,
+                display: "block",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                aspectRatio: "4 / 3",
+                background: S.rowHover,
+                border: `1px dashed ${S.dashed}`,
+                display: "grid",
+                placeItems: "center",
+                font: `400 12px/1 ${mono}`,
+                color: S.textFaint,
+              }}
+            >
+              sheet preview · {current.sheet}
+            </div>
+          )}
           {current.onHold && current.holdReason ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <span style={{ font: `600 13px/1 ${ui}` }}>Holding on</span>
@@ -451,6 +471,59 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
 
 const RFI_COLUMNS = "96px minmax(0,1fr) 64px 92px 60px 48px 84px";
 
+/**
+ * The design's held sheets, as mono chips.
+ *
+ * Three answers, and the third is the one that matters. A sheet list is a
+ * claim about what is blocked, so when the register read did not carry
+ * `linked_rfi_ids` at all this says the linkage is unavailable rather than
+ * printing an empty row that reads as "nothing is held". Those look identical
+ * on screen and mean opposite things to a PM deciding whether steel can run.
+ */
+function HeldSheetChips({
+  rfiNumber,
+  rows,
+  dark,
+}: {
+  rfiNumber: string;
+  rows: RegisterRow[];
+  dark: boolean;
+}) {
+  const S = dark ? DC_DARK : DC_LIGHT;
+  const held = useMemo(() => heldSheetsForRfi(rfiNumber, rows), [rfiNumber, rows]);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span style={{ font: `600 12px/1 ${ui}`, color: S.textMuted }}>Sheets held</span>
+      {!held.known ? (
+        <span style={{ font: `400 12px/1.4 ${ui}`, color: S.textMuted }}>
+          Sheet linkage not available in this register read.
+        </span>
+      ) : held.sheets.length === 0 ? (
+        <span style={{ font: `400 12px/1.4 ${ui}`, color: S.textMuted }}>
+          No sheet names this RFI.
+        </span>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {held.sheets.map((sheet) => (
+            <span
+              key={sheet}
+              style={{
+                font: `500 11px/1 ${mono}`,
+                padding: "4px 6px",
+                background: S.badgeNeutralBg,
+                border: `1px solid ${S.badgeNeutralBorder}`,
+                color: S.badgeNeutralFg,
+              }}
+            >
+              {sheet}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: string }) {
   const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("Open");
@@ -558,6 +631,7 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
               <span style={{ font: `400 13px/1.5 ${ui}`, textWrap: "pretty" }}>{current.proposedSolution}</span>
             </div>
           ) : null}
+          <HeldSheetChips rfiNumber={current.number} rows={data.register.rows} dark={dark} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <PaneButton dark={dark} href="/RFIs">Open RFI</PaneButton>
             <PaneButton dark={dark} variant="secondary">Send reminder</PaneButton>

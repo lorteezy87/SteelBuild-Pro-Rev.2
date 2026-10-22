@@ -12,6 +12,8 @@ import {
   badgeStyle,
   bicSlices,
   daysBetween,
+  heldSheetsForRfi,
+  type SheetLinkage,
   daysOutBar,
   dueDateColor,
   formatDay,
@@ -346,5 +348,56 @@ describe("counts", () => {
   it("takes its parties from the caller and invents none", () => {
     const slices = bicSlices([{ party: "Detailer", count: 1 }]);
     expect(slices.map((s) => s.party)).toEqual(["Detailer"]);
+  });
+});
+
+/**
+ * The sheets an RFI is holding. The third case is the point: an unread column
+ * and a genuinely empty list look identical on screen and mean opposite things
+ * to a PM deciding whether steel can run.
+ */
+describe("held sheets", () => {
+  const rows = [
+    { sheet: "E-203", rfiNumbers: ["RFI #001", "RFI #002"] },
+    { sheet: "4001", rfiNumbers: ["RFI #002"] },
+    { sheet: "S-201", rfiNumbers: [] },
+  ];
+
+  it("matches through the canonical normaliser, not a string compare", () => {
+    // The CSV holds what a detailer typed; the RFI record has its own format.
+    for (const typed of ["RFI #001", "RFI 001", "rfi-001", "  rfi#001 "]) {
+      expect(heldSheetsForRfi(typed, rows)).toEqual({ known: true, sheets: ["E-203"] });
+    }
+  });
+
+  it("returns every sheet that names the RFI", () => {
+    expect(heldSheetsForRfi("RFI #002", rows)).toEqual({ known: true, sheets: ["E-203", "4001"] });
+  });
+
+  it("reports a real empty when the column was read and nothing matched", () => {
+    expect(heldSheetsForRfi("RFI #099", rows)).toEqual({ known: true, sheets: [] });
+  });
+
+  it("reports UNKNOWN, not empty, when no row carried the linkage column", () => {
+    // The state before migration 20261022082000 is applied: the view returns no
+    // `linked_rfi_ids` key at all, so every row maps to null.
+    const unread: SheetLinkage[] = [
+      { sheet: "E-203", rfiNumbers: null },
+      { sheet: "4001", rfiNumbers: null },
+    ];
+    expect(heldSheetsForRfi("RFI #001", unread)).toEqual({ known: false });
+  });
+
+  it("treats a partially linked register as read, since the column is per-view", () => {
+    const mixed: SheetLinkage[] = [
+      { sheet: "E-203", rfiNumbers: ["RFI #001"] },
+      { sheet: "4001", rfiNumbers: null },
+    ];
+    expect(heldSheetsForRfi("RFI #001", mixed)).toEqual({ known: true, sheets: ["E-203"] });
+  });
+
+  it("claims nothing for an RFI with no usable number", () => {
+    expect(heldSheetsForRfi("", rows)).toEqual({ known: false });
+    expect(heldSheetsForRfi("   ", rows)).toEqual({ known: false });
   });
 });

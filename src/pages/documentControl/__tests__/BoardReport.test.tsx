@@ -39,6 +39,8 @@ const m = vi.hoisted(() => ({
       work_package_count: 0,
       last_activity: null as string | null,
       active_hold_id: null as string | null,
+      thumbnail_url: "https://example.test/e203.png" as string | null,
+      linked_rfi_ids: "RFI #041" as string | null,
     },
     {
       drawing_id: "d2",
@@ -59,6 +61,8 @@ const m = vi.hoisted(() => ({
       last_activity: null as string | null,
       active_hold_id: "h1",
       active_hold_reason: "Grid J landing elevation unresolved",
+      thumbnail_url: null as string | null,
+      linked_rfi_ids: "RFI #041, RFI #052" as string | null,
     },
   ],
   submittals: [
@@ -245,6 +249,67 @@ describe("Document Control Board Report", () => {
     } finally {
       m.theme = "light";
     }
+  });
+
+  /**
+   * The two panes that migration 20261022082000 unblocks. Both have to keep an
+   * unread column apart from a real absence.
+   */
+  describe("sheet media and RFI linkage", () => {
+    it("shows the real sheet thumbnail when the register carries one", async () => {
+      renderPage();
+      await goTo("Register");
+      const img = screen.getByRole("img", { name: /Sheet E-203/i });
+      expect(img).toHaveAttribute("src", "https://example.test/e203.png");
+    });
+
+    it("falls back to the placeholder when a sheet has no thumbnail", async () => {
+      const { fireEvent } = await import("@testing-library/react");
+      renderPage();
+      await goTo("Register");
+      fireEvent.click(screen.getByText("Stair ST-1 stringers"));
+      expect(screen.queryByRole("img", { name: /Sheet 4001/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/sheet preview/)).toBeInTheDocument();
+    });
+
+    it("names the sheets an RFI is holding, as chips", async () => {
+      renderPage();
+      await goTo("RFIs");
+      expect(screen.getByText("Sheets held")).toBeInTheDocument();
+      // RFI 041 is named by both fixture sheets' linked_rfi_ids.
+      expect(screen.getByText("E-203")).toBeInTheDocument();
+      expect(screen.getByText("4001")).toBeInTheDocument();
+    });
+
+    it("says the linkage is unavailable rather than printing none when the column is absent", async () => {
+      // The view before 20261022082000: no `linked_rfi_ids` key at all.
+      const original = m.register;
+      m.register = original.map((r) => {
+        const { linked_rfi_ids: _omitted, ...rest } = r;
+        return rest;
+      }) as typeof original;
+      try {
+        renderPage();
+        await goTo("RFIs");
+        expect(screen.getByText(/Sheet linkage not available/i)).toBeInTheDocument();
+        expect(screen.queryByText(/No sheet names this RFI/i)).not.toBeInTheDocument();
+      } finally {
+        m.register = original;
+      }
+    });
+
+    it("reports a real empty when the column was read and no sheet matches", async () => {
+      const original = m.register;
+      m.register = original.map((r) => ({ ...r, linked_rfi_ids: null as string | null })) as typeof original;
+      try {
+        renderPage();
+        await goTo("RFIs");
+        expect(screen.getByText(/No sheet names this RFI/i)).toBeInTheDocument();
+        expect(screen.queryByText(/Sheet linkage not available/i)).not.toBeInTheDocument();
+      } finally {
+        m.register = original;
+      }
+    });
   });
 
   it("asks for a project rather than rendering an empty board", async () => {

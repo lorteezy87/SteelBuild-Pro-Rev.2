@@ -353,6 +353,11 @@
         "version": "20261005100745",
         "lifecycle": "required",
         "evidence": "Prepared in PR #465: PM-authorized retry_revision_comparison RPC. Pending the reviewed backend release and matching ledger stamp; no production application is claimed. Remains required, so the drift gate must report it missing until authorized application is verified."
+      },
+      {
+        "version": "20261022082000",
+        "lifecycle": "required",
+        "evidence": "PENDING PRODUCTION APPLY - 2026-10-22 drawing_register_view projects d.thumbnail_url and d.linked_rfi_ids so the Document Control register pane can show the real sheet preview and the RFI pane can name the sheets an RFI holds. Additive only: both columns are appended after active_hold_placed_at, every existing output column keeps its name, type and position, and security_invoker=true plus the d.is_deleted = false scope are unchanged, so the sibling application that shares this database reads the same shape it reads today. Verified against PostgreSQL 16.15 by installing the 20260908045525 view and replacing it with this one, which Postgres accepts only when no existing column is renamed, retyped, reordered or dropped; a deliberate reorder was rejected with 'cannot drop columns from view'. Lifecycle stays required so the live drift gate keeps reporting it missing until an authorized manual application with a matching ledger payload under this exact version; nothing here suppresses that signal."
       }
     ]
   },

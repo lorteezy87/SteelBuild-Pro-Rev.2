@@ -20,6 +20,9 @@
  */
 
 import { DC_DARK, DC_LIGHT, DC_SIGNAL, type DcSkin } from "./boardReportTheme";
+// THE canonical RFI-number normaliser. See heldSheetsForRfi at the foot of
+// this file for why it is never re-implemented locally.
+import { normNum } from "@/lib/fabReleaseGate";
 
 /** The active skin. Every colour below resolves through this, never through DC_LIGHT directly. */
 export const skinFor = (dark: boolean): DcSkin => (dark ? DC_DARK : DC_LIGHT);
@@ -439,4 +442,49 @@ export function bicSlices(counts: Array<{ party: string; count: number }>, dark 
     share: total ? `${((c.count / total) * 100).toFixed(2)}%` : "0%",
     color: palette[i % palette.length],
   }));
+}
+
+/* ─── held sheets ────────────────────────────────────────────────────────── */
+
+/** A register row, reduced to what the held-sheet lookup needs. */
+export interface SheetLinkage {
+  sheet: string;
+  /** null when the register view does not carry `linked_rfi_ids` at all. */
+  rfiNumbers: string[] | null;
+}
+
+/** What the RFI pane can say about the sheets an RFI is holding. */
+export type HeldSheets =
+  /** The linkage was read: these sheets name this RFI (possibly none). */
+  | { known: true; sheets: string[] }
+  /** The column was not in the read, so nothing is claimed either way. */
+  | { known: false };
+
+/**
+ * The sheets whose `linked_rfi_ids` name this RFI.
+ *
+ * Matching goes through `normNum`, the one canonical normaliser, because the
+ * CSV holds RFI NUMBERS as a detailer typed them ("RFI #001") and the RFI
+ * record holds its own formatting. CLAUDE.md records two shipped bugs from
+ * hand-rolled versions of this compare — one split on whitespace, one kept the
+ * "#" — each of which matched nothing and let a package report "Fab ready"
+ * with an open RFI against it.
+ *
+ * `known: false` when NO row carried the column, which is the state before
+ * migration 20261022082000 is applied. That is deliberately not reported as
+ * "no sheets held": an empty answer and an unread column look identical on
+ * screen and mean opposite things to a PM deciding whether steel can run.
+ */
+export function heldSheetsForRfi(rfiNumber: string, rows: SheetLinkage[]): HeldSheets {
+  const target = normNum(rfiNumber);
+  if (!target) return { known: false };
+  // Absence is per-read, not per-row: the column is either projected for the
+  // whole view or not at all, so one row carrying it means the read saw it.
+  if (!rows.some((r) => r.rfiNumbers !== null)) return { known: false };
+  const sheets: string[] = [];
+  for (const row of rows) {
+    if (!row.rfiNumbers) continue;
+    if (row.rfiNumbers.some((n) => normNum(n) === target)) sheets.push(row.sheet);
+  }
+  return { known: true, sheets };
 }
