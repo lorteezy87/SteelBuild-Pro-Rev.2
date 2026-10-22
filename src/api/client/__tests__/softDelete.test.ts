@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -135,6 +137,18 @@ describe("tables whose database forbids hard deletes", () => {
   it("Vendor.list() excludes archived vendors", async () => {
     await entities.Vendor.list();
     expect(eqSpy).toHaveBeenCalledWith("is_deleted", false);
+  });
+
+  it("vendors is org-scoped, so it is never embedded through a project FK", () => {
+    // projectScopedSelect would request projects!vendors_project_id_fkey, a
+    // relationship that does not exist, and PostgREST would reject every read.
+    expect(PROJECT_SCOPED_TABLES.has("vendors")).toBe(false);
+  });
+
+  it("every project-scoped table has the project FK its embed names", () => {
+    const types = readFileSync(resolve(__dirname, "../../../types/supabase.ts"), "utf8");
+    const missing = [...PROJECT_SCOPED_TABLES].filter((t) => !types.includes(`foreignKeyName: "${t}_project_id_fkey"`));
+    expect(missing).toEqual([]);
   });
 
   it("drawing_transmittals stays out: last-transmittal evidence must see archived headers", () => {
