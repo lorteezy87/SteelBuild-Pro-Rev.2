@@ -21,6 +21,7 @@ vi.mock("@/components/shared/ProjectContext", () => ({
   useProjectContext: () => ({ activeProject: null as null, setActiveProject: vi.fn() }),
 }));
 vi.mock("@/lib/AuthContext", () => ({ useAuth: () => ({ user: null as null }) }));
+vi.mock("@/hooks/useModuleAccess", () => ({ useModuleAccess: () => ({ isPageVisible: (): boolean => true }) }));
 vi.mock("@/hooks/useUserPrefs", () => ({
   useUserPrefs: () => ({ auto_refresh_secs: 0 }),
   refetchIntervalFromPref: () => false,

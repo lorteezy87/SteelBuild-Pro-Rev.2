@@ -87,7 +87,7 @@ vi.mock("@/lib/docControl/pdfPageCount", () => ({
   readPdfPageCount: vi.fn(async () => 1),
 }));
 
-import DocumentControl from "../DocumentControl";
+import DocumentControl from "../documentControl/DocumentIntakeDesk";
 import { entities } from "@/api/supabaseClient";
 import { extractSheetsFromPdf } from "@/lib/pdfSheetExtractor";
 
