@@ -60,6 +60,8 @@ export interface DocumentFilterInput {
   statusTab: string;
   /** null = project root. */
   currentFolderId: string | null;
+  /** "all" skips folder scoping (project-wide quick views). Default "folder". */
+  scope?: "folder" | "all";
   activeFilters?: {
     category?: string[];
     discipline?: string[];
@@ -208,13 +210,15 @@ function matchesSearch(d: DocumentRecord, q: string): boolean {
  * the list when the user is not searching.
  */
 export function filterDocuments(input: DocumentFilterInput): DocumentRecord[] {
-  const { docs, search, category, statusTab, currentFolderId, activeFilters = {} } = input;
+  const { docs, search, category, statusTab, currentFolderId, scope = "folder", activeFilters = {} } = input;
   const q = search.trim().toLowerCase();
   const categoryFilters = activeFilters.category ?? [];
   const disciplineFilters = activeFilters.discipline ?? [];
   const statusFilters = activeFilters.status ?? [];
 
-  let result = q ? docs.filter((d) => matchesSearch(d, q)) : scopeDocsToFolder(docs, currentFolderId);
+  let result = q
+    ? docs.filter((d) => matchesSearch(d, q))
+    : scope === "all" ? [...docs] : scopeDocsToFolder(docs, currentFolderId);
 
   if (category !== "All" || categoryFilters.length > 0) {
     result = result.filter((d) => {

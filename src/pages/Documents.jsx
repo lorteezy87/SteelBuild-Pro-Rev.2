@@ -1,6 +1,9 @@
 /**
  * Documents — Document Management System (DMS) page.
  *
+ * Presentation is a two-pane file browser (folder tree + contents table) in
+ * ./documents/DocumentsControlCenter.tsx.
+ *
  * After the carve-up this shell owns:
  *   1. React-Query fetch + mutations (bulk status + bulk delete).
  *   2. Derived data — normalized documents list, filtered/sorted
@@ -21,23 +24,15 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { presentRemoteFile, presentRemoteFiles } from "@/lib/native/fileExport";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import DocumentCard from "@/components/dms/DocumentCard";
-import DocumentFilters from "@/components/dms/DocumentFilters";
 import DocumentDetailPanel from "@/components/dms/DocumentDetailPanel";
 import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/FolderPicker";
 import { batchProcess } from "@/utils/batchProcess";
-import EmptyStateAction from "@/components/shared/EmptyStateAction";
 import DocumentsControlCenter from "./documents/DocumentsControlCenter";
 import { filterDocuments, planFolderDeletion } from "./documents/documentsControlCenter.derive";
+import { quickViewDocs, restorePatch } from "./documents/documentsBrowser.derive";
 
-import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
-import FolderSection from "./documents/FolderSection";
-import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
-import ListView from "./documents/ListView";
-import EmptyState from "./documents/EmptyState";
 // Lazily loaded: generateTransmittal pulls in jspdf. Keeping the modal out of
 // the static graph means the Documents page does not download the PDF export
 // libs until the user actually generates a transmittal.
@@ -50,31 +45,23 @@ const UploadModal = lazyWithRetry(() => import("@/components/dms/UploadModal"));
 const DocumentEditModal = lazyWithRetry(() => import("@/components/dms/DocumentEditModal"));
 const BulkCreateFoldersModal = lazyWithRetry(() => import("./documents/BulkCreateFoldersModal"));
 
-const SORT_FNS = {
-  "name-asc":   (a, b) => (a.displayName || "").localeCompare(b.displayName || ""),
-  "name-desc":  (a, b) => (b.displayName || "").localeCompare(a.displayName || ""),
-  "date-desc":  (a, b) => new Date(b.uploadedDate || b.created_at || 0) - new Date(a.uploadedDate || a.created_at || 0),
-  "date-asc":   (a, b) => new Date(a.uploadedDate || a.created_at || 0) - new Date(b.uploadedDate || b.created_at || 0),
-  "status":     (a, b) => (a.status || "").localeCompare(b.status || ""),
-  "size-desc":  (a, b) => (Number(b.fileSizeKb) || 0) - (Number(a.fileSizeKb) || 0),
-  "size-asc":   (a, b) => (Number(a.fileSizeKb) || 0) - (Number(b.fileSizeKb) || 0),
-  "doc-num":    (a, b) => (a.documentNumber || "").localeCompare(b.documentNumber || "", undefined, { numeric: true }),
-};
-
 export default function Documents() {
   const { activeProject } = useProjectContext();
   const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode]           = useState("grid");
   const [searchQuery, setSearchQuery]     = useState("");
   const [activeFilters, setActiveFilters] = useState({});
-  const [statusTab, setStatusTab]         = useState("all");
   const [selectedDoc, setSelectedDoc]     = useState(null);
   const [uploadOpen, setUploadOpen]       = useState(false);
   const [editingDoc, setEditingDoc]       = useState(null);
   const [selectedIds, setSelectedIds]     = useState(new Set());
-  const [sortKey, setSortKey]             = useState("date-desc");
   const [isDragOver, setIsDragOver]       = useState(false);
+  // Which list the browser shows: the open folder, or a project-wide quick
+  // view. Owned here so selection, export and filters act on the same rows
+  // the table displays.
+  const [docView, setDocView]             = useState("folder");
+  // The recycle bin is only read once the user opens it.
+  const recycleOpen = docView === "recycle";
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [transmittalOpen, setTransmittalOpen]     = useState(false);
   const [transmittalForm, setTransmittalForm]     = useState({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
@@ -90,14 +77,16 @@ export default function Documents() {
   const dragCounter = useRef(0);
   // Reset folder navigation when the user switches projects so we never
   // accidentally show a folder from a different project.
-  React.useEffect(() => { setCurrentFolderId(null); }, [activeProject?.id]);
+  React.useEffect(() => { setCurrentFolderId(null); setDocView("folder"); }, [activeProject?.id]);
 
   /* ── Data ── */
   const { data: rawDocuments = [], isLoading, isError: docsError, error: docsErrorDetail, refetch: refetchDocs } = useQuery({
     queryKey: ["documents", activeProject?.id],
     queryFn: () =>
       activeProject?.id
-        ? entities.Document.filter({ project_id: activeProject.id })
+        // Complete read: a folder tree built from a capped page would drop
+        // documents past the server row ceiling without saying so.
+        ? entities.Document.filterAll({ project_id: activeProject.id })
         : [],
     enabled: !!activeProject?.id,
   });
@@ -109,9 +98,41 @@ export default function Documents() {
     queryKey: ["document-folders", activeProject?.id],
     queryFn: () =>
       activeProject?.id
-        ? entities.DocumentFolder.filter({ project_id: activeProject.id })
+        ? entities.DocumentFolder.filterAll({ project_id: activeProject.id })
         : [],
     enabled: !!activeProject?.id,
+  });
+
+  /* ── Recycle bin (soft-deleted documents) ── */
+  const {
+    data: rawDeletedDocs = [],
+    isLoading: deletedLoading,
+    isError: deletedIsError,
+    error: deletedErrorDetail,
+  } = useQuery({
+    queryKey: ["documents-deleted", activeProject?.id],
+    // Complete read: a capped page would hide older tombstones with no way
+    // to reach or restore them.
+    queryFn: () =>
+      entities.Document.filterAll({ project_id: activeProject.id, is_deleted: true }, "-deleted_at"),
+    enabled: !!activeProject?.id && recycleOpen,
+  });
+  const deletedDocs = useMemo(() => (rawDeletedDocs || []).map(normalizeDocument), [rawDeletedDocs]);
+
+  const restoreDocMut = useMutation({
+    // A document whose folder has since been deleted would come back inside a
+    // hidden folder and still be invisible, so it returns to the project root.
+    mutationFn: async (doc) => {
+      const { patch, folderGone } = restorePatch(doc, folders);
+      await entities.Document.update(doc.id, patch);
+      return { folderGone };
+    },
+    onSuccess: ({ folderGone }) => {
+      queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
+      queryClient.invalidateQueries({ queryKey: ["documents-deleted", activeProject?.id] });
+      toast.success(folderGone ? "Document restored to the project root (its folder was deleted)" : "Document restored");
+    },
+    onError: (err) => toast.error(toUserErrorMessage(err, "Restore failed")),
   });
 
   const createFolderMut = useMutation({
@@ -323,21 +344,17 @@ export default function Documents() {
     return { created, failed };
   };
 
-  /* ── Filter + sort ── */
-  const categoryFilter = activeFilters.category?.[0] || "All";
+  /* ── Filter (sorting lives in the browser) ── */
+  // `filteredDocs` is exactly what the table shows for the active view.
   const filteredDocs = useMemo(() => {
-    const result = filterDocuments({
-      docs: allDocuments,
-      search: searchQuery,
-      category: categoryFilter,
-      statusTab,
-      currentFolderId,
-      activeFilters,
-    });
-    const fn = SORT_FNS[sortKey];
-    if (fn) result.sort(fn);
-    return result;
-  }, [allDocuments, searchQuery, activeFilters, categoryFilter, statusTab, sortKey, currentFolderId]);
+    if (docView === "recycle") {
+      return filterDocuments({ docs: deletedDocs, search: "", category: "All", statusTab: "all", currentFolderId: null, scope: "all", activeFilters });
+    }
+    if (docView === "recent" || docView === "review") {
+      return filterDocuments({ docs: quickViewDocs(allDocuments, docView), search: "", category: "All", statusTab: "all", currentFolderId: null, scope: "all", activeFilters });
+    }
+    return filterDocuments({ docs: allDocuments, search: searchQuery, category: "All", statusTab: "all", currentFolderId, activeFilters });
+  }, [docView, deletedDocs, allDocuments, searchQuery, activeFilters, currentFolderId]);
 
   React.useEffect(() => {
     const allowedIds = new Set(filteredDocs.map((doc) => doc.id));
@@ -346,11 +363,6 @@ export default function Documents() {
       return next.size === previous.size ? previous : next;
     });
   }, [filteredDocs]);
-
-  const reviewCount = useMemo(
-    () => allDocuments.filter((d) => d.status === "Under Review" || d.status === "Revise & Resubmit").length,
-    [allDocuments]
-  );
 
   /* ── Mutations ── */
   const bulkStatusMut = useMutation({
@@ -403,14 +415,8 @@ export default function Documents() {
 
   /* ── Handlers ── */
   const handleFilterChange    = (key, value) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
-  const handleCategoryChange  = (value) => setActiveFilters((prev) => ({
-    ...prev,
-    category: value === "All" ? [] : [value],
-  }));
-  const handleClearAllFilters = () => { setActiveFilters({}); setSearchQuery(""); setStatusTab("all"); };
-  const handleViewDoc         = (doc) => setSelectedDoc(doc);
+  const handleClearAllFilters = () => { setActiveFilters({}); setSearchQuery(""); };
   const handleEditDoc         = (doc) => setEditingDoc(doc);
-  const handleLinkDoc         = (doc) => setEditingDoc(doc);
 
   const handleDownloadDoc = async (doc) => {
     try {
@@ -516,68 +522,6 @@ export default function Documents() {
     );
   }
 
-    const documentControls = (
-      <Toolbar
-        allDocumentsCount={allDocuments.length}
-        reviewCount={reviewCount}
-        selectedCount={selectedIds.size}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        sortKey={sortKey}
-        onSortChange={setSortKey}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onUploadOpen={() => setUploadOpen(true)}
-        onExportCsv={handleExportCsv}
-        onReviewQueueClick={() => { setStatusTab("Under Review"); setActiveFilters({}); }}
-        onTransmittalOpen={() => setTransmittalOpen(true)}
-        compact
-      />
-    );
-
-    // One row that scrolls sideways on a phone instead of running off the
-    // edge. The divider is an inset shadow, not a border, so the active tab's
-    // underline paints over it inside the scroll box (a -1px overlap onto a
-    // border would be clipped).
-    const statusTabs = (
-      <div style={{ display: "flex", gap: 0, boxShadow: "inset 0 -1px 0 var(--border-default)", marginBottom: 12, flexShrink: 0, overflowX: "auto", overflowY: "hidden" }}>
-        {STATUS_TABS.map((tab) => {
-          const count = tab.key === "all"
-            ? allDocuments.length
-            : allDocuments.filter((d) => d.status === tab.key).length;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setStatusTab(tab.key)}
-              style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
-                background: "transparent",
-                color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
-                border: "none",
-                borderBottom: statusTab === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
-                flexShrink: 0,
-                fontFamily: "var(--font-mono)", fontSize: 9,
-                fontWeight: statusTab === tab.key ? 700 : 500,
-                letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {tab.label}
-              {count > 0 && <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: statusTab === tab.key ? "var(--accent-muted)" : "var(--bg-surface-high)", color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)" }}>{count}</span>}
-            </button>
-          );
-        })}
-      </div>
-    );
-
-    const advancedFilters = (
-      <DocumentFilters
-        onFilterChange={handleFilterChange}
-        activeFilters={activeFilters}
-        onClearAll={handleClearAllFilters}
-      />
-    );
-
     const batchActions = (
       <BatchActionBar
         selectedCount={selectedIds.size}
@@ -596,95 +540,6 @@ export default function Documents() {
       />
     );
 
-    const documentContent = (
-      <>
-        {isLoading ? (
-          <div style={{ padding: 16 }}>
-            <LoadingSkeleton variant="table" rows={6} />
-          </div>
-        ) : docsError ? (
-          // A failed fetch must not render the "upload your first document"
-          // empty state over a register that may hold real documents.
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 12 }}>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-              Couldn’t load documents
-            </p>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-              {toUserErrorMessage(docsErrorDetail, "Something went wrong. Try again.")}
-            </p>
-            <button type="button" onClick={() => refetchDocs()} style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
-              Retry
-            </button>
-          </div>
-        ) : allDocuments.length === 0 ? (
-          <EmptyState onUploadOpen={() => setUploadOpen(true)} />
-        ) : filteredDocs.length === 0 ? (
-          <EmptyStateAction
-            icon="⊘"
-            message={
-              statusTab !== "all"
-                ? `No documents with status "${statusTab}" in this ${currentFolderId ? "folder" : "view"}`
-                : searchQuery.trim()
-                  ? `No documents matching "${searchQuery.trim()}"`
-                  : "No documents match the current filters"
-            }
-            actions={[
-              { label: "Clear Filters", onClick: handleClearAllFilters },
-              { label: "+ Upload Document", onClick: () => setUploadOpen(true), secondary: true },
-            ]}
-          />
-        ) : viewMode === "grid" ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, overflowY: "auto" }}>
-            {filteredDocs.map((doc) => (
-              <div key={doc.id} style={{ position: "relative" }}>
-                <div
-                  onClick={(e) => { e.stopPropagation(); toggleSelect(doc.id); }}
-                  style={{
-                    position: "absolute", top: 8, left: 8, zIndex: 10, width: 18, height: 18,
-                    borderRadius: 4,
-                    background: selectedIds.has(doc.id) ? "var(--status-success)" : "color-mix(in srgb, var(--bg-page) 60%, transparent)",
-                    border: selectedIds.has(doc.id) ? "2px solid var(--status-success)" : "2px solid var(--text-muted)",
-                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  {selectedIds.has(doc.id) && <span style={{ color: "var(--on-accent)", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>}
-                </div>
-                <DocumentCard
-                  doc={doc}
-                  onView={handleViewDoc}
-                  onDownload={handleDownloadDoc}
-                  onEdit={handleEditDoc}
-                  onLink={handleLinkDoc}
-                  onMove={(d) => setPickerFor({ kind: "docs", ids: [d.id] })}
-                  onDelete={handleDeleteDoc}
-                />
-              </div>
-            ))}
-          </div>
-        ) : viewMode === "list" ? (
-          <ListView
-            filteredDocs={filteredDocs}
-            selectedIds={selectedIds}
-            sortKey={sortKey}
-            onSortChange={setSortKey}
-            onToggleSelect={toggleSelect}
-            onSelectAll={selectAll}
-            onDeselectAll={deselectAll}
-            onSelectDoc={setSelectedDoc}
-          />
-        ) : (
-          <FolderView
-            filteredDocs={filteredDocs}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
-            onViewDoc={handleViewDoc}
-            onDownloadDoc={handleDownloadDoc}
-            onEditDoc={handleEditDoc}
-            onDeleteDoc={handleDeleteDoc}
-          />
-        )}
-      </>
-    );
     const modals = (
       <>
         {selectedDoc && (
@@ -754,6 +609,8 @@ export default function Documents() {
             setPickerFor(null);
           }}
         />
+        {/* One transmittal modal. It used to be rendered twice (here and
+            again after the page), which stacked two copies when opened. */}
         {transmittalOpen && (
           <Suspense fallback={null}>
             <TransmittalModal
@@ -781,9 +638,6 @@ export default function Documents() {
           filteredDocs={filteredDocs}
           search={searchQuery}
           onSearch={setSearchQuery}
-          categoryFilter={categoryFilter}
-          onCategoryChange={handleCategoryChange}
-          onStatusTabChange={setStatusTab}
           onOpenDoc={setSelectedDoc}
           onExport={handleExportCsv}
           onUpload={() => setUploadOpen(true)}
@@ -806,62 +660,32 @@ export default function Documents() {
           onMoveSelectedDocs={() => setPickerFor({ kind: "docs", ids: [...selectedIds] })}
           onDeleteSelectedDocs={handleConfirmBulkDeleteDocs}
           onClearSelection={deselectAll}
-          documentControls={documentControls}
-          statusTabs={statusTabs}
-          advancedFilters={advancedFilters}
+          onDownloadDoc={handleDownloadDoc}
+          onEditDoc={handleEditDoc}
+          onMoveDoc={(d) => setPickerFor({ kind: "docs", ids: [d.id] })}
+          onDeleteDoc={handleDeleteDoc}
+          onTransmittal={() => setTransmittalOpen(true)}
+          activeFilters={activeFilters}
+          onFilterChange={handleFilterChange}
+          onClearFilters={handleClearAllFilters}
+          isLoading={isLoading}
+          loadError={docsError ? toUserErrorMessage(docsErrorDetail, "Something went wrong. Try again.") : null}
+          onRetry={() => refetchDocs()}
+          deletedDocs={deletedDocs}
+          deletedLoading={recycleOpen && deletedLoading}
+          deletedError={deletedIsError ? toUserErrorMessage(deletedErrorDetail, "Couldn’t read the recycle bin.") : null}
+          view={docView}
+          onViewChange={(v) => { setDocView(v); setSelectedIds(new Set()); }}
+          onOpenRecycleBin={() => setDocView("recycle")}
+          onRestoreDoc={(d) => restoreDocMut.mutate(d)}
           batchActions={batchActions}
-          documentContent={documentContent}
           isDragOver={isDragOver}
           onDragEnter={onDragEnter}
           onDragLeave={onDragLeave}
           onDragOver={onDragOver}
-          onDrop={onDrop}        />
-        {modals}
-        {transmittalOpen && (
-          <Suspense fallback={null}>
-            <TransmittalModal
-              open={transmittalOpen}
-              project={activeProject}
-              selectedDocs={allDocuments.filter((d) => selectedIds.has(d.id))}
-              form={transmittalForm}
-              onFormChange={(key, value) => setTransmittalForm((prev) => ({ ...prev, [key]: value }))}
-              onClose={() => setTransmittalOpen(false)}
-              onGenerated={() => {
-                setTransmittalOpen(false);
-                setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
-                setSelectedIds(new Set());
-              }}
-            />
-          </Suspense>
-        )}      </>
-    );
-
-  }
-
-function FolderView({ filteredDocs, selectedIds, onToggleSelect, onViewDoc, onDownloadDoc, onEditDoc, onDeleteDoc }) {
-  const folders = {};
-  filteredDocs.forEach((doc) => {
-    const cat = doc.category || "Uncategorized";
-    if (!folders[cat]) folders[cat] = [];
-    folders[cat].push(doc);
-  });
-  const folderNames = Object.keys(folders).sort();
-
-  return (
-    <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-      {folderNames.map((folder) => (
-        <FolderSection
-          key={folder}
-          name={folder}
-          docs={folders[folder]}
-          selectedIds={selectedIds}
-          onToggleSelect={onToggleSelect}
-          onViewDoc={onViewDoc}
-          onDownloadDoc={onDownloadDoc}
-          onEditDoc={onEditDoc}
-          onDeleteDoc={onDeleteDoc}
+          onDrop={onDrop}
         />
-      ))}
-    </div>
-  );
-}
+        {modals}
+      </>
+    );
+  }

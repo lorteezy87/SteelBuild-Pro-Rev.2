@@ -36,25 +36,20 @@ vi.mock("@/components/shared/ProjectContext", () => ({
 }));
 vi.mock("@/lib/native/fileExport", () => ({ presentGeneratedFile, presentRemoteFile, presentRemoteFiles }));
 vi.mock("sonner", () => ({ toast }));
-vi.mock("@/components/dms/DocumentCard", () => ({ default: (): null => null }));
-vi.mock("@/components/dms/DocumentFilters", () => ({ default: (): null => null }));
 vi.mock("@/components/dms/DocumentDetailPanel", () => ({ default: (): null => null }));
 vi.mock("@/components/dms/FolderPicker", () => ({
   default: (): null => null,
   collectFolderAndDescendants: vi.fn(),
 }));
-vi.mock("@/pages/documents/Toolbar", () => ({
-  default: ({ onExportCsv }: { onExportCsv: () => void }) => <button onClick={onExportCsv}>Export CSV</button>,
-}));
 vi.mock("@/pages/documents/DocumentsControlCenter", () => ({
-  default: ({ onToggleAll, batchActions, documentControls }: {
+  default: ({ onToggleAll, batchActions, onExport }: {
     onToggleAll: (checked: boolean) => void;
     batchActions: ReactNode;
-    documentControls: ReactNode;
+    onExport: () => void;
   }) => <>
     <button onClick={() => onToggleAll(true)}>Select all documents</button>
     {batchActions}
-    {documentControls}
+    <button onClick={onExport}>Export CSV</button>
   </>,
 }));
 
