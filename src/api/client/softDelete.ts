@@ -54,6 +54,20 @@ export const SOFT_DELETE_TABLES = new Set<string>([
   // tombstones. gc_drawings also drives gc_drawing_sets.sheet_count through
   // trg_gc_drawings_sync_counts, which fires on the is_deleted UPDATE.
   'gc_drawing_sets', 'gc_drawings',
+  // Every one of these carries is_deleted / deleted_at, `authenticated` holds
+  // no DELETE grant on it, and its guard trigger raises 42501 on a hard delete
+  // ("… are never hard-deleted; set is_deleted instead"). Unregistered, the
+  // Delete buttons on Vendors, Warranty, Change Requests, Action Items and
+  // Constraints failed with "permission denied", and rows archived by other
+  // writers (sibling app, RPCs) still fed every list. Verified against
+  // production pg_policies / grants / triggers on 2026-10-21.
+  //
+  // drawing_transmittals is deliberately NOT here: sheetTransmittalEvidence
+  // reads headers by id and must see archived ones to prove which transmittal
+  // is the last (a missing header fails closed), and useTransmittals filters
+  // is_deleted itself.
+  'action_items', 'change_requests', 'mitigation_actions', 'mitigation_logs',
+  'project_closeout', 'project_handoff_items', 'vendors', 'warranties',
 ]);
 
 /**
@@ -85,6 +99,20 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
   // document. Both FKs are named <table>_project_id_fkey, which is what
   // projectScopedSelect() below embeds.
   'gc_drawing_sets', 'gc_drawings',
+  // Every one of these carries is_deleted / deleted_at, `authenticated` holds
+  // no DELETE grant on it, and its guard trigger raises 42501 on a hard delete
+  // ("… are never hard-deleted; set is_deleted instead"). Unregistered, the
+  // Delete buttons on Vendors, Warranty, Change Requests, Action Items and
+  // Constraints failed with "permission denied", and rows archived by other
+  // writers (sibling app, RPCs) still fed every list. Verified against
+  // production pg_policies / grants / triggers on 2026-10-21.
+  //
+  // drawing_transmittals is deliberately NOT here: sheetTransmittalEvidence
+  // reads headers by id and must see archived ones to prove which transmittal
+  // is the last (a missing header fails closed), and useTransmittals filters
+  // is_deleted itself.
+  'action_items', 'change_requests', 'mitigation_actions', 'mitigation_logs',
+  'project_closeout', 'project_handoff_items', 'vendors', 'warranties',
 ]);
 
 /**
