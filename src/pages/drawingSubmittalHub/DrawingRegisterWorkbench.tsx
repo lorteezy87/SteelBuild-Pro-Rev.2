@@ -160,7 +160,7 @@ export default function DrawingRegisterWorkbench({
         onOpenUploadSet={() => state.setUploadSetOpen(true)}
         onOpenRevision={() => { if (canEditDrawing) state.setRevisionOpen(true); }}
         onOpenLogImport={() => state.setLogImportOpen(true)}
-        onOpenIntake={() => navigate("/DocumentControl")}
+        onOpenIntake={() => navigate("/DocumentIntake")}
         onBulkEdit={() => state.setBulkEditOpen(true)}
         onExportTransmittal={() => exportTransmittal(data.filtered, activeProject?.name ?? undefined)}
         onExportPkg={(kind) => state.setExportPkgKind(kind)}
