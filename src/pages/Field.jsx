@@ -313,7 +313,7 @@ export default function Field() {
         ariaLabel="Today's field execution summary"
       />
 
-      <FieldFastCaptureRail actions={fastActions} />
+      <FieldFastCaptureRail actions={fastActions.filter((action) => action.onClick)} />
 
       <TodayExecutionStrip
         todayLog={summary.todayLog}
@@ -335,7 +335,8 @@ export default function Field() {
           recentLogs={summary.recentLogs}
           recentPhotos={summary.recentPhotos}
           totalPhotos={summary.livePhotos.length}
-          actionFeed={summary.actionFeed}
+          // A feed row whose module is switched off would open nothing.
+          actionFeed={summary.actionFeed.filter((item) => actions.canOpenHref(item.href))}
           onOpenTodayLog={actions.openTodayLog}
           onOpenLog={(id) => actions.openHref(`/DailyLogs?id=${id}`)}
           onOpenPhotos={actions.openPhotos}

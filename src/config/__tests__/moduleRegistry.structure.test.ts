@@ -47,4 +47,12 @@ describe("SteelBuild navigation hierarchy", () => {
     expect(detailing?.items.filter((item) => ["DrawingSubmittalHub", "GcDocuments", "DocumentControl"].includes(item.page)))
       .toEqual([{ label: "Drawing Control", icon: "▦", page: "DrawingSubmittalHub" }]);
   });
+
+  it("links every working project-scoped page that used to be URL-only", () => {
+    // These pages render real registers but had no nav entry. Gated ones are
+    // still hidden by the sidebar until their module flag is on.
+    const pages = new Set(sidebarGroups.flatMap((group) => group.items.map((item) => item.page)));
+    ["ContractManagement", "BudgetHours", "FieldPlan", "ChangeRequests", "ProjectCloseout", "Warranty"]
+      .forEach((page) => expect(pages.has(page)).toBe(true));
+  });
 });
