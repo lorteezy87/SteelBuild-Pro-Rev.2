@@ -101,6 +101,7 @@ const m = vi.hoisted(() => ({
       sent_to: "R. Vega",
       purpose: "For erection",
       date_sent: "2026-10-17T14:20:00Z",
+      recipient_email: "r.vega@crew2.example",
       acknowledged_at: null as string | null,
       acknowledged_by_name: null as string | null,
     },
@@ -111,6 +112,7 @@ const m = vi.hoisted(() => ({
       sent_to: "R. Vega",
       purpose: "For erection",
       date_sent: "2026-10-02T14:20:00Z",
+      recipient_email: "r.vega@crew2.example",
       acknowledged_at: "2026-10-02T18:00:00Z" as string | null,
       acknowledged_by_name: "R. Vega" as string | null,
     },
@@ -338,6 +340,74 @@ describe("Document Control Board Report", () => {
       await screen.findByText(/Supersedes 1 earlier revision/);
       // 4001 was sent twice at Rev 0 — a resend, not a recall.
       expect(screen.queryByText("4001 Rev 0")).not.toBeInTheDocument();
+    });
+
+    /**
+     * `drawing_id` and `gc_drawing_id` are separate drawing spaces and the same
+     * sheet number lives in both, so keying this history by the number alone
+     * raised a pull-from-field warning against an unrelated drawing.
+     */
+    it("does not merge a GC drawing with a shop drawing that shares its number", async () => {
+      m.transmittalItems = [
+        { id: "g1", transmittal_id: "t0", gc_drawing_id: "gc-501", number_at_send: "A-501", revision_at_send: "0", title_at_send: "GC architectural plan", sort_order: 1 },
+        { id: "s1", transmittal_id: "t1", drawing_id: "shop-501", number_at_send: "A-501", revision_at_send: "2", title_at_send: "Shop detail A-501", sort_order: 1 },
+      ];
+      try {
+        renderPage();
+        await findRows();
+        await screen.findByText("Contents");
+        // Same number, different drawing spaces, different revisions — and
+        // still nothing to pull from the field.
+        expect(screen.queryByText(/Supersedes/)).not.toBeInTheDocument();
+      } finally {
+        m.transmittalItems = ITEMS;
+      }
+    });
+
+    /**
+     * The pane's claim is that THIS recipient still holds the earlier copy, so
+     * a delivery to another company is not evidence about them.
+     */
+    it("does not tell one recipient to pull a revision another company was sent", async () => {
+      const original = m.transmittals;
+      m.transmittals = [
+        { ...original[0], recipient_company: "Steel erectors LLC", sent_to: "P. Nolan", recipient_email: "p.nolan@erectors.example" },
+        { ...original[1] },
+      ];
+      try {
+        renderPage();
+        await findRows();
+        await screen.findByText("Contents");
+        expect(screen.queryByText(/Supersedes/)).not.toBeInTheDocument();
+      } finally {
+        m.transmittals = original;
+      }
+    });
+
+    /**
+     * A capped read can be missing the intervening issuance, which names the
+     * WRONG prior revision — on a pane that is at the same time admitting the
+     * sheet list did not load. Absence is not evidence.
+     */
+    it("claims no supersede at all from a truncated contents read", async () => {
+      // EFFECTIVE_LIST_CAP is mocked at 1000; fill it so the read reads as cut off.
+      const filler = Array.from({ length: 998 }, (_, i) => ({
+        id: `f${i}`,
+        transmittal_id: "t0",
+        number_at_send: `F-${i}`,
+        revision_at_send: "0",
+        title_at_send: `Filler ${i}`,
+        sort_order: i + 10,
+      }));
+      m.transmittalItems = [...(ITEMS ?? []), ...filler];
+      try {
+        renderPage();
+        await findRows();
+        expect(await screen.findByText("Sheet list not loaded.")).toBeInTheDocument();
+        expect(screen.queryByText(/Supersedes/)).not.toBeInTheDocument();
+      } finally {
+        m.transmittalItems = ITEMS;
+      }
     });
   });
 

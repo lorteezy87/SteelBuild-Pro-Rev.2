@@ -251,6 +251,43 @@ function normalizeSheetKey(value: string | null | undefined): string {
     .replace(/[^A-Z0-9]/g, "");
 }
 
+/** A transmittal item plus the identity the supersede derivation keys on. */
+type InternalItem = TransmittalItem & { targetKey: string | null };
+
+/**
+ * Which drawing an item points at, as a key.
+ *
+ * `drawing_id` and `gc_drawing_id` are separate drawing spaces — ours and the
+ * GC's register — and the same sheet number legitimately exists in both, so the
+ * prefix is load-bearing: without it a GC sheet and a shop sheet sharing
+ * "A-501" collapse into one history.
+ *
+ * The as-sent number is the last resort, for a legacy row that carries neither
+ * id. It is the weaker key, which is exactly why it is not the first choice.
+ */
+function itemTargetKey(row: Record<string, unknown>): string | null {
+  if (typeof row.drawing_id === "string" && row.drawing_id) return `drawing:${row.drawing_id}`;
+  if (typeof row.gc_drawing_id === "string" && row.gc_drawing_id) return `gc:${row.gc_drawing_id}`;
+  const number = normalizeSheetKey(row.number_at_send as string | null);
+  return number ? `number:${number}` : null;
+}
+
+/**
+ * Who received a transmittal, as a key.
+ *
+ * Email first because it is the one field that identifies a recipient the same
+ * way twice; company and contact are hand-typed and drift. Null when none of
+ * the three says anything, in which case no recipient-specific claim is made.
+ */
+function recipientKey(row: Record<string, unknown>): string | null {
+  const email = String(row.recipient_email ?? "").trim().toLowerCase();
+  if (email) return `email:${email}`;
+  const company = normalizeSheetKey(row.recipient_company as string | null);
+  if (company) return `company:${company}`;
+  const contact = normalizeSheetKey(row.sent_to as string | null);
+  return contact ? `contact:${contact}` : null;
+}
+
 function hoursSince(iso: string | null | undefined, now: Date): number | null {
   if (!iso) return null;
   const then = Date.parse(iso);
@@ -422,7 +459,7 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
     // room to say "at least". An unknown count is honest; a short one is not.
     const itemsKnown =
       Boolean(projectId) && transmittalItems.isSuccess && itemsRaw.length < EFFECTIVE_LIST_CAP;
-    const itemsByTransmittal = new Map<string, TransmittalItem[]>();
+    const itemsByTransmittal = new Map<string, InternalItem[]>();
     for (const row of itemsRaw) {
       const parent = row.transmittal_id;
       if (typeof parent !== "string") continue;
@@ -432,33 +469,56 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         sheet: text(row.number_at_send),
         rev: text(row.revision_at_send, "—"),
         title: text(row.title_at_send, "Untitled sheet"),
+        targetKey: itemTargetKey(row),
       });
       itemsByTransmittal.set(parent, list);
     }
 
     /**
-     * When each sheet number was last issued before a given transmittal, and at
-     * which revision. Built by walking the transmittals oldest-first so that
-     * "earlier" means earlier in time, not earlier in the array — `xmRaw` is
-     * sorted newest-first by the query.
+     * Which revision of a drawing a given recipient was last sent, so a later
+     * transmittal can say what they are still holding.
+     *
+     * Three things this key has to get right, each of which produced a wrong
+     * field instruction when it was missing:
+     *
+     *  - It is keyed by DRAWING IDENTITY, not by sheet number. `drawing_id` and
+     *    `gc_drawing_id` are separate columns describing separate drawing
+     *    spaces, and a shop drawing and a GC drawing can carry the same sheet
+     *    number. Keyed by the number alone, the two merge and a revision bump
+     *    on one raises a pull-from-field warning against the other.
+     *  - It is scoped to the RECIPIENT. The claim the pane makes is "this
+     *    recipient still holds these", so an earlier delivery to a different
+     *    company is not evidence about this one. Project-wide, company B gets
+     *    told to pull a revision only company A was ever sent.
+     *  - It is only computed from a COMPLETE read (`itemsKnown`). A capped read
+     *    can be missing the intervening issuance, which names the wrong prior
+     *    revision — and would have done so on a pane that was simultaneously
+     *    admitting the sheet list had not loaded.
+     *
+     * Built oldest-first, because "earlier" has to mean earlier in time and
+     * `xmRaw` is sorted newest-first by the query.
      */
-    const issuedBefore = new Map<string, { rev: string; sheet: string; title: string; id: string }>();
     const supersededByTransmittal = new Map<string, TransmittalItem[]>();
-    const oldestFirst = [...xmRaw].reverse();
-    for (const t of oldestFirst) {
-      const id = String(t.id);
-      const recalled: TransmittalItem[] = [];
-      for (const item of itemsByTransmittal.get(id) ?? []) {
-        const key = normalizeSheetKey(item.sheet);
-        if (!key) continue;
-        const prior = issuedBefore.get(key);
-        // A re-issue at the SAME revision supersedes nothing — it is a resend.
-        if (prior && normalizeSheetKey(prior.rev) !== normalizeSheetKey(item.rev)) {
-          recalled.push({ id: prior.id, sheet: prior.sheet, rev: prior.rev, title: prior.title });
+    if (itemsKnown) {
+      const issuedBefore = new Map<string, InternalItem>();
+      for (const t of [...xmRaw].reverse()) {
+        const id = String(t.id);
+        const who = recipientKey(t);
+        const recalled: TransmittalItem[] = [];
+        for (const item of itemsByTransmittal.get(id) ?? []) {
+          // No recipient identity and no drawing identity means there is no
+          // claim to make: silence beats a guess aimed at a crew.
+          if (!who || !item.targetKey) continue;
+          const key = `${who}|${item.targetKey}`;
+          const prior = issuedBefore.get(key);
+          // A re-issue at the SAME revision supersedes nothing — it is a resend.
+          if (prior && normalizeSheetKey(prior.rev) !== normalizeSheetKey(item.rev)) {
+            recalled.push({ id: prior.id, sheet: prior.sheet, rev: prior.rev, title: prior.title });
+          }
+          issuedBefore.set(key, item);
         }
-        issuedBefore.set(key, { rev: item.rev, sheet: item.sheet, title: item.title, id: item.id });
+        if (recalled.length) supersededByTransmittal.set(id, recalled);
       }
-      if (recalled.length) supersededByTransmittal.set(id, recalled);
     }
 
     const transmittalRows: TransmittalRow[] = xmRaw.map((t): TransmittalRow => {
