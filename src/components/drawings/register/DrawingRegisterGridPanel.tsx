@@ -36,6 +36,9 @@ import type { DrawingSet, SetPackage } from "@/pages/drawingSubmittalHub/types";
 import { provisionRegisterRevision, rowsNeedingProvisioning } from "./registerProvision";
 import { TitleblockActionButton } from "./TitleblockActionButton";
 import { SheetContextPanel } from "./SheetContextPanel";
+import SavedViewsControl from "@/components/shared/SavedViewsControl";
+import { viewValue } from "@/lib/savedRegisterViews";
+import type { SavedRegisterView } from "@/lib/savedRegisterViews";
 import {
   buildRegisterDisplayRows,
   createDrawingRegisterIndex,
@@ -585,6 +588,16 @@ export function DrawingRegisterGridPanel({
               <option key={s} value={s}>{s === "all" ? "All statuses" : s.replace(/_/g, " ")}</option>
             ))}
           </select>
+          <SavedViewsControl
+            register="drawing_register"
+            currentFilters={{ query, setFilter, statusFilter, groupBySet }}
+            onApply={(view: SavedRegisterView) => {
+              setQuery(viewValue(view, "query", ""));
+              setSetFilter(viewValue(view, "setFilter", "all", ["all", SET_FILTER_NONE, ...registerIndex.setNames]));
+              setStatusFilter(viewValue(view, "statusFilter", "all", STATUS_FILTERS as readonly string[]));
+              setGroupBySet(view.filters.groupBySet === true);
+            }}
+          />
         </div>
         <div className="cmd-filterbar__actions">
           {canRelease && untrackedRows.length > 0 && (

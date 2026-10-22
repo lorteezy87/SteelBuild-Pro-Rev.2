@@ -11,6 +11,7 @@ vi.mock('@/components/submittals/ResponseMatrix', () => ({ default: (): null => 
 vi.mock('@/components/submittals/SubmittalReviewStrip', () => ({ default: (): null => null }));
 vi.mock('@/components/submittals/ApprovalChainPanel', () => ({ default: (): null => null }));
 vi.mock('@/components/submittals/ApproverNotesPanel', () => ({ default: (): null => null }));
+vi.mock('@/components/shared/WhyWaitingWhoPanel', () => ({ default: (): null => null }));
 vi.mock('@/components/submittals/CommentDispositionChecklist', () => ({ default: (): null => null }));
 vi.mock('@/components/submittals/LinkedEntities', () => ({ LinkedRFIs: (): null => null, LinkedTasks: (): null => null }));
 vi.mock('../LinkedDrawingSets', () => ({ LinkedDrawingSets: (): null => null }));

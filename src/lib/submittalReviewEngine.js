@@ -11,6 +11,8 @@
  *   - PCC signal feed (mapSubmittalsToPCCItems)
  */
 
+import { parseLocalDate } from "./workingDays";
+
 // ── Stage metadata ───────────────────────────────────────────────────────────
 
 export const REVIEW_STAGES = {
@@ -203,11 +205,18 @@ export function runAnalysis(submittal, intake, alignment, rounds = []) {
   const flags = [...alignment.flags]; // Carry forward alignment flags
   const now = Date.now();
 
-  // Check: overdue
-  if (submittal.required_date && !TERMINAL.has(submittal.status)) {
-    const reqDate = new Date(submittal.required_date).getTime();
-    if (reqDate < now) {
-      const daysOver = Math.round((now - reqDate) / DAY_MS);
+  // Check: overdue. required_date is a LOCAL calendar day: `new Date("2026-07-20")`
+  // is UTC midnight — 5 PM the day before in Arizona — which flagged a package
+  // overdue the evening before it was due and reported "0 days past" on the due
+  // day itself. Compare local days: overdue starts the day after the date.
+  const reqDay = submittal.required_date && !TERMINAL.has(submittal.status)
+    ? parseLocalDate(submittal.required_date)
+    : null;
+  if (reqDay) {
+    const todayNoon = new Date(now);
+    todayNoon.setHours(12, 0, 0, 0);
+    const daysOver = Math.round((todayNoon.getTime() - reqDay.getTime()) / DAY_MS);
+    if (daysOver > 0) {
       flags.push({
         type: FLAG_TYPES.OVERDUE,
         detail: `${daysOver} day${daysOver === 1 ? "" : "s"} past required date`,

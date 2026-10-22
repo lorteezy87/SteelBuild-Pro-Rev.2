@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   recordRelease: vi.fn(),
   presentFiles: vi.fn(),
   toastError: vi.fn(),
+  role: { role: "pm", isLoading: false } as { role: string; isLoading: boolean },
 }));
 
 vi.mock("@/lib/supabase", () => ({ supabase: { from: vi.fn(() => {
@@ -33,6 +34,10 @@ vi.mock("@/lib/fabRelease/releaseStatus", () => ({
 }));
 vi.mock("@/lib/native/fileExport", () => ({ presentGeneratedFiles: mocks.presentFiles }));
 vi.mock("sonner", () => ({ toast: { error: mocks.toastError, success: vi.fn() } }));
+vi.mock("@/hooks/useProjectRole", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/hooks/useProjectRole")>();
+  return { ...real, useProjectRole: () => mocks.role };
+});
 
 import ExportFabReleaseModal from "../ExportFabReleaseModal";
 
@@ -69,6 +74,7 @@ const Modal = ExportFabReleaseModal as ComponentType<{
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.role = { role: "pm", isLoading: false };
   mocks.loadApproval.mockResolvedValue(approval);
   mocks.loadRfis.mockResolvedValue([]);
 });
@@ -86,6 +92,26 @@ function show(kind: "fab_release" | "turnover" | "claims" = "fab_release") {
     />,
   );
 }
+
+describe("fab release override authority (UI)", () => {
+  const openRfi = [{ id: "rfi-700", rfi_number: "RFI-700", title: "Beam elevation", status: "Open", is_deleted: false }];
+
+  it("offers the PM override on a blocked package to a PM", async () => {
+    mocks.loadRfis.mockResolvedValue(openRfi);
+    show();
+    await waitFor(() => expect(screen.getByText(/PM override/i)).toBeTruthy());
+    expect(screen.queryByTestId("override-pm-only")).toBeNull();
+  });
+
+  it.each(["field", "viewer"])("withholds the override from a %s and says who can release", async (role) => {
+    mocks.role = { role, isLoading: false };
+    mocks.loadRfis.mockResolvedValue(openRfi);
+    show();
+    await waitFor(() => expect(screen.getByTestId("override-pm-only").textContent).toMatch(/Only a project PM can override/));
+    expect(screen.queryByText(/PM override/i)).toBeNull();
+    expect(mocks.recordRelease).not.toHaveBeenCalled();
+  });
+});
 
 describe("fab and turnover export evidence", () => {
   it.each(["fab_release", "turnover"] as const)("blocks %s when approval evidence fails instead of showing zero matches", async (kind) => {
