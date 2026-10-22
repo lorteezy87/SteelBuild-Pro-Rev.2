@@ -18,7 +18,16 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
-  role: "pm" as "pm" | "viewer",
+  role: "pm" as "pm" | "field" | "viewer",
+  /** The shared transmittal lifecycle RPCs. Each returns the row it acted on. */
+  rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => ({
+    data: {
+      id: (args.p_transmittal_id as string | undefined) ?? "t-new",
+      transmittal_number: "T-007",
+      status: fn === "send_transmittal" ? "sent" : fn === "void_transmittal" ? "void" : "draft",
+    },
+    error: null as { message: string } | null,
+  })),
   theme: "light" as string,
   orgName: "Harbor Fabrication" as string | null,
   register: [
@@ -103,6 +112,7 @@ const m = vi.hoisted(() => ({
       purpose: "For erection",
       date_sent: "2026-10-17T14:20:00Z",
       recipient_email: "r.vega@crew2.example",
+      status: "sent",
       acknowledged_at: null as string | null,
       acknowledged_by_name: null as string | null,
     },
@@ -114,6 +124,7 @@ const m = vi.hoisted(() => ({
       purpose: "For erection",
       date_sent: "2026-10-02T14:20:00Z",
       recipient_email: "r.vega@crew2.example",
+      status: "acknowledged",
       acknowledged_at: "2026-10-02T18:00:00Z" as string | null,
       acknowledged_by_name: "R. Vega" as string | null,
     },
@@ -152,12 +163,18 @@ vi.mock("@/api/supabaseClient", () => ({
   },
 }));
 
-vi.mock("@/services/permissions", () => ({
-  usePermissions: () => ({
-    // Mirrors the real floors closely enough for the gate: viewers do nothing.
-    can: () => m.role === "pm",
-  }),
-}));
+// The REAL role floors, so a test can prove which permission key a control
+// asks for (a field user may edit drawings but not transmittals).
+vi.mock("@/services/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/services/permissions")>("@/services/permissions");
+  return {
+    usePermissions: () => ({
+      can: (action: string, entity?: string) => actual.canPerform(m.role, action, entity ?? null),
+    }),
+  };
+});
+
+vi.mock("@/lib/supabase", () => ({ supabase: { rpc: m.rpc } }));
 
 vi.mock("@/hooks/useDrawingRegister", () => ({
   useDrawingRegister: () => ({ data: m.register, isLoading: false, isError: false }),
@@ -238,7 +255,7 @@ describe("Document Control Board Report", () => {
       for (const tab of ["Register", "Submittals", "RFIs", "Transmittals"]) {
         await goTo(tab);
         expect(screen.queryByRole("button", { name: /^\+ New/ })).toBeNull();
-        for (const name of [/^Edit/, /^Delete$/, /acknowledgement/i]) {
+        for (const name of [/^Edit/, /^Delete$/, /^Void$/, /acknowledgement/i]) {
           for (const control of screen.queryAllByRole("button", { name })) {
             expect(control).toBeDisabled();
             // It says why instead of silently failing.
@@ -264,24 +281,48 @@ describe("Document Control Board Report", () => {
     }
   });
 
-  it("asks before deleting, and deletes a transmittal softly so its audit trail survives", async () => {
+  it("gates transmittals at the PM floor even for a role that may edit drawings", async () => {
+    m.role = "field";
+    try {
+      renderPage();
+      await goTo("Register");
+      // field may edit sheets (drawing:edit floors at field)...
+      expect(screen.getByRole("button", { name: "Edit sheet" })).toBeEnabled();
+      await goTo("Transmittals");
+      await screen.findByRole("button", { name: /Transmittal T-118-064/ });
+      // ...but every transmittal write is PM-gated in the database.
+      expect(screen.queryByRole("button", { name: "+ New transmittal" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Record acknowledgement" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Void" })).toBeDisabled();
+    } finally {
+      m.role = "pm";
+    }
+  });
+
+  it("offers no edit or delete on an issued transmittal, and voids it with a reason", async () => {
     const { fireEvent, waitFor } = await import("@testing-library/react");
+    m.rpc.mockClear();
     renderPage();
     await goTo("Transmittals");
     await screen.findByRole("button", { name: /Transmittal T-118-064/ });
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    // Nothing is written until the confirmation is accepted.
-    expect(entities.DrawingTransmittal.update).not.toHaveBeenCalled();
-    const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    // Issued transmittals are a frozen snapshot.
+    expect(screen.queryByRole("button", { name: /^Edit/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Void" }));
+    const dialog = await screen.findByRole("dialog", { name: /Void transmittal T-118-064/ });
+    const confirm = within(dialog).getByRole("button", { name: "Void transmittal" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Void reason"), { target: { value: "Wrong crew" } });
+    fireEvent.click(confirm);
     await waitFor(() =>
-      expect(entities.DrawingTransmittal.update).toHaveBeenCalledWith("t1", { is_deleted: true }),
+      expect(m.rpc).toHaveBeenCalledWith("void_transmittal", { p_transmittal_id: "t1", p_reason: "Wrong crew" }),
     );
+    expect(entities.DrawingTransmittal.update).not.toHaveBeenCalled();
   });
 
-  it("records who acknowledged a transmittal, and will not record an anonymous one", async () => {
+  it("acknowledges through the lifecycle, named, on the calendar day picked", async () => {
     const { fireEvent, waitFor } = await import("@testing-library/react");
-    vi.mocked(entities.DrawingTransmittal.update).mockClear();
+    m.rpc.mockClear();
     renderPage();
     await goTo("Transmittals");
     await screen.findByRole("button", { name: /Transmittal T-118-064/ });
@@ -293,42 +334,76 @@ describe("Document Control Board Report", () => {
     fireEvent.change(by, { target: { value: "  " } });
     expect(within(dialog).getByRole("button", { name: "Record acknowledgement" })).toBeDisabled();
     fireEvent.change(by, { target: { value: "M. Ortiz" } });
+    fireEvent.change(within(dialog).getByLabelText("Date received"), { target: { value: "2026-10-22" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Record acknowledgement" }));
     await waitFor(() =>
-      expect(entities.DrawingTransmittal.update).toHaveBeenCalledWith(
-        "t1",
-        expect.objectContaining({ acknowledged_by_name: "M. Ortiz", acknowledged_at: expect.any(String) }),
-      ),
+      expect(m.rpc).toHaveBeenCalledWith("acknowledge_transmittal", {
+        p_transmittal_id: "t1",
+        p_by_name: "M. Ortiz",
+        p_notes: null,
+        // UTC noon of the picked day reads back as that day in every zone.
+        p_at: "2026-10-22T12:00:00Z",
+      }),
     );
   });
 
-  it("logs a new transmittal as outgoing on the active project", async () => {
+  it("only acknowledges a transmittal recorded as sent", async () => {
+    const legacy = { ...m.transmittals[0], status: null as unknown as string };
+    const original = m.transmittals[0];
+    m.transmittals[0] = legacy;
+    try {
+      renderPage();
+      await goTo("Transmittals");
+      await screen.findByRole("button", { name: /Transmittal T-118-064/ });
+      const ack = screen.getByRole("button", { name: "Record acknowledgement" });
+      expect(ack).toBeDisabled();
+      expect(ack).toHaveAttribute("title", expect.stringMatching(/recorded as sent/));
+    } finally {
+      m.transmittals[0] = original;
+    }
+  });
+
+  it("issues a new transmittal: sequence-numbered draft, then sent, never a client number", async () => {
     const { fireEvent, waitFor } = await import("@testing-library/react");
-    renderPage();
-    await goTo("Transmittals");
-    fireEvent.click(screen.getByRole("button", { name: "+ New transmittal" }));
-    const dialog = await screen.findByRole("dialog", { name: "New transmittal" });
-    const save = within(dialog).getByRole("button", { name: "Log transmittal" });
-    expect(save).toBeDisabled();
-    fireEvent.change(within(dialog).getByLabelText("Transmittal number"), { target: { value: "T-118-065" } });
-    fireEvent.change(within(dialog).getByLabelText("Recipient company"), { target: { value: "Erection crew 2" } });
-    fireEvent.click(save);
-    await waitFor(() =>
-      expect(entities.DrawingTransmittal.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          transmittal_number: "T-118-065",
+    m.rpc.mockClear();
+    const original = m.register[1].current_revision_id;
+    m.register[1].current_revision_id = "rev-4001-0";
+    try {
+      renderPage();
+      await goTo("Transmittals");
+      fireEvent.click(screen.getByRole("button", { name: "+ New transmittal" }));
+      const dialog = await screen.findByRole("dialog", { name: "New transmittal" });
+      expect(within(dialog).queryByLabelText("Transmittal number")).toBeNull();
+      const issue = within(dialog).getByRole("button", { name: "Issue transmittal" });
+      expect(issue).toBeDisabled();
+      fireEvent.change(within(dialog).getByLabelText("Subject"), { target: { value: "Stair ST-1 for erection" } });
+      fireEvent.change(within(dialog).getByLabelText("Attention"), { target: { value: "R. Vega" } });
+      fireEvent.change(within(dialog).getByLabelText("Date sent"), { target: { value: "2026-10-22" } });
+      // send_transmittal refuses an empty transmittal, so the button waits for a sheet.
+      expect(issue).toBeDisabled();
+      fireEvent.click(within(dialog).getByLabelText("Issue 4001 revision 0"));
+      fireEvent.click(issue);
+      await waitFor(() => expect(m.rpc).toHaveBeenCalledWith("send_transmittal", { p_transmittal_id: "t-new", p_sent_date: "2026-10-22" }));
+      expect(m.rpc).toHaveBeenNthCalledWith(1, "create_transmittal", {
+        p_project_id: "p1",
+        p_payload: expect.objectContaining({
           direction: "outgoing",
-          recipient_company: "Erection crew 2",
-          project_id: "p1",
+          subject: "Stair ST-1 for erection",
+          sent_to: "R. Vega",
+          item_refs: ["shop:d2"],
         }),
-      ),
-    );
+      });
+      expect(entities.DrawingTransmittal.create).not.toHaveBeenCalled();
+    } finally {
+      m.register[1].current_revision_id = original;
+    }
   });
 
   it("selecting a row writes nothing", async () => {
     const { fireEvent } = await import("@testing-library/react");
     vi.mocked(entities.DrawingTransmittal.update).mockClear();
     vi.mocked(entities.DrawingTransmittal.create).mockClear();
+    m.rpc.mockClear();
     renderPage();
     for (const tab of ["Register", "Submittals", "RFIs", "Transmittals"]) {
       await goTo(tab);
@@ -338,6 +413,7 @@ describe("Document Control Board Report", () => {
     }
     expect(entities.DrawingTransmittal.update).not.toHaveBeenCalled();
     expect(entities.DrawingTransmittal.create).not.toHaveBeenCalled();
+    expect(m.rpc).not.toHaveBeenCalled();
   });
 
   it("keeps the intake desk reachable from the register pane", async () => {

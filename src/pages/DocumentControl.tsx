@@ -20,9 +20,12 @@
  * without a single new persistence path: every write is handed to
  * BoardReportEditors, which opens the app's own form for that record and
  * saves through the hook the owning page uses (RFI numbers from the sequence
- * RPC, submittal triggers and audit, soft deletes with undo, transmittal items
- * resolved before the header). Controls follow the project role; RLS remains
- * the authority. Selecting a row still changes the pane and nothing else.
+ * RPC, submittal triggers and audit, sheet soft deletes with undo).
+ * Transmittals move only through the shared lifecycle RPCs: issue (sequence
+ * number, then send), acknowledge, void. An issued transmittal is never
+ * edited or deleted. Controls follow the project role; RLS and the RPCs
+ * remain the authority. Selecting a row still changes the pane and nothing
+ * else.
  *
  * The masthead sentence is derived, not written: it reads the same counts the
  * metrics do, so it can never contradict them.
@@ -91,15 +94,26 @@ export default function DocumentControl() {
   const [editor, setEditor] = useState<EditorIntent | null>(null);
   const closeEditor = useCallback(() => setEditor(null), []);
   const { can } = usePermissions();
-  // Transmittals ride on the drawing permission, as they do in the hub's log.
   const actions = useMemo((): BoardReportActions => {
     const perms = (entity: string) => ({
       create: can("create", entity),
       edit: can("edit", entity),
       delete: can("delete", entity),
     });
+    // Transmittals get their own key, not "drawing": drawing:edit floors at
+    // field, but every transmittal write (RLS and the create / send /
+    // acknowledge / void RPCs) requires PM. The un-overridden "transmittal"
+    // key floors create and edit at PM, matching the database. Void is a
+    // PM-gated RPC too, so it follows edit rather than the admin-only
+    // default for delete.
+    const transmittalEdit = can("edit", "transmittal");
     return {
-      perms: { sheet: perms("drawing"), submittal: perms("submittal"), rfi: perms("rfi"), transmittal: perms("drawing") },
+      perms: {
+        sheet: perms("drawing"),
+        submittal: perms("submittal"),
+        rfi: perms("rfi"),
+        transmittal: { create: can("create", "transmittal"), edit: transmittalEdit, delete: transmittalEdit },
+      },
       open: setEditor,
     };
   }, [can]);

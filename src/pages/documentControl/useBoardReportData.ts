@@ -128,13 +128,12 @@ export interface TransmittalRow {
    * Derived from the items, which is the only place the as-sent revision lives.
    */
   supersedes: TransmittalItem[];
-  /* Raw header fields the editor round-trips. Display reads the fields above. */
-  recipientCompany: string;
-  subject: string;
-  notes: string;
-  /** `date_sent` as stored, so an edit that does not touch it does not shift it. */
-  dateSentRaw: string | null;
-  acknowledgedNotes: string;
+  /**
+   * The lifecycle status, lower-cased: "sent" or "acknowledged", or "" for a
+   * row from before the column existed. Only "sent" can be acknowledged
+   * (acknowledge_transmittal refuses anything else).
+   */
+  status: string;
 }
 
 export interface BoardReportLog<T> {
@@ -550,11 +549,7 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         sheetCount: itemsKnown ? contents.length : null,
         contents,
         supersedes: supersededByTransmittal.get(id) ?? [],
-        recipientCompany: text(t.recipient_company, ""),
-        subject: text(t.subject, ""),
-        notes: text(t.notes, ""),
-        dateSentRaw: (t.date_sent as string | null) ?? null,
-        acknowledgedNotes: text(t.acknowledged_notes, ""),
+        status: String(t.status ?? "").toLowerCase(),
       };
     });
 

@@ -1,24 +1,36 @@
 /**
- * transmittalWrites — the one write path for drawing transmittals.
+ * transmittalWrites — the write paths for drawing transmittals.
  *
- * Two surfaces log and edit transmittals: the hub's TransmittalLogPanel and
- * the Document Control Board Report. Each used to be a candidate for its own
- * inline `entities.DrawingTransmittal.*` calls, which is how two writers drift
- * (CLAUDE.md, "One write path" under Schedule tasks). Both call these instead.
+ * TWO KINDS OF WRITE, AND WHICH IS WHICH MATTERS.
+ * `drawing_transmittals` carries the shared database's lifecycle
+ * (SteelBuild-Pro-2026's m4_1): draft → sent → acknowledged, or → void. Its
+ * PM-gated RPCs own every transition and the snapshot taken at send:
+ * `create_transmittal` (number from the sequence, draft, items),
+ * `send_transmittal` (freezes number/revision/title per item, stamps the
+ * sender), `acknowledge_transmittal` (sent → acknowledged, a name required)
+ * and `void_transmittal` (the only retraction of a sent one, a reason
+ * required). `set_transmittal_items` refuses once sent: items are frozen.
  *
- * Rules these functions hold so callers cannot get them wrong:
- * - Every sheet target is resolved BEFORE the header is written. A target
- *   that cannot name its drawing throws first, so a bad pick never leaves a
- *   header with half its items.
+ * - The lifecycle functions below (`createAndSendTransmittal`,
+ *   `acknowledgeTransmittal`, `voidTransmittal`) call those RPCs and are the
+ *   only way to issue, confirm or withdraw a transmittal. The Board Report
+ *   uses them and nothing else.
+ * - The direct header/item writes (`createTransmittal`, `updateTransmittal`,
+ *   `softDeleteTransmittal`) are the hub log's pre-existing editor, kept
+ *   byte-for-byte in behaviour. A direct insert lands as a draft.
+ *
+ * Rules the direct writes hold:
+ * - Every sheet target is resolved BEFORE the header is written, so a bad
+ *   pick never leaves a header with half its items.
  * - `drawing_transmittal_items_one_target` requires exactly one of
- *   drawing_id / gc_drawing_id, so every item carries drawing_id alongside
- *   drawing_revision_id.
+ *   drawing_id / gc_drawing_id, so every item carries drawing_id.
  * - Delete is SOFT (`is_deleted`), so the audit history survives.
  * - An item with no revision recorded was never offered in a picker, so an
  *   edit never removes it.
  */
 
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { withProjectId } from "@/lib/mutations/standardMutation";
 
 export interface TransmittalTarget {
@@ -130,37 +142,114 @@ export async function softDeleteTransmittal(id: string): Promise<void> {
   await entities.DrawingTransmittal.update(id, { is_deleted: true } as never);
 }
 
+/* ─── lifecycle (RPC) ────────────────────────────────────────────────────── */
+
+type TransmittalRecord = Record<string, unknown> & { id: string; transmittal_number?: string; status?: string };
+
+async function rpc(name: string, args: Record<string, unknown>): Promise<TransmittalRecord> {
+  // The generated Database type lists these functions; the client's rpc
+  // overloads do not narrow well through a dynamic name, hence the cast.
+  const { data, error } = await (supabase.rpc as unknown as (
+    fn: string,
+    params: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
+  if (error) throw new Error(error.message);
+  return data as TransmittalRecord;
+}
+
+const isCalendarDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+export interface NewTransmittal {
+  subject: string;
+  /** Who it goes to — `send_transmittal` refuses without one. */
+  sentTo: string;
+  recipientCompany?: string | null;
+  purpose?: string | null;
+  notes?: string | null;
+  /** Shop drawings to issue. `send_transmittal` refuses an empty transmittal. */
+  drawingIds: string[];
+  /** Calendar date sent, YYYY-MM-DD. A `date` argument, so no time zone can move it. */
+  sentDate: string;
+}
+
+/**
+ * Issue a transmittal: create the draft (the number comes from the project
+ * sequence, never from the client) and send it, which snapshots every sheet's
+ * number, revision and title as issued.
+ *
+ * The RPC's own preconditions are checked first so the common refusals never
+ * reach the database. If the send still fails, the orphan draft is voided so
+ * the log is not left holding an unsent, invisible record, and the error says
+ * what happened to its number.
+ */
+export async function createAndSendTransmittal(projectId: string, input: NewTransmittal): Promise<TransmittalRecord> {
+  const subject = input.subject.trim();
+  const sentTo = input.sentTo.trim();
+  const drawingIds = [...new Set(input.drawingIds.filter(Boolean))];
+  if (!subject) throw new Error("A transmittal needs a subject");
+  if (!sentTo) throw new Error("Record who the transmittal goes to before sending");
+  if (drawingIds.length === 0) throw new Error("Add at least one drawing before sending");
+  if (!isCalendarDate(input.sentDate)) throw new Error("Date sent is not a valid date");
+
+  const draft = await rpc("create_transmittal", {
+    p_project_id: projectId,
+    p_payload: {
+      direction: "outgoing",
+      subject,
+      sent_to: sentTo,
+      recipient_company: input.recipientCompany?.trim() || null,
+      purpose: input.purpose?.trim() || null,
+      notes: input.notes?.trim() || null,
+      item_refs: drawingIds.map((id) => `shop:${id}`),
+    },
+  });
+
+  try {
+    return await rpc("send_transmittal", { p_transmittal_id: draft.id, p_sent_date: input.sentDate });
+  } catch (sendError) {
+    const reason = sendError instanceof Error ? sendError.message : String(sendError);
+    try {
+      await rpc("void_transmittal", { p_transmittal_id: draft.id, p_reason: `Send failed: ${reason}` });
+    } catch {
+      throw new Error(`${draft.transmittal_number ?? "The transmittal"} was created as a draft but not sent (${reason}), and could not be voided. Void it from the transmittal log.`);
+    }
+    throw new Error(`Not sent: ${reason}. ${draft.transmittal_number ?? "The draft"} was voided.`);
+  }
+}
+
 export interface TransmittalAcknowledgement {
   /** Who confirmed receipt — a person at the recipient, not the signed-in user. */
   by: string;
-  /** ISO timestamp of the confirmation. */
-  at: string;
+  /** Calendar date of receipt, YYYY-MM-DD. */
+  date: string;
   notes?: string | null;
 }
 
 /**
- * Record that the recipient confirmed receipt. The name is required: an
- * acknowledgement nobody can attribute is not evidence of receipt.
+ * The calendar day as a timestamp that reads back as the same day everywhere.
+ * Stored timestamptz comes back in UTC and the Board reads its date prefix,
+ * so UTC noon is the day itself; local noon was a day off in UTC±12..14.
  */
-export async function recordTransmittalAcknowledgement(
-  id: string,
-  ack: TransmittalAcknowledgement,
-): Promise<void> {
-  const by = ack.by.trim();
-  if (!by) throw new Error("Name who acknowledged receipt");
-  if (Number.isNaN(Date.parse(ack.at))) throw new Error("Acknowledgement date is not a valid date");
-  await entities.DrawingTransmittal.update(id, {
-    acknowledged_at: ack.at,
-    acknowledged_by_name: by,
-    acknowledged_notes: ack.notes?.trim() || null,
-  } as never);
+export function acknowledgementInstant(date: string): string {
+  if (!isCalendarDate(date)) throw new Error("Acknowledgement date is not a valid date");
+  return `${date}T12:00:00Z`;
 }
 
-/** Undo a mis-recorded acknowledgement, returning the transmittal to "awaiting". */
-export async function clearTransmittalAcknowledgement(id: string): Promise<void> {
-  await entities.DrawingTransmittal.update(id, {
-    acknowledged_at: null,
-    acknowledged_by_name: null,
-    acknowledged_notes: null,
-  } as never);
+/** sent → acknowledged. A name is required: an unattributed receipt is not evidence. */
+export async function acknowledgeTransmittal(id: string, ack: TransmittalAcknowledgement): Promise<TransmittalRecord> {
+  const by = ack.by.trim();
+  if (!by) throw new Error("Record who acknowledged receipt");
+  return rpc("acknowledge_transmittal", {
+    p_transmittal_id: id,
+    p_by_name: by,
+    p_notes: ack.notes?.trim() || null,
+    p_at: acknowledgementInstant(ack.date),
+  });
+}
+
+/** Withdraw an issued transmittal. The record and its snapshot are kept; a reason is required. */
+export async function voidTransmittal(id: string, reason: string): Promise<TransmittalRecord> {
+  const trimmed = reason.trim();
+  if (!trimmed) throw new Error("A void reason is required");
+  return rpc("void_transmittal", { p_transmittal_id: id, p_reason: trimmed });
 }

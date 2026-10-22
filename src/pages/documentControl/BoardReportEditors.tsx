@@ -6,14 +6,16 @@
  * that matters lives in it: RFI numbers come only from the sequence RPC
  * (useRfiPageMutations), submittal status moves run the smart triggers and the
  * audit log (useSubmittalsPageMutations), a sheet add queues its detailing task
- * and a sheet delete is soft with Undo (useSheetMutations), and a transmittal's
- * items are resolved before its header is written (transmittalWrites). This
- * module only opens those paths from the Board Report. It owns no persistence.
+ * and a sheet delete is soft with Undo (useSheetMutations), and a transmittal
+ * moves only through the shared lifecycle RPCs — issue, acknowledge, void
+ * (transmittalWrites). This module only opens those paths from the Board
+ * Report. It owns no persistence.
  *
  * The forms are the app's own (SheetFormModal, SubmittalFormModal,
- * RFIFormModal). Only the transmittal editor and the acknowledgement dialog
- * are drawn here, because the hub's transmittal editor is inline in its log
- * rather than a reusable form. Deletes all confirm through DeleteDialog.
+ * RFIFormModal). Only the transmittal dialogs are drawn here, because the
+ * hub's transmittal editor is inline in its log rather than a reusable form,
+ * and edits drafts, which this log never shows. Deletes confirm through
+ * DeleteDialog; a transmittal is voided, never deleted.
  *
  * Each host mounts only while it is open, so the reads a form needs (sets,
  * drawings, RFIs to link) cost nothing until someone opens it.
@@ -36,21 +38,15 @@ import { useRfiPageMutations } from "@/pages/rfis/useRfiPageMutations";
 import { useSheetMutations } from "@/pages/drawings/useSheetMutations";
 import { buildDeleteSheetConfirm } from "@/pages/drawings/drawingActionHelpers";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
-import { useTransmittals } from "@/hooks/useTransmittals";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { attachableRegisterRows } from "@/components/drawings/register/docControl.derive";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import {
-  clearTransmittalAcknowledgement,
-  createTransmittal,
-  recordTransmittalAcknowledgement,
-  resolveTransmittalTargets,
-  softDeleteTransmittal,
-  updateTransmittal,
-  type TransmittalHeader,
+  acknowledgeTransmittal,
+  createAndSendTransmittal,
+  voidTransmittal,
 } from "@/lib/transmittals/transmittalWrites";
-import { buildSheetOptions, drawingIdForRevisionOption } from "@/lib/transmittals/transmittalSheetOptions";
 import { DC_DARK, DC_FONT, DC_LIGHT, DC_SIGNAL, type DcSkin } from "./boardReportTheme";
 import { PaneButton } from "./BoardReportShell";
 import type { RegisterRow, RfiRow, SubmittalRow, TransmittalRow } from "./useBoardReportData";
@@ -65,7 +61,7 @@ export type EditorIntent =
   | { kind: "rfi"; mode: "create" }
   | { kind: "rfi"; mode: "edit" | "delete"; row: RfiRow }
   | { kind: "transmittal"; mode: "create" }
-  | { kind: "transmittal"; mode: "edit" | "delete" | "ack" | "unack"; row: TransmittalRow };
+  | { kind: "transmittal"; mode: "ack" | "void"; row: TransmittalRow };
 
 export interface EditorHostProps {
   intent: EditorIntent | null;
@@ -329,189 +325,90 @@ const todayInput = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+/**
+ * Transmittals follow the shared lifecycle (see transmittalWrites): the Board
+ * shows only issued ones, and an issued transmittal is a contractual snapshot
+ * — its sheets are frozen at send. So the Board offers issue, acknowledge and
+ * void, and never an edit or a delete of something already sent.
+ */
 function TransmittalHost({ intent, projectId, dark, onClose }: HostProps<"transmittal">) {
-  const queryClient = useQueryClient();
-  const refresh = () => invalidateEntity(queryClient, "drawingTransmittal", projectId);
-  const fail = (verb: string) => (error: unknown) => {
-    void refresh();
-    toast.error(`Failed to ${verb}: ${toUserErrorMessage(error, "unknown")}`);
-  };
-
-  const remove = useMutation({
-    mutationFn: (id: string) => softDeleteTransmittal(id),
-    onSuccess: async () => {
-      await refresh();
-      toast.success("Transmittal deleted. Its audit history was retained.");
-    },
-    onError: fail("delete transmittal"),
-  });
-
-  const unack = useMutation({
-    mutationFn: (id: string) => clearTransmittalAcknowledgement(id),
-    onSuccess: async () => {
-      await refresh();
-      toast.success("Acknowledgement cleared");
-      onClose();
-    },
-    onError: fail("clear acknowledgement"),
-  });
-
-  if (intent.mode === "delete") {
-    return (
-      <DeleteDialog
-        open
-        onClose={onClose}
-        busy={remove.isPending}
-        onConfirm={() => remove.mutateAsync(intent.row.id)}
-        title={`Delete transmittal ${intent.row.number}?`}
-        description="It leaves the log and stops counting toward acknowledgements. The header and its sheet list are kept for audit."
-      />
-    );
-  }
-
-  if (intent.mode === "unack") {
-    const skin = dark ? DC_DARK : DC_LIGHT;
-    return (
-      <DcDialog
-        dark={dark}
-        title={`Clear acknowledgement on ${intent.row.number}?`}
-        onClose={onClose}
-        footer={
-          <>
-            <PaneButton dark={dark} variant="secondary" onClick={onClose}>Cancel</PaneButton>
-            <PaneButton dark={dark} onClick={() => unack.mutate(intent.row.id)} disabled={unack.isPending}>
-              {unack.isPending ? "Clearing…" : "Clear acknowledgement"}
-            </PaneButton>
-          </>
-        }
-      >
-        <span style={{ font: `400 13px/1.5 ${DC_FONT.ui}`, color: skin.textSecondary }}>
-          The transmittal goes back to awaiting acknowledgement and starts aging again from its send date.
-          Use this only when receipt was recorded against the wrong transmittal.
-        </span>
-      </DcDialog>
-    );
-  }
-
-  if (intent.mode === "ack") {
-    return <AcknowledgeDialog row={intent.row} projectId={projectId} dark={dark} onClose={onClose} />;
-  }
-
-  return (
-    <TransmittalEditor row={intent.mode === "create" ? null : intent.row} projectId={projectId} dark={dark} onClose={onClose} />
-  );
+  if (intent.mode === "void") return <VoidDialog row={intent.row} projectId={projectId} dark={dark} onClose={onClose} />;
+  if (intent.mode === "ack") return <AcknowledgeDialog row={intent.row} projectId={projectId} dark={dark} onClose={onClose} />;
+  return <IssueTransmittalDialog projectId={projectId} dark={dark} onClose={onClose} />;
 }
 
 interface XmForm {
-  number: string;
+  subject: string;
   company: string;
   attention: string;
   purpose: string;
   date: string;
-  subject: string;
   notes: string;
 }
 
-function TransmittalEditor({
-  row,
-  projectId,
-  dark,
-  onClose,
-}: {
-  /** null to log a new transmittal. */
-  row: TransmittalRow | null;
-  projectId: string;
-  dark: boolean;
-  onClose: () => void;
-}) {
+function IssueTransmittalDialog({ projectId, dark, onClose }: { projectId: string; dark: boolean; onClose: () => void }) {
   const skin = dark ? DC_DARK : DC_LIGHT;
   const queryClient = useQueryClient();
   const register = useDrawingRegister(projectId);
-  // Only an edit needs the existing item list.
-  const log = useTransmittals(projectId, { enabled: Boolean(row) });
-  const existing = row ? (log.data ?? []).find((t) => t.id === row.id) ?? null : null;
-
   const [form, setForm] = useState<XmForm>(() => ({
-    number: row?.number === "—" ? "" : row?.number ?? "",
-    company: row?.recipientCompany ?? "",
-    attention: row?.contact ?? "",
-    purpose: row && row.purpose !== "—" ? row.purpose : "For Review",
-    date: row?.dateSentRaw ? row.dateSentRaw.slice(0, 10) : todayInput(),
-    subject: row?.subject ?? "",
-    notes: row?.notes ?? "",
+    subject: "",
+    company: "",
+    attention: "",
+    purpose: "For Review",
+    date: todayInput(),
+    notes: "",
   }));
-  const [picked, setPicked] = useState<Set<string> | null>(row ? null : new Set());
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  // Seed the picker from the stored items once they arrive.
-  useEffect(() => {
-    if (picked === null && existing) {
-      setPicked(new Set(existing.items.flatMap((i) => (i.drawing_revision_id ? [i.drawing_revision_id] : []))));
-    }
-  }, [existing, picked]);
+  // One row per shop drawing: send_transmittal snapshots each sheet's CURRENT
+  // revision itself, so the pick is the drawing, not a revision.
+  const sheets = useMemo(() => {
+    const seen = new Set<string>();
+    return attachableRegisterRows(register.data ?? []).filter((r) => {
+      if (!r.drawing_id || seen.has(r.drawing_id)) return false;
+      seen.add(r.drawing_id);
+      return true;
+    });
+  }, [register.data]);
 
-  const options = useMemo(
-    () => buildSheetOptions(attachableRegisterRows(register.data ?? []), existing?.items ?? []),
-    [register.data, existing],
-  );
+  const missing = !form.subject.trim()
+    ? "A subject is required"
+    : !form.attention.trim()
+      ? "Name who it goes to"
+      : picked.size === 0
+        ? "Pick at least one sheet"
+        : !form.date
+          ? "Pick the date sent"
+          : null;
 
-  const header = (): TransmittalHeader => ({
-    transmittal_number: form.number.trim(),
-    // The Board Report logs what went OUT; incoming sets belong to the hub log.
-    direction: "outgoing",
-    recipient_company: form.company.trim() || null,
-    sent_to: form.attention.trim() || null,
-    purpose: form.purpose || null,
-    // An untouched date keeps its stored timestamp instead of snapping to midnight.
-    date_sent: row?.dateSentRaw && row.dateSentRaw.slice(0, 10) === form.date ? row.dateSentRaw : form.date || null,
-    subject: form.subject.trim() || null,
-    notes: form.notes.trim() || null,
-  });
-
-  const save = useMutation({
-    mutationFn: async () => {
-      const chosen = picked ?? new Set<string>();
-      const resolve = (revisionId: string) => drawingIdForRevisionOption(options, revisionId);
-      if (row && existing) {
-        await updateTransmittal(projectId, existing, header(), chosen, resolve);
-        return { created: null as Record<string, unknown> | null, count: chosen.size };
-      }
-      const created = await createTransmittal(projectId, header(), resolveTransmittalTargets(chosen, resolve));
-      return { created, count: chosen.size };
-    },
-    onSuccess: async ({ created, count }) => {
+  const issue = useMutation({
+    mutationFn: () =>
+      createAndSendTransmittal(projectId, {
+        subject: form.subject,
+        sentTo: form.attention,
+        recipientCompany: form.company,
+        purpose: form.purpose,
+        notes: form.notes,
+        drawingIds: [...picked],
+        sentDate: form.date,
+      }),
+    onSuccess: async (sent) => {
       await invalidateEntity(queryClient, "drawingTransmittal", projectId);
-      const sheets = count ? ` · ${count} sheet${count === 1 ? "" : "s"}` : "";
-      // The log hides drafts. Say so rather than letting a new record vanish.
-      if (created && String(created.status ?? "").toLowerCase() === "draft") {
-        toast.success(`Transmittal saved as a draft${sheets}. It joins this log once it is sent.`);
-      } else {
-        toast.success(`Transmittal ${row ? "updated" : "logged"}${sheets}`);
-      }
+      toast.success(`${String(sent.transmittal_number ?? "Transmittal")} issued · ${picked.size} sheet${picked.size === 1 ? "" : "s"}`);
       onClose();
     },
     onError: (error) => {
       void invalidateEntity(queryClient, "drawingTransmittal", projectId);
-      toast.error(`Failed to ${row ? "update" : "log"} transmittal: ${toUserErrorMessage(error, "unknown")}`);
+      toast.error(`Failed to issue transmittal: ${toUserErrorMessage(error, "unknown")}`);
     },
   });
 
-  const loadingItems = Boolean(row) && (log.isPending || picked === null);
-  if (row && log.isError) {
-    return <LoadState dark={dark} what={`transmittal ${row.number}`} error={log.error} onClose={onClose} />;
-  }
-  if (row && !log.isPending && !existing) {
-    return (
-      <LoadState dark={dark} what={`transmittal ${row.number}`} error={new Error("It is no longer in the log.")} onClose={onClose} />
-    );
-  }
-
   const set = <K extends keyof XmForm>(key: K) => (value: XmForm[K]) => setForm((f) => ({ ...f, [key]: value }));
-  const chosen = picked ?? new Set<string>();
-  const toggle = (revisionId: string) =>
+  const toggle = (drawingId: string) =>
     setPicked((current) => {
-      const next = new Set(current ?? []);
-      if (next.has(revisionId)) next.delete(revisionId);
-      else next.add(revisionId);
+      const next = new Set(current);
+      if (next.has(drawingId)) next.delete(drawingId);
+      else next.add(drawingId);
       return next;
     });
 
@@ -519,49 +416,42 @@ function TransmittalEditor({
     <DcDialog
       dark={dark}
       wide
-      title={row ? `Edit transmittal ${row.number}` : "New transmittal"}
+      title="New transmittal"
       onClose={onClose}
       footer={
         <>
           <PaneButton dark={dark} variant="secondary" onClick={onClose}>Cancel</PaneButton>
-          <PaneButton
-            dark={dark}
-            onClick={() => save.mutate()}
-            disabled={save.isPending || loadingItems || !form.number.trim()}
-            title={!form.number.trim() ? "A transmittal number is required" : undefined}
-          >
-            {save.isPending ? "Saving…" : row ? "Save changes" : "Log transmittal"}
+          <PaneButton dark={dark} onClick={() => issue.mutate()} disabled={issue.isPending || Boolean(missing)} title={missing ?? undefined}>
+            {issue.isPending ? "Issuing…" : "Issue transmittal"}
           </PaneButton>
         </>
       }
     >
+      <span style={{ font: `400 13px/1.5 ${DC_FONT.ui}`, color: skin.textSecondary }}>
+        The number comes from the project sequence. Issuing records each sheet&apos;s current revision as sent, and the
+        list cannot be changed afterwards — void and reissue instead.
+      </span>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 14 }}>
-        <Field dark={dark} label="Transmittal no." required>
-          <DcInput dark={dark} mono value={form.number} onChange={set("number")} ariaLabel="Transmittal number" placeholder="T-118-065" />
-        </Field>
-        <Field dark={dark} label="Date sent">
-          <DcInput dark={dark} mono type="date" value={form.date} onChange={set("date")} ariaLabel="Date sent" />
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Field dark={dark} label="Subject" required>
+            <DcInput dark={dark} value={form.subject} onChange={set("subject")} ariaLabel="Subject" />
+          </Field>
+        </div>
+        <Field dark={dark} label="Attention" required>
+          <DcInput dark={dark} value={form.attention} onChange={set("attention")} ariaLabel="Attention" />
         </Field>
         <Field dark={dark} label="Recipient company">
           <DcInput dark={dark} value={form.company} onChange={set("company")} ariaLabel="Recipient company" />
         </Field>
-        <Field dark={dark} label="Attention">
-          <DcInput dark={dark} value={form.attention} onChange={set("attention")} ariaLabel="Attention" />
-        </Field>
         <Field dark={dark} label="Purpose">
-          <select
-            aria-label="Purpose"
-            value={form.purpose}
-            onChange={(e) => set("purpose")(e.target.value)}
-            style={inputStyle(skin, false)}
-          >
-            {[...new Set([...PURPOSES, form.purpose].filter(Boolean))].map((p) => (
+          <select aria-label="Purpose" value={form.purpose} onChange={(e) => set("purpose")(e.target.value)} style={inputStyle(skin, false)}>
+            {PURPOSES.map((p) => (
               <option key={p} value={p}>{p}</option>
             ))}
           </select>
         </Field>
-        <Field dark={dark} label="Subject">
-          <DcInput dark={dark} value={form.subject} onChange={set("subject")} ariaLabel="Subject" />
+        <Field dark={dark} label="Date sent" required>
+          <DcInput dark={dark} mono type="date" value={form.date} onChange={set("date")} ariaLabel="Date sent" />
         </Field>
         <div style={{ gridColumn: "1 / -1" }}>
           <Field dark={dark} label="Notes">
@@ -579,25 +469,25 @@ function TransmittalEditor({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", font: `600 13px/1 ${DC_FONT.ui}` }}>
           <span>Sheets</span>
-          <span style={{ font: `400 12px/1 ${DC_FONT.mono}`, color: skin.textMuted }}>{chosen.size} selected</span>
+          <span style={{ font: `400 12px/1 ${DC_FONT.mono}`, color: skin.textMuted }}>{picked.size} selected</span>
         </div>
         <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${skin.paneBorder}` }}>
-          {loadingItems ? (
-            <div style={{ padding: 12, font: `400 13px/1.4 ${DC_FONT.ui}`, color: skin.textMuted }}>Reading the sheet list…</div>
-          ) : options.length === 0 ? (
+          {register.isPending ? (
+            <div style={{ padding: 12, font: `400 13px/1.4 ${DC_FONT.ui}`, color: skin.textMuted }}>Reading the register…</div>
+          ) : sheets.length === 0 ? (
             <div style={{ padding: 12, font: `400 13px/1.4 ${DC_FONT.ui}`, color: skin.textMuted }}>
-              No sheets with a tracked revision to attach.
+              No sheets with a tracked revision to issue.
             </div>
           ) : (
-            options.map((o) => {
-              const sheet = o.sheetNumber || "Unknown sheet";
-              const rev = o.revisionCode || "unmarked";
+            sheets.map((r) => {
+              const sheet = r.sheet_number || "Unknown sheet";
+              const rev = r.current_revision || "unmarked";
               return (
                 <label
-                  key={o.revisionId}
+                  key={r.drawing_id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "18px 72px 52px minmax(0,1fr) auto",
+                    gridTemplateColumns: "18px 72px 52px minmax(0,1fr)",
                     gap: 10,
                     alignItems: "center",
                     padding: "8px 12px",
@@ -608,20 +498,15 @@ function TransmittalEditor({
                 >
                   <input
                     type="checkbox"
-                    aria-label={`Attach ${sheet} revision ${rev}`}
-                    checked={chosen.has(o.revisionId)}
-                    onChange={() => toggle(o.revisionId)}
+                    aria-label={`Issue ${sheet} revision ${rev}`}
+                    checked={picked.has(r.drawing_id)}
+                    onChange={() => toggle(r.drawing_id)}
                   />
                   <span style={{ font: `600 12px/1 ${DC_FONT.mono}` }}>{sheet}</span>
                   <span style={{ font: `400 12px/1 ${DC_FONT.mono}`, color: skin.textMuted }}>Rev {rev}</span>
                   <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: skin.textSecondary }}>
-                    {o.sheetTitle || ""}
+                    {r.sheet_title || ""}
                   </span>
-                  {o.historical ? (
-                    <span style={{ font: `400 11px/1 ${DC_FONT.ui}`, color: skin.textMuted }}>previous revision</span>
-                  ) : (
-                    <span />
-                  )}
                 </label>
               );
             })
@@ -650,12 +535,7 @@ function AcknowledgeDialog({
   const [notes, setNotes] = useState("");
 
   const save = useMutation({
-    mutationFn: () => {
-      // A date-only pick is recorded at local noon so no time zone moves it to another day.
-      const [y, m, d] = date.split("-").map(Number);
-      const at = new Date(y, (m ?? 1) - 1, d ?? 1, 12).toISOString();
-      return recordTransmittalAcknowledgement(row.id, { by, at, notes });
-    },
+    mutationFn: () => acknowledgeTransmittal(row.id, { by, date, notes }),
     onSuccess: async () => {
       await invalidateEntity(queryClient, "drawingTransmittal", projectId);
       toast.success(`${row.number} acknowledged by ${by.trim()}`);
@@ -700,6 +580,68 @@ function AcknowledgeDialog({
           rows={2}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
+          style={{ ...inputStyle(skin, false), resize: "vertical" }}
+        />
+      </Field>
+    </DcDialog>
+  );
+}
+
+function VoidDialog({
+  row,
+  projectId,
+  dark,
+  onClose,
+}: {
+  row: TransmittalRow;
+  projectId: string;
+  dark: boolean;
+  onClose: () => void;
+}) {
+  const skin = dark ? DC_DARK : DC_LIGHT;
+  const queryClient = useQueryClient();
+  const [reason, setReason] = useState("");
+
+  const run = useMutation({
+    mutationFn: () => voidTransmittal(row.id, reason),
+    onSuccess: async () => {
+      await invalidateEntity(queryClient, "drawingTransmittal", projectId);
+      toast.success(`${row.number} voided. The record and its sheet list are kept.`);
+      onClose();
+    },
+    onError: (error) => toast.error(`Failed to void transmittal: ${toUserErrorMessage(error, "unknown")}`),
+  });
+
+  return (
+    <DcDialog
+      dark={dark}
+      title={`Void transmittal ${row.number}?`}
+      onClose={onClose}
+      footer={
+        <>
+          <PaneButton dark={dark} variant="secondary" onClick={onClose}>Cancel</PaneButton>
+          <PaneButton
+            dark={dark}
+            tone="danger"
+            onClick={() => run.mutate()}
+            disabled={run.isPending || !reason.trim()}
+            title={!reason.trim() ? "A reason is required" : undefined}
+          >
+            {run.isPending ? "Voiding…" : "Void transmittal"}
+          </PaneButton>
+        </>
+      }
+    >
+      <span style={{ font: `400 13px/1.5 ${DC_FONT.ui}`, color: skin.textSecondary }}>
+        It leaves this log and stops counting toward acknowledgements. Nothing is deleted: the issued sheet list and
+        the reason stay on the record. Tell {row.recipient} separately if they should discard what they received.
+      </span>
+      <Field dark={dark} label="Reason" required>
+        <textarea
+          aria-label="Void reason"
+          rows={2}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
           style={{ ...inputStyle(skin, false), resize: "vertical" }}
         />
       </Field>

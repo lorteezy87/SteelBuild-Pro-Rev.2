@@ -879,43 +879,31 @@ export function TransmittalsScreen({ data, actions }: { data: BoardReportData; a
                 </span>
               </div>
               <PaneActions>
-                {state === "acknowledged" ? (
-                  <PaneButton
-                    dark={dark}
-                    variant="secondary"
-                    onClick={() => actions.open({ kind: "transmittal", mode: "unack", row: current })}
-                    disabled={!actions.perms.transmittal.edit}
-                    title={actions.perms.transmittal.edit ? undefined : denied("edit", "transmittals")}
-                  >
-                    Clear acknowledgement
-                  </PaneButton>
-                ) : (
+                {state === "acknowledged" ? null : (
                   <PaneButton
                     dark={dark}
                     onClick={() => actions.open({ kind: "transmittal", mode: "ack", row: current })}
-                    disabled={!actions.perms.transmittal.edit}
-                    title={actions.perms.transmittal.edit ? undefined : denied("edit", "transmittals")}
+                    disabled={!actions.perms.transmittal.edit || current.status !== "sent"}
+                    title={
+                      !actions.perms.transmittal.edit
+                        ? denied("acknowledge", "transmittals")
+                        : current.status !== "sent"
+                          ? "Only a transmittal recorded as sent can be acknowledged. This one predates the send log."
+                          : undefined
+                    }
                   >
                     Record acknowledgement
                   </PaneButton>
                 )}
-                <PaneButton
-                  dark={dark}
-                  variant="secondary"
-                  onClick={() => actions.open({ kind: "transmittal", mode: "edit", row: current })}
-                  disabled={!actions.perms.transmittal.edit}
-                  title={actions.perms.transmittal.edit ? undefined : denied("edit", "transmittals")}
-                >
-                  Edit
-                </PaneButton>
+                {/* Issued transmittals are a frozen snapshot: no edit, no delete. Void keeps the record. */}
                 <PaneButton
                   dark={dark}
                   tone="danger"
-                  onClick={() => actions.open({ kind: "transmittal", mode: "delete", row: current })}
+                  onClick={() => actions.open({ kind: "transmittal", mode: "void", row: current })}
                   disabled={!actions.perms.transmittal.delete}
-                  title={actions.perms.transmittal.delete ? undefined : denied("delete", "transmittals")}
+                  title={actions.perms.transmittal.delete ? undefined : denied("void", "transmittals")}
                 >
-                  Delete
+                  Void
                 </PaneButton>
               </PaneActions>
             </DetailPane>
