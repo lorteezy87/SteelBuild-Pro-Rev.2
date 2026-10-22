@@ -5,6 +5,7 @@
  * sidebar share one icon vocabulary. Adding a page = one line here.
  */
 import {
+  ClipboardCheck, Timer,
   LayoutDashboard, Terminal, Grid3x3, Briefcase, BarChart3,
   CalendarRange, CalendarDays, CheckSquare, HelpCircle, DollarSign, Mail,
   FileText, Eye, Box, ScanLine,
@@ -78,6 +79,8 @@ export const PAGE_ICON = {
   FieldHub: HardHat,
   Field: HardHat,
   DailyLogs: ClipboardList,
+  SiteReadiness: ClipboardCheck,
+  DelayLog: Timer,
   Photos: Camera,
   Inspections: ScanLine,
   Safety: Shield,
