@@ -82,6 +82,21 @@ export interface RfiRow {
   open: boolean;
 }
 
+/**
+ * One sheet as it went out, from `drawing_transmittal_items`.
+ *
+ * The `*_at_send` columns are the point: a transmittal is a record of what was
+ * issued ON THAT DAY, so the sheet number, revision and title are the ones
+ * printed on the transmittal, not whatever the drawing says now. Reading the
+ * live drawing would quietly rewrite history every time a sheet was revised.
+ */
+export interface TransmittalItem {
+  id: string;
+  sheet: string;
+  rev: string;
+  title: string;
+}
+
 export interface TransmittalRow {
   id: string;
   number: string;
@@ -95,6 +110,22 @@ export interface TransmittalRow {
   acknowledgedOn: CalendarDay | null;
   acknowledgedBy: string;
   hoursWaiting: number | null;
+  /**
+   * How many sheets went out, or NULL when the contents read has not completed.
+   *
+   * Null is "unknown", not zero — the same rule as the NULL downstream dates in
+   * CLAUDE.md. A transmittal always carries sheets, so printing 0 while the
+   * read is in flight (or after it failed) states something that is never true.
+   */
+  sheetCount: number | null;
+  /** The sheets themselves, in the order the transmittal lists them. */
+  contents: TransmittalItem[];
+  /**
+   * Sheets this transmittal re-issues that an EARLIER transmittal already sent
+   * at a different revision — so the recipient is holding a superseded copy.
+   * Derived from the items, which is the only place the as-sent revision lives.
+   */
+  supersedes: TransmittalItem[];
 }
 
 export interface BoardReportLog<T> {
@@ -206,6 +237,20 @@ function countSheetsInSets(ids: unknown, sheetsBySet: Map<string, number>): numb
   return total;
 }
 
+/**
+ * Sheet numbers and revisions compared the one way.
+ *
+ * The same sheet is typed "E-203", "E203" and "e 203" across a job's life, so a
+ * raw string compare would miss a supersede and leave a stale revision looking
+ * current. Same shape as `normNum` in `lib/fabReleaseGate.ts`, which exists
+ * because hand-rolled variants of this have shipped broken twice.
+ */
+function normalizeSheetKey(value: string | null | undefined): string {
+  return String(value ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
 function hoursSince(iso: string | null | undefined, now: Date): number | null {
   if (!iso) return null;
   const then = Date.parse(iso);
@@ -247,6 +292,18 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         { project_id: projectId, direction: "outgoing", is_deleted: false },
         "-date_sent",
       ),
+  });
+
+  /**
+   * The sheets inside those transmittals. Scoped by project rather than by
+   * transmittal id so this stays one read instead of one per row; the rows are
+   * grouped in the mapping below. `sort_order` is the transmittal's own
+   * ordering, which is what the printed sheet shows.
+   */
+  const transmittalItems = useQuery({
+    queryKey: ["board-report", "transmittal-items", projectId],
+    enabled: Boolean(projectId),
+    queryFn: () => entities.DrawingTransmittalItem.filter({ project_id: projectId }, "sort_order"),
   });
 
   return useMemo(() => {
@@ -352,10 +409,64 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
       // awaiting anybody's acknowledgement.
       return status !== "draft" && status !== "void";
     });
+    /**
+     * Contents per transmittal.
+     *
+     * `itemsKnown` is false until the read lands, and that distinction is
+     * carried all the way to the column: an unknown count prints as a dash, not
+     * as 0. The query is disabled without a project, so "no project selected"
+     * is also unknown rather than empty.
+     */
+    const itemsRaw = (transmittalItems.data ?? []) as Array<Record<string, unknown>>;
+    // A capped contents read makes every count a floor, and this column has no
+    // room to say "at least". An unknown count is honest; a short one is not.
+    const itemsKnown =
+      Boolean(projectId) && transmittalItems.isSuccess && itemsRaw.length < EFFECTIVE_LIST_CAP;
+    const itemsByTransmittal = new Map<string, TransmittalItem[]>();
+    for (const row of itemsRaw) {
+      const parent = row.transmittal_id;
+      if (typeof parent !== "string") continue;
+      const list = itemsByTransmittal.get(parent) ?? [];
+      list.push({
+        id: String(row.id),
+        sheet: text(row.number_at_send),
+        rev: text(row.revision_at_send, "—"),
+        title: text(row.title_at_send, "Untitled sheet"),
+      });
+      itemsByTransmittal.set(parent, list);
+    }
+
+    /**
+     * When each sheet number was last issued before a given transmittal, and at
+     * which revision. Built by walking the transmittals oldest-first so that
+     * "earlier" means earlier in time, not earlier in the array — `xmRaw` is
+     * sorted newest-first by the query.
+     */
+    const issuedBefore = new Map<string, { rev: string; sheet: string; title: string; id: string }>();
+    const supersededByTransmittal = new Map<string, TransmittalItem[]>();
+    const oldestFirst = [...xmRaw].reverse();
+    for (const t of oldestFirst) {
+      const id = String(t.id);
+      const recalled: TransmittalItem[] = [];
+      for (const item of itemsByTransmittal.get(id) ?? []) {
+        const key = normalizeSheetKey(item.sheet);
+        if (!key) continue;
+        const prior = issuedBefore.get(key);
+        // A re-issue at the SAME revision supersedes nothing — it is a resend.
+        if (prior && normalizeSheetKey(prior.rev) !== normalizeSheetKey(item.rev)) {
+          recalled.push({ id: prior.id, sheet: prior.sheet, rev: prior.rev, title: prior.title });
+        }
+        issuedBefore.set(key, { rev: item.rev, sheet: item.sheet, title: item.title, id: item.id });
+      }
+      if (recalled.length) supersededByTransmittal.set(id, recalled);
+    }
+
     const transmittalRows: TransmittalRow[] = xmRaw.map((t): TransmittalRow => {
       const ackAt = (t.acknowledged_at as string | null) ?? null;
+      const id = String(t.id);
+      const contents = itemsByTransmittal.get(id) ?? [];
       return {
-        id: String(t.id),
+        id,
         number: text(t.transmittal_number),
         recipient: text(t.recipient_company, text(t.sent_to)),
         contact: text(t.sent_to, ""),
@@ -366,6 +477,9 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         acknowledgedOn: parseCalendarDay(ackAt),
         acknowledgedBy: text(t.acknowledged_by_name, ""),
         hoursWaiting: ackAt ? null : hoursSince(t.date_sent as string | null, now),
+        sheetCount: itemsKnown ? contents.length : null,
+        contents,
+        supersedes: supersededByTransmittal.get(id) ?? [],
       };
     });
 
@@ -380,7 +494,11 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
       isError: register.isError || submittals.isError || rfis.isError || transmittals.isError,
       today,
     };
-  }, [register.data, register.isLoading, register.isError, submittals.data, submittals.isLoading, submittals.isError, rfis.data, rfis.isLoading, rfis.isError, transmittals.data, transmittals.isLoading, transmittals.isError, today]);
+    // The contents read is deliberately NOT folded into isLoading/isError: a
+    // transmittal's sheet list is detail on top of the log, so a slow or failed
+    // items read must not blank a page whose rows are already in hand. It
+    // surfaces as an unknown sheet count instead.
+  }, [register.data, register.isLoading, register.isError, submittals.data, submittals.isLoading, submittals.isError, rfis.data, rfis.isLoading, rfis.isError, transmittals.data, transmittals.isLoading, transmittals.isError, transmittalItems.data, transmittalItems.isSuccess, projectId, today]);
 }
 
 /**
