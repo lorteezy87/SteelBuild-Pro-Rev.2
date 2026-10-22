@@ -131,6 +131,10 @@
 [data-skin="command"] .cmd-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--cmd-border); background: var(--cmd-surface); color: var(--cmd-text); }
 [data-skin="command"] .cmd-btn--primary { background: var(--cmd-gold); border-color: var(--cmd-gold); color: var(--cmd-on-gold); }
 [data-skin="command"] .cmd-btn--ghost { background: transparent; }
+/* A disabled command button used to render identically to a live one — same
+   gold fill, same pointer — so the only way to learn it was dead was to click
+   it. Gate a control and the user has to be able to see it is gated. */
+[data-skin="command"] .cmd-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 [data-skin="command"] .cmd-chip-btn { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--cmd-border); background: var(--cmd-surface); color: var(--cmd-text-muted); cursor: pointer; font-size: 12px; }
 [data-skin="command"] .cmd-chip-btn.is-active { background: var(--cmd-gold); border-color: var(--cmd-gold); color: var(--cmd-on-gold); }
 

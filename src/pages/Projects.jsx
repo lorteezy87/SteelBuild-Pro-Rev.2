@@ -183,7 +183,22 @@ function WorkspaceProjects({ orgId, scope, currentOrgRef }) {
       && (healthFilter === "all"  || healthByProjectId[p.id]?.label === healthFilter);
   }), [projects, search, phaseFilter, healthFilter, healthByProjectId]);
 
-  const canCreate = evidenceReady && !projectQuery.isFetching && !atProjectLimit;
+  /* ── Why creation is unavailable ──
+     This used to be a bare boolean, and the Control Center rendered the "New
+     Project" button only when it was true. So on a workspace at its plan's
+     project limit the control was simply absent — no limit named, no upgrade
+     path, nothing to distinguish "you have used your projects" from "this
+     product cannot create projects". The same absence covered a background
+     refetch, which is transient and means the opposite.
+     The reason and the callback are now complementary by construction: a null
+     callback always carries a reason the user can read. */
+  const planName = plan.name ? `${plan.name} plan` : "your plan";
+  const createBlockedReason = atProjectLimit
+    ? `${projects.length} of ${projectLimit} projects used on ${planName}. Upgrade to add another.`
+    : projectQuery.isFetching
+      ? "Refreshing the project register — try again in a moment."
+      : null;
+  const canCreate = evidenceReady && !createBlockedReason;
 
   if (failedSource) return (
     <div role="alert" style={{ padding: 24, color: "var(--status-error)" }}>
@@ -210,6 +225,7 @@ function WorkspaceProjects({ orgId, scope, currentOrgRef }) {
         onHealthFilter={setHealthFilter}
         filtered={filtered}
         onCreate={canCreate ? () => { setEditing(null); setModalOpen(true); } : null}
+        createBlockedReason={createBlockedReason}
         onOpenProject={(p) => setDetailProject(p)}
       />
       {modalOpen && (

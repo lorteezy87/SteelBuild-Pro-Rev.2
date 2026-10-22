@@ -39,7 +39,7 @@ const rowActionStyle = {
   cursor: "pointer",
 };
 
-export default function DailyLogsList({ logs = [], onEdit = null, onDelete = null }) {
+export default function DailyLogsList({ logs = [], onEdit = null, onDelete = null, onCopy = null, onLogDelay = null }) {
   const [expandedId, setExpandedId] = useState(null);
   const listId = useId();
 
@@ -239,8 +239,18 @@ export default function DailyLogsList({ logs = [], onEdit = null, onDelete = nul
             </span>
           </button>
 
-          {(onEdit || onDelete) && (
+          {(onEdit || onDelete || onCopy || onLogDelay) && (
             <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+              {onCopy && (
+                <button type="button" aria-label={`Copy daily report for ${recordLabel}`} onClick={() => onCopy(log)} style={rowActionStyle}>
+                  Copy report
+                </button>
+              )}
+              {onLogDelay && (log.delays || Number(log.delay_hours) > 0) && (
+                <button type="button" aria-label={`Log a delay from the daily for ${recordLabel}`} onClick={() => onLogDelay(log)} style={rowActionStyle}>
+                  Log as delay
+                </button>
+              )}
               {onEdit && (
                 <button type="button" aria-label={`Edit daily log for ${recordLabel}`} onClick={() => onEdit(log)} style={rowActionStyle}>
                   Edit log

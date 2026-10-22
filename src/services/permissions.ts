@@ -94,6 +94,14 @@ const ENTITY_OVERRIDES: Record<string, AppRole> = {
   "drawing_set:edit":        "field",
   "drawing:edit":            "field",
   "submittal:edit":          "field",
+  // Site readiness checklists are action_items rows: INSERT / UPDATE / DELETE
+  // RLS is user_has_project_role_at_least(project_id,'field').
+  "site_readiness:create":   "field",
+  "site_readiness:edit":     "field",
+  "site_readiness:delete":   "field",
+  // Delays are change_requests rows: INSERT is any project member
+  // (user_has_project_access), UPDATE is pm — so edit keeps the pm floor.
+  "delay:create":            "field",
 };
 
 // ─── Pure permission check ──────────────────────────────────────────────

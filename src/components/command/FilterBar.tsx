@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Search, Download, Plus, Upload } from "lucide-react";
 
 export function FilterBar({
@@ -11,6 +11,7 @@ export function FilterBar({
   secondaryActions,
   primaryLabel,
   onPrimary,
+  primaryDisabledReason = null,
 }: {
   search: string;
   onSearch: (v: string) => void;
@@ -23,7 +24,15 @@ export function FilterBar({
   secondaryActions?: ReactNode;
   primaryLabel?: string;
   onPrimary?: (() => void) | null;
+  /** Why the primary action cannot be used right now. A caller that gates the
+   *  action passes `onPrimary: null` AND this reason; the button then stays on
+   *  screen disabled with the reason beside it, instead of disappearing. A
+   *  control that vanishes tells the user nothing about why — they read it as
+   *  "this product cannot do that". Omit the reason and the old behaviour is
+   *  unchanged: no `onPrimary`, no button. */
+  primaryDisabledReason?: string | null;
 }) {
+  const blockedId = useId();
   return (
     <div className="cmd-filterbar">
       <div className="cmd-search">
@@ -41,6 +50,11 @@ export function FilterBar({
         {secondaryActions}
         {primaryLabel && onPrimary ? (
           <button type="button" className="cmd-btn cmd-btn--primary" onClick={onPrimary}><Plus size={14} /> {primaryLabel}</button>
+        ) : primaryLabel && primaryDisabledReason ? (
+          <>
+            <span className="cmd-row__meta" id={blockedId}>{primaryDisabledReason}</span>
+            <button type="button" className="cmd-btn cmd-btn--primary" disabled aria-describedby={blockedId}><Plus size={14} /> {primaryLabel}</button>
+          </>
         ) : null}
       </div>
     </div>

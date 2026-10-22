@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import "@/styles/command.css";
 import "@/styles/command-center-system.css";
 import {
@@ -34,6 +35,8 @@ export interface CommandCenterControlCenterProps {
   onTypeChange: (v: string) => void;
   onOpenItem: (item: ActionItem) => void;
   onForwardLook: () => void;
+  /** Erector field gate (readiness, delay notices, dailies, weather), rendered under the summary. */
+  fieldGate?: ReactNode;
 }
 
 const TYPE_CHIPS = ["All", "RFI", "SUB", "CO", "DEL", "WP", "TASK"];
@@ -218,6 +221,8 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
       />
 
       <OperationalSummary metrics={metrics} ariaLabel="Command Center operational summary" />
+
+      {props.fieldGate ?? null}
 
       <CommandExecutionBrief
         actionItems={summary.actionItems} horizons={horizons}
