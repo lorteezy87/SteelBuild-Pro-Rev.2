@@ -19,6 +19,7 @@
 import type { ReactNode } from "react";
 import "@/styles/command.css";
 import "@/styles/drawing-control.css";
+import "@/styles/drawing-control-sdc.css";
 import { OperationalSummary, useCommandSkin } from "@/components/command";
 import { DetailingCommandHeader } from "./DetailingCommandHeader";
 import {

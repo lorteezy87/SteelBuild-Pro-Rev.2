@@ -9,6 +9,7 @@ import type { TransmittalAttachment, TransmittalRow } from "@/hooks/useTransmitt
 // Analytics cards below the grid read their own data; not under test here.
 vi.mock("@/components/submittals/CycleTimeCard", () => ({ default: (): null => null }));
 vi.mock("@/components/submittals/AgingReportTable", () => ({ default: (): null => null }));
+vi.mock("@/components/submittals/ReviewDelayCard", () => ({ default: (): null => null }));
 
 import { ApprovalMatrixPanel } from "../ApprovalMatrixPanel";
 import type { HoldsStatus, LastSentStatus } from "../ApprovalMatrixPanel";

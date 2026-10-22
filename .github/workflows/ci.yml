@@ -324,6 +324,13 @@ jobs:
           npm ci --prefix supabase/tests/stripe-billing --ignore-scripts
           npm test --prefix supabase/tests/stripe-billing
 
+      - name: Verify append-only activity and audit candidate
+        # Uninstalled candidate (supabase/candidates/append-only-activity-audit.sql).
+        # Synthetic in-memory SQL over the committed table/policy definitions.
+        run: |
+          npm ci --prefix supabase/tests/append-only-activity --ignore-scripts
+          npm test --prefix supabase/tests/append-only-activity
+
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure

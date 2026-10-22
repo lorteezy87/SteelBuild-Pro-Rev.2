@@ -94,7 +94,7 @@ function panel(title: string): HTMLElement {
   return section;
 }
 
-const queueRow = (name: RegExp) => within(panel("Critical Work Queue")).getByRole("button", { name });
+const queueRow = (name: RegExp) => within(panel("Needs action")).getByRole("button", { name });
 const location = () => screen.getByTestId("location").textContent;
 
 describe("ControlBoardPanel: in the hub (onOpenHref)", () => {
@@ -148,19 +148,59 @@ describe("ControlBoardPanel: in the hub (onOpenHref)", () => {
     expect(location()).toBe(HUB);
   });
 
-  it("View all still opens the Approval Matrix tab", () => {
+  it("the Needs action list still opens the Approval Matrix tab", () => {
     const { onOpenHref, onOpenTab } = renderBoard(triageFor([LINKED_SUBMITTAL, UNLINKED_SUBMITTAL]));
-    fireEvent.click(within(panel("Critical Work Queue")).getByRole("button", { name: "View all" }));
+    fireEvent.click(within(panel("Needs action")).getByRole("button", { name: "Approval Matrix" }));
     expect(onOpenTab).toHaveBeenCalledWith("matrix");
     expect(onOpenHref).not.toHaveBeenCalled();
   });
 });
 
-describe("ControlBoardPanel: metric tiles", () => {
-  it("scopes the triage tile as 'Items Needing Action', apart from the KPI strip's 'Submittals Needing Action'", () => {
+describe("ControlBoardPanel: filter chips", () => {
+  it("scopes the triage chip as 'Items Needing Action', apart from the KPI strip's 'Submittals Needing Action'", () => {
     renderBoard(triageFor([LINKED_SUBMITTAL, UNLINKED_SUBMITTAL]));
-    expect(screen.getByText("Items Needing Action")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Items Needing Action/ })).toBeInTheDocument();
     expect(screen.queryByText("Needs Action")).not.toBeInTheDocument();
+  });
+
+  it("narrows the Needs action list to one queue and back to all", () => {
+    renderBoard(triageFor([LINKED_SUBMITTAL, UNLINKED_SUBMITTAL]));
+    const list = panel("Needs action");
+    const all = within(list).getAllByRole("button", { name: /Main Steel|Anchor Bolts|SUB-002/ }).length;
+    fireEvent.click(within(list).getByRole("button", { name: /^Missing Dates/ }));
+    expect(within(list).getByRole("button", { name: /^Missing Dates/ })).toHaveAttribute("aria-pressed", "true");
+    const narrowed = within(list).queryAllByRole("button", { name: /Main Steel|Anchor Bolts|SUB-002/ }).length;
+    expect(narrowed).toBeLessThanOrEqual(all);
+    fireEvent.click(within(list).getByRole("button", { name: /^All/ }));
+    expect(within(list).getAllByRole("button", { name: /Main Steel|Anchor Bolts|SUB-002/ })).toHaveLength(all);
+  });
+
+  it("lists open RFIs earliest-due first and opens one", () => {
+    const onOpenRfi = vi.fn();
+    render(
+      <MemoryRouter initialEntries={[HUB]}>
+        <ControlBoardPanel
+          triage={triageFor([])}
+          kpis={{ pending: 0, total: 0 }}
+          drawingKpis={{ totalSets: 0, totalSheets: 0, released: 0, inReview: 0, overdue: 0 }}
+          isLoading={false}
+          onOpenTab={vi.fn()}
+          sequenceReadiness={[]}
+          revisionImpact={[]}
+          isSaving={false}
+          openRfis={[
+            { id: "r2", rfi_number: "RFI-002", title: "Later", status: "Open", due_date: "2099-01-02" },
+            { id: "r1", rfi_number: "RFI-001", title: "Sooner", status: "Open", due_date: "2099-01-01" },
+            { id: "r0", rfi_number: "RFI-000", title: "Done", status: "Closed", due_date: "2000-01-01" },
+          ]}
+          onOpenRfi={onOpenRfi}
+        />
+      </MemoryRouter>,
+    );
+    const links = screen.getAllByRole("button", { name: /RFI-00/ });
+    expect(links.map((b) => b.textContent)).toEqual([expect.stringContaining("RFI-001"), expect.stringContaining("RFI-002")]);
+    fireEvent.click(links[0]);
+    expect(onOpenRfi).toHaveBeenCalledWith("r1");
   });
 });
 

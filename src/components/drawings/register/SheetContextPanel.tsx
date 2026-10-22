@@ -12,6 +12,9 @@ import type { IndexedRegisterRow } from "./docControl.derive";
 import { useSheetSetEvidence } from "./useSheetSetEvidence";
 import { useSheetTransmittalEvidence } from "./useSheetTransmittalEvidence";
 import "./sheetContextPanel.css";
+import WhyWaitingWhoPanel from "@/components/shared/WhyWaitingWhoPanel";
+import { DRAWING_SET_TRACKED_FIELDS } from "@/lib/recordMovement";
+import { explainGateBlockers, groupBlockersByOwner } from "@/lib/setGateBlockerOwnership";
 
 const NOT_VERIFIED = "Not verified";
 
@@ -288,6 +291,19 @@ export function SheetContextPanel({ entry, projectId, panelRef }: {
           <Link to="/FabRelease">Open Fab Release check</Link>
         </div>
       </dl>
+
+      {scopedProjectId && explicitSetId && (
+        <WhyWaitingWhoPanel
+          entityTable="drawing_sets"
+          recordId={explicitSetId}
+          projectId={scopedProjectId}
+          fields={DRAWING_SET_TRACKED_FIELDS}
+          waitingOn={groupBlockersByOwner(explainGateBlockers(trustedGate?.blockers, governing?.ball_in_court ?? null))}
+          waitingOnStatus={trustedGate ? "ready" : gate.isError ? "unavailable" : "loading"}
+          ballInCourt={governing?.ball_in_court ?? null}
+          nextMove={action.label}
+        />
+      )}
 
       <div className="sheet-context-panel__actions">
         <Link className="cmd-btn cmd-btn--primary" to={action.href}>{action.label}</Link>

@@ -73,6 +73,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
     allDrawings,
     allSheetResponses,
     allCommentDispositions,
+    blockerSourcesStatus,
   } = useSubmittalsPageQueries(projectId);
   const pageState = useSubmittalsPageState(rows, drawingSetsById);
   const {
@@ -391,6 +392,7 @@ export default function Submittals({ embedded = false }: { embedded?: boolean } 
         cycleStats: reviewForecast.stats,
         today,
         allRfis,
+        blockerSourcesStatus,
         allTasks,
         projectName: activeProject?.project_name || activeProject?.name || "Project",
         project: activeProject,
