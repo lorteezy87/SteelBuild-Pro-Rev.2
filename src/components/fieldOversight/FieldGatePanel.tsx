@@ -100,21 +100,21 @@ export function FieldGatePanel(props: FieldGatePanelProps) {
               No field findings. Readiness checklists, delay notices and daily reports are current for the next ten working days.
             </div>
           ) : signals.slice(0, 12).map((s) => (
-            <button
-              type="button"
-              role="listitem"
-              key={s.id}
-              className={`fo-signal is-${s.severity}`}
-              onClick={() => navigate(targetUrl(s))}
-              aria-label={`${s.severity} ${s.title}. ${s.action}`}
-            >
-              <span className="fo-signal__code">{s.code}</span>
-              <span>
-                <span className="fo-signal__title">{s.title}</span>
-                <span className="fo-signal__detail" style={{ display: "block" }}>{s.detail}</span>
-              </span>
-              <span className="fo-signal__action">{s.action} →</span>
-            </button>
+            <div role="listitem" key={s.id}>
+              <button
+                type="button"
+                className={`fo-signal is-${s.severity}`}
+                onClick={() => navigate(targetUrl(s))}
+                aria-label={`${s.severity} ${s.title}. ${s.action}`}
+              >
+                <span className="fo-signal__code">{s.code}</span>
+                <span>
+                  <span className="fo-signal__title">{s.title}</span>
+                  <span className="fo-signal__detail" style={{ display: "block" }}>{s.detail}</span>
+                </span>
+                <span className="fo-signal__action">{s.action} →</span>
+              </button>
+            </div>
           ))}
         </div>
       </div>

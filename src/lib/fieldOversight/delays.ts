@@ -9,7 +9,6 @@
  */
 import { workingDaysBetween, DEFAULT_CALENDAR } from "@/lib/schedule/workingCalendar";
 import type { WorkingCalendar } from "@/lib/schedule/workingCalendar";
-import type { Json } from "@/types/supabase";
 import {
   dateOnlyOrNull, isLive, metadataSection, numberOrNull, textOrNull, withMetadataSection,
 } from "./types";
@@ -152,7 +151,16 @@ export function noticeState(
 
 /** Rows that are closed out commercially no longer carry open exposure. */
 export function isOpenExposure(record: DelayRecord): boolean {
-  return record.status !== "Approved" && record.status !== "Rejected";
+  return record.status !== "Approved" && record.status !== "Rejected" && !record.raw.change_order_id;
+}
+
+/**
+ * Whether the notice window still applies. A delay that has been approved,
+ * rejected or converted to a change order is past the point where a missing
+ * notice is actionable, so it stops raising notice findings.
+ */
+export function needsNotice(record: DelayRecord): boolean {
+  return isOpenExposure(record) && !record.inputs.noticeSentOn;
 }
 
 export interface DelayDraft {
@@ -248,29 +256,53 @@ function delayTitle(inputs: DelayInputs): string {
   return `Delay — ${cause}${inputs.impactDate ? ` — ${inputs.impactDate}` : ""}`;
 }
 
+const GENERATED_TITLE = /^Delay — /;
+const GENERATED_AREAS = /^Responsible: /;
+
+function costImpact(cost: DelayCost): number | null {
+  return cost.total === null ? null : Math.round(cost.total * 100) / 100;
+}
+
 /**
- * Change-request fields for a delay. `estimated_cost_impact` is left NULL when
- * no cost is recorded, so the CR register never shows an invented $0.
- * cr_number is NOT set here: the atomic create assigns it.
+ * Insert fields for a new delay. `estimated_cost_impact` is left NULL when no
+ * cost is recorded, so the CR register never shows an invented $0.
+ * cr_number and requested_by are NOT set here: the atomic create assigns the
+ * number and stamps the signed-in user.
  */
-export function delayChangeRequestFields(
-  draft: DelayDraft,
-  existingMetadata: Json | null | undefined,
-  requestedBy: string | null,
-): Record<string, unknown> {
+export function delayCreateFields(draft: DelayDraft): Record<string, unknown> {
   const inputs = draftInputs(draft);
-  const cost = delayCost(inputs);
   return {
     title: delayTitle(inputs),
     description: inputs.whatHappened,
     reason: DELAY_CR_REASON,
     request_date: inputs.impactDate,
-    requested_by: requestedBy,
-    estimated_cost_impact: cost.total === null ? null : Math.round(cost.total * 100) / 100,
+    estimated_cost_impact: costImpact(delayCost(inputs)),
     affected_areas: inputs.responsibleParty ? `Responsible: ${inputs.responsibleParty}` : null,
     priority: "High",
-    metadata: withMetadataSection(existingMetadata, DELAY_METADATA_KEY, metadataFromInputs(inputs)),
+    metadata: { [DELAY_METADATA_KEY]: metadataFromInputs(inputs) },
   };
+}
+
+/**
+ * Update fields for an existing delay. Never touches requested_by, priority or
+ * status, and only rewrites title / affected_areas while they still hold the
+ * text this module generated — a PM's edits in the Change Requests register
+ * win. Sibling metadata keys are kept.
+ */
+export function delayUpdateFields(draft: DelayDraft, existing: ChangeRequestLike): Record<string, unknown> {
+  const inputs = draftInputs(draft);
+  const patch: Record<string, unknown> = {
+    description: inputs.whatHappened,
+    request_date: inputs.impactDate,
+    estimated_cost_impact: costImpact(delayCost(inputs)),
+    metadata: withMetadataSection(existing.metadata, DELAY_METADATA_KEY, metadataFromInputs(inputs)),
+  };
+  if (!textOrNull(existing.title) || GENERATED_TITLE.test(existing.title ?? "")) patch.title = delayTitle(inputs);
+  const areas = textOrNull(existing.affected_areas);
+  if (!areas || GENERATED_AREAS.test(areas)) {
+    patch.affected_areas = inputs.responsibleParty ? `Responsible: ${inputs.responsibleParty}` : null;
+  }
+  return patch;
 }
 
 /** Patch that records a notice as sent today without touching anything else. */

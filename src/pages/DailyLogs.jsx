@@ -34,6 +34,7 @@ import { useFieldOversightSources } from "@/hooks/useFieldOversightSources";
 import { DailyCoverage } from "@/components/fieldOversight/DailyCoverage";
 import { CopyTextModal } from "@/components/fieldOversight/CopyTextModal";
 import { useOrgName } from "@/pages/documentControl/BoardReportShell";
+import { useProjectRole } from "@/hooks/useProjectRole";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -323,13 +324,22 @@ export default function DailyLogs() {
 
   // Command Center's field gate links here with ?new_date=YYYY-MM-DD.
   const newDate = searchParams.get("new_date");
+  const { isLoading: roleLoading } = useProjectRole(projectId);
+  const canCreateLog = can("create", "daily_log");
   useEffect(() => {
-    if (!newDate || isLoading || !projectId || !can("create", "daily_log")) return;
+    // Wait for the project role: can() reads as viewer until it resolves.
+    if (!newDate || isLoading || !projectId || roleLoading) return;
+    if (!canCreateLog) {
+      toast.error("Your project role cannot create daily logs.");
+      searchParams.delete("new_date");
+      setSearchParams(searchParams, { replace: true });
+      return;
+    }
     if (/^\d{4}-\d{2}-\d{2}$/.test(newDate)) fileForDate(newDate);
     searchParams.delete("new_date");
     setSearchParams(searchParams, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newDate, isLoading, projectId]);
+  }, [newDate, isLoading, projectId, roleLoading, canCreateLog]);
 
   const datePresets = [
     { key: "today", label: "Today" },

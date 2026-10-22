@@ -99,7 +99,9 @@ function fmtLongDate(iso: IsoDate | null): string {
 export function formatDailyReport(log: DailyLogLike, project: ProjectLike | null, orgName: string | null): string {
   const job = [project?.project_number, project?.name].filter(Boolean).join(" ");
   const crew = numberOrNull(log.headcount);
-  const hours = numberOrNull(log.hours_worked);
+  // hours_worked is the form's "Total Man-Hours" (the manning grid's sum of
+  // count × hours) — already a crew total, never hours per person.
+  const manHours = numberOrNull(log.hours_worked);
   const line = (label: string, value: unknown) => {
     const v = typeof value === "number" ? String(value) : textOrNull(value);
     return v ? `${label}: ${v}` : null;
@@ -110,14 +112,15 @@ export function formatDailyReport(log: DailyLogLike, project: ProjectLike | null
   };
   const weather = [log.weather_description, log.temperature, log.wind_speed ? `wind ${log.wind_speed}` : null]
     .map(textOrNull).filter(Boolean).join(" · ");
-  const manHours = crew !== null && hours !== null ? crew * hours : null;
   return [
     `DAILY FIELD REPORT${job ? ` — ${job}` : ""}`,
     [fmtLongDate(dateOnlyOrNull(log.date)), orgName].filter(Boolean).join(" · "),
     "",
     line("Superintendent / foreman", log.superintendent),
     line("Crew", log.crew_name),
-    crew !== null ? `Manpower: ${crew}${hours !== null ? ` × ${hours} hrs = ${manHours} man-hours` : ""}` : null,
+    crew !== null || manHours !== null
+      ? `Manpower: ${[crew !== null ? `${crew} on site` : null, manHours !== null ? `${manHours} man-hours` : null].filter(Boolean).join(" · ")}`
+      : null,
     line("Weather", weather),
     line("Equipment on site", log.equipment_used),
     line("Materials received", log.materials_received),

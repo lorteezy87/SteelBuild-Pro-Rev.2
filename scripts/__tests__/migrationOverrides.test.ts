@@ -344,13 +344,8 @@ const LEDGER = new Set([
   // Applied immediately after its MFA prerequisite. The exact committed blob
   // is retained as statements[1] (sha256 29e8db4bd72c6f036aa8acc8437a73b4ef0defdad83787e6b809e50ba7a76eb6).
   '20261007112918',
-  // set_site_readiness_mark. Applied and stamped in production 2026-10-22
-  // 06:40, and observed in the live ledger by the `Supabase drift check` run on
-  // this branch, which reported it as `unknownMigrations` — i.e. remote holds
-  // it and the repo did not. Recorded here because this literal is only a
-  // deterministic, offline stand-in for that ledger: the real gate is
-  // `npm run supabase:drift`, which reads production. The file was landed
-  // (20261022064000_site_readiness_mark_rpc.sql, ported byte-identical from
-  // the authoring branch) rather than the check being weakened.
+  // Site readiness atomic tick RPC (PR #583). Applied and stamped by hand
+  // 2026-10-22 at the owner's direction; statements[1] is the exact committed
+  // blob (3756 bytes, sha256 fa5d699a8645bee15fd8cf45eb23eb5d13916e20f5990cfc643b9baaf8d23a23).
   '20261022064000',
 ]);
