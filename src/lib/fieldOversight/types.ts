@@ -44,6 +44,7 @@ export interface ChangeRequestLike {
   title?: string | null;
   description?: string | null;
   reason?: string | null;
+  affected_areas?: string | null;
   status?: string | null;
   request_date?: string | null;
   requested_by?: string | null;

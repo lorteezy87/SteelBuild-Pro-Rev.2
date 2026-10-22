@@ -53,8 +53,9 @@ describe("FieldGatePanel", () => {
 
   it("lists readiness and notice findings as actionable rows", () => {
     renderPanel();
-    expect(screen.getByRole("listitem", { name: /critical Seq 2 mobilizes in 1 working day/ })).toBeInTheDocument();
-    expect(screen.getByRole("listitem", { name: /CR-004 — written notice due today/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /critical Seq 2 mobilizes in 1 working day/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /CR-004 — written notice due today/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem").length).toBeGreaterThanOrEqual(2);
   });
 
   it("says the forecast is unknown rather than implying clear weather", () => {

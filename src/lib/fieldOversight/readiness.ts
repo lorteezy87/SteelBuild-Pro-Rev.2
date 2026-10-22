@@ -9,7 +9,7 @@
  * and anchor-bolt repairs are approved. The rest is what keeps a crew and crane
  * from mobilizing to a site that cannot take them.
  */
-import { addWorkingDays, workingDaysBetween, DEFAULT_CALENDAR } from "@/lib/schedule/workingCalendar";
+import { addWorkingDays, snapToWorkingDay, workingDaysBetween, DEFAULT_CALENDAR } from "@/lib/schedule/workingCalendar";
 import type { WorkingCalendar } from "@/lib/schedule/workingCalendar";
 import type { Json } from "@/types/supabase";
 import {
@@ -146,26 +146,43 @@ export function deriveReadiness(
  * Working days from `today` to the sequence start. Zero is "starts today";
  * negative means the start has passed. Null when no start is recorded.
  */
+/**
+ * The working day a sequence actually mobilizes: a start recorded on a
+ * non-working day (a Saturday on a Mon–Fri calendar) snaps forward.
+ */
+export function effectiveStart(
+  record: Pick<ReadinessRecord, "start">,
+  calendar: WorkingCalendar = DEFAULT_CALENDAR,
+): IsoDate | null {
+  return record.start ? snapToWorkingDay(record.start, calendar) ?? record.start : null;
+}
+
 export function workingDaysToStart(
   record: Pick<ReadinessRecord, "start">,
   today: IsoDate,
   calendar: WorkingCalendar = DEFAULT_CALENDAR,
 ): number | null {
-  if (!record.start) return null;
-  if (record.start === today) return 0;
-  if (record.start > today) {
+  const start = effectiveStart(record, calendar);
+  if (!start) return null;
+  if (start === today) return 0;
+  if (start > today) {
     // Inclusive count includes today when it is a working day; "in N days"
     // means N working days AFTER today.
-    const inclusive = workingDaysBetween(today, record.start, calendar);
+    const inclusive = workingDaysBetween(today, start, calendar);
     if (inclusive === null) return null;
     const todayCounts = (workingDaysBetween(today, today, calendar) ?? 0) > 0;
     return Math.max(0, inclusive - (todayCounts ? 1 : 0));
   }
-  const back = workingDaysBetween(record.start, today, calendar);
+  const back = workingDaysBetween(start, today, calendar);
   return back === null ? null : -Math.max(1, back - 1);
 }
 
-export type ReadinessTone = "ready" | "critical" | "warning" | "open" | "past";
+/**
+ * "started" = the sequence start has passed with items still open. That is
+ * the worst case, not a stale one: steel may be going up without the
+ * controlling contractor's written OK, so it stays critical until closed.
+ */
+export type ReadinessTone = "ready" | "critical" | "warning" | "open" | "started";
 
 export function readinessTone(
   record: ReadinessRecord,
@@ -175,15 +192,23 @@ export function readinessTone(
   if (!record.open.length) return "ready";
   const wd = workingDaysToStart(record, today, calendar);
   if (wd === null) return "open";
-  if (wd < 0) return "past";
+  if (wd < 0) return "started";
   if (wd <= 1) return "critical";
   if (wd <= 5) return "warning";
   return "open";
 }
 
-/** The action_items status a checklist implies. Complete only when every item is closed. */
-export function readinessStatus(marks: Record<string, ReadinessMark>): "Open" | "Complete" {
-  return openReadinessItems(marks).length ? "Open" : "Complete";
+/** Statuses set by hand in the Action Items register that a checklist edit must not undo. */
+const HELD_STATUSES = new Set(["Cancelled", "Closed"]);
+
+/**
+ * The action_items status a checklist implies: Complete when every item is
+ * closed, otherwise Open — except that a sequence someone Cancelled or Closed
+ * in the Action Items register stays that way until its checklist completes.
+ */
+export function readinessStatus(marks: Record<string, ReadinessMark>, current?: string | null): string {
+  if (!openReadinessItems(marks).length) return "Complete";
+  return current && HELD_STATUSES.has(current) ? current : "Open";
 }
 
 /** Cycle one item: open → done → N/A → open. Returns the new marks. */
@@ -202,16 +227,76 @@ export function cycleReadinessMark(
   return next;
 }
 
+/** The state a click moves an item to, from the state the user saw. */
+export function nextReadinessState(current: ReadinessState | undefined): ReadinessState | null {
+  if (!current) return "done";
+  return current === "done" ? "na" : null;
+}
+
+/** Set one item to an explicit state (null = open) without touching the others. */
+export function setReadinessMark(
+  marks: Record<string, ReadinessMark>,
+  key: string,
+  state: ReadinessState | null,
+  by: string | null,
+  atIso: string,
+): Record<string, ReadinessMark> {
+  if (!READINESS_ITEMS.some((item) => item.key === key)) return marks;
+  const next = { ...marks };
+  if (state) next[key] = { state, by, at: atIso };
+  else delete next[key];
+  return next;
+}
+
+/**
+ * Apply one item change so that concurrent ticks by different users on the
+ * same checklist do not erase each other.
+ *
+ * action_items has no per-item column and this change adds no migration, so
+ * the checklist is one jsonb value. Each attempt re-reads the row from the
+ * server, sets ONLY this item on that fresh copy, writes, then re-reads to
+ * confirm the item stuck. If another user's write landed in between and
+ * dropped it, the item is re-applied on top of theirs.
+ *
+ * This is the FALLBACK for a database without the `set_site_readiness_mark`
+ * function (migration 20261022064000), which does the same under a row lock
+ * and has no race. Here a residual window remains: a writer that completes its
+ * whole read-write-verify cycle inside this attempt's read→write gap can
+ * still have its item dropped.
+ */
+export async function applyReadinessMark(args: {
+  fetchRow: () => Promise<ActionItemLike | null>;
+  writePatch: (patch: { metadata: Record<string, Json>; status: string }) => Promise<unknown>;
+  key: string;
+  state: ReadinessState | null;
+  by: string | null;
+  atIso: string;
+  maxAttempts?: number;
+}): Promise<ActionItemLike> {
+  const { fetchRow, writePatch, key, state, by, atIso, maxAttempts = 3 } = args;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const row = await fetchRow();
+    if (!row) throw new Error("This checklist no longer exists. Refresh the page.");
+    const checklist = readChecklist(row.metadata);
+    const marks = setReadinessMark(checklist?.marks ?? {}, key, state, by, atIso);
+    await writePatch(readinessUpdatePatch(row, checklist?.sequence || textOrNull(row.title) || "", marks));
+    const after = await fetchRow();
+    const stuck = after ? readChecklist(after.metadata)?.marks[key]?.state ?? null : undefined;
+    if (after && stuck === state) return after;
+  }
+  throw new Error("Another update kept replacing this checklist. Refresh and try again.");
+}
+
 /** The update payload for a checklist change: metadata merged, status reconciled. */
 export function readinessUpdatePatch(
   row: ActionItemLike,
   sequence: string,
   marks: Record<string, ReadinessMark>,
-): { metadata: Record<string, Json>; status: "Open" | "Complete" } {
+): { metadata: Record<string, Json>; status: string } {
   const checklist: ReadinessChecklist = { version: 1, sequence, marks };
   return {
     metadata: withMetadataSection(row.metadata, READINESS_METADATA_KEY, checklist as unknown as Record<string, unknown>),
-    status: readinessStatus(marks),
+    status: readinessStatus(marks, row.status),
   };
 }
 

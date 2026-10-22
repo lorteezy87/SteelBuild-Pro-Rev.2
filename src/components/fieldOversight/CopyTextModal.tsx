@@ -26,7 +26,10 @@ export interface CopyTextModalProps {
 export function CopyTextModal({ open, title, eyebrow, text, onClose, extraAction }: CopyTextModalProps) {
   const [value, setValue] = useState(text);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
-  useEffect(() => { if (open) setValue(text); }, [open, text]);
+  // Seed only when the modal opens, so a background refetch that rebuilds
+  // `text` never discards edits the user is making.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) setValue(text); }, [open]);
 
   const copy = async () => {
     try {
