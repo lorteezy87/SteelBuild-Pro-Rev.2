@@ -17,10 +17,23 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   // set name change. Create waits for the check so nobody commits unseen.
   const crossSet = useCrossSetSupersede({ projectId, sheets, meta });
   const checkingOtherSets = crossSet.status === "loading";
+  // The ids actually sent to the create, derived once so the count shown beside
+  // Create cannot disagree with what gets written.
+  const supersedeIds = canSupersede && crossSet.status === "ready" ? crossSet.checkedIds : [];
   const handleCreateClick = () => {
-    const supersedeIds = canSupersede && crossSet.status === "ready" ? crossSet.checkedIds : [];
     onCreate(sheets.filter(s => s.selected), { supersedeIds, supersedeLabels: crossSet.labels });
   };
+
+  // Pages matched in another set that this create will LEAVE LIVE. Six separate
+  // conditions in planCrossSetSupersede can each leave a row unticked (locked
+  // set, set-name casing, missing or differing title, short sheet number, an
+  // older revision), and a locked row cannot be ticked at all — so the number
+  // was reachable only by reading the panel row by row. For a fabricator this
+  // is the number that matters: those are the sheets the shop can still pull.
+  // Stated next to Create so the consequence is visible at the moment of
+  // commit, not buried in a collapsed section above it.
+  const stayingLiveCount =
+    crossSet.status === "ready" ? crossSet.plan.rows.length - supersedeIds.length : 0;
 
   const setMetaField = (k, v) => setMeta(prev => ({ ...prev, [k]: v }));
   const anyAiFilled = Object.values(aiFilledFields).some(Boolean);
@@ -51,6 +64,14 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   // extractFailed PDFs produce a single pre-populated sheet row the user can
   // edit inline, so blocking the Create button here would dead-end them.
   const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge || r.extractFailed);
+
+  // A file whose UPLOAD failed is a different class and is kept separate: it
+  // contributed no sheet rows at all, so the amber "fill it in below" copy
+  // would point at nothing. It used to match none of the soft flags above and
+  // so rendered no warning anywhere — in a multi-file set one dropped PDF
+  // reached this screen silently and the set was created missing those pages,
+  // with the shop then working from a short register.
+  const failedFiles = fileResults.filter(r => r.status === "failed");
 
   // Per-sheet review signal (intakeReview) — the honest "confidence" surface:
   // the extractor returns no model confidence, so we flag sheets with a concrete
@@ -152,6 +173,26 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
           </div>
         </div>
       </div>
+
+      {/* Hard failures — this file contributed NO sheets. Red, above the amber
+          soft warnings, and it names the pages that will be missing if you
+          create the set anyway. */}
+      {failedFiles.map(r => (
+        <div key={`failed-${r.fileName}`} style={{
+          display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
+          background: "var(--danger-muted)",
+          border: "1px solid var(--danger-border)",
+          borderRadius: 8, marginBottom: 10,
+        }}>
+          <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-error)", flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
+            <span style={{ color: "var(--status-error)", fontWeight: 600 }}>{r.fileName}</span> did not upload, so none of its sheets are in the list below. Creating the set now will leave those pages out.
+            <div style={{ marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4, letterSpacing: "0.04em", overflowWrap: "anywhere" }}>
+              {r.error || "Upload failed for an unknown reason."}
+            </div>
+          </div>
+        </div>
+      ))}
 
       {/* Warnings — all soft failures share the amber "fill in manually" treatment */}
       {warnedFiles.map(r => (
@@ -291,15 +332,22 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
-        <Button
-          onClick={handleCreateClick}
-          disabled={selectedCount === 0 || checkingOtherSets}
-          style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}
-        >
-          {checkingOtherSets
-            ? "Checking other sets…"
-            : <>Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} /></>}
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {stayingLiveCount > 0 && (
+            <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-warning)" }}>
+              {stayingLiveCount} old {stayingLiveCount === 1 ? "page stays" : "pages stay"} live
+            </span>
+          )}
+          <Button
+            onClick={handleCreateClick}
+            disabled={selectedCount === 0 || checkingOtherSets}
+            style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}
+          >
+            {checkingOtherSets
+              ? "Checking other sets…"
+              : <>Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} /></>}
+          </Button>
+        </div>
       </div>
     </div>
   );
