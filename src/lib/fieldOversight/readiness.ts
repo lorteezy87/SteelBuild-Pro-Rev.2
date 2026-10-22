@@ -9,7 +9,7 @@
  * and anchor-bolt repairs are approved. The rest is what keeps a crew and crane
  * from mobilizing to a site that cannot take them.
  */
-import { addWorkingDays, workingDaysBetween, DEFAULT_CALENDAR } from "@/lib/schedule/workingCalendar";
+import { addWorkingDays, snapToWorkingDay, workingDaysBetween, DEFAULT_CALENDAR } from "@/lib/schedule/workingCalendar";
 import type { WorkingCalendar } from "@/lib/schedule/workingCalendar";
 import type { Json } from "@/types/supabase";
 import {
@@ -146,26 +146,43 @@ export function deriveReadiness(
  * Working days from `today` to the sequence start. Zero is "starts today";
  * negative means the start has passed. Null when no start is recorded.
  */
+/**
+ * The working day a sequence actually mobilizes: a start recorded on a
+ * non-working day (a Saturday on a Mon–Fri calendar) snaps forward.
+ */
+export function effectiveStart(
+  record: Pick<ReadinessRecord, "start">,
+  calendar: WorkingCalendar = DEFAULT_CALENDAR,
+): IsoDate | null {
+  return record.start ? snapToWorkingDay(record.start, calendar) ?? record.start : null;
+}
+
 export function workingDaysToStart(
   record: Pick<ReadinessRecord, "start">,
   today: IsoDate,
   calendar: WorkingCalendar = DEFAULT_CALENDAR,
 ): number | null {
-  if (!record.start) return null;
-  if (record.start === today) return 0;
-  if (record.start > today) {
+  const start = effectiveStart(record, calendar);
+  if (!start) return null;
+  if (start === today) return 0;
+  if (start > today) {
     // Inclusive count includes today when it is a working day; "in N days"
     // means N working days AFTER today.
-    const inclusive = workingDaysBetween(today, record.start, calendar);
+    const inclusive = workingDaysBetween(today, start, calendar);
     if (inclusive === null) return null;
     const todayCounts = (workingDaysBetween(today, today, calendar) ?? 0) > 0;
     return Math.max(0, inclusive - (todayCounts ? 1 : 0));
   }
-  const back = workingDaysBetween(record.start, today, calendar);
+  const back = workingDaysBetween(start, today, calendar);
   return back === null ? null : -Math.max(1, back - 1);
 }
 
-export type ReadinessTone = "ready" | "critical" | "warning" | "open" | "past";
+/**
+ * "started" = the sequence start has passed with items still open. That is
+ * the worst case, not a stale one: steel may be going up without the
+ * controlling contractor's written OK, so it stays critical until closed.
+ */
+export type ReadinessTone = "ready" | "critical" | "warning" | "open" | "started";
 
 export function readinessTone(
   record: ReadinessRecord,
@@ -175,15 +192,23 @@ export function readinessTone(
   if (!record.open.length) return "ready";
   const wd = workingDaysToStart(record, today, calendar);
   if (wd === null) return "open";
-  if (wd < 0) return "past";
+  if (wd < 0) return "started";
   if (wd <= 1) return "critical";
   if (wd <= 5) return "warning";
   return "open";
 }
 
-/** The action_items status a checklist implies. Complete only when every item is closed. */
-export function readinessStatus(marks: Record<string, ReadinessMark>): "Open" | "Complete" {
-  return openReadinessItems(marks).length ? "Open" : "Complete";
+/** Statuses set by hand in the Action Items register that a checklist edit must not undo. */
+const HELD_STATUSES = new Set(["Cancelled", "Closed"]);
+
+/**
+ * The action_items status a checklist implies: Complete when every item is
+ * closed, otherwise Open — except that a sequence someone Cancelled or Closed
+ * in the Action Items register stays that way until its checklist completes.
+ */
+export function readinessStatus(marks: Record<string, ReadinessMark>, current?: string | null): string {
+  if (!openReadinessItems(marks).length) return "Complete";
+  return current && HELD_STATUSES.has(current) ? current : "Open";
 }
 
 /** Cycle one item: open → done → N/A → open. Returns the new marks. */
@@ -207,11 +232,11 @@ export function readinessUpdatePatch(
   row: ActionItemLike,
   sequence: string,
   marks: Record<string, ReadinessMark>,
-): { metadata: Record<string, Json>; status: "Open" | "Complete" } {
+): { metadata: Record<string, Json>; status: string } {
   const checklist: ReadinessChecklist = { version: 1, sequence, marks };
   return {
     metadata: withMetadataSection(row.metadata, READINESS_METADATA_KEY, checklist as unknown as Record<string, unknown>),
-    status: readinessStatus(marks),
+    status: readinessStatus(marks, row.status),
   };
 }
 

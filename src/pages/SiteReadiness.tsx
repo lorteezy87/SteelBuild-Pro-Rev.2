@@ -29,11 +29,11 @@ import { OperationalSummary, PageHeader, Pill, useCommandSkin } from "@/componen
 import { CopyTextModal } from "@/components/fieldOversight/CopyTextModal";
 import { useFieldOversightSources, FIELD_OVERSIGHT_KEYS } from "@/hooks/useFieldOversightSources";
 import {
-  READINESS_ITEMS, buildReadinessRequest, cycleReadinessMark, defaultMobilizationDate,
+  READINESS_ITEMS, buildReadinessRequest, cycleReadinessMark, defaultMobilizationDate, readChecklist,
   isErectionTask, readinessCreateInput, readinessEditInput, readinessTone, readinessUpdatePatch,
   workingDaysToStart,
 } from "@/lib/fieldOversight";
-import type { ProjectLike, ReadinessDraft, ReadinessRecord, ReadinessTone } from "@/lib/fieldOversight";
+import type { ActionItemLike, ProjectLike, ReadinessDraft, ReadinessRecord, ReadinessTone } from "@/lib/fieldOversight";
 import "@/styles/command.css";
 import "@/styles/field-oversight.css";
 
@@ -42,7 +42,7 @@ const Modal = ModalRaw as unknown as ComponentType<AnyProps>;
 const DeleteDialog = DeleteDialogRaw as unknown as ComponentType<AnyProps>;
 
 const TONE_PILL: Record<ReadinessTone, "good" | "danger" | "warn" | "neutral" | "info"> = {
-  ready: "good", critical: "danger", warning: "warn", open: "info", past: "neutral",
+  ready: "good", critical: "danger", warning: "warn", open: "info", started: "danger",
 };
 
 function shortDay(iso: string | null): string {
@@ -92,7 +92,10 @@ export default function SiteReadiness() {
       if (state.mode === "create") return entities.ActionItem.create(withProjectId(readinessCreateInput(state.draft), projectId) as never);
       const record = state.record;
       if (!record || record.raw.project_id !== projectId) throw new Error("Reopen this sequence in its own project before saving.");
-      return entities.ActionItem.update(record.id, readinessEditInput(record.raw, state.draft, record.marks) as never);
+      // Keep the latest checklist marks, not the ones captured when the editor opened.
+      const row = latestRow(record.id) ?? record.raw;
+      const marks = readChecklist(row.metadata)?.marks ?? record.marks;
+      return entities.ActionItem.update(record.id, readinessEditInput(row, state.draft, marks) as never);
     },
     onSuccess: async (_r, state) => {
       setEditor(null);
@@ -102,16 +105,26 @@ export default function SiteReadiness() {
     onError: (err) => toast.error(toUserErrorMessage(err, "Could not save the sequence")),
   });
 
+  // Build each write from the freshest cached row, and lock the whole card
+  // until the write and its refetch land, so a second tick can never be built
+  // from marks that predate the first.
+  const latestRow = (id: string): ActionItemLike | undefined =>
+    (qc.getQueryData<ActionItemLike[]>([...FIELD_OVERSIGHT_KEYS.readiness(projectId)]) ?? []).find((row) => row.id === id);
   const toggleMut = useMutation({
     mutationFn: async ({ record, key }: { record: ReadinessRecord; key: string }) => {
-      if (record.raw.project_id !== projectId) throw new Error("This checklist belongs to another project.");
-      const marks = cycleReadinessMark(record.marks, key, by, new Date().toISOString());
-      return entities.ActionItem.update(record.id, readinessUpdatePatch(record.raw, record.sequence, marks) as never);
+      const row = latestRow(record.id) ?? record.raw;
+      if (row.project_id !== projectId) throw new Error("This checklist belongs to another project.");
+      const current = readChecklist(row.metadata)?.marks ?? record.marks;
+      const marks = cycleReadinessMark(current, key, by, new Date().toISOString());
+      const saved = await entities.ActionItem.update(record.id, readinessUpdatePatch(row, record.sequence, marks) as never);
+      qc.setQueryData<ActionItemLike[]>([...FIELD_OVERSIGHT_KEYS.readiness(projectId)], (rows) =>
+        (rows ?? []).map((r) => (r.id === record.id ? { ...r, ...(saved as ActionItemLike) } : r)));
+      return saved;
     },
-    onMutate: ({ record, key }) => setPending((p) => ({ ...p, [`${record.id}:${key}`]: true })),
-    onSettled: async (_d, _e, { record, key }) => {
-      setPending((p) => { const next = { ...p }; delete next[`${record.id}:${key}`]; return next; });
+    onMutate: ({ record }) => setPending((p) => ({ ...p, [record.id]: true })),
+    onSettled: async (_d, _e, { record }) => {
       await refresh();
+      setPending((p) => { const next = { ...p }; delete next[record.id]; return next; });
     },
     onError: (err) => toast.error(toUserErrorMessage(err, "Could not update the checklist")),
   });
@@ -147,7 +160,7 @@ export default function SiteReadiness() {
 
   const list = src.readiness;
   const tones = list.map((r) => readinessTone(r, today, src.calendar));
-  const soonOpen = tones.filter((t) => t === "critical" || t === "warning").length;
+  const soonOpen = tones.filter((t) => t === "critical" || t === "warning" || t === "started").length;
   const ready = tones.filter((t) => t === "ready").length;
   const openItems = list.reduce((n, r) => n + r.open.length, 0);
 
@@ -179,7 +192,7 @@ export default function SiteReadiness() {
         metrics={[
           { label: "Sequences", value: list.length, sublabel: "tracked" },
           { label: "Ready", value: ready, sublabel: "clear to mobilize", tone: ready ? "good" : "neutral" },
-          { label: "Not ready · 5 days", value: soonOpen, sublabel: "mobilizing soon with open items", tone: soonOpen ? "danger" : "good" },
+          { label: "Not ready", value: soonOpen, sublabel: "started or mobilizing within 5 work days with open items", tone: soonOpen ? "danger" : "good" },
           { label: "Open items", value: openItems, sublabel: "across all sequences", tone: openItems ? "warn" : "good" },
         ]}
       />
@@ -195,7 +208,7 @@ export default function SiteReadiness() {
             const tone = tones[idx];
             const wd = workingDaysToStart(r, today, src.calendar);
             const pct = Math.round((r.doneCount / READINESS_ITEMS.length) * 100);
-            const cls = tone === "ready" ? "is-ready" : tone === "critical" ? "is-critical" : tone === "warning" ? "is-warning" : "";
+            const cls = tone === "ready" ? "is-ready" : tone === "critical" || tone === "started" ? "is-critical" : tone === "warning" ? "is-warning" : "";
             const task = r.scheduleTaskId ? src.tasks.find((t) => t.id === r.scheduleTaskId) : undefined;
             return (
               <section key={r.id} id={`fo-seq-${r.id}`} className={`fo-card ${cls}`} aria-label={r.sequence}
@@ -206,6 +219,7 @@ export default function SiteReadiness() {
                     <div className="fo-card__sub">
                       {task ? `${task.task_name ?? "Erection task"} · ` : ""}{r.start ? `mob ${shortDay(r.start)}` : "no mobilization date"}
                       {wd !== null && wd >= 0 ? ` · ${wd === 0 ? "today" : `${wd} work day${wd === 1 ? "" : "s"} out`}` : ""}
+                      {wd !== null && wd < 0 && r.open.length ? " · started with items open" : ""}
                       {r.owner ? ` · ${r.owner}` : ""}
                     </div>
                   </div>
@@ -217,7 +231,7 @@ export default function SiteReadiness() {
                 <div className="fo-check">
                   {READINESS_ITEMS.map((item) => {
                     const mark = r.marks[item.key];
-                    const busy = !!pending[`${r.id}:${item.key}`];
+                    const busy = !!pending[r.id];
                     const state = mark?.state ?? "open";
                     return (
                       <button
@@ -231,7 +245,7 @@ export default function SiteReadiness() {
                       >
                         <span className="fo-check__box">{state === "done" ? "✓" : state === "na" ? "N/A" : ""}</span>
                         <span className="fo-check__label">{item.label}</span>
-                        <span className="fo-check__meta">{mark ? [mark.by, mark.at ? shortDay(mark.at.slice(0, 10)) : null].filter(Boolean).join(" · ") : item.party}</span>
+                        <span className="fo-check__meta">{mark ? [mark.by, mark.at && !Number.isNaN(Date.parse(mark.at)) ? shortDay(todayLocalISO(new Date(mark.at))) : null].filter(Boolean).join(" · ") : item.party}</span>
                       </button>
                     );
                   })}

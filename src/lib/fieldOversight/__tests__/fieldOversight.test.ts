@@ -5,8 +5,8 @@ import {
   readinessCreateInput, readinessTone, readinessUpdatePatch, workingDaysToStart,
 } from "../readiness";
 import {
-  DELAY_CR_REASON, buildDelayNotice, delayChangeRequestFields, delayCost, deriveDelays,
-  emptyDelayDraft, noticeSentPatch, noticeState, validateDelayDraft,
+  DELAY_CR_REASON, buildDelayNotice, delayCost, delayCreateFields, delayUpdateFields, deriveDelays,
+  emptyDelayDraft, needsNotice, noticeSentPatch, noticeState, validateDelayDraft,
 } from "../delays";
 import { formatDailyReport, missingDailyReports } from "../dailyReports";
 import { buildFieldBrief, deriveFieldSignals, deriveScheduleCore } from "../fieldGate";
@@ -63,6 +63,16 @@ describe("site readiness", () => {
     expect(cycleReadinessMark(marks, "not-a-key", "x", "t")).toBe(marks);
   });
 
+  it("keeps a Cancelled or Closed sequence closed until its checklist completes", () => {
+    expect(readinessUpdatePatch(readinessRow({ status: "Cancelled" }), "Seq 2", {}).status).toBe("Cancelled");
+    expect(readinessUpdatePatch(readinessRow({ status: "Complete" }), "Seq 2", {}).status).toBe("Open");
+  });
+
+  it("snaps a weekend start to the next working day", () => {
+    // Saturday 10-24 on Mon–Fri mobilizes Monday: one working day out from Friday, not "today".
+    expect(workingDaysToStart({ start: "2026-10-24" }, FRI)).toBe(1);
+  });
+
   it("is Complete only when every item is done or N/A", () => {
     const done: ReadinessMark = { state: "done", by: null, at: null };
     const all: Record<string, ReadinessMark> = Object.fromEntries(READINESS_ITEMS.map((i) => [i.key, done]));
@@ -96,6 +106,7 @@ describe("site readiness", () => {
     expect(readinessTone(r, FRI)).toBe("critical");
     expect(readinessTone(r, "2026-10-19")).toBe("warning");
     expect(readinessTone(r, "2026-10-12")).toBe("open");
+    expect(readinessTone(r, "2026-10-28")).toBe("started");
   });
 
   it("writes the request from the signed-in org and lists only other parties' items", () => {
@@ -143,12 +154,37 @@ describe("delay log", () => {
     expect(noticeState({ impactDate: null, noticeSentOn: null }, WED)).toEqual({ kind: "unknown" });
   });
 
-  it("builds CR fields without a number and without an invented $0", () => {
-    const fields = delayChangeRequestFields({ ...emptyDelayDraft(WED), cause: "steel" }, { keep: 1 }, null);
+  it("creates CR fields without a number, a requester or an invented $0", () => {
+    const fields = delayCreateFields({ ...emptyDelayDraft(WED), cause: "steel" });
     expect(fields).not.toHaveProperty("cr_number");
+    expect(fields).not.toHaveProperty("requested_by");
     expect(fields.estimated_cost_impact).toBeNull();
     expect(fields.reason).toBe(DELAY_CR_REASON);
-    expect(fields.metadata).toMatchObject({ keep: 1, delay_log: { cause: "steel", impact_date: WED } });
+    expect(fields.metadata).toMatchObject({ delay_log: { cause: "steel", impact_date: WED } });
+  });
+
+  it("updates without wiping what a PM set in the Change Requests register", () => {
+    const existing: ChangeRequestLike = { id: "d1", title: "Steel late — Bldg B", affected_areas: "Bldg B, Grid 1–6", requested_by: "pm@example.com", priority: "Critical", metadata: { keep: 1, delay_log: { cause: "steel" } } } as ChangeRequestLike;
+    const patch = delayUpdateFields({ ...emptyDelayDraft(WED), cause: "steel", crew: "4", hoursEach: "8", laborRate: "90", responsibleParty: "Acme" }, existing);
+    expect(patch).not.toHaveProperty("requested_by");
+    expect(patch).not.toHaveProperty("priority");
+    expect(patch).not.toHaveProperty("status");
+    expect(patch).not.toHaveProperty("title");
+    expect(patch).not.toHaveProperty("affected_areas");
+    expect(patch.estimated_cost_impact).toBe(2880);
+    expect(patch.metadata).toMatchObject({ keep: 1, delay_log: { crew: 4, hours_each: 8 } });
+    const generated = delayUpdateFields({ ...emptyDelayDraft(WED), cause: "site", responsibleParty: "Acme" }, { id: "d2", title: "Delay — Steel late or short-shipped — 2026-10-21", affected_areas: "Responsible: Old GC" });
+    expect(generated.title).toBe("Delay — Site not ready — 2026-10-21");
+    expect(generated.affected_areas).toBe("Responsible: Acme");
+  });
+
+  it("stops asking for notice once a delay is approved, rejected or converted", () => {
+    const [open] = deriveDelays([delayRow({ cause: "site" })]);
+    const [approved] = deriveDelays([delayRow({ cause: "site" }, { status: "Approved" })]);
+    const [converted] = deriveDelays([delayRow({ cause: "site" }, { change_order_id: "co-1" })]);
+    expect([needsNotice(open), needsNotice(approved), needsNotice(converted)]).toEqual([true, false, false]);
+    const signals = deriveFieldSignals({ readiness: [], delays: [approved, converted], tasks: [], deliveries: [], logs: [], weather: [], today: "2026-11-30" });
+    expect(signals).toEqual([]);
   });
 
   it("validates numbers and notice ordering", () => {
@@ -217,6 +253,13 @@ describe("field gate", () => {
     expect(signals.map((s) => s.code)).toEqual(["DN", "RD", "DR", "DR", "DR", "DR"]);
     expect(signals[0].severity).toBe("critical");
     expect(signals[1].severity).toBe("critical");
+  });
+
+  it("keeps raising open items after the sequence has started", () => {
+    const signals = deriveFieldSignals({ readiness, delays: [], tasks: [], deliveries: [], logs: [], weather: [], today: "2026-10-28" });
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toMatchObject({ code: "RD", severity: "critical" });
+    expect(signals[0].title).toContain("started Mon, Oct 26");
   });
 
   it("only raises weather against scheduled field work", () => {

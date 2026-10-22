@@ -14,9 +14,9 @@
  */
 import { addWorkingDays, DEFAULT_CALENDAR } from "@/lib/schedule/workingCalendar";
 import type { WorkingCalendar } from "@/lib/schedule/workingCalendar";
-import { readinessTone, workingDaysToStart } from "./readiness";
+import { effectiveStart, workingDaysToStart } from "./readiness";
 import type { ReadinessRecord } from "./readiness";
-import { DELAY_CAUSES, formatMoney, noticeState, DEFAULT_NOTICE_WINDOW_DAYS } from "./delays";
+import { DELAY_CAUSES, formatMoney, needsNotice, noticeState, DEFAULT_NOTICE_WINDOW_DAYS } from "./delays";
 import type { DelayRecord } from "./delays";
 import { fieldWorkOn, missingDailyReports } from "./dailyReports";
 import type {
@@ -74,21 +74,26 @@ export function deriveFieldSignals(input: FieldGateInput): FieldSignal[] {
   for (const r of readiness) {
     if (!r.open.length) continue;
     const wd = workingDaysToStart(r, today, calendar);
-    if (wd === null || wd < 0 || wd > 5) continue;
-    const when = wd === 0 ? "today" : `in ${wd} working day${wd === 1 ? "" : "s"}`;
+    if (wd === null || wd > 5) continue;
+    const items = `${r.open.length} readiness item${r.open.length === 1 ? "" : "s"} open`;
+    const start = effectiveStart(r, calendar);
+    const title = wd < 0
+      ? `${r.sequence} started ${start ? shortDay(start) : ""} with ${items}`.replace("  ", " ")
+      : `${r.sequence} mobilizes ${wd === 0 ? "today" : `in ${wd} working day${wd === 1 ? "" : "s"}`} with ${items}`;
     out.push({
       id: `rd:${r.id}`,
       code: "RD",
-      severity: readinessTone(r, today, calendar) === "critical" ? "critical" : "warning",
-      title: `${r.sequence} mobilizes ${when} with ${r.open.length} readiness item${r.open.length === 1 ? "" : "s"} open`,
+      severity: wd <= 1 ? "critical" : "warning",
+      title,
       detail: `Still open: ${r.open.slice(0, 3).map((i) => i.label).join("; ")}${r.open.length > 3 ? `; +${r.open.length - 3} more` : ""}. Get written confirmation or re-sequence before the crew and crane mobilize.`,
-      date: r.start,
+      date: start,
       target: { page: "SiteReadiness", id: r.id },
       action: "Open checklist",
     });
   }
 
   for (const d of delays) {
+    if (!needsNotice(d)) continue;
     const n = noticeState(d.inputs, today, noticeWindowDays, calendar);
     if (n.kind !== "due" && n.kind !== "overdue") continue;
     const cause = d.inputs.cause ? DELAY_CAUSES[d.inputs.cause] : "Delay";
@@ -174,7 +179,7 @@ export function deriveScheduleCore(input: Omit<FieldGateInput, "delays" | "logs"
     if (!date) break;
     const work = fieldWorkOn(date, tasks, deliveries);
     const readinessOpen = readiness
-      .filter((r) => r.start === date)
+      .filter((r) => effectiveStart(r, calendar) === date)
       .reduce((n, r) => n + r.open.length, 0);
     const wx = weather ? weather.filter((w) => w.date === date).reduce<number | null>((m, w) => Math.max(m ?? 0, w.severity), null) : null;
     const blocked = work.tasks.some((t) => t.status && BLOCKED_TASK.has(t.status))

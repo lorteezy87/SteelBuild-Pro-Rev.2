@@ -20,6 +20,7 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { usePermissions } from "@/services/permissions";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { useProjectRole } from "@/hooks/useProjectRole";
 import { useNumberedCreateDraft } from "@/hooks/useNumberedCreateDraft";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
@@ -35,8 +36,8 @@ import { CopyTextModal } from "@/components/fieldOversight/CopyTextModal";
 import { useFieldOversightSources, FIELD_OVERSIGHT_KEYS } from "@/hooks/useFieldOversightSources";
 import { useNoticeWindow } from "@/hooks/useNoticeWindow";
 import {
-  DELAY_CAUSES, buildDelayNotice, delayChangeRequestFields, delayCost, draftFromRecord, draftInputs,
-  emptyDelayDraft, formatMoney, isErectionTask, isOpenExposure, noticeSentPatch, noticeState, validateDelayDraft,
+  DELAY_CAUSES, buildDelayNotice, delayCreateFields, delayCost, delayUpdateFields, draftFromRecord, draftInputs,
+  emptyDelayDraft, formatMoney, isErectionTask, isOpenExposure, needsNotice, noticeSentPatch, noticeState, validateDelayDraft,
 } from "@/lib/fieldOversight";
 import type { DelayCause, DelayDraft, DelayRecord, NoticeState, ProjectLike } from "@/lib/fieldOversight";
 import "@/styles/command.css";
@@ -84,13 +85,15 @@ export default function DelayLog() {
   const createDraft = useNumberedCreateDraft(projectId, !!editor && !editor.record, "delay-log");
   useEffect(() => { setEditor(null); setNoticeFor(null); }, [projectId]);
 
+  const { isLoading: roleLoading } = useProjectRole(projectId);
   const canCreate = can("create", "delay");
   const canEdit = can("edit", "delay");
 
   // Deep links: ?from_log=<daily log id> prefills a new delay; ?id=<delay> opens its notice.
   const handled = useRef<string | null>(null);
   useEffect(() => {
-    if (src.isLoading || !projectId) return;
+    // Wait for the project role: can() reads as viewer until it resolves.
+    if (src.isLoading || !projectId || roleLoading) return;
     const fromLog = params.get("from_log");
     const focus = params.get("id");
     const token = `${fromLog ?? ""}|${focus ?? ""}`;
@@ -112,21 +115,24 @@ export default function DelayLog() {
       const rec = src.delays.find((x) => x.id === focus);
       if (rec) setNoticeFor(rec);
     }
-  }, [src.isLoading, src.logs, src.delays, params, projectId, canCreate, today]);
+  }, [src.isLoading, roleLoading, src.logs, src.delays, params, projectId, canCreate, today]);
 
   const erectionTasks = useMemo(() => src.tasks.filter(isErectionTask), [src.tasks]);
   const refresh = () => invalidateEntity(qc, "change_request", projectId);
 
   const saveMut = useMutation({
     mutationFn: async (state: EditorState) => {
-      const errors = validateDelayDraft(state.draft);
-      if (errors.length) throw new Error(errors.join(" "));
+      // A recovery re-sends the original payload; the form is locked and not re-validated.
+      const recovering = !state.record && createDraft.recoveryPending;
+      if (!recovering) {
+        const errors = validateDelayDraft(state.draft);
+        if (errors.length) throw new Error(errors.join(" "));
+      }
       if (!state.record) {
-        const fields = delayChangeRequestFields(state.draft, null, null);
-        return createDraft.save(withProjectId({ ...fields, status: "Submitted" }, projectId), entities.ChangeRequest.create as never);
+        return createDraft.save(withProjectId({ ...delayCreateFields(state.draft), status: "Submitted" }, projectId), entities.ChangeRequest.create as never);
       }
       if (state.record.raw.project_id !== projectId) throw new Error("Reopen this delay in its own project before saving.");
-      return entities.ChangeRequest.update(state.record.id, delayChangeRequestFields(state.draft, state.record.raw.metadata, null) as never);
+      return entities.ChangeRequest.update(state.record.id, delayUpdateFields(state.draft, state.record.raw) as never);
     },
     onSuccess: async (_r, state) => {
       setEditor(null);
@@ -168,8 +174,9 @@ export default function DelayLog() {
 
   const delays = src.delays;
   const states = new Map(delays.map((d) => [d.id, noticeState(d.inputs, today, noticeWindow, src.calendar)]));
-  const unnoticed = delays.filter((d) => { const n = states.get(d.id); return n?.kind === "due" || n?.kind === "overdue"; });
-  const overdue = delays.filter((d) => states.get(d.id)?.kind === "overdue");
+  // Approved, rejected or converted delays no longer raise notice findings.
+  const unnoticed = delays.filter((d) => { const n = states.get(d.id); return needsNotice(d) && (n?.kind === "due" || n?.kind === "overdue"); });
+  const overdue = unnoticed.filter((d) => states.get(d.id)?.kind === "overdue");
   const manHours = delays.reduce<number | null>((sum, d) => (d.cost.manHours === null ? sum : (sum ?? 0) + d.cost.manHours), null);
   const exposure = delays.filter(isOpenExposure).reduce<number | null>((sum, d) => (d.cost.total === null ? sum : (sum ?? 0) + d.cost.total), null);
   const converted = delays.filter((d) => d.raw.change_order_id).length;
@@ -195,7 +202,7 @@ export default function DelayLog() {
     { key: "party", header: "Responsible", render: (d) => d.inputs.responsibleParty ?? "—" },
     { key: "mh", header: "Man-hrs", align: "right", render: (d) => (d.cost.manHours === null ? "—" : Math.round(d.cost.manHours).toLocaleString("en-US")) },
     { key: "cost", header: "Cost", align: "right", render: (d) => <span style={{ fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>{formatMoney(d.cost.total)}</span> },
-    { key: "notice", header: "Notice", render: (d) => noticePill(states.get(d.id) as NoticeState) },
+    { key: "notice", header: "Notice", render: (d) => (needsNotice(d) || d.inputs.noticeSentOn ? noticePill(states.get(d.id) as NoticeState) : <Pill tone="neutral">Closed out</Pill>) },
     { key: "status", header: "CR status", render: (d) => <Pill tone={d.status === "Approved" ? "good" : d.status === "Rejected" ? "neutral" : "info"}>{d.status ?? "—"}</Pill> },
     {
       key: "act", header: "", align: "right", render: (d) => (
@@ -291,12 +298,17 @@ export default function DelayLog() {
               </span>
               <button type="button" className="cmd-btn" onClick={() => setEditor(null)}>Cancel</button>
               <button type="button" className="cmd-btn cmd-btn--primary" disabled={saveMut.isPending} onClick={() => saveMut.mutate(editor)}>
-                {saveMut.isPending ? "Saving…" : editor.record ? "Save" : "Log delay"}
+                {saveMut.isPending ? "Saving…" : editor.record ? "Save" : createDraft.recoveryPending ? "Recover saved delay" : "Log delay"}
               </button>
             </div>
           )}
         >
-          <div className="fo-form">
+          {!editor.record && createDraft.recoveryPending ? (
+            <p role="status" className="fo-errors" style={{ marginBottom: 12 }}>
+              The last save may have completed. Saving again recovers that original delay; changes entered here will not be applied. Check the register before logging another.
+            </p>
+          ) : null}
+          <fieldset className="fo-form" disabled={saveMut.isPending || (!editor.record && createDraft.recoveryPending)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <div className="fo-field">
               <label htmlFor="dl-date">Date of impact *</label>
               <input id="dl-date" type="date" value={draft.impactDate} onChange={(e) => setDraft({ impactDate: e.target.value })} />
@@ -353,10 +365,10 @@ export default function DelayLog() {
                 <input id="dl-noticed" type="date" value={draft.noticeSentOn} onChange={(e) => setDraft({ noticeSentOn: e.target.value })} />
               </div>
             ) : null}
-            {validateDelayDraft(draft).length ? (
+            {validateDelayDraft(draft).length && !(!editor.record && createDraft.recoveryPending) ? (
               <p className="fo-errors is-wide" role="status">{validateDelayDraft(draft).join(" ")}</p>
             ) : null}
-          </div>
+          </fieldset>
         </Modal>
       ) : null}
 

@@ -2,7 +2,7 @@
    Colour comes only from the command-skin tokens (--cmd-*), so light and
    SteelBuild Dark both work without a literal surface or text hex here. */
 
-.fo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; align-items: start; }
+.fo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; align-items: start; }
 
 .fo-card { border: 1px solid var(--cmd-border); border-radius: 12px; background: var(--cmd-surface); color: var(--cmd-text); overflow: hidden; }
 .fo-card.is-critical { border-color: var(--cmd-danger); }
@@ -53,7 +53,7 @@
 
 .fo-signals { display: flex; flex-direction: column; }
 .fo-signal { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: start; width: 100%; padding: 11px 14px; border: 0; border-bottom: 1px solid var(--cmd-border); background: transparent; color: var(--cmd-text); text-align: left; cursor: pointer; }
-.fo-signal:last-child { border-bottom: 0; }
+[role="listitem"]:last-child > .fo-signal { border-bottom: 0; }
 .fo-signal:hover { background: var(--cmd-row-hover); }
 .fo-signal:focus-visible { outline: 2px solid var(--cmd-gold); outline-offset: -2px; }
 .fo-signal__code { display: grid; place-items: center; height: 26px; border-radius: 7px; font: 800 10px/1 var(--font-mono, monospace); letter-spacing: .04em; background: var(--cmd-chip-warn-bg); color: var(--cmd-warn-text); }
