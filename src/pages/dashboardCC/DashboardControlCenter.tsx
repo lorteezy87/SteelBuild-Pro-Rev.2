@@ -42,8 +42,15 @@ interface DashboardControlCenterProps {
   rfiEvidenceLoaded?: boolean;
   scheduleEvidenceLoaded?: boolean;
   onNavigate?: (target: string, opts?: Record<string, unknown>) => void;
+  /**
+   * Whether a page's module is switched on for this user. Links to a page that
+   * is off land on "module disabled", so they are not offered. Defaults to
+   * every page open.
+   */
+  canOpenPage?: (page: string) => boolean;
 }
 
+const ALL_PAGES_OPEN = () => true;
 const EMPTY_ROWS: Record<string, unknown>[] = [];
 
 function toneForStatus(statusTone: string) {
@@ -78,6 +85,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
     rfiEvidenceLoaded = true,
     scheduleEvidenceLoaded = true,
     onNavigate,
+    canOpenPage = ALL_PAGES_OPEN,
   } = props;
 
   const summary = useMemo(
@@ -147,7 +155,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
     onOpen: item.target && onNavigate ? () => onNavigate(item.target!) : undefined,
   }));
 
-  const quickAccess: QuickAccessItem[] = summary.modules.slice(0, 6).map((module) => ({
+  const quickAccess: QuickAccessItem[] = summary.modules.filter((module) => canOpenPage(module.page)).slice(0, 6).map((module) => ({
     page: module.target,
     label: module.title,
     metric: module.metric,
@@ -234,7 +242,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
               Operating evidence is incomplete. Open the source workspace to review missing records.
             </p>
           ) : null}
-          {onNavigate ? (
+          {onNavigate && canOpenPage("JobStatusReport") ? (
             <button type="button" className="dash-executive__text-button"
               onClick={() => onNavigate("JobStatusReport")}>
               Open job status report <ArrowUpRight size={15} aria-hidden="true" />

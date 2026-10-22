@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { createPageUrl } from "@/utils";
+import { searchResultHref } from "./searchResultHref";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { Search } from "lucide-react";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 
@@ -61,6 +62,7 @@ export default function GlobalSearchModal({ open, onClose }) {
   const inputRef = useRef(null);
   const listRef = useRef(null);
   const navigate = useNavigate();
+  const { isPageVisible } = useModuleAccess();
 
   // Get active project for scope filtering
   const { activeProject } = useProjectContext();
@@ -191,7 +193,7 @@ export default function GlobalSearchModal({ open, onClose }) {
     scopeFilter(cachedDrawings)
       .filter(d => d.sheet_number?.toLowerCase().includes(ql) || d.title?.toLowerCase().includes(ql))
       .slice(0, 5)
-      .forEach(d => searchResults.push({ type: "Drawing", id: d.id, title: `${d.sheet_number} · ${d.title}`, subtitle: searchScope === "all" ? `${d.project_name || "—"} · ${d.stage}` : `${d.project_name} · ${d.stage}`, status: d.stage, projectId: d.project_id, page: "Documents" }));
+      .forEach(d => searchResults.push({ type: "Drawing", id: d.id, title: `${d.sheet_number} · ${d.title}`, subtitle: searchScope === "all" ? `${d.project_name || "—"} · ${d.stage}` : `${d.project_name} · ${d.stage}`, status: d.stage, projectId: d.project_id, page: "DrawingViewer" }));
 
     scopeFilter(cachedWPs)
       .filter(w => w.wp_number?.toLowerCase().includes(ql) || w.name?.toLowerCase().includes(ql))
@@ -227,10 +229,12 @@ export default function GlobalSearchModal({ open, onClose }) {
   // Module quick-nav filtered by query
   const filteredModules = useMemo(() => {
     if (query.length >= 2) return []; // search results take over
-    if (query.length === 0) return QUICK_NAV;
+    // Quick-nav to a switched-off module lands on "module disabled".
+    const open = QUICK_NAV.filter((m) => isPageVisible(m.page));
+    if (query.length === 0) return open;
     const ql = query.toLowerCase();
-    return QUICK_NAV.filter((m) => m.name.toLowerCase().includes(ql));
-  }, [query]);
+    return open.filter((m) => m.name.toLowerCase().includes(ql));
+  }, [query, isPageVisible]);
 
   // Combined display items
   const displayItems = useMemo(() => {
@@ -260,7 +264,7 @@ export default function GlobalSearchModal({ open, onClose }) {
       const searches = [result.title, ...recentSearches.filter((s) => s !== result.title)].slice(0, 5);
       localStorage.setItem("__steelbuild_recent_searches", JSON.stringify(searches));
     }
-    navigate(createPageUrl(result.page));
+    navigate(searchResultHref(result));
     onClose?.();
   };
 

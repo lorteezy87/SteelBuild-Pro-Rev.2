@@ -202,3 +202,18 @@ describe("buildClaimsManifestCsv", () => {
     expect(csv).toContain("rfi");
   });
 });
+
+describe("buildClaimsManifestCsv — real column names", () => {
+  it("dates and credits each record from columns that exist", () => {
+    const csv = buildClaimsManifestCsv({
+      rfis: [{ id: "r1", rfi_number: "RFI-1", title: "Q", status: "Open", submitted_by: "pm@x.com", submitted_date: "2026-01-02" }],
+      changeOrders: [{ id: "c1", co_number: "CO-1", title: "Extra", status: "Approved", submitted_by: "pm2@x.com", submitted_date: "2026-01-03" }],
+      photos: [{ id: "p1", title: "Embed at A/1", created_by: "fld@x.com", taken_date: "2026-01-04", work_package_id: "wp1" }],
+    });
+    expect(csv).toContain("pm@x.com");
+    expect(csv).toContain("2026-01-03");
+    expect(csv).toContain("Embed at A/1");
+    expect(csv).toContain("work_package:wp1");
+    expect(csv).toContain("2026-01-04");
+  });
+});

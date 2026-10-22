@@ -1,4 +1,5 @@
 import { useCallback, useRef, type RefObject } from "react";
+import { useNavigate } from "react-router-dom";
 import { Camera, ClipboardCheck, ClipboardList } from "lucide-react";
 import { FilterBar } from "@/components/command";
 
@@ -25,6 +26,7 @@ export function useFieldTodayNavigation({
   onStatusFilter,
 }: UseFieldTodayNavigationOptions): FieldTodayNavigation {
   const tableRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const showTaskTable = useCallback(() => {
     tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
@@ -32,9 +34,10 @@ export function useFieldTodayNavigation({
     onStatusFilter("all");
     showTaskTable();
   }, [onStatusFilter, showTaskTable]);
+  // In-app navigation: location.assign reloaded the whole app and re-ran auth.
   const showDailyPhotos = useCallback(() => {
-    window.location.assign(`/Photos?date=${todayIso}`);
-  }, [todayIso]);
+    navigate(`/Photos?date=${encodeURIComponent(todayIso)}`);
+  }, [navigate, todayIso]);
 
   return { tableRef, showAllTasks, showTaskTable, showDailyPhotos };
 }

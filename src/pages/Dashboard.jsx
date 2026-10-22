@@ -13,6 +13,7 @@ import { projectsInWorkspace, readProjectRows } from "@/lib/portfolioScope";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import GettingStartedChecklist from "@/components/dashboard/GettingStartedChecklist";
 // Canonical control-center loading uses the same query set for all project views.
@@ -41,6 +42,7 @@ function FirstProjectWelcome({ onStart }) {
 }
 
 export default function Dashboard() {
+  const { isPageVisible } = useModuleAccess();
   const navigate = useNavigate();
   const { activeProject, setActiveProject } = useProjectContext();
   const { user } = useAuth();
@@ -372,6 +374,7 @@ export default function Dashboard() {
               rfiEvidenceLoaded={rfisSuccess}
               scheduleEvidenceLoaded={scheduleTasksSuccess}
               onNavigate={onNavigateDash}
+              canOpenPage={isPageVisible}
             />
           </>
         </Suspense>

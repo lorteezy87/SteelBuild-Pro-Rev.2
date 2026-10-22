@@ -333,13 +333,17 @@ export default function ExportFabReleaseModal({
         // packages containing zero RFIs. A claims export that cannot read its
         // own evidence must ABORT, not quietly omit it.
         //
-        // NOTE: rfis has NO `subject` column (use title) — selecting it made
-        // PostgREST reject the whole query.
+        // NOTE: select only real columns. One unknown column makes PostgREST
+        // reject the whole query and abort the export: rfis has no `subject`
+        // or `author`; change_orders has no `issued_date`/`issued_by`; photos
+        // has `title`/`taken_date`/`created_by`, not caption/taken_at/uploaded_by.
+        // src/lib/exports/__tests__/claimsColumns.test.ts checks these lists
+        // against the generated schema.
         const [rfis, changeOrders, photos] = await Promise.all([
           fetchAllRows(
             (start, end) => supabase
               .from("rfis")
-              .select("id, rfi_number, title, question, status, submitted_date, created_at, author, created_by")
+              .select("id, rfi_number, title, question, status, submitted_date, created_at, submitted_by, created_by")
               .eq("project_id", project.id).eq("is_deleted", false)
               .order("id").range(start, end),
             "claims RFIs",
@@ -347,7 +351,7 @@ export default function ExportFabReleaseModal({
           fetchAllRows(
             (start, end) => supabase
               .from("change_orders")
-              .select("id, co_number, title, description, status, issued_date, created_at, issued_by, created_by")
+              .select("id, co_number, title, description, status, submitted_date, created_at, submitted_by, created_by")
               .eq("project_id", project.id).eq("is_deleted", false)
               .order("id").range(start, end),
             "claims change orders",
@@ -355,7 +359,7 @@ export default function ExportFabReleaseModal({
           fetchAllRows(
             (start, end) => supabase
               .from("photos")
-              .select("id, caption, file_name, taken_at, created_at, uploaded_by, linked_drawing_id")
+              .select("id, title, description, file_name, taken_date, created_at, created_by, work_package_id, daily_log_id")
               .eq("project_id", project.id).eq("is_deleted", false)
               .order("id").range(start, end),
             "claims photos",
