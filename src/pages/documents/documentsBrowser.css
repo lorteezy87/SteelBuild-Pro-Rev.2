@@ -1,0 +1,381 @@
+/* Documents two-pane browser. Command-skin tokens only (no literal colours). */
+
+[data-skin="command"] .docb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  color: var(--cmd-text);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+[data-skin="command"] .docb-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--cmd-border);
+}
+[data-skin="command"] .docb-head__title {
+  margin: 0 8px 0 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--cmd-text);
+}
+[data-skin="command"] .docb-head__spacer { flex: 1; }
+[data-skin="command"] .docb-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 340px;
+  min-width: 200px;
+  padding: 7px 10px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 8px;
+  background: var(--cmd-surface);
+  color: var(--cmd-text-muted);
+}
+[data-skin="command"] .docb-search:focus-within { border-color: var(--cmd-gold); }
+[data-skin="command"] .docb-search input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  min-height: 0 !important;
+  line-height: 20px;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  outline: none;
+  background: transparent !important;
+  color: var(--cmd-text);
+  font-size: 13px;
+}
+[data-skin="command"] .docb-search input::-webkit-search-cancel-button { display: none; }
+[data-skin="command"] .docb-tree-toggle { display: none; }
+
+/* ── Menus ──────────────────────────────────────────────────────────────── */
+[data-skin="command"] .docb-menu-wrap { position: relative; display: inline-flex; }
+[data-skin="command"] .docb-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--cmd-menu, var(--cmd-surface));
+  border: 1px solid var(--cmd-border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--cmd-bg) 40%, transparent);
+}
+[data-skin="command"] .docb-menu--right { left: auto; right: 0; }
+[data-skin="command"] .docb-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cmd-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+[data-skin="command"] .docb-menu > button:hover:not(:disabled) { background: var(--cmd-menu-hover, var(--cmd-row-hover)); }
+[data-skin="command"] .docb-menu > button:disabled { opacity: 0.5; cursor: not-allowed; }
+[data-skin="command"] .docb-menu__sep { height: 1px; margin: 4px 2px; background: var(--cmd-border); }
+[data-skin="command"] .docb-menu--filters { padding: 10px; gap: 8px; min-width: 260px; }
+[data-skin="command"] .docb-menu__field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--cmd-text-muted); }
+
+/* ── Filter chips ───────────────────────────────────────────────────────── */
+[data-skin="command"] .docb-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+[data-skin="command"] .docb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  background: var(--cmd-chip-bg, var(--cmd-surface));
+  border: 1px solid var(--cmd-border);
+  font-size: 12px;
+}
+[data-skin="command"] .docb-chip button { border: 0; background: transparent; color: var(--cmd-text-muted); cursor: pointer; display: inline-flex; padding: 2px; }
+[data-skin="command"] .docb-link { border: 0; background: transparent; padding: 0; color: var(--cmd-gold); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+
+/* ── Body: tree + contents ──────────────────────────────────────────────── */
+[data-skin="command"] .docb-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  min-width: 0;
+}
+
+[data-skin="command"] .docb-tree {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 160px);
+  overflow: auto;
+  font-size: 14px;
+}
+[data-skin="command"] .docb-tree ul { list-style: none; margin: 0; padding: 0; }
+[data-skin="command"] .docb-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 34px;
+  padding-right: 6px;
+  border-radius: 6px;
+}
+[data-skin="command"] .docb-tree__row:hover { background: var(--cmd-row-hover); }
+[data-skin="command"] .docb-tree__row.is-active {
+  background: color-mix(in srgb, var(--cmd-gold) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--cmd-gold);
+}
+[data-skin="command"] .docb-tree__row--root { padding-left: 4px; font-weight: 700; }
+[data-skin="command"] .docb-tree__twisty {
+  flex: 0 0 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--cmd-text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+[data-skin="command"] .docb-tree__label {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+[data-skin="command"] .docb-tree__label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-skin="command"] .docb-tree__label svg { flex: 0 0 auto; color: var(--cmd-text-muted); }
+[data-skin="command"] .docb-tree__row.is-active .docb-tree__label svg { color: var(--cmd-gold); }
+[data-skin="command"] .docb-tree__empty { margin: 8px 10px; font-size: 12px; color: var(--cmd-text-muted); }
+[data-skin="command"] .docb-tree__views {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cmd-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+[data-skin="command"] .docb-tree__views button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cmd-text);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+[data-skin="command"] .docb-tree__views button svg { color: var(--cmd-text-muted); }
+[data-skin="command"] .docb-tree__views button:hover { background: var(--cmd-row-hover); }
+[data-skin="command"] .docb-tree__views button.is-active { background: color-mix(in srgb, var(--cmd-gold) 14%, transparent); }
+[data-skin="command"] .docb-count {
+  margin-left: auto;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--cmd-chip-bg, var(--cmd-surface));
+  color: var(--cmd-text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+[data-skin="command"] .docb-count--inline { margin-left: 0; flex: 0 0 auto; }
+
+/* ── Contents table ─────────────────────────────────────────────────────── */
+[data-skin="command"] .docb-main { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+[data-skin="command"] .docb-main__head h2 { margin: 0; font-size: 17px; font-weight: 700; color: var(--cmd-text); }
+[data-skin="command"] .docb-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 4px; font-size: 12px; color: var(--cmd-text-muted); }
+[data-skin="command"] .docb-crumbs span { display: inline-flex; align-items: center; gap: 2px; }
+[data-skin="command"] .docb-crumbs button { border: 0; background: transparent; padding: 0 2px; color: var(--cmd-text-muted); font: inherit; cursor: pointer; }
+[data-skin="command"] .docb-crumbs button:hover { color: var(--cmd-gold); text-decoration: underline; }
+
+[data-skin="command"] .docb-table-wrap {
+  border: 1px solid var(--cmd-border);
+  border-radius: 10px;
+  background: var(--cmd-surface);
+  overflow-x: auto;
+}
+[data-skin="command"] .docb-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+[data-skin="command"] .docb-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0 12px;
+  height: 46px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cmd-text);
+  background: color-mix(in srgb, var(--cmd-text) 5%, var(--cmd-surface));
+  border-bottom: 1px solid var(--cmd-border);
+  white-space: nowrap;
+}
+[data-skin="command"] .docb-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+[data-skin="command"] .docb-sort.is-active svg { color: var(--cmd-gold); }
+[data-skin="command"] .docb-row td {
+  padding: 0 12px;
+  height: 48px;
+  border-bottom: 1px solid var(--cmd-border);
+  vertical-align: middle;
+}
+[data-skin="command"] .docb-row:last-child td { border-bottom: 0; }
+[data-skin="command"] .docb-row { cursor: pointer; }
+[data-skin="command"] .docb-row:hover { background: var(--cmd-row-hover); }
+[data-skin="command"] .docb-row:focus-visible { outline: 2px solid var(--cmd-gold); outline-offset: -2px; }
+[data-skin="command"] .docb-row.is-selected { background: color-mix(in srgb, var(--cmd-gold) 10%, transparent); }
+[data-skin="command"] .docb-row--new { cursor: default; }
+[data-skin="command"] .docb-col-check { width: 44px; text-align: center; }
+[data-skin="command"] .docb-col-name { min-width: 220px; }
+[data-skin="command"] .docb-namecell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+[data-skin="command"] .docb-namecell svg { flex: 0 0 auto; }
+[data-skin="command"] .docb-namestack { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+[data-skin="command"] .docb-nameline { display: flex; align-items: center; gap: 8px; min-width: 0; }
+[data-skin="command"] .docb-name { font-weight: 500; overflow-wrap: anywhere; }
+[data-skin="command"] .docb-mobile-meta { display: none; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--cmd-text-muted); }
+[data-skin="command"] .docb-rev {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cmd-text-muted);
+}
+[data-skin="command"] .docb-col-loc { color: var(--cmd-text-muted); font-size: 13px; white-space: nowrap; }
+[data-skin="command"] .docb-col-status { width: 1%; white-space: nowrap; }
+[data-skin="command"] .docb-col-size { width: 1%; text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--cmd-text-muted); white-space: nowrap; }
+[data-skin="command"] .docb-col-date { white-space: nowrap; font-size: 13px; color: var(--cmd-text); }
+[data-skin="command"] .docb-col-actions { width: 48px; text-align: right; }
+[data-skin="command"] .docb-sub { display: block; font-size: 11px; color: var(--cmd-text-muted); }
+
+[data-skin="command"] .docb-icon { color: var(--cmd-text-muted); }
+[data-skin="command"] .docb-icon--folder { color: var(--cmd-gold); fill: color-mix(in srgb, var(--cmd-gold) 30%, transparent); }
+[data-skin="command"] .docb-icon--pdf { color: var(--cmd-danger); }
+[data-skin="command"] .docb-icon--sheet { color: var(--cmd-good); }
+[data-skin="command"] .docb-icon--image { color: var(--cmd-info); }
+
+[data-skin="command"] .docb-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cmd-text-muted);
+  cursor: pointer;
+}
+[data-skin="command"] .docb-icon-btn:hover { background: var(--cmd-row-hover); color: var(--cmd-text); }
+[data-skin="command"] .docb-danger { color: var(--cmd-danger) !important; }
+
+[data-skin="command"] .docb-newfolder { display: flex; align-items: center; gap: 8px; }
+[data-skin="command"] .docb-newfolder input {
+  flex: 0 1 320px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--cmd-gold);
+  border-radius: 6px;
+  background: var(--cmd-bg);
+  color: var(--cmd-text);
+  font-size: 14px;
+}
+
+[data-skin="command"] .docb-folderbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cmd-gold) 8%, var(--cmd-surface));
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-skin="command"] .docb-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--cmd-text-muted);
+  font-size: 14px;
+}
+[data-skin="command"] .docb-state--error { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; color: var(--cmd-text); }
+
+[data-skin="command"] .docb-drop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--cmd-gold);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--cmd-gold) 10%, transparent);
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cmd-gold);
+}
+
+[data-skin="command"] .sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ── Narrow layouts: tree becomes a toggled panel; Size column drops ───── */
+@media (max-width: 900px) {
+  [data-skin="command"] .docb-body { grid-template-columns: minmax(0, 1fr); }
+  [data-skin="command"] .docb-tree { display: none; position: static; max-height: none; border: 1px solid var(--cmd-border); border-radius: 10px; padding: 8px; background: var(--cmd-surface); }
+  [data-skin="command"] .docb-tree.is-open { display: flex; }
+  [data-skin="command"] .docb-tree-toggle { display: inline-flex; }
+  [data-skin="command"] .docb-search { flex: 1 1 100%; order: 5; }
+  [data-skin="command"] .docb-head__title { font-size: 24px; }
+}
+@media (max-width: 600px) {
+  [data-skin="command"] .docb-col-size,
+  [data-skin="command"] .docb-col-loc,
+  [data-skin="command"] .docb-col-status,
+  [data-skin="command"] .docb-col-date { display: none; }
+  [data-skin="command"] .docb-col-name { min-width: 0; width: 100%; }
+  [data-skin="command"] .docb-row td { height: auto; padding-top: 10px; padding-bottom: 10px; }
+  [data-skin="command"] .docb-mobile-meta { display: flex; }
+}
