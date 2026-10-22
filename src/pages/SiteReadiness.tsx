@@ -13,6 +13,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
+import { isMissingFunctionError, setSiteReadinessMark } from "@/api/client/siteReadiness";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
@@ -113,18 +114,26 @@ export default function SiteReadiness() {
   const toggleMut = useMutation({
     mutationFn: async ({ record, key }: { record: ReadinessRecord; key: string }) => {
       if (record.raw.project_id !== projectId) throw new Error("This checklist belongs to another project.");
-      // Target state comes from what the user saw; the write re-reads the
-      // server row and sets only this item (see applyReadinessMark).
+      // Target state comes from what the user saw. The server function sets
+      // only this item under a row lock (migration 20261022064000); before that
+      // migration exists on a database, fall back to read-set-verify.
       const target = nextReadinessState(record.marks[key]?.state);
-      const saved = await applyReadinessMark({
-        fetchRow: async () => {
-          const row = (await entities.ActionItem.get(record.id)) as unknown as ActionItemLike | null;
-          if (row && row.project_id !== projectId) throw new Error("This checklist belongs to another project.");
-          return row;
-        },
-        writePatch: (patch) => entities.ActionItem.update(record.id, patch as never),
-        key, state: target, by, atIso: new Date().toISOString(),
-      });
+      let saved: ActionItemLike;
+      try {
+        saved = (await setSiteReadinessMark(record.id, key, target, by)) as ActionItemLike;
+      } catch (err) {
+        if (!isMissingFunctionError(err)) throw err;
+        saved = await applyReadinessMark({
+          fetchRow: async () => {
+            const row = (await entities.ActionItem.get(record.id)) as unknown as ActionItemLike | null;
+            if (row && row.project_id !== projectId) throw new Error("This checklist belongs to another project.");
+            return row;
+          },
+          writePatch: (patch) => entities.ActionItem.update(record.id, patch as never),
+          key, state: target, by, atIso: new Date().toISOString(),
+        });
+      }
+      if (saved.project_id !== projectId) throw new Error("This checklist belongs to another project.");
       qc.setQueryData<ActionItemLike[]>([...FIELD_OVERSIGHT_KEYS.readiness(projectId)], (rows) =>
         (rows ?? []).map((r) => (r.id === record.id ? { ...r, ...saved } : r)));
       return saved;

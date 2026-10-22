@@ -258,10 +258,11 @@ export function setReadinessMark(
  * confirm the item stuck. If another user's write landed in between and
  * dropped it, the item is re-applied on top of theirs.
  *
- * Residual window: if another writer completes its whole read-write-verify
- * cycle between this attempt's read and its write (milliseconds), that
- * writer's item can still be dropped without either side noticing. Closing it
- * fully needs a server-side per-item update (an RPC), which is a migration.
+ * This is the FALLBACK for a database without the `set_site_readiness_mark`
+ * function (migration 20261022064000), which does the same under a row lock
+ * and has no race. Here a residual window remains: a writer that completes its
+ * whole read-write-verify cycle inside this attempt's read→write gap can
+ * still have its item dropped.
  */
 export async function applyReadinessMark(args: {
   fetchRow: () => Promise<ActionItemLike | null>;

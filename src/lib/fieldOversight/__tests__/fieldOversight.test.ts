@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { makeCalendar } from "@/lib/schedule/workingCalendar";
 import {
@@ -85,6 +87,13 @@ describe("site readiness", () => {
     const marks = readChecklist(saved.metadata)?.marks ?? {};
     expect(marks.anchors?.state).toBe("done");
     expect(marks.pad?.state).toBe("done");
+  });
+
+  it("keeps the server function's item list in step with READINESS_ITEMS", () => {
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/20261022064000_site_readiness_mark_rpc.sql"), "utf8");
+    const block = /v_keys constant text\[\] := ARRAY\[([^\]]+)\]/.exec(sql)?.[1] ?? "";
+    const keys = [...block.matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
+    expect(keys).toEqual(READINESS_ITEMS.map((i) => i.key));
   });
 
   it("is Complete only when every item is done or N/A", () => {
