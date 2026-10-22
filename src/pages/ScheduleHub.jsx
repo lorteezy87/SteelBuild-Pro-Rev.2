@@ -9,27 +9,35 @@
  * tab lazy-loads the existing page unchanged; all stay independently routable.
  * `?sched_tab=` drives the active tab.
  */
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 
 const SchedulePage = lazyWithRetry(() => import("@/pages/Schedule"));
 const LookAheadPage = lazyWithRetry(() => import("@/pages/LookAheadSchedule"));
 const CalendarPage = lazyWithRetry(() => import("@/pages/ProjectCalendar"));
 
 const TABS = [
-  { key: "schedule", label: "Schedule", Component: SchedulePage },
-  { key: "lookahead", label: "Look-Ahead", Component: LookAheadPage },
-  { key: "calendar", label: "Calendar", Component: CalendarPage },
+  { key: "schedule", page: "Schedule", label: "Schedule", Component: SchedulePage },
+  { key: "lookahead", page: "LookAheadSchedule", label: "Look-Ahead", Component: LookAheadPage },
+  { key: "calendar", page: "ProjectCalendar", label: "Calendar", Component: CalendarPage },
 ];
 
 export default function ScheduleHub() {
   const [params, setParams] = useSearchParams();
+  const { isPageVisible } = useModuleAccess();
+  // Tabs follow their standalone page's module switch (Look-Ahead is gated).
+  // Schedule itself is never filtered out: it is the hub's default tab.
+  const tabs = useMemo(
+    () => TABS.filter((t) => t.key === "schedule" || isPageVisible(t.page)),
+    [isPageVisible],
+  );
   const param = params.get("sched_tab");
-  const activeKey = TABS.some((t) => t.key === param) ? param : "schedule";
-  const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
+  const activeKey = tabs.some((t) => t.key === param) ? param : "schedule";
+  const Active = (tabs.find((t) => t.key === activeKey) || tabs[0]).Component;
   const setTab = (key) =>
     setParams(
       (prev) => {
@@ -57,7 +65,7 @@ export default function ScheduleHub() {
           flexWrap: "wrap",
         }}
       >
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = tab.key === activeKey;
           return (
             <button
