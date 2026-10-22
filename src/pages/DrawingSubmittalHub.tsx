@@ -24,6 +24,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { fetchAllRows } from "@/lib/pagedQuery";
+import { createPageUrl } from "@/utils";
 import { comparisonEvidenceByRevision, type RevisionComparisonEvidenceRow } from "@/lib/revisionControlEvidence";
 import { toast } from "sonner";
 import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
@@ -857,6 +858,8 @@ function DetailingControlCenter() {
             modelRosterLoading={modelElementsLoading}
             onLoadModelRoster={() => setMappingRosterRequested(true)}
             onImportModelElements={() => setImportModelOpen(true)}
+            openRfis={rfis as ReadonlyArray<Record<string, unknown>>}
+            onOpenRfi={(rfiId: string) => navigate(`${createPageUrl("RFIs")}?id=${encodeURIComponent(rfiId)}`)}
           />
           </>
         )}
