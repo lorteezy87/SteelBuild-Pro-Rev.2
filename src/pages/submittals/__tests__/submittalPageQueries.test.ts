@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { groupSubmittalRounds, indexDrawingSets } from "../useSubmittalsPageQueries";
+import { blockerSourcesStatusOf, groupSubmittalRounds, indexDrawingSets } from "../useSubmittalsPageQueries";
+import { EFFECTIVE_LIST_CAP } from "@/api/client/entityClient";
 
 describe("submittal page query derivations", () => {
   it("indexes only drawing sets with persistent ids", () => {
@@ -25,5 +26,18 @@ describe("submittal page query derivations", () => {
     expect(grouped["sub-1"].map((round) => round.id)).toEqual(["r1", "r3"]);
     expect(grouped["sub-2"].map((round) => round.id)).toEqual(["default", "r2"]);
     expect(grouped).not.toHaveProperty("undefined");
+  });
+});
+
+describe("blockerSourcesStatusOf", () => {
+  const ok = { pending: false, error: false, rows: 10 };
+  it("is ready only when every source loaded below the row ceiling", () => {
+    expect(blockerSourcesStatusOf(ok, ok)).toBe("ready");
+  });
+  it("reports loading, then unavailable, then incomplete in that order", () => {
+    expect(blockerSourcesStatusOf({ ...ok, pending: true }, { ...ok, error: true })).toBe("loading");
+    expect(blockerSourcesStatusOf(ok, { ...ok, error: true })).toBe("unavailable");
+    expect(blockerSourcesStatusOf(ok, { ...ok, rows: EFFECTIVE_LIST_CAP })).toBe("incomplete");
+    expect(blockerSourcesStatusOf({ ...ok, rows: EFFECTIVE_LIST_CAP - 1 }, ok)).toBe("ready");
   });
 });

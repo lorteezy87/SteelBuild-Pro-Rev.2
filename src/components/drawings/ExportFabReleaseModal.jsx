@@ -39,6 +39,7 @@ import {
   suggestPackageName,
 } from "@/lib/exports/fabRelease";
 import { presentGeneratedFiles } from "@/lib/native/fileExport";
+import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 
 /**
  * Group key for a sheet: the FK set id, else the id of the drawing_sets row
@@ -227,7 +228,11 @@ export default function ExportFabReleaseModal({
   );
   // Override now requires a written reason (the server records it and refuses an
   // empty-reason override). The button stays locked until the reason is filled.
-  const overrideReady = override && overrideReason.trim().length > 0;
+  // The server (fab_release_log RLS + trigger) is the authority; this only
+  // keeps a non-PM from filling in an override the server will refuse.
+  const { role: projectRole, isLoading: roleLoading } = useProjectRole(project?.id);
+  const canOverride = !roleLoading && roleAtLeast(projectRole, "pm");
+  const overrideReady = canOverride && override && overrideReason.trim().length > 0;
   const exportLocked = !evidenceReady || (gate.blocked && !overrideReady);
 
   if (!open) return null;
@@ -514,11 +519,17 @@ export default function ExportFabReleaseModal({
                 );
               })}
             </div>
+            {canOverride ? (
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 11, color: "var(--text-secondary)" }}>
               <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
               <span><strong style={{ color: "var(--text-primary)" }}>PM override</strong> — release despite these issues (I accept the risk; this is recorded).</span>
             </label>
-            {override && (
+            ) : (
+              <p data-testid="override-pm-only" style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0 }}>
+                {roleLoading ? "Checking your project role…" : "Only a project PM can override these blockers. Resolve them, or ask the PM to release with a written reason."}
+              </p>
+            )}
+            {canOverride && override && (
               <textarea
                 value={overrideReason}
                 onChange={(e) => setOverrideReason(e.target.value)}

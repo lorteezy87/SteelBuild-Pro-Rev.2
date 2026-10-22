@@ -193,3 +193,138 @@ export function buildProductionReadinessQueue(triage: TriageModel): ProductionRe
     })
     .slice(0, 12);
 }
+
+// ── Needs-action list and stage pipeline (Steel Document Control layout) ──
+
+/** Which slice of open work the Needs-action list shows. */
+export type NeedsActionFilter = "all" | "overdue" | "dueSoon" | "needsAction" | "noDate";
+
+/**
+ * Every open item, most urgent first, optionally narrowed to one triage queue.
+ * Unlike the old Critical Work Queue there is no cap: a capped list read as
+ * "that's everything" on a busy project.
+ */
+export function buildNeedsActionRows(triage: TriageModel, filter: NeedsActionFilter = "all"): TriageItem[] {
+  const source: TriageItem[] =
+    filter === "overdue" ? triage.overdue
+      : filter === "dueSoon" ? triage.dueSoon
+        : filter === "needsAction" ? triage.needsAction
+          : filter === "noDate" ? triage.noDate
+            : triage.openItems;
+  return Array.from(new Map(source.filter((it) => !it.closed).map((it) => [it.id, it] as const)).values()).sort(itemUrgency);
+}
+
+/** The seven drawing-package lanes, in workflow order. */
+export const PIPELINE_LANES = ["NS", "IFA", "OFA", "BFA", "OFS", "IFC", "REL"] as const;
+export type PipelineLane = (typeof PIPELINE_LANES)[number];
+
+export const PIPELINE_LANE_LABEL: Record<PipelineLane, string> = {
+  NS: "Not Started / detailing",
+  IFA: "Issued for Approval",
+  OFA: "Out for Approval",
+  BFA: "Back from Approval (incl. R&R)",
+  OFS: "Out for Scrub",
+  IFC: "Issued for Construction",
+  REL: "Released",
+};
+
+/**
+ * Lane for an operational (effective) detailing state. Drafting states sit in
+ * NS, R&R is a BFA return, and every release state is REL. An unrecognised
+ * state is reported separately, never silently counted as Not Started.
+ */
+export function pipelineLaneFor(state: string | null | undefined): PipelineLane | null {
+  switch (state) {
+    case "Not Started":
+    case "In Detailing":
+    case "Internal Review":
+    case "Ready to Submit":
+      return "NS";
+    case "IFA": return "IFA";
+    case "OFA": return "OFA";
+    case "BFA":
+    case "R&R":
+      return "BFA";
+    case "OFS": return "OFS";
+    case "IFC": return "IFC";
+    case "Released":
+    case "Partially Released":
+    case "Released for Erection":
+      return "REL";
+    default:
+      return null;
+  }
+}
+
+export interface StagePipeline {
+  lanes: Array<{ lane: PipelineLane; label: string; count: number }>;
+  /** Packages whose state maps to no lane (shown as "unclassified"). */
+  unclassified: number;
+  total: number;
+}
+
+/**
+ * Drawing-set counts per lane. A closed package that is not in a release lane
+ * is a dead (Void-only) set: nobody will work it again, so it is left out
+ * rather than padding Not Started.
+ */
+export function buildStagePipeline(setItems: readonly TriageItem[]): StagePipeline {
+  const counts = new Map<PipelineLane, number>(PIPELINE_LANES.map((l) => [l, 0]));
+  let unclassified = 0;
+  let total = 0;
+  for (const item of setItems) {
+    const lane = pipelineLaneFor(item.detailingState ?? null);
+    if (item.closed && lane !== "REL") continue;
+    total += 1;
+    if (lane) counts.set(lane, (counts.get(lane) ?? 0) + 1);
+    else unclassified += 1;
+  }
+  return {
+    lanes: PIPELINE_LANES.map((lane) => ({ lane, label: PIPELINE_LANE_LABEL[lane], count: counts.get(lane) ?? 0 })),
+    unclassified,
+    total,
+  };
+}
+
+export interface BoardRfi {
+  id: string;
+  number: string;
+  title: string;
+  dueDate: string | null;
+  overdue: boolean;
+}
+
+interface RfiLike {
+  id?: string | null;
+  rfi_number?: string | null;
+  title?: string | null;
+  question?: string | null;
+  status?: string | null;
+  due_date?: string | null;
+  date_required?: string | null;
+  is_deleted?: boolean | null;
+}
+
+const RFI_CLOSED = new Set(["answered", "closed", "void", "cancelled"]);
+
+/**
+ * Open RFIs for the board's side list, earliest due first; undated last.
+ * `today` is the viewer's local calendar day (YYYY-MM-DD) so "overdue" flips
+ * at local midnight, not UTC midnight.
+ */
+export function openRfisForBoard(rfis: readonly RfiLike[], today: string, limit = 8): { rows: BoardRfi[]; total: number } {
+  const open = rfis
+    .filter((r) => r.id && !r.is_deleted && !RFI_CLOSED.has(String(r.status ?? "").trim().toLowerCase()))
+    .map((r) => {
+      const due = (r.due_date || r.date_required || "").slice(0, 10) || null;
+      return {
+        id: String(r.id),
+        number: r.rfi_number || "RFI",
+        title: r.title || r.question || "Untitled RFI",
+        dueDate: due,
+        overdue: !!due && due < today,
+      };
+    })
+    .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || a.number.localeCompare(b.number, undefined, { numeric: true }));
+  return { rows: open.slice(0, limit), total: open.length };
+}
