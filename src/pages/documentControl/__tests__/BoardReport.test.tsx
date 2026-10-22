@@ -92,6 +92,7 @@ const m = vi.hoisted(() => ({
       holds_released_count: 0,
     },
   ],
+  // Newest first, the way the query orders them.
   transmittals: [
     {
       id: "t1",
@@ -100,10 +101,33 @@ const m = vi.hoisted(() => ({
       sent_to: "R. Vega",
       purpose: "For erection",
       date_sent: "2026-10-17T14:20:00Z",
+      recipient_email: "r.vega@crew2.example",
       acknowledged_at: null as string | null,
       acknowledged_by_name: null as string | null,
     },
+    {
+      id: "t0",
+      transmittal_number: "T-118-061",
+      recipient_company: "Erection crew 2",
+      sent_to: "R. Vega",
+      purpose: "For erection",
+      date_sent: "2026-10-02T14:20:00Z",
+      recipient_email: "r.vega@crew2.example",
+      acknowledged_at: "2026-10-02T18:00:00Z" as string | null,
+      acknowledged_by_name: "R. Vega" as string | null,
+    },
   ],
+  /**
+   * T-118-061 issued E-203 at Rev 0 and 4001 at Rev 0; T-118-064 re-issues
+   * E-203 at Rev 1 (a supersede) and 4001 again at Rev 0 (a plain resend,
+   * which supersedes nothing).
+   */
+  transmittalItems: [
+    { id: "i1", transmittal_id: "t0", number_at_send: "E-203", revision_at_send: "0", title_at_send: "Seq 3 roof framing plan", sort_order: 1 },
+    { id: "i2", transmittal_id: "t0", number_at_send: "4001", revision_at_send: "0", title_at_send: "Stair ST-1 stringers", sort_order: 2 },
+    { id: "i3", transmittal_id: "t1", number_at_send: "E-203", revision_at_send: "1", title_at_send: "Seq 3 roof framing plan", sort_order: 1 },
+    { id: "i4", transmittal_id: "t1", number_at_send: "4001", revision_at_send: "0", title_at_send: "Stair ST-1 stringers", sort_order: 2 },
+  ] as Array<Record<string, unknown>> | null,
 }));
 
 vi.mock("@/api/supabaseClient", () => ({
@@ -112,6 +136,14 @@ vi.mock("@/api/supabaseClient", () => ({
     Submittal: { filter: vi.fn(async () => m.submittals) },
     RFI: { filter: vi.fn(async () => m.rfis) },
     DrawingTransmittal: { filter: vi.fn(async () => m.transmittals) },
+    DrawingTransmittalItem: {
+      filter: vi.fn(async () => {
+        // null stands for a read that does not land, so the pane and the
+        // Sheets column have to say "unknown" rather than "none".
+        if (m.transmittalItems === null) throw new Error("contents unavailable");
+        return m.transmittalItems;
+      }),
+    },
   },
 }));
 
@@ -136,6 +168,9 @@ function wrapper({ children }: { children: ReactNode }) {
     </MemoryRouter>
   );
 }
+
+/** The loaded contents fixture, kept so a test that blanks it can restore it. */
+const ITEMS = m.transmittalItems;
 
 const renderPage = () => render(<DocumentControl />, { wrapper });
 const goTo = async (tab: string) => {
@@ -245,6 +280,153 @@ describe("Document Control Board Report", () => {
     } finally {
       m.theme = "light";
     }
+  });
+
+  /**
+   * The design's transmittal screen carries six columns and a pane that lists
+   * what went out. The Sheets column and the contents list shipped missing
+   * because `drawing_transmittal_items` was not read; these pin them.
+   */
+  describe("transmittal contents", () => {
+    // The transmittal number appears in both the row and the pane eyebrow, so
+    // this only navigates; each test asserts on what it actually cares about.
+    const findRows = async () => {
+      await goTo("Transmittals");
+    };
+
+    it("prints a real sheet count in the Sheets column", async () => {
+      renderPage();
+      await findRows();
+      await screen.findByText("Contents");
+      // Both transmittals carry two sheets each.
+      expect(screen.getByText("Sheets")).toBeInTheDocument();
+      expect(await screen.findByText("2 sheets")).toBeInTheDocument();
+    });
+
+    it("lists each sheet as number, revision and title", async () => {
+      renderPage();
+      await findRows();
+      await screen.findByText("Contents");
+      expect(screen.getAllByText("E-203").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Seq 3 roof framing plan").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Stair ST-1 stringers").length).toBeGreaterThan(0);
+    });
+
+    it("shows the sheet list as unknown, never as empty, when the read fails", async () => {
+      m.transmittalItems = null;
+      try {
+        renderPage();
+        await findRows();
+        expect(await screen.findByText("Sheet list not loaded.")).toBeInTheDocument();
+        // The honest answer is a dash. A 0 would describe a transmittal that
+        // carried no sheets, which is not a thing that happens.
+        expect(screen.queryByText(/No sheets are recorded/)).not.toBeInTheDocument();
+      } finally {
+        m.transmittalItems = ITEMS;
+      }
+    });
+
+    it("flags the earlier revision a re-issue supersedes", async () => {
+      renderPage();
+      await findRows();
+      expect(await screen.findByText(/Supersedes 1 earlier revision/)).toBeInTheDocument();
+      // E-203 went from Rev 0 to Rev 1, so Rev 0 is the copy still in the field.
+      expect(screen.getByText("E-203 Rev 0")).toBeInTheDocument();
+    });
+
+    it("does not call a same-revision resend a supersede", async () => {
+      renderPage();
+      await findRows();
+      await screen.findByText(/Supersedes 1 earlier revision/);
+      // 4001 was sent twice at Rev 0 — a resend, not a recall.
+      expect(screen.queryByText("4001 Rev 0")).not.toBeInTheDocument();
+    });
+
+    /**
+     * `drawing_id` and `gc_drawing_id` are separate drawing spaces and the same
+     * sheet number lives in both, so keying this history by the number alone
+     * raised a pull-from-field warning against an unrelated drawing.
+     */
+    it("does not merge a GC drawing with a shop drawing that shares its number", async () => {
+      m.transmittalItems = [
+        { id: "g1", transmittal_id: "t0", gc_drawing_id: "gc-501", number_at_send: "A-501", revision_at_send: "0", title_at_send: "GC architectural plan", sort_order: 1 },
+        { id: "s1", transmittal_id: "t1", drawing_id: "shop-501", number_at_send: "A-501", revision_at_send: "2", title_at_send: "Shop detail A-501", sort_order: 1 },
+      ];
+      try {
+        renderPage();
+        await findRows();
+        await screen.findByText("Contents");
+        // Same number, different drawing spaces, different revisions — and
+        // still nothing to pull from the field.
+        expect(screen.queryByText(/Supersedes/)).not.toBeInTheDocument();
+      } finally {
+        m.transmittalItems = ITEMS;
+      }
+    });
+
+    /**
+     * The pane's claim is that THIS recipient still holds the earlier copy, so
+     * a delivery to another company is not evidence about them.
+     */
+    it("does not tell one recipient to pull a revision another company was sent", async () => {
+      const original = m.transmittals;
+      m.transmittals = [
+        { ...original[0], recipient_company: "Steel erectors LLC", sent_to: "P. Nolan", recipient_email: "p.nolan@erectors.example" },
+        { ...original[1] },
+      ];
+      try {
+        renderPage();
+        await findRows();
+        await screen.findByText("Contents");
+        expect(screen.queryByText(/Supersedes/)).not.toBeInTheDocument();
+      } finally {
+        m.transmittals = original;
+      }
+    });
+
+    /**
+     * A capped read can be missing the intervening issuance, which names the
+     * WRONG prior revision — on a pane that is at the same time admitting the
+     * sheet list did not load. Absence is not evidence.
+     */
+    it("claims no supersede at all from a truncated contents read", async () => {
+      // EFFECTIVE_LIST_CAP is mocked at 1000; fill it so the read reads as cut off.
+      const filler = Array.from({ length: 998 }, (_, i) => ({
+        id: `f${i}`,
+        transmittal_id: "t0",
+        number_at_send: `F-${i}`,
+        revision_at_send: "0",
+        title_at_send: `Filler ${i}`,
+        sort_order: i + 10,
+      }));
+      m.transmittalItems = [...(ITEMS ?? []), ...filler];
+      try {
+        renderPage();
+        await findRows();
+        expect(await screen.findByText("Sheet list not loaded.")).toBeInTheDocument();
+        expect(screen.queryByText(/Supersedes/)).not.toBeInTheDocument();
+      } finally {
+        m.transmittalItems = ITEMS;
+      }
+    });
+  });
+
+  /**
+   * The comps label the register's primary button by what the sheet needs
+   * next. It is still a link out — the page writes nothing — but the label is
+   * the design's, and a single generic one threw that away.
+   */
+  it("labels the register's primary action by sheet status", async () => {
+    renderPage();
+    await goTo("Register");
+    // E-203 is Revise & Resubmit and selected first.
+    expect(screen.getByRole("link", { name: "Upload next revision" })).toBeInTheDocument();
+
+    const { fireEvent } = await import("@testing-library/react");
+    // 4001 carries an active hold, which outranks its Released stage.
+    fireEvent.click(screen.getByText("Stair ST-1 stringers"));
+    expect(screen.getByRole("link", { name: "Open RFI" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Upload next revision" })).not.toBeInTheDocument();
   });
 
   it("asks for a project rather than rendering an empty board", async () => {

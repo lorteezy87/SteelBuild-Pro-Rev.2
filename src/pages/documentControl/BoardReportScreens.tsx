@@ -199,6 +199,27 @@ const Rows = ({ children }: { children: ReactNode }) => (
 
 const REGISTER_COLUMNS = "72px minmax(0,1fr) 56px 44px 96px 64px 64px 84px";
 
+/**
+ * The design's status-dependent primary action, as a LINK rather than a write.
+ *
+ * The comps label this button by what the sheet needs next — REL sends to the
+ * shop, R&R wants the next revision uploaded, HOLD opens an RFI — and that
+ * label is most of what the pane tells a PM. The page is read-only, and the
+ * handoff is explicit that these "must be built disabled, or as links out to
+ * the existing Drawing/Submittal Hub flows", so each one routes to the flow
+ * that owns the write instead of performing it here. The label is the design's;
+ * the behaviour is a navigation.
+ */
+const REGISTER_ACTION: Record<DcStatus, { label: string; href: string }> = {
+  REL: { label: "Send to shop", href: "/WorkPackages" },
+  REV: { label: "Send reminder", href: "/DrawingSubmittalHub" },
+  "R&R": { label: "Upload next revision", href: "/DrawingSubmittalHub" },
+  HOLD: { label: "Open RFI", href: "/RFIs" },
+  DET: { label: "Assign checker", href: "/DrawingSubmittalHub" },
+  LATE: { label: "Escalate to GC", href: "/DrawingSubmittalHub" },
+  NONE: { label: "Open in Drawing Control", href: "/DrawingSubmittalHub" },
+};
+
 export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; intakeHref: string }) {
   const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("All sheets");
@@ -301,7 +322,9 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <PaneButton dark={dark} href="/DrawingSubmittalHub">Open in Drawing Control</PaneButton>
+            <PaneButton dark={dark} href={REGISTER_ACTION[current.status].href}>
+              {REGISTER_ACTION[current.status].label}
+            </PaneButton>
             <PaneButton dark={dark} variant="secondary" href={intakeHref}>
               Intake desk
             </PaneButton>
@@ -573,13 +596,77 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
 /* ─── 2d · Transmittals ──────────────────────────────────────────────────── */
 
 /**
- * The design carries a Sheets column. `drawing_transmittals` holds no count
- * and the contents live in `drawing_transmittal_items`, which this page does
- * not read — so the column could only ever print an em dash. A column that
- * can never fill is worse than one that is not there; restore it alongside a
- * join on that table.
+ * The design's six columns, Sheets included.
+ *
+ * This column shipped missing: the count lives in `drawing_transmittal_items`,
+ * which the page did not read, so it could only ever have printed an em dash.
+ * `useBoardReportData` now reads that table, so the column carries a real
+ * number — and `null` while the read is in flight, which prints as a dash
+ * rather than a 0 no transmittal has ever had.
  */
-const XM_COLUMNS = "112px minmax(0,1.25fr) minmax(0,1fr) 92px 112px";
+const XM_COLUMNS = "112px minmax(0,1.25fr) minmax(0,1fr) 52px 92px 112px";
+
+/**
+ * The design's contents list: sheet number, revision, title, one row each.
+ *
+ * Three different states, and they are not the same answer. A null count means
+ * the contents read has not landed, so the list says so rather than rendering
+ * an empty block that reads as "nothing was sent" — a transmittal with no
+ * sheets is a thing that does not happen, so showing one would be a lie about
+ * data we simply do not have yet.
+ */
+function TransmittalContents({ row, dark }: { row: TransmittalRow; dark: boolean }) {
+  const S = dark ? DC_DARK : DC_LIGHT;
+  const unknown = row.sheetCount === null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", borderTop: `1px solid ${S.rowBorder}`, paddingTop: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+        <span style={{ font: `600 13px/1 ${ui}` }}>Contents</span>
+        <span style={{ font: `400 12px/1 ${mono}`, color: S.textMuted }}>
+          {unknown ? "—" : `${row.sheetCount} sheet${row.sheetCount === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      {unknown ? (
+        <span style={{ font: `400 12px/1.4 ${ui}`, color: S.textMuted }}>Sheet list not loaded.</span>
+      ) : row.contents.length === 0 ? (
+        <span style={{ font: `400 12px/1.4 ${ui}`, color: S.textMuted }}>
+          No sheets are recorded against this transmittal.
+        </span>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {row.contents.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "52px 40px minmax(0,1fr)",
+                gap: 8,
+                alignItems: "baseline",
+                padding: "7px 0",
+                borderBottom: `1px solid ${S.hairline}`,
+              }}
+            >
+              <span style={{ font: `500 12px/1.3 ${mono}` }}>{item.sheet}</span>
+              <span style={{ font: `400 12px/1.3 ${mono}`, color: S.textMuted }}>{item.rev}</span>
+              <span
+                style={{
+                  font: `400 12px/1.3 ${ui}`,
+                  color: S.textSecondary,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+                title={item.title}
+              >
+                {item.title}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function TransmittalsScreen({ data }: { data: BoardReportData }) {
   const { skin: S, dark } = useSkin();
@@ -600,7 +687,7 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
     <BoardReportBody>
       <LogColumn>
         <ChipBar chips={chips} active={filter} onPick={setFilter} right="Newest first" />
-        <LogHeader dark={dark} columns={XM_COLUMNS} labels={["Transmittal", "To", "Purpose", "Sent", "Acknowledged"]} />
+        <LogHeader dark={dark} columns={XM_COLUMNS} labels={["Transmittal", "To", "Purpose", "Sheets", "Sent", "Acknowledged"]} />
         <Rows>
           {rows.length === 0 ? (
             <EmptyLog what="transmittals" />
@@ -623,6 +710,8 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
                     </span>
                   </div>
                   <Cell kind="clip">{r.purpose}</Cell>
+                  {/* null is "contents not read yet", never 0. */}
+                  <Cell kind="mono">{r.sheetCount ?? "—"}</Cell>
                   <Cell kind="mono">{formatShortDay(r.sentOn)}</Cell>
                   <span style={{ font: `600 12px/1.3 ${mono}`, color: ackColor(state, dark) }}>
                     {/* acknowledgedOn, not sentOn — any acknowledgement that
@@ -649,6 +738,33 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
                 title={`${current.purpose} — ${current.recipient}`}
                 desc={`Sent ${formatDay(current.sentOn)}${current.contact ? ` · to ${current.contact}` : ""}`}
               />
+              <TransmittalContents row={current} dark={dark} />
+              {current.supersedes.length > 0 ? (
+                <div style={{ padding: "14px 16px", background: S.wellBg, border: `1px solid ${S.wellBorder}`, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <span style={{ font: `600 13px/1.3 ${ui}` }}>
+                    Supersedes {current.supersedes.length} earlier revision{current.supersedes.length === 1 ? "" : "s"}
+                  </span>
+                  <span style={{ font: `400 12px/1.45 ${ui}`, color: S.textSecondary, textWrap: "pretty" }}>
+                    The recipient still holds these. Confirm they are pulled from the field.
+                  </span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {current.supersedes.map((item) => (
+                      <span
+                        key={item.id}
+                        style={{
+                          font: `500 11px/1 ${mono}`,
+                          padding: "4px 6px",
+                          background: S.paneBg,
+                          border: `1px solid ${S.controlBorder}`,
+                          color: S.textSecondary,
+                        }}
+                      >
+                        {item.sheet} Rev {item.rev}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div style={{ padding: "14px 16px", background: box.background, border: box.border, display: "flex", flexDirection: "column", gap: 6 }}>
                 <span style={{ font: `600 13px/1.3 ${ui}`, color: box.titleColor }}>
                   {state === "acknowledged"
