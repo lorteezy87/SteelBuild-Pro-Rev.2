@@ -91,7 +91,7 @@ acceptance on target devices.
 
 ## Local development
 
-Requires Node 24 (pinned in `.nvmrc`; run `nvm use`). CI installs with Node 24 / npm 11.
+Requires Node 24 and npm 11 (Node pinned in `.nvmrc`; run `nvm use`, which brings its bundled npm 11). CI installs with Node 24 / npm 11.
 Older npm (10, bundled with Node 22) rejects the lockfile with an `npm ci` "not in
 sync" error, because it resolves the `miniflare` `sharp`/`undici` overrides
 differently. Don't regenerate the lockfile to fix that; switch Node.
