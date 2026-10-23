@@ -6,9 +6,12 @@
  * in columns and in what the pane says. Splitting them into five files would
  * duplicate the row/pane scaffolding five times.
  *
- * All five are READ-ONLY. Selecting a row changes which record the pane
- * describes and nothing else; every action is either disabled or a link out to
- * the hub flow that already owns that write. See PaneButton.
+ * Selecting a row changes which record the pane describes and nothing else.
+ * Writes start from the pane's buttons and the masthead's "New …" action, and
+ * every one is handed to BoardReportEditors, which routes it through the save
+ * path the owning page already uses. These screens never call the database.
+ * A control the signed-in role may not use renders disabled with the reason
+ * as its tooltip, rather than disappearing or failing on click.
  */
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
@@ -46,6 +49,26 @@ import {
   type DcStatus,
 } from "./boardReportDerive";
 import type { BoardReportData, RegisterRow, RfiRow, SubmittalRow, TransmittalRow } from "./useBoardReportData";
+import type { EditorIntent } from "./BoardReportEditors";
+
+/** What the signed-in role may do to one record type. UI gating only; RLS decides. */
+export interface RecordPerms {
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+}
+
+/** The screens' only route to a write: name the intent, and the page opens the editor. */
+export interface BoardReportActions {
+  perms: { sheet: RecordPerms; submittal: RecordPerms; rfi: RecordPerms; transmittal: RecordPerms };
+  open: (intent: EditorIntent) => void;
+}
+
+const denied = (verb: string, what: string) => `Your project role cannot ${verb} ${what}.`;
+
+const PaneActions = ({ children }: { children: ReactNode }) => (
+  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{children}</div>
+);
 
 const mono = DC_FONT.mono;
 const ui = DC_FONT.ui;
@@ -204,11 +227,11 @@ const REGISTER_COLUMNS = "72px minmax(0,1fr) 56px 44px 96px 64px 64px 84px";
  *
  * The comps label this button by what the sheet needs next — REL sends to the
  * shop, R&R wants the next revision uploaded, HOLD opens an RFI — and that
- * label is most of what the pane tells a PM. The page is read-only, and the
- * handoff is explicit that these "must be built disabled, or as links out to
- * the existing Drawing/Submittal Hub flows", so each one routes to the flow
- * that owns the write instead of performing it here. The label is the design's;
- * the behaviour is a navigation.
+ * label is most of what the pane tells a PM. These next steps (send to the
+ * shop, upload a revision, open an RFI) are owned by other flows, so each one
+ * routes there rather than being re-implemented here. The label is the
+ * design's; the behaviour is a navigation. Editing and deleting the sheet
+ * itself happen in place, through the pane's Edit / Delete buttons.
  */
 const REGISTER_ACTION: Record<DcStatus, { label: string; href: string }> = {
   REL: { label: "Send to shop", href: "/WorkPackages" },
@@ -220,7 +243,15 @@ const REGISTER_ACTION: Record<DcStatus, { label: string; href: string }> = {
   NONE: { label: "Open in Drawing Control", href: "/DrawingSubmittalHub" },
 };
 
-export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; intakeHref: string }) {
+export function RegisterScreen({
+  data,
+  intakeHref,
+  actions,
+}: {
+  data: BoardReportData;
+  intakeHref: string;
+  actions: BoardReportActions;
+}) {
   const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("All sheets");
   const [selected, setSelected] = useState<string | null>(null);
@@ -321,14 +352,31 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
               {current.rfiCount > 0 ? `${current.rfiCount} linked RFI${current.rfiCount === 1 ? "" : "s"}` : "No linked RFIs"}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <PaneButton dark={dark} href={REGISTER_ACTION[current.status].href}>
+          <PaneActions>
+            <PaneButton
+              dark={dark}
+              onClick={() => actions.open({ kind: "sheet", mode: "edit", row: current })}
+              disabled={!actions.perms.sheet.edit}
+              title={actions.perms.sheet.edit ? undefined : denied("edit", "sheets")}
+            >
+              Edit sheet
+            </PaneButton>
+            <PaneButton dark={dark} variant="secondary" href={REGISTER_ACTION[current.status].href}>
               {REGISTER_ACTION[current.status].label}
             </PaneButton>
             <PaneButton dark={dark} variant="secondary" href={intakeHref}>
               Intake desk
             </PaneButton>
-          </div>
+            <PaneButton
+              dark={dark}
+              tone="danger"
+              onClick={() => actions.open({ kind: "sheet", mode: "delete", row: current })}
+              disabled={!actions.perms.sheet.delete}
+              title={actions.perms.sheet.delete ? undefined : denied("delete", "sheets")}
+            >
+              Delete
+            </PaneButton>
+          </PaneActions>
         </DetailPane>
       ) : (
         <EmptyPane what="a sheet" />
@@ -341,7 +389,15 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
 
 const SUBMITTAL_COLUMNS = "118px minmax(0,1fr) 52px 92px minmax(0,1.1fr) 80px";
 
-export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; orgName: string }) {
+export function SubmittalsScreen({
+  data,
+  orgName,
+  actions,
+}: {
+  data: BoardReportData;
+  orgName: string;
+  actions: BoardReportActions;
+}) {
   const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("Out for review");
   const [selected, setSelected] = useState<string | null>(null);
@@ -458,10 +514,29 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
               </span>
             </div>
           ) : null}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <PaneButton dark={dark} href="/Submittals">Open package</PaneButton>
-            <PaneButton dark={dark} variant="secondary">Send reminder</PaneButton>
-          </div>
+          <PaneActions>
+            <PaneButton
+              dark={dark}
+              onClick={() => actions.open({ kind: "submittal", mode: "edit", row: current })}
+              disabled={!actions.perms.submittal.edit}
+              title={actions.perms.submittal.edit ? undefined : denied("edit", "submittals")}
+            >
+              Edit package
+            </PaneButton>
+            {/* Rounds, returns and sheet responses are logged on the package page, which owns that audited flow. */}
+            <PaneButton dark={dark} variant="secondary" href={`/Submittals?recordId=${encodeURIComponent(current.id)}`}>
+              Log return
+            </PaneButton>
+            <PaneButton
+              dark={dark}
+              tone="danger"
+              onClick={() => actions.open({ kind: "submittal", mode: "delete", row: current })}
+              disabled={!actions.perms.submittal.delete}
+              title={actions.perms.submittal.delete ? undefined : denied("delete", "submittals")}
+            >
+              Delete
+            </PaneButton>
+          </PaneActions>
         </DetailPane>
       ) : (
         <EmptyPane what="a package" />
@@ -474,7 +549,15 @@ export function SubmittalsScreen({ data, orgName }: { data: BoardReportData; org
 
 const RFI_COLUMNS = "96px minmax(0,1fr) 64px 92px 60px 48px 84px";
 
-export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: string }) {
+export function RfiScreen({
+  data,
+  orgName,
+  actions,
+}: {
+  data: BoardReportData;
+  orgName: string;
+  actions: BoardReportActions;
+}) {
   const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("Open");
   const [selected, setSelected] = useState<string | null>(null);
@@ -581,10 +664,26 @@ export function RfiScreen({ data, orgName }: { data: BoardReportData; orgName: s
               <span style={{ font: `400 13px/1.5 ${ui}`, textWrap: "pretty" }}>{current.proposedSolution}</span>
             </div>
           ) : null}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <PaneButton dark={dark} href="/RFIs">Open RFI</PaneButton>
-            <PaneButton dark={dark} variant="secondary">Send reminder</PaneButton>
-          </div>
+          <PaneActions>
+            <PaneButton
+              dark={dark}
+              onClick={() => actions.open({ kind: "rfi", mode: "edit", row: current })}
+              disabled={!actions.perms.rfi.edit}
+              title={actions.perms.rfi.edit ? undefined : denied("edit", "RFIs")}
+            >
+              {current.open ? "Edit / log answer" : "Edit RFI"}
+            </PaneButton>
+            <PaneButton dark={dark} variant="secondary" href={`/RFIs?recordId=${encodeURIComponent(current.id)}`}>Open in RFI log</PaneButton>
+            <PaneButton
+              dark={dark}
+              tone="danger"
+              onClick={() => actions.open({ kind: "rfi", mode: "delete", row: current })}
+              disabled={!actions.perms.rfi.delete}
+              title={actions.perms.rfi.delete ? undefined : denied("delete", "RFIs")}
+            >
+              Delete
+            </PaneButton>
+          </PaneActions>
         </DetailPane>
       ) : (
         <EmptyPane what="an RFI" />
@@ -668,7 +767,7 @@ function TransmittalContents({ row, dark }: { row: TransmittalRow; dark: boolean
   );
 }
 
-export function TransmittalsScreen({ data }: { data: BoardReportData }) {
+export function TransmittalsScreen({ data, actions }: { data: BoardReportData; actions: BoardReportActions }) {
   const { skin: S, dark } = useSkin();
   const [filter, setFilter] = useState("All");
   const [selected, setSelected] = useState<string | null>(null);
@@ -779,10 +878,34 @@ export function TransmittalsScreen({ data }: { data: BoardReportData }) {
                     : `Sent to ${current.recipient}. No confirmation of receipt yet.`}
                 </span>
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <PaneButton dark={dark} href="/Documents">Open set</PaneButton>
-                <PaneButton dark={dark} variant="secondary">Resend &amp; notify</PaneButton>
-              </div>
+              <PaneActions>
+                {state === "acknowledged" ? null : (
+                  <PaneButton
+                    dark={dark}
+                    onClick={() => actions.open({ kind: "transmittal", mode: "ack", row: current })}
+                    disabled={!actions.perms.transmittal.edit || current.status !== "sent"}
+                    title={
+                      !actions.perms.transmittal.edit
+                        ? denied("acknowledge", "transmittals")
+                        : current.status !== "sent"
+                          ? "Only a transmittal recorded as sent can be acknowledged. This one predates the send log."
+                          : undefined
+                    }
+                  >
+                    Record acknowledgement
+                  </PaneButton>
+                )}
+                {/* Issued transmittals are a frozen snapshot: no edit, no delete. Void keeps the record. */}
+                <PaneButton
+                  dark={dark}
+                  tone="danger"
+                  onClick={() => actions.open({ kind: "transmittal", mode: "void", row: current })}
+                  disabled={!actions.perms.transmittal.delete}
+                  title={actions.perms.transmittal.delete ? undefined : denied("void", "transmittals")}
+                >
+                  Void
+                </PaneButton>
+              </PaneActions>
             </DetailPane>
           );
         })()

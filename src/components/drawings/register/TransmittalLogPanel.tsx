@@ -10,19 +10,26 @@ import type { Dispatch, SetStateAction } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { entities } from "@/api/supabaseClient";
-import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { invalidateEntity } from "@/services/cacheRegistry";
+import {
+  createTransmittal,
+  resolveTransmittalTargets,
+  softDeleteTransmittal,
+  updateTransmittal,
+  type TransmittalHeader,
+} from "@/lib/transmittals/transmittalWrites";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { usePermissions } from "@/services/permissions";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useTransmittals } from "@/hooks/useTransmittals";
-import type { TransmittalAttachment, TransmittalRow, TransmittalTruncation } from "@/hooks/useTransmittals";
+import type { TransmittalRow, TransmittalTruncation } from "@/hooks/useTransmittals";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
-import type { DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
 import { attachableRegisterRows, resolveTransmittalDisplay } from "./docControl.derive";
+import { buildSheetOptions, type SheetOption } from "@/lib/transmittals/transmittalSheetOptions";
 
 function directionTone(direction: string): PillTone {
   if (direction === "incoming") return "info";
@@ -37,15 +44,6 @@ interface FormState {
   subject: string;
   date: string;
   notes: string;
-}
-
-interface SheetOption {
-  revisionId: string;
-  drawingId: string | null;
-  sheetNumber: string | null;
-  sheetTitle: string | null;
-  revisionCode: string | null;
-  historical: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -69,7 +67,7 @@ function formForTransmittal(transmittal: TransmittalRow): FormState {
   };
 }
 
-function headerPatch(form: FormState) {
+function headerPatch(form: FormState): TransmittalHeader {
   const incoming = form.direction === "incoming";
   return {
     transmittal_number: form.transmittal_number.trim(),
@@ -81,41 +79,6 @@ function headerPatch(form: FormState) {
     date_received: incoming ? (form.date || null) : null,
     notes: form.notes.trim() || null,
   };
-}
-
-function buildSheetOptions(
-  register: DrawingRegisterRow[],
-  attachedItems: TransmittalAttachment[],
-): SheetOption[] {
-  const byRevision = new Map<string, SheetOption>();
-  for (const row of register) {
-    if (!row.current_revision_id) continue;
-    byRevision.set(row.current_revision_id, {
-      revisionId: row.current_revision_id,
-      drawingId: row.drawing_id,
-      sheetNumber: row.sheet_number,
-      sheetTitle: row.sheet_title,
-      revisionCode: row.current_revision,
-      historical: false,
-    });
-  }
-  for (const item of attachedItems) {
-    // The picker is keyed by revision; an item with none recorded can't be listed.
-    const revisionId = item.drawing_revision_id;
-    if (!revisionId || byRevision.has(revisionId)) continue;
-    byRevision.set(revisionId, {
-      revisionId,
-      drawingId: item.drawing_id,
-      sheetNumber: item.sheet_number,
-      sheetTitle: item.sheet_title,
-      revisionCode: item.revision_code,
-      historical: true,
-    });
-  }
-  return [...byRevision.values()].sort((a, b) =>
-    String(a.sheetNumber || "").localeCompare(String(b.sheetNumber || ""), undefined, { numeric: true })
-    || String(a.revisionCode || "").localeCompare(String(b.revisionCode || ""), undefined, { numeric: true }),
-  );
 }
 
 function drawingIdForRevision(
@@ -438,97 +401,54 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const patch = headerPatch(form);
-      if (!patch.transmittal_number) throw new Error("Transmittal number is required");
-      const selectedTargets = [...selected].map((revisionId) => ({
-        revisionId,
-        drawingId: drawingIdForRevision(sheetOptions, revisionId),
-      }));
-      const transmittal = await entities.DrawingTransmittal.create(
-        withProjectId({ ...patch } as Record<string, unknown>, projectId) as never,
-      );
-      const transmittalId = (transmittal as { id: string }).id;
-      for (const { revisionId, drawingId } of selectedTargets) {
-        // drawing_transmittal_items_one_target requires exactly one of
-        // drawing_id / gc_drawing_id to be set (added directly to the shared
-        // prod schema; drawing_revision_id is no longer part of that check).
-        // sheetOptions already resolves drawingId per revisionId.
-        await entities.DrawingTransmittalItem.create(
-          withProjectId({
-            transmittal_id: transmittalId,
-            drawing_revision_id: revisionId,
-            drawing_id: drawingId,
-          }, projectId) as never,
-        );
-      }
+      const targets = resolveTransmittalTargets(selected, (revisionId) => drawingIdForRevision(sheetOptions, revisionId));
+      await createTransmittal(projectId, headerPatch(form), targets);
       return selected.size;
     },
     onSuccess: (count) => {
-      queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
+      void invalidateEntity(queryClient, "drawingTransmittal", projectId);
       toast.success(`Transmittal logged${count ? ` · ${count} sheet${count === 1 ? "" : "s"}` : ""}`);
       resetEditor();
     },
     onError: (mutationError) => {
-      queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
+      void invalidateEntity(queryClient, "drawingTransmittal", projectId);
       toast.error(`Failed to log transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
 
   const editMutation = useMutation({
     mutationFn: async (transmittal: TransmittalRow) => {
-      if (!projectId) throw new Error("Select a project before editing a transmittal");
-      const patch = headerPatch(form);
-      if (!patch.transmittal_number) throw new Error("Transmittal number is required");
-      await entities.DrawingTransmittal.update(transmittal.id, patch as never);
-
-      const existingRevisionIds = new Set(
-        transmittal.items.flatMap((item) => (item.drawing_revision_id ? [item.drawing_revision_id] : [])),
+      await updateTransmittal(
+        projectId,
+        transmittal,
+        headerPatch(form),
+        selected,
+        (revisionId) => drawingIdForRevision(sheetOptions, revisionId),
       );
-      const additions = [...selected].filter((revisionId) => !existingRevisionIds.has(revisionId));
-      // An item with no revision recorded isn't in the picker, so it was never
-      // deselectable: leave it alone rather than delete it.
-      const removals = transmittal.items.filter((item) => item.drawing_revision_id && !selected.has(item.drawing_revision_id));
-      await Promise.all([
-        ...additions.map((revisionId) => {
-          // See createMutation above: drawing_id is required alongside
-          // drawing_revision_id to satisfy drawing_transmittal_items_one_target.
-          const drawingId = drawingIdForRevision(sheetOptions, revisionId);
-          return entities.DrawingTransmittalItem.create(
-            withProjectId({
-              transmittal_id: transmittal.id,
-              drawing_revision_id: revisionId,
-              drawing_id: drawingId,
-            }, projectId) as never,
-          );
-        }),
-        ...removals.map((item) => entities.DrawingTransmittalItem.delete(item.id)),
-      ]);
       return selected.size;
     },
     onSuccess: (count) => {
-      queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
+      void invalidateEntity(queryClient, "drawingTransmittal", projectId);
       toast.success(`Transmittal updated · ${count} sheet${count === 1 ? "" : "s"}`);
       resetEditor();
     },
     onError: (mutationError) => {
-      queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
+      void invalidateEntity(queryClient, "drawingTransmittal", projectId);
       toast.error(`Failed to update transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (transmittal: TransmittalRow) => {
-      await entities.DrawingTransmittal.update(transmittal.id, { is_deleted: true } as never);
-    },
+    mutationFn: (transmittal: TransmittalRow) => softDeleteTransmittal(transmittal.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
+      void invalidateEntity(queryClient, "drawingTransmittal", projectId);
       toast.success("Transmittal deleted. Its audit history was retained.");
       setActiveId(null);
       setConfirmingDelete(false);
       setDeleteConfirmation("");
     },
     onError: (mutationError) => {
-      queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
+      void invalidateEntity(queryClient, "drawingTransmittal", projectId);
       toast.error(`Failed to delete transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
