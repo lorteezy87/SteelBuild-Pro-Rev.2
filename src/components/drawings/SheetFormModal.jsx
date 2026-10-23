@@ -8,7 +8,7 @@ import { STAGES, DISCIPLINES, EMPTY_FORM, mono, surface } from "./drawingsConfig
  * Modal for creating or editing a single drawing sheet.
  * Handles file upload via Supabase integration.
  *
- * @param {{ initial?: object, onSave: (form: object) => void, onClose: () => void, saving: boolean }} props
+ * @param {{ initial?: object, onSave: (form: object) => void, onClose: () => void, saving: boolean, existingSetNames?: string[] }} props
  */
 export default function SheetFormModal({ initial, onSave, onClose, saving, existingSetNames = [] }) {
   const trapRef = useFocusTrap(true);

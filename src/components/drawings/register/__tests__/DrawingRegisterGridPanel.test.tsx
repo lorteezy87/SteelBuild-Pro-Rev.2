@@ -323,6 +323,16 @@ describe("DrawingRegisterGridPanel — revision workflow", () => {
 describe("DrawingRegisterGridPanel — large registers", () => {
   let rectSpy: ReturnType<typeof vi.spyOn>;
   let originalResizeObserver: typeof window.ResizeObserver;
+  // jsdom lays nothing out, so every box measures 0. The virtualizer reads the
+  // scroll viewport through different APIs across @tanstack/virtual-core
+  // releases — getBoundingClientRect / ResizeObserver entries in older ones,
+  // offset* and client* in newer ones (3.19 reads clientWidth/clientHeight).
+  // Stub them all from one size so a minor bump inside the `^` range cannot
+  // turn the viewport to zero and render no rows.
+  const SIZE_PROPS = ["clientWidth", "clientHeight", "offsetWidth", "offsetHeight"] as const;
+  const originalSizeProps = new Map<string, PropertyDescriptor | undefined>();
+  const boxHeight = (element: Element) =>
+    element.getAttribute("data-testid") === "drawing-register-virtual-body" ? 600 : 54;
 
   beforeEach(() => {
     originalResizeObserver = window.ResizeObserver;
@@ -349,10 +359,8 @@ describe("DrawingRegisterGridPanel — large registers", () => {
       disconnect() {}
     };
     rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect")
-      .mockImplementation(function getBoundingClientRect() {
-        const height = this.getAttribute("data-testid") === "drawing-register-virtual-body"
-          ? 600
-          : 54;
+      .mockImplementation(function getBoundingClientRect(this: HTMLElement) {
+        const height = boxHeight(this);
         return {
           x: 0,
           y: 0,
@@ -365,6 +373,15 @@ describe("DrawingRegisterGridPanel — large registers", () => {
           toJSON: () => ({}),
         };
       });
+    for (const prop of SIZE_PROPS) {
+      originalSizeProps.set(prop, Object.getOwnPropertyDescriptor(HTMLElement.prototype, prop));
+      Object.defineProperty(HTMLElement.prototype, prop, {
+        configurable: true,
+        get(this: HTMLElement) {
+          return prop.endsWith("Width") ? 1400 : boxHeight(this);
+        },
+      });
+    }
     vi.clearAllMocks();
     canEdit = true;
     registerRows = Array.from({ length: 150 }, (_, index) => {
@@ -376,11 +393,19 @@ describe("DrawingRegisterGridPanel — large registers", () => {
         current_revision_id: `rev-${sequence}`,
       });
     });
+  });
 
-    afterEach(() => {
-      rectSpy.mockRestore();
-      window.ResizeObserver = originalResizeObserver;
-    });
+  // Registered at describe level. It used to sit inside beforeEach, where it
+  // is not a normal suite hook, so the stubs were not reliably restored for
+  // the suites that follow.
+  afterEach(() => {
+    rectSpy.mockRestore();
+    window.ResizeObserver = originalResizeObserver;
+    for (const prop of SIZE_PROPS) {
+      const original = originalSizeProps.get(prop);
+      if (original) Object.defineProperty(HTMLElement.prototype, prop, original);
+      else Reflect.deleteProperty(HTMLElement.prototype, prop);
+    }
   });
 
   it("virtualizes the row body while preserving accessible headers and visible controls", () => {

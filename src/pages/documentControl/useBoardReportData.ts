@@ -43,6 +43,8 @@ import {
 
 export interface RegisterRow {
   id: string;
+  /** The sheet's own project — a soft delete checks it against the active one. */
+  projectId: string | null;
   sheet: string;
   title: string;
   seq: string;
@@ -150,6 +152,12 @@ export interface TransmittalRow {
    * Derived from the items, which is the only place the as-sent revision lives.
    */
   supersedes: TransmittalItem[];
+  /**
+   * The lifecycle status, lower-cased: "sent" or "acknowledged", or "" for a
+   * row from before the column existed. Only "sent" can be acknowledged
+   * (acknowledge_transmittal refuses anything else).
+   */
+  status: string;
 }
 
 export interface BoardReportLog<T> {
@@ -404,6 +412,7 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
       const sentOn = parseCalendarDay(pkg?.submitted ?? null);
       return {
         id: r.drawing_id,
+        projectId: r.project_id ?? null,
         sheet: text(r.sheet_number),
         title: text(r.sheet_title, "Untitled sheet"),
         seq: text(r.discipline, "—"),
@@ -570,6 +579,7 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         sheetCount: itemsKnown ? contents.length : null,
         contents,
         supersedes: supersededByTransmittal.get(id) ?? [],
+        status: String(t.status ?? "").toLowerCase(),
       };
     });
 

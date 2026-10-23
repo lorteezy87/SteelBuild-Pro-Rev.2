@@ -1,16 +1,14 @@
-import { deleteRegisterSheet } from "./drawingRegisterDeletion";
+import { useSheetMutations } from "./useSheetMutations";
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 import {
   entities,
-  type Insert,
   type RowWithAliases,
   type Update,
 } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { batchProcess } from "@/utils/batchProcess";
-import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { stageToSubmittalStatus } from "@/lib/submittalStageMapping";
 import {
   ensureSetLinked,
@@ -24,7 +22,6 @@ import {
   validateStageTransition,
 } from "@/components/drawings/drawingsUtils";
 import {
-  buildDrawingCreatePayload,
   formatDeleteSetSuccessMessage,
   formatDrawingWriteError,
 } from "./drawingMutationHelpers";
@@ -106,79 +103,17 @@ export function useDrawingsPageController({
     setShowModal,
   } = state;
 
-  const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["drawings", projectId] }),
-      queryClient.invalidateQueries({ queryKey: ["drawing-register", projectId] }),
-      invalidateEntity(queryClient, "drawingSet", projectId),
-      invalidateEntity(queryClient, "submittal", projectId),
-    ]);
-  };
-
-  const createMut = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => entities.Drawing.create(
-      buildDrawingCreatePayload(
-        payload,
-        projectId,
-        activeProject?.name,
-      ) as Insert<"drawings">,
-    ),
-    onSuccess: async (created) => {
-      await invalidate();
-      toast.success("Sheet added");
-      setShowModal(false);
-      if (created?.id) {
-        const { created: count, failed } = await autoCreateDetailingTasks(
-          [created],
-          { projectName: activeProject?.name ?? "" },
-        );
-        if (count > 0) {
-          queryClient.invalidateQueries({ queryKey: ["schedule-tasks"] });
-          toast.success("Schedule task auto-created");
-        } else if (failed) {
-          toast.error("Schedule task failed to create");
-        }
-      }
-    },
-    onError: (error) => toast.error(formatDrawingWriteError(error, "add")),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, ...payload }: { id: string } & Record<string, unknown>) =>
-      entities.Drawing.update(id, payload as DrawingUpdate),
-    onSuccess: async () => {
-      await invalidate();
-      toast.success("Sheet updated");
+  // Single-sheet writes share one path with the Document Control Board Report.
+  const { createMut, updateMut, deleteMut, invalidate } = useSheetMutations({
+    projectId,
+    projectName: activeProject?.name,
+    queryClient,
+    onCreated: () => setShowModal(false),
+    onUpdated: () => {
       setEditing(null);
       setShowModal(false);
     },
-    onError: (error) => toast.error(formatDrawingWriteError(error, "update")),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => deleteRegisterSheet(drawings.find((drawing) => drawing.id === id), projectId),
-    onSuccess: async (_result, id) => {
-      await invalidate();
-      setSelected(new Set());
-      toast.success("Sheet deleted", {
-        action: {
-          label: "Undo",
-          onClick: async () => {
-            try {
-              await entities.Drawing.update(id, {
-                is_deleted: false,
-                deleted_at: null,
-              });
-              await invalidate();
-              toast.success("Sheet restored");
-            } catch (error) {
-              toast.error(formatDrawingWriteError(error, "restore"));
-            }
-          },
-        },
-      });
-    },
-    onError: (error) => toast.error(formatDrawingWriteError(error, "delete")),
+    onDeleted: () => setSelected(new Set()),
   });
 
   const deleteSetMut = useMutation({
@@ -285,7 +220,7 @@ export function useDrawingsPageController({
     const confirm = buildDeleteSheetConfirm(
       drawings.find((drawing) => drawing.id === id),
     );
-    setConfirmState({ ...confirm, run: async () => { await deleteMut.mutateAsync(id); } });
+    setConfirmState({ ...confirm, run: async () => { await deleteMut.mutateAsync(drawings.find((drawing) => drawing.id === id)); } });
   };
 
   const handleDeleteSet = (group: DrawingSetGroupLike) => {
