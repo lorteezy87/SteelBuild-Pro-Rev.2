@@ -39,7 +39,7 @@ const m = vi.hoisted(() => ({
       work_package_count: 0,
       last_activity: null as string | null,
       active_hold_id: null as string | null,
-      thumbnail_url: "https://example.test/e203.png" as string | null,
+      thumbnail_url: "drawings/d1/e203-thumb.png" as string | null,
       linked_rfi_ids: "RFI #041" as string | null,
     },
     {
@@ -155,6 +155,18 @@ vi.mock("@/hooks/useDrawingRegister", () => ({
   useDrawingRegister: () => ({ data: m.register, isLoading: false, isError: false }),
 }));
 
+vi.mock("@/hooks/useResolvedFileUrl", () => ({
+  // Mirrors the real contract (api/client/storage.ts): a storage PATH resolves
+  // to a signed URL on our host; a full URL on any other host is BLOCKED and
+  // resolves to null. Tests below assert both sides of that boundary.
+  useResolvedFileUrl: (fileUrl: string | null | undefined) => {
+    if (!fileUrl) return { url: null, loading: false, error: null as unknown };
+    if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+      return { url: null, loading: false, error: null as unknown }; // untrusted host → blocked
+    }
+    return { url: `https://kjrwqagyeswwoxpjkcko.supabase.co/signed/${fileUrl}`, loading: false, error: null as unknown };
+  },
+}));
 vi.mock("@/hooks/useProjectId", () => ({ useProjectId: () => "p1" }));
 vi.mock("@/hooks/useDocumentTitle", () => ({ default: () => {} }));
 vi.mock("@/components/shared/ThemeContext", () => ({ useTheme: () => ({ theme: m.theme }) }));
@@ -291,11 +303,33 @@ describe("Document Control Board Report", () => {
    * unread column apart from a real absence.
    */
   describe("sheet media and RFI linkage", () => {
-    it("shows the real sheet thumbnail when the register carries one", async () => {
+    it("renders the thumbnail through the signed URL, never the raw storage path", async () => {
       renderPage();
       await goTo("Register");
       const img = screen.getByRole("img", { name: /Sheet E-203/i });
-      expect(img).toHaveAttribute("src", "https://example.test/e203.png");
+      // The stored value is a storage PATH; rendered raw it would 404 against
+      // the app origin. Only the resolver's signed URL may reach src.
+      expect(img).toHaveAttribute("src", "https://kjrwqagyeswwoxpjkcko.supabase.co/signed/drawings/d1/e203-thumb.png");
+      expect(img.getAttribute("src")).not.toBe("drawings/d1/e203-thumb.png");
+    });
+
+    it("never fetches a poisoned external thumbnail URL for viewers", async () => {
+      // The file-trust boundary (#20): a full URL on a foreign host resolves to
+      // null, so a user-controlled thumbnail_url cannot make every Board
+      // Report viewer request an arbitrary tracking URL.
+      const original = m.register;
+      m.register = original.map((r, i) =>
+        i === 0 ? { ...r, thumbnail_url: "https://evil.example/pixel.png" } : r,
+      ) as typeof original;
+      try {
+        renderPage();
+        await goTo("Register");
+        expect(screen.queryByRole("img", { name: /Sheet E-203/i })).not.toBeInTheDocument();
+        expect(screen.getByText(/sheet preview/)).toBeInTheDocument();
+        expect(document.querySelector('img[src*="evil.example"]')).toBeNull();
+      } finally {
+        m.register = original;
+      }
     });
 
     it("falls back to the placeholder when a sheet has no thumbnail", async () => {

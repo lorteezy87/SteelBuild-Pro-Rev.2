@@ -47,6 +47,9 @@ import {
   type DcStatus,
 } from "./boardReportDerive";
 import type { BoardReportData, RegisterRow, RfiRow, SubmittalRow, TransmittalRow } from "./useBoardReportData";
+// The file-trust boundary: storage paths become signed URLs; foreign hosts
+// come back null. See SheetPreview for why src never takes the raw value.
+import { useResolvedFileUrl } from "@/hooks/useResolvedFileUrl";
 
 const mono = DC_FONT.mono;
 const ui = DC_FONT.ui;
@@ -201,6 +204,58 @@ const Rows = ({ children }: { children: ReactNode }) => (
 const REGISTER_COLUMNS = "72px minmax(0,1fr) 56px 44px 96px 64px 64px 84px";
 
 /**
+ * The design's 4:3 sheet preview.
+ *
+ * `thumbnail_url` is a STORAGE PATH, not a URL — storage.ts verified every
+ * file_url table holds paths, zero full URLs — so it goes through
+ * `useResolvedFileUrl`, never straight into `src`. That one hop is doing two
+ * jobs: a raw path rendered as `src` resolves against the app's own origin and
+ * 404s (no existing thumbnail would ever load), and the resolver is also the
+ * file-trust boundary (#20) — a full URL on any host but our Supabase project
+ * comes back null rather than being fetched by every viewer of this pane, so
+ * a poisoned thumbnail_url cannot turn the Board Report into a tracking pixel.
+ *
+ * Unresolved, blocked, loading and absent all land on the placeholder the
+ * handoff allows — a missing preview says nothing about the sheet.
+ */
+function SheetPreview({ sheet, thumbnailUrl, dark }: { sheet: string; thumbnailUrl: string | null; dark: boolean }) {
+  const S = dark ? DC_DARK : DC_LIGHT;
+  const { url } = useResolvedFileUrl(thumbnailUrl);
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={`Sheet ${sheet}`}
+        loading="lazy"
+        style={{
+          aspectRatio: "4 / 3",
+          width: "100%",
+          objectFit: "cover",
+          background: S.rowHover,
+          border: `1px solid ${S.paneBorder}`,
+          display: "block",
+        }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{
+        aspectRatio: "4 / 3",
+        background: S.rowHover,
+        border: `1px dashed ${S.dashed}`,
+        display: "grid",
+        placeItems: "center",
+        font: `400 12px/1 ${mono}`,
+        color: S.textFaint,
+      }}
+    >
+      sheet preview · {sheet}
+    </div>
+  );
+}
+
+/**
  * The design's status-dependent primary action, as a LINK rather than a write.
  *
  * The comps label this button by what the sheet needs next — REL sends to the
@@ -295,38 +350,7 @@ export function RegisterScreen({ data, intakeHref }: { data: BoardReportData; in
             badge={<StatusBadge label={badgeLabel(current.status)} style={badgeStyle(current.status, dark)} />}
             title={current.title}
           />
-          {/* The design's 4:3 preview. The real thumbnail when the register
-              carries one, otherwise the placeholder the handoff allows — a
-              missing thumbnail says nothing about the sheet. */}
-          {current.thumbnailUrl ? (
-            <img
-              src={current.thumbnailUrl}
-              alt={`Sheet ${current.sheet}`}
-              loading="lazy"
-              style={{
-                aspectRatio: "4 / 3",
-                width: "100%",
-                objectFit: "cover",
-                background: S.rowHover,
-                border: `1px solid ${S.paneBorder}`,
-                display: "block",
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                aspectRatio: "4 / 3",
-                background: S.rowHover,
-                border: `1px dashed ${S.dashed}`,
-                display: "grid",
-                placeItems: "center",
-                font: `400 12px/1 ${mono}`,
-                color: S.textFaint,
-              }}
-            >
-              sheet preview · {current.sheet}
-            </div>
-          )}
+          <SheetPreview sheet={current.sheet} thumbnailUrl={current.thumbnailUrl} dark={dark} />
           {current.onHold && current.holdReason ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <span style={{ font: `600 13px/1 ${ui}` }}>Holding on</span>
