@@ -348,4 +348,11 @@ const LEDGER = new Set([
   // 2026-10-22 at the owner's direction; statements[1] is the exact committed
   // blob (3756 bytes, sha256 fa5d699a8645bee15fd8cf45eb23eb5d13916e20f5990cfc643b9baaf8d23a23).
   '20261022064000',
+  // drawing_register_view thumbnail_url + linked_rfi_ids (PR #586). Stamped in
+  // production 2026-10-22 and live (both columns appended at positions 20-21).
+  // statements[1] is NOT yet the committed blob: it holds a placeholder note
+  // naming the file's md5 (7cc34b1602a4abb7a7d640a1d144a7e2), which the
+  // byte-identical file in supabase/migrations matches. Replacing the
+  // placeholder with the verbatim file is a separate, authorized ledger write.
+  '20261022082000',
 ]);
