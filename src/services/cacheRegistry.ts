@@ -207,6 +207,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["rfi-detail", pid],          // ProjectDetailView.jsx
       ["pill-rfis-quick"],          // ProjectPillDropdown.jsx
       ["modal-rfis", pid],          // ProjectDrilldownModal.jsx
+      ["board-report", "rfis", pid], // Document Control Board Report
     ],
   },
 
@@ -459,6 +460,18 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["submittals-all"],
       ["submittals-nav-count", pid],
       ["submittal-detail", pid],
+      ["board-report", "submittals", pid], // Document Control Board Report (also feeds register Sent/Back)
+    ],
+  },
+
+  // Drawing transmittals. The hub log reads ["drawing-transmittals", pid];
+  // the Board Report reads its own outgoing-only view.
+  drawingTransmittal: {
+    primary:  (pid) => ["drawing-transmittals", pid],
+    families: (pid) => [
+      ["drawing-transmittals", pid],
+      ["board-report", "transmittals", pid],
+      ["board-report", "transmittal-items", pid], // Board Report Sheets column + contents
     ],
   },
 

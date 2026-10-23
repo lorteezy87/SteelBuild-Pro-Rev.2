@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * The Board Report's two standing guarantees, asserted rather than trusted.
+ * The Board Report's standing guarantees, asserted rather than trusted.
  *
- * 1. READ-ONLY. The page this replaced wrote nothing, so reviewing a document
- *    was never an irreversible act. Every action here is a link out to the
- *    flow that owns the write, or disabled. A future change that wires a save
- *    button straight into this page should fail here first.
+ * 1. WRITES ARE GATED AND CONFIRMED. Create / edit / delete were approved on
+ *    2026-10-22. Every write control follows the project role (a viewer sees
+ *    them disabled, never failing on click), a delete always asks first, and
+ *    selecting a row still writes nothing.
  * 2. NO HARDCODED COMPANY. Every screen in the design comps shows a literal
  *    fabricator name in the masthead; CLAUDE.md records the owner's decision
  *    that no part of this product may name it. The wordmark reads the
@@ -18,6 +18,16 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
+  role: "pm" as "pm" | "field" | "viewer",
+  /** The shared transmittal lifecycle RPCs. Each returns the row it acted on. */
+  rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => ({
+    data: {
+      id: (args.p_transmittal_id as string | undefined) ?? "t-new",
+      transmittal_number: "T-007",
+      status: fn === "send_transmittal" ? "sent" : fn === "void_transmittal" ? "void" : "draft",
+    },
+    error: null as { message: string } | null,
+  })),
   theme: "light" as string,
   orgName: "Harbor Fabrication" as string | null,
   register: [
@@ -102,6 +112,7 @@ const m = vi.hoisted(() => ({
       purpose: "For erection",
       date_sent: "2026-10-17T14:20:00Z",
       recipient_email: "r.vega@crew2.example",
+      status: "sent",
       acknowledged_at: null as string | null,
       acknowledged_by_name: null as string | null,
     },
@@ -113,6 +124,7 @@ const m = vi.hoisted(() => ({
       purpose: "For erection",
       date_sent: "2026-10-02T14:20:00Z",
       recipient_email: "r.vega@crew2.example",
+      status: "acknowledged",
       acknowledged_at: "2026-10-02T18:00:00Z" as string | null,
       acknowledged_by_name: "R. Vega" as string | null,
     },
@@ -135,7 +147,11 @@ vi.mock("@/api/supabaseClient", () => ({
   entities: {
     Submittal: { filter: vi.fn(async () => m.submittals) },
     RFI: { filter: vi.fn(async () => m.rfis) },
-    DrawingTransmittal: { filter: vi.fn(async () => m.transmittals) },
+    DrawingTransmittal: {
+      filter: vi.fn(async () => m.transmittals),
+      create: vi.fn(async (row: Record<string, unknown>) => ({ id: "t-new", status: "sent", ...row })),
+      update: vi.fn(async (id: string, patch: Record<string, unknown>) => ({ id, ...patch })),
+    },
     DrawingTransmittalItem: {
       filter: vi.fn(async () => {
         // null stands for a read that does not land, so the pane and the
@@ -146,6 +162,19 @@ vi.mock("@/api/supabaseClient", () => ({
     },
   },
 }));
+
+// The REAL role floors, so a test can prove which permission key a control
+// asks for (a field user may edit drawings but not transmittals).
+vi.mock("@/services/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/services/permissions")>("@/services/permissions");
+  return {
+    usePermissions: () => ({
+      can: (action: string, entity?: string) => actual.canPerform(m.role, action, entity ?? null),
+    }),
+  };
+});
+
+vi.mock("@/lib/supabase", () => ({ supabase: { rpc: m.rpc } }));
 
 vi.mock("@/hooks/useDrawingRegister", () => ({
   useDrawingRegister: () => ({ data: m.register, isLoading: false, isError: false }),
@@ -159,6 +188,7 @@ vi.mock("@/components/shared/OrgContext", () => ({
 }));
 
 import DocumentControl from "../../DocumentControl";
+import { entities } from "@/api/supabaseClient";
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -218,19 +248,172 @@ describe("Document Control Board Report", () => {
     expect(within(row).getByText("HOLD")).toBeInTheDocument();
   });
 
-  it("writes nothing: every pane action is a link out or disabled", async () => {
+  it("disables every write control for a role that may not write, and offers no create", async () => {
+    m.role = "viewer";
+    try {
+      renderPage();
+      for (const tab of ["Register", "Submittals", "RFIs", "Transmittals"]) {
+        await goTo(tab);
+        expect(screen.queryByRole("button", { name: /^\+ New/ })).toBeNull();
+        for (const name of [/^Edit/, /^Delete$/, /^Void$/, /acknowledgement/i]) {
+          for (const control of screen.queryAllByRole("button", { name })) {
+            expect(control).toBeDisabled();
+            // It says why instead of silently failing.
+            expect(control).toHaveAttribute("title", expect.stringMatching(/project role cannot/));
+          }
+        }
+      }
+    } finally {
+      m.role = "pm";
+    }
+  });
+
+  it("offers create on each log for a role that may write", async () => {
+    renderPage();
+    for (const [tab, label] of [
+      ["Register", "+ New sheet"],
+      ["Submittals", "+ New submittal"],
+      ["RFIs", "+ New RFI"],
+      ["Transmittals", "+ New transmittal"],
+    ]) {
+      await goTo(tab);
+      expect(screen.getByRole("button", { name: label })).toBeEnabled();
+    }
+  });
+
+  it("gates transmittals at the PM floor even for a role that may edit drawings", async () => {
+    m.role = "field";
+    try {
+      renderPage();
+      await goTo("Register");
+      // field may edit sheets (drawing:edit floors at field)...
+      expect(screen.getByRole("button", { name: "Edit sheet" })).toBeEnabled();
+      await goTo("Transmittals");
+      await screen.findByRole("button", { name: /Transmittal T-118-064/ });
+      // ...but every transmittal write is PM-gated in the database.
+      expect(screen.queryByRole("button", { name: "+ New transmittal" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Record acknowledgement" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Void" })).toBeDisabled();
+    } finally {
+      m.role = "pm";
+    }
+  });
+
+  it("offers no edit or delete on an issued transmittal, and voids it with a reason", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    m.rpc.mockClear();
+    renderPage();
+    await goTo("Transmittals");
+    await screen.findByRole("button", { name: /Transmittal T-118-064/ });
+    // Issued transmittals are a frozen snapshot.
+    expect(screen.queryByRole("button", { name: /^Edit/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Void" }));
+    const dialog = await screen.findByRole("dialog", { name: /Void transmittal T-118-064/ });
+    const confirm = within(dialog).getByRole("button", { name: "Void transmittal" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Void reason"), { target: { value: "Wrong crew" } });
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(m.rpc).toHaveBeenCalledWith("void_transmittal", { p_transmittal_id: "t1", p_reason: "Wrong crew" }),
+    );
+    expect(entities.DrawingTransmittal.update).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges through the lifecycle, named, on the calendar day picked", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    m.rpc.mockClear();
+    renderPage();
+    await goTo("Transmittals");
+    await screen.findByRole("button", { name: /Transmittal T-118-064/ });
+    fireEvent.click(screen.getByRole("button", { name: "Record acknowledgement" }));
+    const dialog = await screen.findByRole("dialog", { name: /Record acknowledgement/ });
+    const by = within(dialog).getByLabelText("Acknowledged by");
+    // Prefilled from the attention line; cleared, the save is refused.
+    expect(by).toHaveValue("R. Vega");
+    fireEvent.change(by, { target: { value: "  " } });
+    expect(within(dialog).getByRole("button", { name: "Record acknowledgement" })).toBeDisabled();
+    fireEvent.change(by, { target: { value: "M. Ortiz" } });
+    fireEvent.change(within(dialog).getByLabelText("Date received"), { target: { value: "2026-10-22" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Record acknowledgement" }));
+    await waitFor(() =>
+      expect(m.rpc).toHaveBeenCalledWith("acknowledge_transmittal", {
+        p_transmittal_id: "t1",
+        p_by_name: "M. Ortiz",
+        p_notes: null,
+        // UTC noon of the picked day reads back as that day in every zone.
+        p_at: "2026-10-22T12:00:00Z",
+      }),
+    );
+  });
+
+  it("only acknowledges a transmittal recorded as sent", async () => {
+    const legacy = { ...m.transmittals[0], status: null as unknown as string };
+    const original = m.transmittals[0];
+    m.transmittals[0] = legacy;
+    try {
+      renderPage();
+      await goTo("Transmittals");
+      await screen.findByRole("button", { name: /Transmittal T-118-064/ });
+      const ack = screen.getByRole("button", { name: "Record acknowledgement" });
+      expect(ack).toBeDisabled();
+      expect(ack).toHaveAttribute("title", expect.stringMatching(/recorded as sent/));
+    } finally {
+      m.transmittals[0] = original;
+    }
+  });
+
+  it("issues a new transmittal: sequence-numbered draft, then sent, never a client number", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    m.rpc.mockClear();
+    const original = m.register[1].current_revision_id;
+    m.register[1].current_revision_id = "rev-4001-0";
+    try {
+      renderPage();
+      await goTo("Transmittals");
+      fireEvent.click(screen.getByRole("button", { name: "+ New transmittal" }));
+      const dialog = await screen.findByRole("dialog", { name: "New transmittal" });
+      expect(within(dialog).queryByLabelText("Transmittal number")).toBeNull();
+      const issue = within(dialog).getByRole("button", { name: "Issue transmittal" });
+      expect(issue).toBeDisabled();
+      fireEvent.change(within(dialog).getByLabelText("Subject"), { target: { value: "Stair ST-1 for erection" } });
+      fireEvent.change(within(dialog).getByLabelText("Attention"), { target: { value: "R. Vega" } });
+      fireEvent.change(within(dialog).getByLabelText("Date sent"), { target: { value: "2026-10-22" } });
+      // send_transmittal refuses an empty transmittal, so the button waits for a sheet.
+      expect(issue).toBeDisabled();
+      fireEvent.click(within(dialog).getByLabelText("Issue 4001 revision 0"));
+      fireEvent.click(issue);
+      await waitFor(() => expect(m.rpc).toHaveBeenCalledWith("send_transmittal", { p_transmittal_id: "t-new", p_sent_date: "2026-10-22" }));
+      expect(m.rpc).toHaveBeenNthCalledWith(1, "create_transmittal", {
+        p_project_id: "p1",
+        p_payload: expect.objectContaining({
+          direction: "outgoing",
+          subject: "Stair ST-1 for erection",
+          sent_to: "R. Vega",
+          item_refs: ["shop:d2"],
+        }),
+      });
+      expect(entities.DrawingTransmittal.create).not.toHaveBeenCalled();
+    } finally {
+      m.register[1].current_revision_id = original;
+    }
+  });
+
+  it("selecting a row writes nothing", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    vi.mocked(entities.DrawingTransmittal.update).mockClear();
+    vi.mocked(entities.DrawingTransmittal.create).mockClear();
+    m.rpc.mockClear();
     renderPage();
     for (const tab of ["Register", "Submittals", "RFIs", "Transmittals"]) {
       await goTo(tab);
-      // Buttons that are not tabs, rows or filter chips are pane actions.
-      const actions = screen
-        .getAllByRole("button")
-        .filter((b) => !b.hasAttribute("aria-pressed") && !b.hasAttribute("aria-current") && b.getAttribute("aria-label") === null)
-        .filter((b) => !["Brief", "Register", "Submittals", "RFIs", "Transmittals"].includes(b.textContent ?? ""));
-      for (const action of actions) {
-        expect(action).toBeDisabled();
+      for (const row of screen.getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"))) {
+        fireEvent.click(row);
       }
     }
+    expect(entities.DrawingTransmittal.update).not.toHaveBeenCalled();
+    expect(entities.DrawingTransmittal.create).not.toHaveBeenCalled();
+    expect(m.rpc).not.toHaveBeenCalled();
   });
 
   it("keeps the intake desk reachable from the register pane", async () => {
@@ -412,9 +595,10 @@ describe("Document Control Board Report", () => {
   });
 
   /**
-   * The comps label the register's primary button by what the sheet needs
-   * next. It is still a link out — the page writes nothing — but the label is
-   * the design's, and a single generic one threw that away.
+   * The comps label the register's next-step button by what the sheet needs
+   * next. It is a link out to the flow that owns that step (editing the sheet
+   * itself is the pane's Edit button), but the label is the design's, and a
+   * single generic one threw that away.
    */
   it("labels the register's primary action by sheet status", async () => {
     renderPage();

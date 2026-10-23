@@ -225,48 +225,104 @@ export function DetailPane({ children, gap = 20, dark = false }: { children: Rea
 }
 
 /**
- * Pane actions. Every one of these is DISABLED on purpose.
+ * Pane actions.
  *
- * The page this replaced wrote nothing — reviewing a document was never an
- * irreversible act — and the design handoff repeats that guarantee: "Build
- * these as disabled, or as links out to the existing flows. Do not add write
- * behavior." `href` turns a button into a link out to a hub flow that already
- * owns the write; without one it renders inert and is announced as disabled.
+ * Three shapes, decided by props:
+ * - `href`    — a link out to the flow that owns a write this page does not
+ *               do itself (the intake desk, the hub, the full RFI page).
+ * - `onClick` — an action on this page: edit, delete, record an
+ *               acknowledgement. Every one goes through the same write path
+ *               the owning page uses; this component only starts it.
+ * - neither, or `disabled` — inert and announced as disabled. Used when the
+ *               signed-in role may not perform the action, so the control
+ *               explains its absence instead of failing on click.
+ *
+ * `tone="danger"` is for destructive actions; it never takes the primary
+ * fill, so a delete is never the most prominent thing in a pane.
  */
 export function PaneButton({
   children,
   variant = "primary",
   href,
+  onClick,
+  disabled = false,
+  title,
+  tone,
   dark = false,
 }: {
   children: ReactNode;
   variant?: "primary" | "secondary";
   href?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  /** Tooltip — used to say WHY a control is disabled. */
+  title?: string;
+  tone?: "danger";
   dark?: boolean;
 }) {
   const skin = dark ? DC_DARK : DC_LIGHT;
   const base: CSSProperties = {
     padding: "9px 14px",
     borderRadius: 6,
-    font: `${variant === "primary" ? 600 : 500} 13px/1 ${DC_FONT.ui}`,
+    font: `${variant === "primary" && tone !== "danger" ? 600 : 500} 13px/1 ${DC_FONT.ui}`,
     display: "inline-flex",
     alignItems: "center",
     textDecoration: "none",
   };
   const look: CSSProperties =
-    variant === "primary"
-      ? { background: skin.btnPrimaryBg, color: skin.btnPrimaryFg, border: `1px solid ${skin.btnPrimaryBg}` }
-      : { background: "transparent", color: skin.text, border: `1px solid ${skin.btnSecondaryBorder}` };
+    tone === "danger"
+      ? {
+          background: "transparent",
+          // The light red text would sink into the dark pane; the masthead's late tone carries on dark.
+          color: dark ? DC_SIGNAL.metricLate : DC_SIGNAL.redText,
+          border: `1px solid ${skin.btnSecondaryBorder}`,
+        }
+      : variant === "primary"
+        ? { background: skin.btnPrimaryBg, color: skin.btnPrimaryFg, border: `1px solid ${skin.btnPrimaryBg}` }
+        : { background: "transparent", color: skin.text, border: `1px solid ${skin.btnSecondaryBorder}` };
 
-  if (href) {
+  if (href && !disabled) {
     return (
-      <a href={href} style={{ ...base, ...look, cursor: "pointer" }}>
+      <a href={href} title={title} style={{ ...base, ...look, cursor: "pointer" }}>
         {children}
       </a>
     );
   }
+  const inert = disabled || !onClick;
   return (
-    <button type="button" disabled style={{ ...base, ...look, cursor: "not-allowed", opacity: 0.55 }}>
+    <button
+      type="button"
+      disabled={inert}
+      title={title}
+      onClick={inert ? undefined : onClick}
+      style={{ ...base, ...look, cursor: inert ? "not-allowed" : "pointer", opacity: inert ? 0.55 : 1 }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * The masthead's primary call to action — the design's orange "New …" button.
+ * Rendered only when the signed-in role may create the record, so a viewer
+ * never sees an offer the database will refuse.
+ */
+export function MastheadAction({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        appearance: "none",
+        background: DC_SIGNAL.accent,
+        color: DC_SIGNAL.onAccent,
+        border: 0,
+        borderRadius: 6,
+        padding: "8px 14px",
+        font: `600 13px/1 ${DC_FONT.ui}`,
+        cursor: "pointer",
+      }}
+    >
       {children}
     </button>
   );

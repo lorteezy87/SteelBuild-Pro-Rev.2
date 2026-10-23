@@ -14,22 +14,32 @@
  * the system already holds, the intake desk reads one it does not, and the
  * hub's "Open intake" button means the latter.
  *
- * READ-ONLY, DELIBERATELY
- * The page this replaced wrote nothing, so reviewing a document was never an
- * irreversible act, and the design handoff asks for the same guarantee. Every
- * action in the panes is either a link out to the flow that already owns the
- * write, or disabled. Selecting a row changes the pane and nothing else.
+ * WRITES GO THROUGH THE OWNING PAGE'S PATH
+ * The first build of this page was read-only, per the design handoff. Full
+ * create / edit / delete was approved afterwards (2026-10-22). It is added
+ * without a single new persistence path: every write is handed to
+ * BoardReportEditors, which opens the app's own form for that record and
+ * saves through the hook the owning page uses (RFI numbers from the sequence
+ * RPC, submittal triggers and audit, sheet soft deletes with undo).
+ * Transmittals move only through the shared lifecycle RPCs: issue (sequence
+ * number, then send), acknowledge, void. An issued transmittal is never
+ * edited or deleted. Controls follow the project role; RLS and the RPCs
+ * remain the authority. Selecting a row still changes the pane and nothing
+ * else.
  *
  * The masthead sentence is derived, not written: it reads the same counts the
  * metrics do, so it can never contradict them.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useProjectId } from "@/hooks/useProjectId";
 import useDocumentTitle from "@/hooks/useDocumentTitle";
 import { useTheme } from "@/components/shared/ThemeContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
+import { usePermissions } from "@/services/permissions";
 import {
   BoardReportShell,
+  MastheadAction,
   useOrgName,
   type BoardReportTab,
   type Metric,
@@ -42,12 +52,16 @@ import {
   RfiScreen,
   SubmittalsScreen,
   TransmittalsScreen,
+  type BoardReportActions,
 } from "./documentControl/BoardReportScreens";
+import { BoardReportEditorHost, type EditorIntent } from "./documentControl/BoardReportEditors";
 import { DC_FONT, DC_LIGHT, DC_MASTHEAD, DC_SIGNAL } from "./documentControl/boardReportTheme";
 import { ackState, CONTRACT_RETURN_DAYS, isPastDue } from "./documentControl/boardReportDerive";
 import { countLabel, useBoardReportData } from "./documentControl/useBoardReportData";
 
 const INTAKE_HREF = "/DocumentIntake";
+
+type ProjectLabel = { id?: string | null; name?: string | null; project_name?: string | null };
 
 /** The phrase the sentence highlights. */
 function Hot({ children }: { children: React.ReactNode }) {
@@ -65,6 +79,54 @@ export default function DocumentControl() {
   const [tab, setTab] = useState<BoardReportTab>("Brief");
   const data = useBoardReportData(projectId ?? null);
   useDocumentTitle("Document Control");
+
+  // The id can come from the URL rather than the switcher, so the name is
+  // looked up by id instead of assuming the active project is this one.
+  const projectCtx = useProjectContext() as {
+    activeProject?: ProjectLabel | null;
+    projects?: ProjectLabel[];
+  };
+  const project =
+    projectCtx.activeProject?.id === projectId
+      ? projectCtx.activeProject
+      : projectCtx.projects?.find((p) => p.id === projectId) ?? null;
+  const projectName = project?.name || project?.project_name || "";
+  const [editor, setEditor] = useState<EditorIntent | null>(null);
+  const closeEditor = useCallback(() => setEditor(null), []);
+  const { can } = usePermissions();
+  const actions = useMemo((): BoardReportActions => {
+    const perms = (entity: string) => ({
+      create: can("create", entity),
+      edit: can("edit", entity),
+      delete: can("delete", entity),
+    });
+    // Transmittals get their own key, not "drawing": drawing:edit floors at
+    // field, but every transmittal write (RLS and the create / send /
+    // acknowledge / void RPCs) requires PM. The un-overridden "transmittal"
+    // key floors create and edit at PM, matching the database. Void is a
+    // PM-gated RPC too, so it follows edit rather than the admin-only
+    // default for delete.
+    const transmittalEdit = can("edit", "transmittal");
+    return {
+      perms: {
+        sheet: perms("drawing"),
+        submittal: perms("submittal"),
+        rfi: perms("rfi"),
+        transmittal: { create: can("create", "transmittal"), edit: transmittalEdit, delete: transmittalEdit },
+      },
+      open: setEditor,
+    };
+  }, [can]);
+
+  const createAction = (() => {
+    const make = (label: string, allowed: boolean, intent: EditorIntent) =>
+      allowed ? <MastheadAction onClick={() => setEditor(intent)}>{label}</MastheadAction> : null;
+    if (tab === "Register") return make("+ New sheet", actions.perms.sheet.create, { kind: "sheet", mode: "create" });
+    if (tab === "Submittals") return make("+ New submittal", actions.perms.submittal.create, { kind: "submittal", mode: "create" });
+    if (tab === "RFIs") return make("+ New RFI", actions.perms.rfi.create, { kind: "rfi", mode: "create" });
+    if (tab === "Transmittals") return make("+ New transmittal", actions.perms.transmittal.create, { kind: "transmittal", mode: "create" });
+    return null;
+  })();
 
   const counts = useMemo(() => {
     const reg = data.register.rows;
@@ -269,7 +331,12 @@ export default function DocumentControl() {
       sentence={data.isLoading ? "Reading the register…" : sentence}
       metrics={metrics}
       emphasis={emphasis}
-      mastheadRight={right}
+      mastheadRight={
+        <>
+          {right}
+          {createAction}
+        </>
+      }
       dark={dark}
     >
       <BoardReportSkin dark={dark}>
@@ -279,11 +346,18 @@ export default function DocumentControl() {
         </div>
       ) : null}
       {tab === "Brief" ? <BriefScreen data={data} /> : null}
-      {tab === "Register" ? <RegisterScreen data={data} intakeHref={INTAKE_HREF} /> : null}
-      {tab === "Submittals" ? <SubmittalsScreen data={data} orgName={orgName} /> : null}
-      {tab === "RFIs" ? <RfiScreen data={data} orgName={orgName} /> : null}
-      {tab === "Transmittals" ? <TransmittalsScreen data={data} /> : null}
+      {tab === "Register" ? <RegisterScreen data={data} intakeHref={INTAKE_HREF} actions={actions} /> : null}
+      {tab === "Submittals" ? <SubmittalsScreen data={data} orgName={orgName} actions={actions} /> : null}
+      {tab === "RFIs" ? <RfiScreen data={data} orgName={orgName} actions={actions} /> : null}
+      {tab === "Transmittals" ? <TransmittalsScreen data={data} actions={actions} /> : null}
       </BoardReportSkin>
+      <BoardReportEditorHost
+        intent={editor}
+        projectId={projectId}
+        projectName={projectName}
+        dark={dark}
+        onClose={closeEditor}
+      />
     </BoardReportShell>
   );
 }
