@@ -24,6 +24,10 @@ import { useQuery } from "@tanstack/react-query";
 import { entities, EFFECTIVE_LIST_CAP } from "@/api/supabaseClient";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { isRfiOpen } from "@/lib/entityPredicates";
+// THE canonical reader for a drawing's `linked_rfi_ids` CSV. CLAUDE.md records
+// that hand-rolled variants of this split have shipped twice and silently
+// matched nothing, so the parse is never re-implemented here.
+import { linkedRfiNumbers } from "@/lib/fabReleaseGate";
 import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import {
   type CalendarDay,
@@ -54,6 +58,26 @@ export interface RegisterRow {
   onHold: boolean;
   holdReason: string | null;
   rfiCount: number;
+  /**
+   * The sheet's thumbnail, or null when there is none to show.
+   *
+   * Null covers both "the register view does not project this column yet"
+   * and "this sheet has no thumbnail", because the pane does the same thing
+   * either way: it falls back to the placeholder the design allows. Nothing
+   * downstream makes a claim about the sheet from its absence.
+   */
+  thumbnailUrl: string | null;
+  /**
+   * The RFI numbers this sheet is linked to — or NULL when the view does not
+   * carry the column, which is not the same as an empty list.
+   *
+   * `[]` is evidence: the column was read and the sheet links to no RFI.
+   * `null` is the absence of evidence, and the RFI pane says so rather than
+   * printing "no sheets held" over a column it never saw. Same rule as
+   * `DocField.observed` in lib/docControl and the NULL downstream dates in
+   * CLAUDE.md.
+   */
+  rfiNumbers: string[] | null;
 }
 
 export interface SubmittalRow {
@@ -405,6 +429,12 @@ export function useBoardReportData(projectId: string | null): BoardReportData {
         onHold: Boolean(r.active_hold_id),
         holdReason: r.active_hold_reason ?? null,
         rfiCount: r.rfi_count ?? 0,
+        thumbnailUrl: r.thumbnail_url ?? null,
+        // `undefined` is the view not projecting the column (pre-20261022082000);
+        // null or "" is the column read and the sheet linking to nothing. The
+        // first is unknown, the second is a real empty — keep them apart.
+        rfiNumbers:
+          r.linked_rfi_ids === undefined ? null : linkedRfiNumbers({ linked_rfi_ids: r.linked_rfi_ids }),
       };
     });
 

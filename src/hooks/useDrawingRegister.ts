@@ -33,6 +33,16 @@ export interface DrawingRegisterRow {
   active_hold_id?: string | null;
   active_hold_reason?: string | null;
   active_hold_placed_at?: string | null;
+  /**
+   * Projected by migration 20261022082000. OPTIONAL, and that is the point:
+   * until that migration is applied the view does not return these keys at
+   * all, so `undefined` means "the view does not carry this" while `null`
+   * means "the view carries it and the sheet has none". Readers must keep
+   * those apart — see RegisterRow.thumbnailUrl / rfiNumbers.
+   */
+  thumbnail_url?: string | null;
+  /** CSV of RFI NUMBERS (not uuids). Normalise with lib/fabReleaseGate. */
+  linked_rfi_ids?: string | null;
 }
 
 const DRAWING_SET_LOOKUP_BATCH_SIZE = 100;
