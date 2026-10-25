@@ -31,12 +31,15 @@ The active rebuild covers the entire subcontractor app for structural steel fabr
 - **Vercel is retired.** Don't reintroduce it.
 - **Cloudflare:** `wrangler.jsonc` and `wrangler.staging.jsonc` remain for legacy rollback, staging, and PR previews. Do not attach the production domains to them.
 
-## Design system: SteelBuild dual theme
-- Colors: CSS variables only (`var(--bg-*)`, `var(--text-*)`, `var(--accent)`, `var(--cmd-*)`, `var(--sbd-*)`). Never hardcode surface/text/border hex in components.
-- Dark: SteelBuild Dark (`data-theme="dark"` + `html.steelbuild-dark`); accent gold `#C89B20` / `#E0B030`.
-- Light: `[data-theme="light"]`; command Control Centers use `[data-skin="command"]` with `--cmd-*` (dark remap aliases SteelBuild Dark).
-- Fonts: Barlow Condensed (display), Inter (body), IBM Plex Mono (numeric/code).
-- Radius: use the shipped token/component radii for each kit; do not reintroduce a fake 2px-only rule.
+## Design system: Board Report (Document Control v2)
+- The whole app follows the SteelBuild Document Control v2 Board Report design (owner, 2026-10-25): a dark masthead (topbar + sidebar) over a light warm-paper working body.
+- `src/styles/board-report-system.css` is the authoritative layer, imported last by `globals.css`. Its values mirror `src/pages/documentControl/boardReportTheme.ts` (`DC_LIGHT` / `DC_DARK` / `DC_MASTHEAD`); change both together.
+- Colors: CSS variables only (`var(--bg-*)`, `var(--text-*)`, `var(--accent)`, `var(--cmd-*)`, `var(--sbd-*)`). Never hardcode surface/text/border hex in components. Accent is orange `#FF5A1F` in both skins.
+- Light (default look): paper `#FAFAF8`, cards `#FFFFFF`, rules `#DEDCD6`, ink `#17191C`. Dark: `data-theme="dark"` + `html.steelbuild-dark`, body `#0C0F12`, panels `#141A1F`. The masthead stays `#141618` in both.
+- The masthead re-points `--bg-*` / `--text-*` on the chrome elements themselves, so anything inside the topbar or sidebar draws dark without component changes. Don't redefine `--bg-sidebar` / `--nav-*` globally; pages reuse them for table headers.
+- Command Control Centers use `[data-skin="command"]` with `--cmd-*`, remapped onto the same paper.
+- Fonts: Archivo for all UI text (display headings use its width axis, `font-stretch: 85%`), IBM Plex Mono for every number, date and document id. Barlow Condensed and Inter are retired from app chrome.
+- Radius: 6px cards/buttons/inputs, 4px badges.
 - Theme preference: `sbp-theme` in localStorage, else `prefers-color-scheme`.
 - Never use `<form>` tags. Never use Radix Dialog.
 
