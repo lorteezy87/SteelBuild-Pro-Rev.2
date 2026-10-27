@@ -50,7 +50,7 @@ export default function SuccessStep({ createdCount, fileResults, processError, s
           <div role="alert" style={{
             marginTop: 8, padding: "8px 12px", maxWidth: "100%", boxSizing: "border-box", textAlign: "left",
             fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)",
-            background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 8,
+            background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 6,
           }}>
             {processError && <div style={{ color: "var(--text-primary)", fontWeight: 600 }}>{processError}</div>}
             {problems.length > 0 && (

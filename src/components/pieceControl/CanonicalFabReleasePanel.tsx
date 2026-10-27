@@ -35,7 +35,7 @@ function presentBlocker(blocker: string) {
 
 /** Theme-token styles — follow --cmd-* when on a command surface, else app tokens. */
 const panel: CSSProperties = {
-  borderRadius: 16,
+  borderRadius: 8,
   border: "1px solid var(--cmd-border, var(--border-default))",
   background: "var(--cmd-surface, var(--bg-surface))",
   color: "var(--cmd-text, var(--text-primary))",
@@ -48,7 +48,7 @@ const muted: CSSProperties = {
 };
 
 const warnBox: CSSProperties = {
-  borderRadius: 12,
+  borderRadius: 6,
   border: "1px solid var(--cmd-chip-warn-bg, var(--warning-border))",
   background: "var(--cmd-chip-warn-bg, var(--warning-muted))",
   color: "var(--cmd-warn-text, var(--status-warning))",
@@ -57,7 +57,7 @@ const warnBox: CSSProperties = {
 };
 
 const dangerBox: CSSProperties = {
-  borderRadius: 12,
+  borderRadius: 6,
   border: "1px solid var(--cmd-chip-danger-bg, var(--danger-border))",
   background: "var(--cmd-chip-danger-bg, var(--danger-muted))",
   color: "var(--cmd-danger-text, var(--status-error))",
@@ -66,7 +66,7 @@ const dangerBox: CSSProperties = {
 };
 
 const goodBox: CSSProperties = {
-  borderRadius: 12,
+  borderRadius: 6,
   border: "1px solid var(--cmd-chip-good-bg, var(--success-border))",
   background: "var(--cmd-chip-good-bg, var(--success-muted))",
   color: "var(--cmd-good-text, var(--status-success))",
@@ -74,7 +74,7 @@ const goodBox: CSSProperties = {
 };
 
 const neutralBox: CSSProperties = {
-  borderRadius: 12,
+  borderRadius: 6,
   border: "1px solid var(--cmd-border, var(--border-default))",
   background: "var(--cmd-row-hover, var(--bg-surface-low))",
   color: "var(--cmd-text, var(--text-primary))",
@@ -84,7 +84,7 @@ const neutralBox: CSSProperties = {
 };
 
 const iconBtn: CSSProperties = {
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid var(--cmd-border, var(--border-default))",
   background: "transparent",
   color: "var(--cmd-text-muted, var(--text-muted))",
@@ -95,7 +95,7 @@ const iconBtn: CSSProperties = {
 const primaryBtn = (variant: "good" | "warn" | "danger"): CSSProperties => ({
   marginTop: 16,
   width: "100%",
-  borderRadius: 12,
+  borderRadius: 6,
   border: "none",
   padding: "12px 16px",
   fontSize: 14,
@@ -114,7 +114,7 @@ const primaryBtn = (variant: "good" | "warn" | "danger"): CSSProperties => ({
 });
 
 const input: CSSProperties = {
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid var(--cmd-border, var(--border-default))",
   background: "var(--cmd-surface, var(--bg-surface))",
   color: "var(--cmd-text, var(--text-primary))",
@@ -170,7 +170,7 @@ function GhostBtn({
       onClick={onClick}
       disabled={disabled}
       style={{
-        borderRadius: 8,
+        borderRadius: 6,
         border: "1px solid var(--cmd-border, var(--border-default))",
         background: "transparent",
         color: "var(--cmd-warn-text, var(--status-warning))",
@@ -259,7 +259,7 @@ export default function CanonicalFabReleasePanel({
         <div style={{ display: "flex", gap: 12 }}>
           <div
             style={{
-              borderRadius: 12,
+              borderRadius: 6,
               padding: 8,
               background: "var(--cmd-icon-wash, var(--accent-muted))",
               color: "var(--cmd-gold, var(--accent))",

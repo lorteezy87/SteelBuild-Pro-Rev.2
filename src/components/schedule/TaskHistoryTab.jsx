@@ -94,7 +94,7 @@ export default function TaskHistoryTab({ taskId, projectId }) {
             padding: '10px 12px',
             background: drawerPanel,
             border: `1px solid ${drawerMutedBorder}`,
-            borderRadius: 8,
+            borderRadius: 6,
           }}
         >
           <div style={{

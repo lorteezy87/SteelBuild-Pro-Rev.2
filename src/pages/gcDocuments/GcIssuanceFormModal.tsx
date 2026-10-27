@@ -41,7 +41,7 @@ const labelStyle: React.CSSProperties = {
 const fieldStyle: React.CSSProperties = {
   width: "100%",
   padding: "7px 10px",
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid var(--border-default)",
   background: "var(--bg-surface-low)",
   color: "var(--text-primary)",
@@ -343,7 +343,7 @@ export default function GcIssuanceFormModal({
     >
       <div style={{ display: "grid", gap: 14 }}>
         {!initial && (
-          <section aria-label="GC issuance source" style={{ padding: 12, border: "1px solid var(--border-default)", borderRadius: 8, background: "var(--bg-surface-low)" }}>
+          <section aria-label="GC issuance source" style={{ padding: 12, border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--bg-surface-low)" }}>
             <div style={labelStyle}>What arrived from the GC or design team?</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <button type="button" className="sbd-btn" aria-pressed={sourceMode === "pdf"} onClick={() => { setSourceMode("pdf"); setError(null); }}>PDF source</button>
@@ -473,7 +473,7 @@ export default function GcIssuanceFormModal({
           />
         </div>
         {!initial && sourceMode === "pdf" && (
-          <section aria-label="Review GC source PDF" style={{ display: "grid", gap: 10, padding: 12, border: "1px solid var(--border-default)", borderRadius: 8 }}>
+          <section aria-label="Review GC source PDF" style={{ display: "grid", gap: 10, padding: 12, border: "1px solid var(--border-default)", borderRadius: 6 }}>
             <div style={labelStyle}>Source PDF · page evidence</div>
             <input
               aria-label="GC source PDF"

@@ -10,7 +10,7 @@
  */
 
 export const mono    = { fontFamily: "var(--font-mono)" };
-export const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+export const display = { fontFamily: "var(--font-display)" };
 
 // semantic zone-status marks — allowlisted; used as drawing/viewer ink and
 // translucent fills, not page chrome.

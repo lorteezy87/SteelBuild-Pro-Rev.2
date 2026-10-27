@@ -181,7 +181,7 @@ export function LaborDrawer({ open, onClose, kpi, selectedProject }) {
                   borderRadius: 3,
                   background: "var(--accent-muted)",
                   border: "1px solid var(--accent-border)",
-                  fontFamily: "'Space Grotesk', var(--font-display)",
+                  fontFamily: "var(--font-display)",
                   fontSize: 8,
                   fontWeight: 700,
                   color: "var(--accent)",

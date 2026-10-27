@@ -36,7 +36,7 @@ export default class ErrorBoundary extends React.Component {
           padding: 24, textAlign: "center",
           background: "rgba(239,68,68,0.06)",
           border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, margin: 8
+          borderRadius: 6, margin: 8
         }}>
           <div style={{
             fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,

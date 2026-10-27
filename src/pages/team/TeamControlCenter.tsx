@@ -228,7 +228,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
               value={m.role}
               onChange={(e) => onChangeRole(m, e.target.value)}
               className="sbd-select"
-              style={{ padding: "5px 8px", borderRadius: 7, fontSize: 12 }}
+              style={{ padding: "5px 8px", borderRadius: 6, fontSize: 12 }}
               // Prevent row-click from firing when interacting with the select
               onClick={(e) => e.stopPropagation()}
             >
@@ -398,7 +398,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
                   onChange={(e) => onSetStagedRole(idx, e.target.value)}
                   disabled={sendingStaged}
                   className="sbd-select"
-                  style={{ padding: "8px 10px", borderRadius: 9, minHeight: 38 }}
+                  style={{ padding: "8px 10px", borderRadius: 6, minHeight: 38 }}
                 >
                   <option value="member">Member</option>
                   <option value="admin">Admin</option>
@@ -442,7 +442,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
               style={{
                 flex: "1 1 260px", minWidth: 200,
                 background: "var(--bg-input)", border: "1px solid var(--border-default)",
-                borderRadius: 9, padding: "10px 12px", color: "var(--text-primary)",
+                borderRadius: 6, padding: "10px 12px", color: "var(--text-primary)",
                 fontSize: 14, outline: "none",
               }}
             />
@@ -451,7 +451,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
               onChange={(e) => onSetInviteRole(e.target.value)}
               disabled={inviteBusy}
               className="sbd-select"
-              style={{ padding: "10px 12px", borderRadius: 9, minHeight: 40 }}
+              style={{ padding: "10px 12px", borderRadius: 6, minHeight: 40 }}
             >
               <option value="member">Member</option>
               <option value="admin">Admin</option>

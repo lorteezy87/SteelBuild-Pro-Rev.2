@@ -62,7 +62,7 @@ export function WorkspaceTab({
           {(Object.entries(PERSONALIZATION_PRESETS) as Array<[PresetId, typeof PERSONALIZATION_PRESETS[PresetId]]>).map(([id, preset]) => {
             const active = preferences.workspace_preset === id;
             return (
-              <button key={id} type="button" aria-label={`${preset.label} preset`} onClick={() => setPendingPreset(id)} style={{ textAlign: "left", padding: 12, borderRadius: 8, border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`, background: active ? "var(--accent-muted)" : "var(--bg-surface-low)", color: "var(--text-primary)", cursor: "pointer" }}>
+              <button key={id} type="button" aria-label={`${preset.label} preset`} onClick={() => setPendingPreset(id)} style={{ textAlign: "left", padding: 12, borderRadius: 6, border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`, background: active ? "var(--accent-muted)" : "var(--bg-surface-low)", color: "var(--text-primary)", cursor: "pointer" }}>
                 <span style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700, fontSize: 12 }}>{preset.label}{active ? <Check size={14} color="var(--accent)" /> : null}</span>
                 <span style={{ display: "block", marginTop: 5, fontSize: 10, color: "var(--text-muted)", lineHeight: 1.4 }}>{preset.description}</span>
               </button>
@@ -86,7 +86,7 @@ export function WorkspaceTab({
 
       <section>
         <div style={labelStyle}>Favorite Projects</div>
-        <div style={{ border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
           {sortedProjects.length === 0 ? <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 11 }}>No accessible projects.</div> : sortedProjects.map((project, index) => {
             const selected = preferences.favorite_project_ids.includes(project.id);
             return (

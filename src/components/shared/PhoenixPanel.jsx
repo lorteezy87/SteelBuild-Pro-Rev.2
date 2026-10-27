@@ -6,7 +6,7 @@ export function PhoenixPanel({ title, count, actions, children, style = {} }) {
     <div className="sbd-card sbp-phoenix-panel" style={{
       background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 90%, #000 10%) 0%, color-mix(in srgb, var(--bg-surface-low) 86%, #000 14%) 100%)",
       border: "1px solid color-mix(in srgb, var(--border-default) 88%, white 12%)",
-      borderRadius: "16px",
+      borderRadius: "8px",
       overflow: "hidden",
       padding: 0,
       boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 28px rgba(0,0,0,0.28)",

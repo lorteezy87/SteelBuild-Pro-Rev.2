@@ -283,7 +283,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
             // underneath the list. Prefer elevated, then page, then hard fallback.
             background: "var(--sbd-bg-panel-hi, var(--bg-elevated, #21262D))",
             border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",
-            borderRadius: 14,
+            borderRadius: 8,
             boxShadow: "var(--shadow-lg, 0 16px 40px rgba(0,0,0,0.55))",
             zIndex: 3000,
             padding: 8,

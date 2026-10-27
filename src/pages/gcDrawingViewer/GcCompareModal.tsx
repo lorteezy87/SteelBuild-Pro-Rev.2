@@ -116,7 +116,7 @@ export default function GcCompareModal({
         <div
           style={{
             display: "flex", flexDirection: "column", gap: 8, padding: 28,
-            border: "1px dashed var(--border-default)", borderRadius: 10, textAlign: "center",
+            border: "1px dashed var(--border-default)", borderRadius: 6, textAlign: "center",
           }}
         >
           <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
@@ -176,7 +176,7 @@ export default function GcCompareModal({
                 aria-pressed={mode === key}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 5,
-                  minHeight: 30, padding: "4px 10px", borderRadius: 7, cursor: "pointer",
+                  minHeight: 30, padding: "4px 10px", borderRadius: 6, cursor: "pointer",
                   border: `1px solid ${mode === key ? "var(--accent)" : "var(--border-default)"}`,
                   background: mode === key ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent",
                   color: mode === key ? "var(--accent)" : "var(--text-muted)",
@@ -241,7 +241,7 @@ export default function GcCompareModal({
           {/* ── Canvas ──────────────────────────────────────────────── */}
           <div
             style={{
-              flex: 1, minHeight: 300, minWidth: 0, overflow: "auto", borderRadius: 10,
+              flex: 1, minHeight: 300, minWidth: 0, overflow: "auto", borderRadius: 6,
               border: "1px solid var(--border-default)", background: "var(--bg-surface-highest)",
               position: "relative",
             }}

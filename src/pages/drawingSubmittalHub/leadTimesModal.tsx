@@ -57,7 +57,7 @@ export function LeadTimesModal({ leadDays, defaults, saving, onSave, onClose }: 
         style={{
           width: "min(480px, 100%)", maxHeight: "85vh", overflowY: "auto",
           background: "var(--bg-surface-secondary)",
-          border: `1px solid ${border}`, borderRadius: 16,
+          border: `1px solid ${border}`, borderRadius: 8,
           boxShadow: "var(--shadow-card)", padding: 20,
         }}
       >
@@ -86,7 +86,7 @@ export function LeadTimesModal({ leadDays, defaults, saving, onSave, onClose }: 
                   onChange={(e) => setField(f.key, e.target.value)}
                   style={{
                     width: 56, background: "var(--bg-input, var(--bg-surface-low))",
-                    border: `1px solid ${border}`, borderRadius: 8, padding: "6px 8px",
+                    border: `1px solid ${border}`, borderRadius: 6, padding: "6px 8px",
                     color: textPrimary, fontFamily: mono, fontSize: 13, textAlign: "right", outline: "none",
                   }}
                 />

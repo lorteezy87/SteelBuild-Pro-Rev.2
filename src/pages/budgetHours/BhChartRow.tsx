@@ -52,7 +52,7 @@ function CustomTooltip({ active, payload, label }: {
     <div style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--accent-border)",
-      borderRadius: 8,
+      borderRadius: 6,
       padding: "10px 14px",
       fontFamily: "var(--font-mono)",
       fontSize: 10,
@@ -77,7 +77,7 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   return (
     <div style={{
       background: "var(--bg-surface-high)",
-      borderRadius: 12,
+      borderRadius: 6,
       border: "1px solid var(--border-default)",
       padding: 16,
       display: "flex",

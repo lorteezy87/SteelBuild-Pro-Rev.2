@@ -259,7 +259,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
           <div style={{
             padding: "10px 12px", background: "color-mix(in srgb, var(--info) 6%, transparent)",
             border: "1px solid color-mix(in srgb, var(--info) 20%, transparent)",
-            borderRadius: 8,
+            borderRadius: 6,
           }}>
             <div style={{
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
@@ -419,7 +419,7 @@ export function LinkToExistingModal({ message, projectId, onClose, onSuccess }: 
             <button key={rec.id} onClick={() => handleLink(rec)} disabled={saving} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
               background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
-              borderRadius: 8, cursor: "pointer", textAlign: "left", width: "100%", transition: "all 120ms",
+              borderRadius: 6, cursor: "pointer", textAlign: "left", width: "100%", transition: "all 120ms",
             }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.background = "var(--accent-muted)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "var(--bg-surface-low)"; }}
@@ -646,7 +646,7 @@ export function ReplyEmailModal({ projectId, originalMessage, mode, currentUserE
         </div>
         {/* Quoted original */}
         <div style={{
-          padding: "10px 12px", borderRadius: 8,
+          padding: "10px 12px", borderRadius: 6,
           background: "var(--bg-surface-low)",
           border: "1px solid var(--border-default)",
           maxHeight: 200, overflowY: "auto",
@@ -733,7 +733,7 @@ function AttachmentPicker({ attachments, setAttachments, disabled }: AttachmentP
               style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
                 background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
-                borderRadius: 8,
+                borderRadius: 6,
               }}
             >
               <Paperclip size={12} strokeWidth={2} style={{ color: "var(--text-muted)", flexShrink: 0 }} />

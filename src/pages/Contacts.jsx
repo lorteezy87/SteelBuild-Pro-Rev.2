@@ -225,7 +225,7 @@ export default function Contacts() {
                 padding: "6px 10px",
                 borderRadius: "var(--radius-btn)",
                 border: view === v ? "1px solid var(--accent)" : "1px solid var(--divider)",
-                background: view === v ? "rgba(200,155,32,0.12)" : "var(--bg-surface)",
+                background: view === v ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--bg-surface)",
                 color: view === v ? "var(--accent)" : "var(--text-secondary)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 9,

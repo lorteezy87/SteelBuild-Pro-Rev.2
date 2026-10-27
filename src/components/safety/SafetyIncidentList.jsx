@@ -36,7 +36,7 @@ export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, o
 
   if (incidents.length === 0) {
     return (
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "40px", textAlign: "center" }}>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No incidents reported</p>
       </div>
     );
@@ -45,7 +45,7 @@ export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, o
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       {incidents.map((incident) => (
-        <div key={incident.id} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "10px", overflow: "hidden", cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}>
+        <div key={incident.id} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", overflow: "hidden", cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}>
           {/* Header */}
           <div onClick={() => setExpanded(expanded === incident.id ? null : incident.id)} style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "auto 1fr 1fr auto", gap: "16px", alignItems: "center", borderBottom: expanded === incident.id ? "1px solid var(--divider)" : "none" }}>
             <div style={{ fontSize: "20px" }}>{TYPE_ICONS[incident.incident_type] || "📋"}</div>

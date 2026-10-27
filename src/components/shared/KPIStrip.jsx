@@ -10,7 +10,7 @@ const accentMap = {
   // actual color is now industrial amber; true purple read as out-of-place
   // in a steel fab UI. Alias "amber" for new call-sites.
   purple: { color: "var(--status-warning)", bg: "rgba(245,158,11,0.07)" },
-  slate:  { color: "var(--accent)",         bg: "rgba(200,155,32,0.06)" },
+  slate:  { color: "var(--accent)",         bg: "color-mix(in srgb, var(--accent) 6%, transparent)" },
 };
 
 export default function KPIStrip({ items }) {
@@ -23,7 +23,7 @@ export default function KPIStrip({ items }) {
             background: `linear-gradient(180deg, color-mix(in srgb, ${accent.color} 7%, var(--bg-surface-high)) 0%, var(--bg-surface) 52%, color-mix(in srgb, var(--bg-surface) 84%, #000 16%) 100%)`,
             border: "1px solid color-mix(in srgb, var(--border-default) 80%, rgba(255,255,255,0.06) 20%)",
             borderTop: `2px solid ${accent.color}`,
-            borderRadius: 18,
+            borderRadius: 8,
             padding: "16px 16px 14px",
             boxShadow: `0 18px 40px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px color-mix(in srgb, ${accent.color} 10%, transparent)`,
             position: "relative",

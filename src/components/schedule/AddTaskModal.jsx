@@ -199,7 +199,7 @@ export default function AddTaskModal({
           overflowY: 'auto',
           background: 'var(--bg-surface-secondary)',
           border: '1px solid var(--accent-border)',
-          borderRadius: 16,
+          borderRadius: 8,
           boxShadow: 'var(--shadow-lg)',
           zIndex: 999,
           padding: 24,

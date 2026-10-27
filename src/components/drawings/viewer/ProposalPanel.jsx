@@ -35,7 +35,7 @@ import {
 import { invalidateEntity } from "@/services/cacheRegistry";
 
 const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+const display = { fontFamily: "var(--font-display)" };
 
 // Status pill palette — distinct from zone-status colors so the user
 // doesn't confuse a 'pending' proposal with a 'green' real zone.
@@ -229,7 +229,7 @@ export default function ProposalPanel({
                     fontWeight: 700,
                     letterSpacing: "0.08em",
                     padding: "2px 6px",
-                    borderRadius: 8,
+                    borderRadius: 6,
                     background: PROPOSAL_STATUS_COLORS.pending.bg,
                     color: PROPOSAL_STATUS_COLORS.pending.fg,
                     border: `1px solid ${PROPOSAL_STATUS_COLORS.pending.border}`,

@@ -733,7 +733,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               width: 260,
               maxWidth: "100%",
               height: 28,
-              borderRadius: 8,
+              borderRadius: 6,
               border: "1px solid var(--border-default)",
               background: "var(--bg-input)",
               color: "var(--text-primary)",
@@ -930,7 +930,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           style={{
             marginLeft: "auto",
             padding: "5px 10px",
-            borderRadius: 8,
+            borderRadius: 6,
             border: "1px solid var(--divider)",
             background: showLegend ? GANTT_ROW_HOVER_VAR : GANTT_PANEL_STRONG_VAR,
             color: showLegend ? "var(--accent)" : "var(--text-muted)",
@@ -1282,7 +1282,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             zIndex: 10000,
             padding: "8px 10px",
             pointerEvents: "none",
-            borderRadius: 7,
+            borderRadius: 6,
             boxShadow: "var(--shadow-lg)",
             minWidth: 220,
           }}
@@ -1314,7 +1314,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           pointerEvents: "none",
           minWidth: 260,
           boxShadow: "var(--shadow-lg)",
-          borderRadius: 8,
+          borderRadius: 6,
         }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6, letterSpacing: "0.01em" }}>
             {sanitizeTaskName(tooltip.task)}

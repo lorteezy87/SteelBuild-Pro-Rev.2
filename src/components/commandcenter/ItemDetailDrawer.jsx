@@ -220,7 +220,7 @@ export default function ItemDetailDrawer({ item, onClose }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
-                fontFamily: "'Space Grotesk', var(--font-display)",
+                fontFamily: "var(--font-display)",
                 fontSize: 14,
                 fontWeight: 700,
                 color: "var(--text-primary)",

@@ -123,7 +123,7 @@ const attachmentDropStyle: CSSProperties = {
   gap: 14,
   padding: 14,
   border: "1px dashed color-mix(in srgb, var(--accent) 45%, var(--border-default))",
-  borderRadius: 12,
+  borderRadius: 6,
   background: "linear-gradient(135deg, var(--info-muted), var(--bg-surface-low))",
 };
 
@@ -145,7 +145,7 @@ const attachmentDescriptionStyle: CSSProperties = {
 
 const uploadButtonStyle: CSSProperties = {
   border: "1px solid var(--accent-border)",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--accent-muted)",
   color: "var(--accent)",
   padding: "8px 13px",
@@ -165,7 +165,7 @@ const attachmentRowStyle: CSSProperties = {
   alignItems: "center",
   padding: "9px 10px",
   border: "1px solid var(--border-default)",
-  borderRadius: 9,
+  borderRadius: 6,
   background: "var(--hover-bg)",
 };
 
@@ -188,7 +188,7 @@ const attachmentMetaStyle: CSSProperties = {
 
 const attachmentActionStyle: CSSProperties = {
   border: "1px solid var(--border-default)",
-  borderRadius: 7,
+  borderRadius: 6,
   background: "var(--bg-hover)",
   color: "var(--accent)",
   padding: "5px 8px",

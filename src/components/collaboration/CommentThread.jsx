@@ -203,7 +203,7 @@ export default function CommentThread({
           gap: 10,
           background: "var(--bg-surface-low)",
           border: "1px solid var(--border-default)",
-          borderRadius: 8,
+          borderRadius: 6,
         }}
       >
         {isLoading && (
@@ -298,7 +298,7 @@ function CommentRow({ c, canModify = false, onDelete, onCycleStatus }) {
     alignItems: "center",
     gap: 3,
     padding: "1px 7px",
-    borderRadius: 8,
+    borderRadius: 6,
     background: statusColor,
     color: "var(--on-accent)",
     border: "none",

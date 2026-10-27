@@ -22,7 +22,7 @@ export default function EmptyState({ icon = "rfi", title, body, cta }) {
           width: 48,
           height: 48,
           margin: "0 auto 12px",
-          borderRadius: 8,
+          borderRadius: 6,
           background: "var(--bg-surface-high)",
           border: "1px solid var(--border-default)",
           display: "flex",

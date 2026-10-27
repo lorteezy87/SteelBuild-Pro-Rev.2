@@ -331,7 +331,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   min-height: 38px;
   gap: 8px;
   padding: 0 4px 0 0;
-  border-radius: 20px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 700;
 }
@@ -419,7 +419,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-body);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.07em;
@@ -466,7 +466,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   font-weight: 650;
   text-align: left;
@@ -552,7 +552,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   background: var(--dash-bg);
   color: var(--dash-text);
   padding: 18px 22px 28px;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-body);
 }
 
 .sb-dashboard-theme * {
@@ -573,7 +573,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   justify-content: space-between;
   gap: 16px;
   border: 1px solid var(--dash-border);
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 16px 18px;
   background: var(--dash-card-bg);
   color: var(--dash-text);
@@ -619,7 +619,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
 .sb-dashboard-kpi-card {
   min-height: 104px;
   padding: 14px 14px 13px;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--dash-border);
   background: var(--dash-card-bg);
   display: flex;
@@ -715,7 +715,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
 .sb-activity-panel {
   background: var(--dash-card-bg-translucent);
   border: 1px solid var(--dash-border);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: var(--dash-shadow);
   color: var(--dash-text);
 }
@@ -924,7 +924,7 @@ html.steelbuild-dark .sb-dashboard-shell-content,
   display: block;
   overflow: hidden;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 0;
   cursor: pointer;
   background: var(--dash-module-card-bg);

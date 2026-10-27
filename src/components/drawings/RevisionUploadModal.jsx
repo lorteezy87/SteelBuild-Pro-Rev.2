@@ -450,14 +450,14 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
         <div style={{ paddingTop: 8 }}>
           {samePreflightPdf && initialReview && step !== "success" && (
-            <div style={{ marginBottom: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--divider)", background: "var(--hover-bg)", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
+            <div style={{ marginBottom: 12, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--divider)", background: "var(--hover-bg)", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
               <strong style={{ color: "var(--text-primary)" }}>Document Control review carried forward.</strong>
               {" "}Source: {initialPdfFile.name}. {Object.entries(initialReview.sourcePages || {}).map(([sheet, page]) => `${sheet} · PDF page ${page}`).join("; ")}.
               {" "}Confirm the set, extracted matches, and revision before applying. This review is tied to that PDF and does not grant IFC or fabrication release.
             </div>
           )}
           {flowError && step !== "processing" && (
-            <div style={{ marginBottom: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--danger)" }}>
+            <div style={{ marginBottom: 12, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--danger)" }}>
               {flowError}
             </div>
           )}
@@ -484,7 +484,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               <h3 style={{ margin: "0 0 8px", color: "var(--status-warning-bright)" }}>Partial revision upload</h3>
               <p>{applyStats.updated + applyStats.added + applyStats.removed} sheet action(s) saved; {applyFailures.failed} sheet action(s) failed, {applyFailures.historyFailed} history write(s) failed{applyFailures.setWriteFailed ? ", and the set header could not be updated" : ""}.</p>
               <p>The set header advances only when every sheet and history write succeeds. Inspect the live drawing register before starting another upload of this revision; some changes may already be saved.</p>
-              <button type="button" onClick={handleClose} style={{ padding: "9px 16px", borderRadius: 8, background: "var(--accent)", color: "var(--on-accent)", border: "none", cursor: "pointer" }}>Close and inspect register</button>
+              <button type="button" onClick={handleClose} style={{ padding: "9px 16px", borderRadius: 6, background: "var(--accent)", color: "var(--on-accent)", border: "none", cursor: "pointer" }}>Close and inspect register</button>
             </section>
           )}
         </div>

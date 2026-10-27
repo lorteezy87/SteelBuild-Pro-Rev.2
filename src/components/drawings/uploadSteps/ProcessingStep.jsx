@@ -43,7 +43,7 @@ export default function ProcessingStep({ processingStatus, onCancel, error, file
                 display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px",
                 background: "var(--danger-muted)",
                 border: "1px solid var(--danger-border)",
-                borderRadius: 8, marginBottom: 8,
+                borderRadius: 6, marginBottom: 8,
               }}>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--status-error)", flexShrink: 0, marginTop: 1 }}>✗</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -79,8 +79,8 @@ export default function ProcessingStep({ processingStatus, onCancel, error, file
 
       {/* Progress bar */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ background: "var(--bg-surface-high)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 400, margin: "0 auto" }}>
-          <div style={{ height: "100%", background: "var(--accent)", borderRadius: 20, width: `${progress}%`, transition: "width 0.4s ease" }} />
+        <div style={{ background: "var(--bg-surface-high)", borderRadius: 8, height: 6, overflow: "hidden", maxWidth: 400, margin: "0 auto" }}>
+          <div style={{ height: "100%", background: "var(--accent)", borderRadius: 8, width: `${progress}%`, transition: "width 0.4s ease" }} />
         </div>
         <div style={{ textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 5 }}>{progress}%</div>
       </div>
@@ -94,7 +94,7 @@ export default function ProcessingStep({ processingStatus, onCancel, error, file
           return (
             <div key={step.id} style={{
               display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px",
-              borderRadius: 8,
+              borderRadius: 6,
               background: isActive ? "var(--warning-muted)" : isDone ? "rgba(0,214,143,0.04)" : "transparent",
               border: `1px solid ${isActive ? "rgba(245,158,11,0.2)" : isDone ? "rgba(0,214,143,0.12)" : "var(--hover-bg)"}`,
               transition: "all 0.2s",

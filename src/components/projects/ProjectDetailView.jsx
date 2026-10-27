@@ -9,7 +9,7 @@ import ProjectHandoffChecklist from '@/components/projects/ProjectHandoffCheckli
 import { useProjectContext } from '@/components/shared/ProjectContext';
 import { toast } from 'sonner';
 
-const mono = { fontFamily: 'JetBrains Mono, monospace' };
+const mono = { fontFamily: 'var(--font-mono)' };
 
 const TABS = [
   { id: 'overview',   label: 'Overview',    icon: BarChart2 },
@@ -582,12 +582,12 @@ export default function ProjectDetailView({ project, onClose, onArchive }) {
         {/* Header */}
         <div style={{ padding: '16px 24px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
           <div style={{ width: 38, height: 38, borderRadius: 2, background: phase.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <span style={{ fontSize: 18, fontWeight: 800, color: phase.color, fontFamily: 'Space Grotesk, sans-serif' }}>
+            <span style={{ fontSize: 18, fontWeight: 800, color: phase.color, fontFamily: 'var(--font-display)' }}>
               {project.name?.charAt(0)?.toUpperCase()}
             </span>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {project.name}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, flexWrap: 'wrap' }}>

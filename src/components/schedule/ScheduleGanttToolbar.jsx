@@ -104,7 +104,7 @@ export function GanttMetricCards({
         <div key={card.label} style={{
           minWidth: 104,
           border: "1px solid var(--border-default)",
-          borderRadius: 10,
+          borderRadius: 6,
           background: "var(--bg-surface-low)",
           padding: "6px 8px",
           boxShadow: `inset 0 1px 0 ${GANTT_GRID_VAR}`,

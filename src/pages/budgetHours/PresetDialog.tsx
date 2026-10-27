@@ -32,7 +32,7 @@ export default function PresetDialog({
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
-          borderRadius: 12,
+          borderRadius: 6,
           padding: 22,
           minWidth: "min(460px, calc(100vw - 24px))",
           maxWidth: 560,
@@ -80,7 +80,7 @@ export default function PresetDialog({
                 textAlign: "left",
                 background: "var(--bg-surface-low)",
                 border: "1px solid var(--border-default)",
-                borderRadius: 8,
+                borderRadius: 6,
                 padding: "12px 14px",
                 cursor: "pointer",
                 transition: "border-color 0.12s, background 0.12s",

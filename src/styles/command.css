@@ -51,7 +51,7 @@
 
 /* Hero — shared art sits on the right at a deliberately smaller scale so the
    full construction scene reads as a scene rather than a close-up crop. */
-[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background-color: var(--cmd-surface); background-image: linear-gradient(90deg, var(--cmd-surface) 14%, var(--cmd-hero-fade) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg")); background-size: 100% 100%, min(54%, 820px) auto; background-position: center, right center; background-repeat: no-repeat; overflow: hidden; }
+[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 8px; background-color: var(--cmd-surface); background-image: linear-gradient(90deg, var(--cmd-surface) 14%, var(--cmd-hero-fade) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg")); background-size: 100% 100%, min(54%, 820px) auto; background-position: center, right center; background-repeat: no-repeat; overflow: hidden; }
 /* The gradient sits above the image so each page title, status, and action stays
    readable. `PageHero` supplies the shared artwork; the fallback also covers any
    command hero rendered outside of that component. */
@@ -63,7 +63,7 @@
 }
 [data-skin="command"] .cmd-hero__left, [data-skin="command"] .cmd-hero__right { position: relative; z-index: 2; }
 [data-skin="command"] .cmd-hero__left { display: flex; gap: 14px; align-items: flex-start; }
-[data-skin="command"] .cmd-hero__icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--cmd-icon-wash); color: var(--cmd-gold); flex-shrink: 0; }
+[data-skin="command"] .cmd-hero__icon { width: 40px; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--cmd-icon-wash); color: var(--cmd-gold); flex-shrink: 0; }
 [data-skin="command"] .cmd-hero__title { font-size: 26px; font-weight: 700; margin: 0; color: var(--cmd-text); }
 [data-skin="command"] .cmd-hero__subtitle { margin: 3px 0 11px; max-width: 520px; color: var(--cmd-text-muted); font-size: 13px; }
 [data-skin="command"] .cmd-hero__chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -74,7 +74,7 @@
 [data-skin="command"] .cmd-chip--danger { background: var(--cmd-chip-danger-bg); color: var(--cmd-danger-text); }
 [data-skin="command"] .cmd-chip--info { background: var(--cmd-chip-info-bg); color: var(--cmd-info); }
 [data-skin="command"] .cmd-hero__right { display: flex; gap: 12px; }
-[data-skin="command"] .cmd-statcard { min-width: 96px; padding: 10px 14px; border: 1px solid var(--cmd-border); border-radius: 10px; background: var(--cmd-surface); text-align: center; }
+[data-skin="command"] .cmd-statcard { min-width: 96px; padding: 10px 14px; border: 1px solid var(--cmd-border); border-radius: 6px; background: var(--cmd-surface); text-align: center; }
 [data-skin="command"] .cmd-statcard__value { font-size: 24px; font-weight: 700; color: var(--cmd-text); }
 [data-skin="command"] .cmd-statcard__label { font-size: 11px; color: var(--cmd-text-muted); }
 
@@ -85,8 +85,8 @@
    strip now fills its row evenly whatever it carries. The narrow breakpoints
    below still pin explicit column counts. */
 [data-skin="command"] .cmd-kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-[data-skin="command"] .cmd-kpi { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 14px; }
-[data-skin="command"] .cmd-kpi__icon { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: var(--cmd-kpi-icon-bg); color: var(--cmd-text-muted); margin-bottom: 8px; }
+[data-skin="command"] .cmd-kpi { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 6px; padding: 14px; }
+[data-skin="command"] .cmd-kpi__icon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--cmd-kpi-icon-bg); color: var(--cmd-text-muted); margin-bottom: 8px; }
 [data-skin="command"] .cmd-kpi__value { font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--cmd-text); }
 [data-skin="command"] .cmd-kpi__label { font-size: 12px; color: var(--cmd-text); margin-top: 2px; }
 [data-skin="command"] .cmd-kpi__sub { font-size: 11px; color: var(--cmd-text-muted); }
@@ -101,7 +101,7 @@
 
 /* Decision panels */
 [data-skin="command"] .cmd-panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-[data-skin="command"] .cmd-panel { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; }
+[data-skin="command"] .cmd-panel { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 6px; }
 [data-skin="command"] .cmd-panel__head { display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--cmd-border); }
 [data-skin="command"] .cmd-panel__title { font-size: 14px; font-weight: 700; margin: 0; color: var(--cmd-text); }
 [data-skin="command"] .cmd-panel__viewall { background: none; border: none; color: var(--cmd-info); cursor: pointer; font-size: 12px; }
@@ -122,13 +122,13 @@
 [data-skin="command"] .cmd-pill--review { background: var(--cmd-review); color: var(--cmd-pill-on-solid); }
 
 /* Filter bar + buttons */
-[data-skin="command"] .cmd-filterbar { display: flex; gap: 10px; align-items: center; background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 10px 12px; }
-[data-skin="command"] .cmd-search { display: flex; align-items: center; gap: 6px; flex: 0 1 320px; padding: 6px 10px; border: 1px solid var(--cmd-border); border-radius: 8px; color: var(--cmd-text-muted); }
+[data-skin="command"] .cmd-filterbar { display: flex; gap: 10px; align-items: center; background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 6px; padding: 10px 12px; }
+[data-skin="command"] .cmd-search { display: flex; align-items: center; gap: 6px; flex: 0 1 320px; padding: 6px 10px; border: 1px solid var(--cmd-border); border-radius: 6px; color: var(--cmd-text-muted); }
 [data-skin="command"] .cmd-search__input { border: none; outline: none; width: 100%; background: transparent; color: var(--cmd-text); font-size: 13px; }
 [data-skin="command"] .cmd-search__input::placeholder { color: var(--cmd-text-muted); }
 [data-skin="command"] .cmd-filterbar__filters { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
 [data-skin="command"] .cmd-filterbar__actions { display: flex; gap: 8px; }
-[data-skin="command"] .cmd-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--cmd-border); background: var(--cmd-surface); color: var(--cmd-text); }
+[data-skin="command"] .cmd-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--cmd-border); background: var(--cmd-surface); color: var(--cmd-text); }
 [data-skin="command"] .cmd-btn--primary { background: var(--cmd-gold); border-color: var(--cmd-gold); color: var(--cmd-on-gold); }
 [data-skin="command"] .cmd-btn--ghost { background: transparent; }
 /* A disabled command button used to render identically to a live one — same
@@ -139,7 +139,7 @@
 [data-skin="command"] .cmd-chip-btn.is-active { background: var(--cmd-gold); border-color: var(--cmd-gold); color: var(--cmd-on-gold); }
 
 /* Table */
-[data-skin="command"] .cmd-table-wrap { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; overflow: auto; }
+[data-skin="command"] .cmd-table-wrap { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 6px; overflow: auto; }
 [data-skin="command"] .cmd-table { width: 100%; border-collapse: collapse; font-size: 13px; color: var(--cmd-text); }
 [data-skin="command"] .cmd-table th { text-align: left; padding: 10px 14px; color: var(--cmd-text-muted); font-weight: 600; border-bottom: 1px solid var(--cmd-border); white-space: nowrap; background: var(--cmd-surface); }
 [data-skin="command"] .cmd-table td { padding: 11px 14px; border-bottom: 1px solid var(--cmd-border); color: var(--cmd-text); }
@@ -306,7 +306,7 @@ html.steelbuild-dark [data-skin="command"],
 /* (b) desk-* chrome — re-declared for the command scope (the [data-skin="desktop"]
    rules don't apply here). Layout mirrors desktop.css; colors → command kit. */
 [data-skin="command"] .detailing-cc .desk-section-card {
-  border-radius: 14px;
+  border-radius: 8px;
   border: 1px solid var(--cmd-border);
   background: var(--cmd-surface);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
@@ -354,13 +354,13 @@ html.steelbuild-dark [data-skin="command"],
 /* Buttons used inside panels. */
 [data-skin="command"] .detailing-cc .sbd-btn-primary {
   display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-gold);
-  color: var(--cmd-on-gold); border: 1px solid var(--cmd-gold); border-radius: 8px;
+  color: var(--cmd-on-gold); border: 1px solid var(--cmd-gold); border-radius: 6px;
   font-weight: 600; font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
 [data-skin="command"] .detailing-cc .sbd-btn,
 [data-skin="command"] .detailing-cc .sbd-btn-ghost {
   display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-surface);
-  color: var(--cmd-text); border: 1px solid var(--cmd-border); border-radius: 8px;
+  color: var(--cmd-text); border: 1px solid var(--cmd-border); border-radius: 6px;
   font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
 /* Badges. The .desk-state / .desk-state__title / .desk-state__msg and

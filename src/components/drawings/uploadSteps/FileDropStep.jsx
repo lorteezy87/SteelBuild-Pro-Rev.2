@@ -21,7 +21,7 @@ export default function FileDropStep({ files, setFiles, onBack, onUpload, setNam
     <div>
       {setName && (
         <div style={{
-          marginBottom: 12, padding: "8px 12px", borderRadius: 8,
+          marginBottom: 12, padding: "8px 12px", borderRadius: 6,
           background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)",
           display: "flex", alignItems: "center", gap: 8,
         }}>
@@ -36,7 +36,7 @@ export default function FileDropStep({ files, setFiles, onBack, onUpload, setNam
         onClick={() => fileInputRef.current?.click()}
         style={{
           border: `2px dashed ${dragOver ? "var(--warning-border)" : "rgba(245,158,11,0.3)"}`,
-          borderRadius: 12, padding: "32px 24px", textAlign: "center", cursor: "pointer",
+          borderRadius: 6, padding: "32px 24px", textAlign: "center", cursor: "pointer",
           background: dragOver ? "var(--warning-muted)" : "rgba(245,158,11,0.02)",
           transition: "all 0.15s", marginBottom: 16,
         }}
@@ -53,7 +53,7 @@ export default function FileDropStep({ files, setFiles, onBack, onUpload, setNam
         onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
 
       {files.length > 0 && (
-        <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+        <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, overflow: "hidden", marginBottom: 16 }}>
           {files.map((f, i) => {
             const tooBig = f.size / (1024 * 1024) > MAX_PDF_SIZE_MB;
             return (

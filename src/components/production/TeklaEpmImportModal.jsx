@@ -27,7 +27,7 @@ import { parseFabSuiteXml, stageModelElements, teklaRowToModelElement } from "@/
 import { readFileText } from "@/lib/textDecoding";
 
 const mono = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+const display = { fontFamily: "var(--font-display)" };
 const ACCENT = "var(--accent, #3B82F6)";
 
 /**
@@ -189,7 +189,7 @@ export default function TeklaEpmImportModal({ open, projectId, projectName, onCl
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
           {err && (
             <div role="alert" style={{
-              marginBottom: 12, padding: "10px 12px", borderRadius: 8,
+              marginBottom: 12, padding: "10px 12px", borderRadius: 6,
               border: "1px solid color-mix(in srgb, var(--status-error) 45%, transparent)",
               background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
               color: "var(--text-primary)", fontSize: 12,
@@ -210,7 +210,7 @@ export default function TeklaEpmImportModal({ open, projectId, projectName, onCl
                 onClick={() => fileInput.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); acceptFile(e.dataTransfer.files?.[0]); }}
-                style={{ border: "1.5px dashed var(--border-default)", borderRadius: 10, padding: "34px 20px", textAlign: "center", cursor: "pointer", background: "var(--bg-surface-low)" }}
+                style={{ border: "1.5px dashed var(--border-default)", borderRadius: 6, padding: "34px 20px", textAlign: "center", cursor: "pointer", background: "var(--bg-surface-low)" }}
               >
                 <Upload size={22} style={{ color: "var(--text-muted)" }} />
                 <div style={{ marginTop: 8, color: "var(--text-primary)", fontSize: 13, fontWeight: 600 }}>
@@ -350,7 +350,7 @@ const td = { padding: "7px 10px", borderBottom: "1px solid var(--divider)", colo
 
 function Section({ icon, title, children }) {
   return (
-    <div style={{ border: "1px solid var(--border-default)", borderRadius: 10, overflow: "hidden" }}>
+    <div style={{ border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", color: "var(--text-primary)", fontSize: 12, fontWeight: 700 }}>
         <span style={{ color: ACCENT }}>{icon}</span>{title}
       </div>

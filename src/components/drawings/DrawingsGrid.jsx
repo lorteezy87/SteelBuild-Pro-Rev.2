@@ -203,7 +203,7 @@ function SheetCard({
       style={{
         background: "var(--bg-surface)",
         border: `1px solid ${isSel ? "var(--accent)" : "var(--border-default)"}`,
-        borderRadius: 10,
+        borderRadius: 6,
         overflow: "hidden",
         cursor: "pointer",
         position: "relative",
@@ -333,7 +333,7 @@ function SetSection({
       style={{
         background: "var(--bg-surface)",
         border: `1px solid ${headerBorder}`,
-        borderRadius: 14,
+        borderRadius: 8,
         overflow: "hidden",
       }}
     >

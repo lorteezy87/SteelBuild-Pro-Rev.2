@@ -750,7 +750,7 @@ export default function DrawingViewer() {
               <p className="drawing-viewer-empty-copy">Canvas mode could not load this PDF. Browser PDF mode may still open the file.</p>
               <button
                 onClick={() => setRenderMode("iframe")}
-                style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 12, padding: "7px 14px", background: "rgba(200,155,32,0.12)", border: "1px solid var(--accent)", borderRadius: 6, cursor: "pointer", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}
+                style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 12, padding: "7px 14px", background: "color-mix(in srgb, var(--accent) 12%, transparent)", border: "1px solid var(--accent)", borderRadius: 6, cursor: "pointer", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}
               >
                 Switch to browser PDF
               </button>

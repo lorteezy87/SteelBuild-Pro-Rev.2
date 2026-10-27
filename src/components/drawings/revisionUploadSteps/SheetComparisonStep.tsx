@@ -41,7 +41,7 @@ export default function StepSheetComparison(props: any) {
   return (
     <div>
       {/* Summary bar */}
-      <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderRadius: 6, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>{totalOld} → {totalNew} sheets</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning-bright)", letterSpacing: "0.06em" }}>{counts.revised} revised</span>
@@ -58,7 +58,7 @@ export default function StepSheetComparison(props: any) {
       </div>
 
       {ambiguousSheets.length > 0 && (
-        <div style={{ padding: "10px 12px", borderRadius: 8, marginBottom: 12, background: "rgba(255,61,61,0.07)", border: "1px solid rgba(255,61,61,0.20)" }}>
+        <div style={{ padding: "10px 12px", borderRadius: 6, marginBottom: 12, background: "rgba(255,61,61,0.07)", border: "1px solid rgba(255,61,61,0.20)" }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
             Ambiguous sheet matches — exact numbers only, no automatic guessing
           </div>
@@ -81,7 +81,7 @@ export default function StepSheetComparison(props: any) {
           default treats the upload as a PARTIAL revision and leaves those sheets
           current. Only a deliberate full re-issue supersedes them. */}
       {removedSheets.length > 0 && (
-        <div style={{ padding: "10px 12px", borderRadius: 8, marginBottom: 12,
+        <div style={{ padding: "10px 12px", borderRadius: 6, marginBottom: 12,
           background: supersedeUnlisted ? "rgba(255,61,61,0.07)" : "var(--hover-bg)",
           border: `1px solid ${supersedeUnlisted ? "rgba(255,61,61,0.20)" : "var(--divider)"}` }}>
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
@@ -106,7 +106,7 @@ export default function StepSheetComparison(props: any) {
       )}
 
       {/* Comparison table */}
-      <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--divider)", borderRadius: 8, marginBottom: 14 }}>
+      <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--divider)", borderRadius: 6, marginBottom: 14 }}>
         {/* Header */}
         <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.revision || "—"})</div>
@@ -147,11 +147,11 @@ export default function StepSheetComparison(props: any) {
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 6, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onConfirm} style={{
-          padding: "7px 16px", borderRadius: 8, cursor: "pointer",
+          padding: "7px 16px", borderRadius: 6, cursor: "pointer",
           background: "var(--accent)", border: "none", color: "var(--on-accent)",
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
           display: "flex", alignItems: "center", gap: 6

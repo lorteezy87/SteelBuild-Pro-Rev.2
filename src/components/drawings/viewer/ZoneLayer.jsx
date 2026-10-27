@@ -420,7 +420,7 @@ export default function ZoneLayer({
               />
               <text
                 x={5} y={10}
-                fontFamily="var(--font-mono, 'JetBrains Mono', monospace)"
+                fontFamily="var(--font-mono)"
                 fontSize={9}
                 fontWeight={700}
                 fill="#FFFFFF"

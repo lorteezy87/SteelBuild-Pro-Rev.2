@@ -157,7 +157,7 @@ export default function GcImpactModal({
                   gap: 2,
                   textAlign: "left",
                   padding: "10px 12px",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   cursor: "pointer",
                   background: selected ? "var(--bg-surface-high)" : "var(--bg-surface-low)",
                   border: `1px solid ${selected ? STEEL_IMPACT_TOKENS[state] : "var(--border-default)"}`,
@@ -192,7 +192,7 @@ export default function GcImpactModal({
             placeholder="Grid C canopy connections — new embed plates, affects sequence 3."
             style={{
               width: "100%", minHeight: 88, resize: "vertical", padding: "8px 10px",
-              borderRadius: 8, border: "1px solid var(--border-default)",
+              borderRadius: 6, border: "1px solid var(--border-default)",
               background: "var(--bg-surface-low)", color: "var(--text-primary)",
               fontSize: 13, outline: "none",
             }}
@@ -240,8 +240,8 @@ export default function GcImpactModal({
               </label>
               <input id="gc-shop-set-search" value={shopSearch} onChange={(event) => setShopSearch(event.target.value)}
                 placeholder="Search our set names or registers"
-                style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-primary)", fontSize: 12.5 }} />
-              <div role="group" aria-label="Shop drawing set options" style={{ maxHeight: 180, overflowY: "auto", border: "1px solid var(--border-default)", borderRadius: 8, marginTop: 7 }}>
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-primary)", fontSize: 12.5 }} />
+              <div role="group" aria-label="Shop drawing set options" style={{ maxHeight: 180, overflowY: "auto", border: "1px solid var(--border-default)", borderRadius: 6, marginTop: 7 }}>
                 {visibleShopSets.length ? visibleShopSets.map((set) => (
                   <label key={set.id} style={{ display: "flex", gap: 10, padding: "7px 10px", borderBottom: "1px solid var(--border-default)", color: "var(--text-primary)", fontSize: 12, cursor: "pointer" }}>
                     <input type="checkbox" checked={selectedShopIds.includes(set.id)} onChange={() => toggleShopSet(set.id)} />

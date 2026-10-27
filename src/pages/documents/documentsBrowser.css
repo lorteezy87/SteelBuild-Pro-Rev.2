@@ -35,7 +35,7 @@
   min-width: 200px;
   padding: 7px 10px;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   color: var(--cmd-text-muted);
 }
@@ -72,7 +72,7 @@
   padding: 4px;
   background: var(--cmd-menu, var(--cmd-surface));
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: 0 10px 30px color-mix(in srgb, var(--cmd-bg) 40%, transparent);
 }
 [data-skin="command"] .docb-menu--right { left: auto; right: 0; }
@@ -221,7 +221,7 @@
 
 [data-skin="command"] .docb-table-wrap {
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   overflow-x: auto;
 }
@@ -325,7 +325,7 @@
   gap: 8px;
   padding: 8px 12px;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--cmd-gold) 8%, var(--cmd-surface));
   font-size: 13px;
   font-weight: 600;
@@ -347,7 +347,7 @@
   align-items: center;
   justify-content: center;
   border: 3px dashed var(--cmd-gold);
-  border-radius: 14px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--cmd-gold) 10%, transparent);
   pointer-events: none;
   font-family: var(--font-mono);
@@ -364,7 +364,7 @@
 /* ── Narrow layouts: tree becomes a toggled panel; Size column drops ───── */
 @media (max-width: 900px) {
   [data-skin="command"] .docb-body { grid-template-columns: minmax(0, 1fr); }
-  [data-skin="command"] .docb-tree { display: none; position: static; max-height: none; border: 1px solid var(--cmd-border); border-radius: 10px; padding: 8px; background: var(--cmd-surface); }
+  [data-skin="command"] .docb-tree { display: none; position: static; max-height: none; border: 1px solid var(--cmd-border); border-radius: 6px; padding: 8px; background: var(--cmd-surface); }
   [data-skin="command"] .docb-tree.is-open { display: flex; }
   [data-skin="command"] .docb-tree-toggle { display: inline-flex; }
   [data-skin="command"] .docb-search { flex: 1 1 100%; order: 5; }

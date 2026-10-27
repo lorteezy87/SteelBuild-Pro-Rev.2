@@ -66,7 +66,7 @@ export function Model3DGateNotice() {
         alignItems: "flex-start",
         gap: 12,
         padding: "12px 14px",
-        borderRadius: 10,
+        borderRadius: 6,
         border: "1px solid var(--cmd-border)",
         background: "var(--cmd-surface)",
         color: "var(--cmd-text)",

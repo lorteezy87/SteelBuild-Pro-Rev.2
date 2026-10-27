@@ -21,7 +21,7 @@ export function ScheduleAiRiskCard({ insight }) {
     return {
       gridColumn: "span 6",
       border: `1px solid color-mix(in srgb, ${tone} 34%, var(--border-default))`,
-      borderRadius: 16,
+      borderRadius: 8,
       background: `linear-gradient(135deg, color-mix(in srgb, ${tone} 10%, var(--bg-surface-high)), var(--bg-surface-low))`,
       boxShadow: `inset 3px 0 0 ${tone}, var(--shadow-lg)`,
       padding: 14,
@@ -77,7 +77,7 @@ export function ScheduleAiRiskCard({ insight }) {
     return {
       width: 48,
       height: 48,
-      borderRadius: 14,
+      borderRadius: 8,
       display: "grid",
       placeItems: "center",
       border: `1px solid color-mix(in srgb, ${tone} 45%, transparent)`,
@@ -107,7 +107,7 @@ export function ScheduleAiRiskCard({ insight }) {
 
   const aiRiskSectionStyle = {
     border: "1px solid var(--border-default)",
-    borderRadius: 12,
+    borderRadius: 6,
     background: "var(--bg-surface-low)",
     padding: 11,
     minWidth: 0,

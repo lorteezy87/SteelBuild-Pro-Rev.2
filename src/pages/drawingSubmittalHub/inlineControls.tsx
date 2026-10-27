@@ -33,7 +33,7 @@ export function InlineOwnerControl({ currentOwner, onAssign, disabled, label = "
   return (
     <div style={{
       padding: "10px 12px",
-      borderRadius: 10,
+      borderRadius: 6,
       background: surface1,
       border: `1px solid ${isUnassigned ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
       position: "relative",
@@ -143,7 +143,7 @@ export function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled 
   return (
     <div style={{
       padding: "10px 12px",
-      borderRadius: 10,
+      borderRadius: 6,
       background: surface1,
       border: `1px solid ${isOverdue ? "color-mix(in srgb, var(--status-error) 46%, transparent)" : !hasDate ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
       position: "relative",
@@ -244,7 +244,7 @@ interface InlineDetailingControlProps {
 
 export function InlineDetailingControl({ current, onAdvance, disabled }: InlineDetailingControlProps) {
   return (
-    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
+    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 6, background: surface1, border: `1px solid ${border}` }}>
       <div style={{
         fontFamily: mono, fontSize: 8, color: textMuted,
         letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8,
@@ -266,7 +266,7 @@ export function InlineDetailingControl({ current, onAdvance, disabled }: InlineD
               title={isCurrent ? `Already ${s}` : `Set to ${s}`}
               style={{
                 padding: "5px 9px",
-                borderRadius: 8,
+                borderRadius: 6,
                 fontFamily: mono,
                 fontSize: 10,
                 fontWeight: 800,

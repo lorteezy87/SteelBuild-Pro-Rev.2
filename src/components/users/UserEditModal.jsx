@@ -43,14 +43,14 @@ export default function UserEditModal({ open, onClose, user }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <label style={{ display: "block", marginBottom: 8, fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Email</label>
-              <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-body)", fontSize: 12 }}>
+              <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "10px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-body)", fontSize: 12 }}>
                 {user.email}
               </div>
             </div>
 
             <div>
               <label style={{ display: "block", marginBottom: 8, fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Name</label>
-              <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-body)", fontSize: 12 }}>
+              <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "10px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-body)", fontSize: 12 }}>
                 {user.full_name || "—"}
               </div>
             </div>
@@ -64,7 +64,7 @@ export default function UserEditModal({ open, onClose, user }) {
                   width: "100%",
                   background: "var(--bg-input)",
                   border: "1px solid var(--border-default)",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   padding: "10px 12px",
                   color: "var(--text-primary)",
                   fontFamily: "var(--font-body)",

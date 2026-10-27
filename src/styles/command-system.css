@@ -22,7 +22,7 @@
 .sbp-page-header {
   padding: 18px 20px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-surface);
   color: var(--text-primary);
 }
@@ -46,7 +46,7 @@
 
 .sbp-page-header__title {
   margin: 0;
-  font-family: var(--font-display, 'Barlow Condensed', sans-serif);
+  font-family: var(--font-display);
   font-size: clamp(24px, 2.2vw, 32px);
   line-height: 1;
   font-weight: 700;
@@ -72,7 +72,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-surface);
   overflow: hidden;
 }
@@ -93,7 +93,7 @@
 }
 .sbp-operational-summary__value {
   margin-top: 3px;
-  font-family: var(--font-display, 'Barlow Condensed', sans-serif);
+  font-family: var(--font-display);
   font-size: 25px;
   font-weight: 700;
   line-height: 1;
@@ -108,7 +108,7 @@
 
 .sbp-attention {
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-surface);
   overflow: hidden;
 }
@@ -231,7 +231,7 @@ button.sbp-attention__row:hover { background: var(--bg-row-hover); }
 
 .sbp-work-panel {
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-surface);
   overflow: hidden;
 }
@@ -275,7 +275,7 @@ button.sbp-attention__row:hover { background: var(--bg-row-hover); }
 [data-skin="command"] .cmd-hero.cmd-hero--photo {
   min-height: 0;
   padding: 18px 20px;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   background-image: none !important;
@@ -298,7 +298,7 @@ button.sbp-attention__row:hover { background: var(--bg-row-hover); }
 
 [data-skin="command"] .cmd-hero__title {
   margin: 0;
-  font-family: var(--font-display, 'Barlow Condensed', sans-serif);
+  font-family: var(--font-display);
   font-size: clamp(24px, 2.2vw, 32px);
   line-height: 1;
   font-weight: 700;
@@ -354,7 +354,7 @@ button.sbp-attention__row:hover { background: var(--bg-row-hover); }
 }
 
 [data-skin="command"] .cmd-statcard__value {
-  font-family: var(--font-display, 'Barlow Condensed', sans-serif);
+  font-family: var(--font-display);
   font-size: 23px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -372,7 +372,7 @@ button.sbp-attention__row:hover { background: var(--bg-row-hover); }
 [data-skin="command"] .cmd-kpi-strip {
   gap: 0;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--bg-surface);
 }
@@ -397,7 +397,7 @@ button.sbp-attention__row:hover { background: var(--bg-row-hover); }
 
 [data-skin="command"] .cmd-kpi__value {
   margin-top: 3px;
-  font-family: var(--font-display, 'Barlow Condensed', sans-serif);
+  font-family: var(--font-display);
   font-size: 24px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -420,7 +420,7 @@ button.sbp-attention__row:hover { background: var(--bg-row-hover); }
 [data-skin="command"] .cmd-panel,
 [data-skin="command"] .cmd-filterbar,
 [data-skin="command"] .cmd-table-wrap {
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: none;
 }
 

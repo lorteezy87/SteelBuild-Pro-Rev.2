@@ -62,7 +62,7 @@ export default function SubmittalForecastCard({ forecast }) {
     <div style={{
       border: `1px solid ${cfg.border}`,
       background: cfg.bg,
-      borderRadius: 8,
+      borderRadius: 6,
       padding: "12px 14px",
     }}>
       {/* Risk header */}

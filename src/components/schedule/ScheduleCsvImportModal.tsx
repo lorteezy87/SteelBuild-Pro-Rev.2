@@ -22,7 +22,7 @@ import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import type { ScheduleTask } from "@/pages/schedule/types";
 
 const mono = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+const display = { fontFamily: "var(--font-display)" };
 const ACCENT = "var(--accent, var(--status-info))";
 
 type Step = "upload" | "parsing" | "preview" | "committing" | "done";

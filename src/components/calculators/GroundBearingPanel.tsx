@@ -82,7 +82,7 @@ export default function GroundBearingPanel() {
       {invalid.length > 0 && <div role="alert" style={noticeStyle("red")}>{invalid.map((m) => <div key={m}>• {m}</div>)}</div>}
 
       {result && (
-        <div data-testid="ground-bearing-result" style={{ border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div data-testid="ground-bearing-result" style={{ border: "1px solid var(--border-default)", borderRadius: 6, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
             <span style={{ ...mono, fontSize: 20, fontWeight: 800, color: STATUS_COLOR[result.status] }}>
               {Math.round(result.pressure).toLocaleString("en-US")} psf

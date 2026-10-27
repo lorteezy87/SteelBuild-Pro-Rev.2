@@ -69,7 +69,7 @@ export default function WPContextMenu({
       style={{
         position: "fixed", left: x, top: y,
         background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
-        borderRadius: 8, padding: "4px 0", zIndex: 10000,
+        borderRadius: 6, padding: "4px 0", zIndex: 10000,
         boxShadow: "0 8px 32px rgba(0,0,0,0.7)", minWidth: 200,
       }}
     >

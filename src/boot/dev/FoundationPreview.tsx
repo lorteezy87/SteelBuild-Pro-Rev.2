@@ -46,7 +46,7 @@ function FoundationPreview() {
         <Link to="/dev/foundation.html" aria-current={!details ? 'page' : undefined}>Overview</Link>
         <Link to="/dev/foundation.html?view=details" aria-current={details ? 'page' : undefined}>Details</Link>
       </nav>
-      <main id="verification" tabIndex={-1} style={{ maxWidth: 960, padding: 16, border: '1px solid var(--border-default)', borderRadius: 8 }}>
+      <main id="verification" tabIndex={-1} style={{ maxWidth: 960, padding: 16, border: '1px solid var(--border-default)', borderRadius: 6 }}>
         {details ? (
           <PageErrorBoundary label="Fixture details">
             <Suspense fallback={<PageLoader />}><Details /></Suspense>

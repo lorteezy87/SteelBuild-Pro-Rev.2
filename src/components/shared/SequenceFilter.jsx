@@ -11,9 +11,9 @@ import React, { useMemo } from "react";
 
 const chipStyle = (active) => ({
   padding: "4px 10px",
-  borderRadius: 14,
+  borderRadius: 8,
   border: `1px solid ${active ? "var(--accent)" : "var(--divider)"}`,
-  background: active ? "rgba(200,155,32,0.12)" : "transparent",
+  background: active ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent",
   color: active ? "var(--accent)" : "var(--text-secondary)",
   fontSize: 11,
   fontFamily: "var(--font-mono)",

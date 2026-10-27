@@ -307,9 +307,9 @@ function FieldRow({ label, fieldKey, enabled, toggle, children }) {
         gap: 10,
         padding: "8px 10px",
         borderRadius: 6,
-        background: isOn ? "rgba(200,155,32,0.05)" : "transparent",
+        background: isOn ? "color-mix(in srgb, var(--accent) 5%, transparent)" : "transparent",
         border: isOn
-          ? "1px solid rgba(200,155,32,0.2)"
+          ? "1px solid color-mix(in srgb, var(--accent) 20%, transparent)"
           : "1px solid transparent",
         transition: "all 0.12s",
       }}

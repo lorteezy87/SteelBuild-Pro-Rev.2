@@ -47,7 +47,7 @@ export default function UnscheduledTray({
           style={{
             background: "var(--bg-surface-low)",
             border: "1px dashed var(--border-strong)",
-            borderRadius: 8,
+            borderRadius: 6,
             padding: "8px 10px",
             marginBottom: 6,
             cursor: "grab",
@@ -67,7 +67,7 @@ export default function UnscheduledTray({
               {"\u2248"} {hoursToWorkdays(wpBudgetHoursForResource(wp))} workdays
             </div>
           )}
-          <div style={{ fontSize: 8, color: "rgba(200,155,32,0.5)", marginTop: 3, fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
+          <div style={{ fontSize: 8, color: "color-mix(in srgb, var(--accent) 50%, transparent)", marginTop: 3, fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
             {"\u2195"} drag to assign to resource
           </div>
         </div>

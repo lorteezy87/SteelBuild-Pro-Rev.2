@@ -41,7 +41,7 @@ export const getChartTheme = () => {
     tooltip: {
       background: getVar('--bg-elevated', 'var(--bg-elevated)'),
       border: `1px solid ${getVar('--border-default', 'var(--border-default)')}`,
-      borderRadius: 8,
+      borderRadius: 6,
       color: getVar('--text-primary', 'var(--text-primary)'),
       fontFamily: "'IBM Plex Mono', monospace",
     },
@@ -68,7 +68,7 @@ export const chartComponentStyles = {
     contentStyle: {
       background: "var(--bg-elevated)",
       border: "1px solid var(--border-default)",
-      borderRadius: 8,
+      borderRadius: 6,
       fontFamily: "'IBM Plex Mono', monospace",
       color: "var(--text-primary)",
     },

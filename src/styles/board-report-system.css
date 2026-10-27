@@ -35,6 +35,7 @@ html.steelbuild-dark,
   --sbd-font-display:          var(--br-font-ui);
   --sbd-font-mono:             var(--br-font-mono);
 
+  --radius:                    6px; /* shadcn/Tailwind rounded-lg|md|sm */
   --radius-card:               6px;
   --radius-btn:                6px;
   --radius-input:              6px;

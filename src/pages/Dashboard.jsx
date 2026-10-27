@@ -27,7 +27,7 @@ function FirstProjectWelcome({ onStart }) {
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--accent)", fontWeight: 800, marginBottom: 14 }}>
           Welcome to SteelBuild Pro
         </div>
-        <h1 style={{ fontFamily: "'Space Grotesk', var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 10px" }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 10px" }}>
           Set up your first project
         </h1>
         <p style={{ color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 24px" }}>

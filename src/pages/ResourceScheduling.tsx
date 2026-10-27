@@ -420,7 +420,7 @@ export default function ResourceScheduling() {
         // Subtle capacity indicator on non-hovered rows
         const bgColor = isOverAlloc ? "rgba(248,81,73,0.04)" : utilPct > 80 ? "rgba(227,179,65,0.03)" : "rgba(63,185,80,0.02)";
         row.style.background = bgColor;
-        row.style.outline = `1px dashed ${isOverAlloc ? "rgba(248,81,73,0.15)" : "rgba(200,155,32,0.12)"}`;
+        row.style.outline = `1px dashed ${isOverAlloc ? "rgba(248,81,73,0.15)" : "color-mix(in srgb, var(--accent) 12%, transparent)"}`;
         row.style.boxShadow = "none";
       }
     });

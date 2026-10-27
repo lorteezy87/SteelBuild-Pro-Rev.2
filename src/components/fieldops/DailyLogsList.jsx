@@ -99,7 +99,7 @@ export default function DailyLogsList({ logs = [], onEdit = null, onDelete = nul
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
-          borderRadius: "12px",
+          borderRadius: "6px",
           padding: "40px",
           textAlign: "center",
         }}
@@ -140,7 +140,7 @@ export default function DailyLogsList({ logs = [], onEdit = null, onDelete = nul
           style={{
             background: "var(--bg-surface)",
             border: "1px solid var(--border-default)",
-            borderRadius: "12px",
+            borderRadius: "6px",
             padding: "16px",
             transition: "border-color 0.15s, background 0.15s",
           }}
@@ -427,7 +427,7 @@ export default function DailyLogsList({ logs = [], onEdit = null, onDelete = nul
                             display: "block",
                             width: 80,
                             height: 80,
-                            borderRadius: 8,
+                            borderRadius: 6,
                             border: "1px solid var(--border-default)",
                             overflow: "hidden",
                             background: "var(--bg-input)",

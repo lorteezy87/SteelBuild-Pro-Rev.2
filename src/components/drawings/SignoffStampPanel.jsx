@@ -99,7 +99,7 @@ export default function SignoffStampPanel({
       style={{
         background: "var(--bg-surface-secondary)",
         border: "1px solid var(--border-default)",
-        borderRadius: 8,
+        borderRadius: 6,
         padding: compact ? "8px 10px" : "12px 14px",
         display: "flex",
         flexDirection: "column",
@@ -305,7 +305,7 @@ function ModalShell({ title, onClose, children }) {
         width: 420, maxWidth: "90vw",
         background: "var(--bg-surface-secondary)",
         border: "1px solid var(--border-default)",
-        borderRadius: 12,
+        borderRadius: 6,
         padding: 16,
         boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
       }}>

@@ -619,7 +619,7 @@ function DocumentControlProject({ projectId }: { projectId: string | null }) {
               <section aria-label="Document Control next actions" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
                 <div style={{ ...monoStyle, color: "var(--text-muted)" }}>Next actions — reviewed handoff</div>
                 {nextActions.map(({ sheetNumber, action }, index) => (
-                  <div key={`${sheetNumber}-${index}`} aria-label={`Next action for ${sheetNumber}`} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--divider)", background: "var(--hover-bg)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <div key={`${sheetNumber}-${index}`} aria-label={`Next action for ${sheetNumber}`} style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid var(--divider)", background: "var(--hover-bg)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <div style={{ minWidth: 180, flex: 1 }}>
                       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>{action.label}</div>
                       <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{action.detail}</div>
@@ -786,7 +786,7 @@ const noticeStyle: React.CSSProperties = {
   fontSize: 12,
   color: "var(--text-secondary)",
   padding: "10px 12px",
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid var(--divider)",
   background: "var(--hover-bg)",
   marginBottom: 12,
@@ -803,7 +803,7 @@ const sourceButtonStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 700,
   padding: "9px 14px",
-  borderRadius: 7,
+  borderRadius: 6,
   border: "1px solid var(--divider)",
   background: "var(--hover-bg)",
   color: "var(--text-primary)",
@@ -817,7 +817,7 @@ const dropZoneStyle: React.CSSProperties = {
   justifyContent: "center",
   gap: 6,
   padding: "40px 20px",
-  borderRadius: 10,
+  borderRadius: 6,
   border: "1px dashed var(--divider)",
   color: "var(--text-secondary)",
   cursor: "pointer",

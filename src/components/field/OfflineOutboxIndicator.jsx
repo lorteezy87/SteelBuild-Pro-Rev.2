@@ -38,7 +38,7 @@ export default function OfflineOutboxIndicator({ pending = 0, online = true, onS
         gap: 10,
         maxWidth: "calc(100vw - 24px)",
         padding: "8px 14px",
-        borderRadius: 8,
+        borderRadius: 6,
         fontFamily: "var(--font-mono)",
         fontSize: 12,
         fontWeight: 700,

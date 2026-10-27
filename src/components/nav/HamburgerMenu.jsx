@@ -8,7 +8,7 @@ export default function HamburgerMenu({ open, onToggle }) {
       aria-label={open ? "Close navigation menu" : "Open navigation"}
       aria-expanded={open}
       style={{
-        width: 44, height: 44, borderRadius: 10,
+        width: 44, height: 44, borderRadius: 6,
         background: "var(--hover-bg)", border: "1px solid var(--border)",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         gap: 4, cursor: "pointer", flexShrink: 0,

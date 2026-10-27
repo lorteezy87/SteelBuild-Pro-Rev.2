@@ -167,7 +167,7 @@ export default function EscalateModal({ item, initialKind = "rfi", projectId, pr
                 title={enabled ? hint : "You don't have permission for this"}
                 style={{
                   display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3,
-                  padding: "10px 12px", borderRadius: 10, cursor: enabled ? "pointer" : "not-allowed",
+                  padding: "10px 12px", borderRadius: 6, cursor: enabled ? "pointer" : "not-allowed",
                   border: `1px solid ${kind === key ? "var(--accent)" : border}`,
                   background: kind === key ? "color-mix(in srgb, var(--accent) 13%, transparent)" : surface2,
                   color: kind === key ? "var(--accent)" : textMuted,

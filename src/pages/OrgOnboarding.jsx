@@ -19,7 +19,7 @@ const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "Member" };
 function Shell({ children, email, onSignOut }) {
   return (
     <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24, background: "var(--bg-base, #0D1117)" }}>
-      <div style={{ width: "100%", maxWidth: 460, background: "var(--bg-surface-secondary, #161B22)", border: "1px solid var(--border-default)", borderRadius: 14, padding: "32px 28px", boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
+      <div style={{ width: "100%", maxWidth: 460, background: "var(--bg-surface-secondary, #161B22)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "32px 28px", boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--accent)", fontWeight: 800 }}>
           SteelBuild Pro
         </div>
@@ -134,7 +134,7 @@ export default function OrgOnboarding() {
       <form onSubmit={submitCreate}>
         <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Workspace name</label>
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Acme Steel Fabricators" disabled={busy}
-          style={{ width: "100%", boxSizing: "border-box", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 9, padding: "11px 13px", color: "var(--text-primary)", fontSize: 15, outline: "none", marginBottom: 18 }} />
+          style={{ width: "100%", boxSizing: "border-box", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "11px 13px", color: "var(--text-primary)", fontSize: 15, outline: "none", marginBottom: 18 }} />
         <button type="submit" className="sbd-btn sbd-btn-primary" disabled={!name.trim() || busy} style={{ width: "100%", justifyContent: "center", minHeight: 44, fontSize: 14 }}>
           {busy ? "Creating…" : "Create workspace"}
         </button>
@@ -143,5 +143,5 @@ export default function OrgOnboarding() {
   );
 }
 
-const hStyle = { fontFamily: "'Space Grotesk', var(--font-display)", fontSize: 24, fontWeight: 600, color: "var(--text-primary)", margin: "10px 0 6px" };
+const hStyle = { fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 600, color: "var(--text-primary)", margin: "10px 0 6px" };
 const pStyle = { color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, margin: "0 0 22px" };

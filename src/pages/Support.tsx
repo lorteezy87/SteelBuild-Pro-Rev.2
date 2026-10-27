@@ -97,7 +97,7 @@ export default function Support() {
         }}>
           <Link to="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
             <div style={{
-              width: 34, height: 34, borderRadius: 8,
+              width: 34, height: 34, borderRadius: 6,
               background: "var(--sbd-bg-surface-hi)",
               border: "1px solid var(--sbd-border-strong)", display: "grid", placeItems: "center",
               color: "var(--sbd-accent)", fontFamily: "var(--sbd-font-display)", fontWeight: 700, fontSize: 14,

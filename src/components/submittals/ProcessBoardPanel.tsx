@@ -199,7 +199,7 @@ function ProcessColumn({
       display: "flex",
       flexDirection: "column",
       minHeight: 500,
-      borderRadius: 12,
+      borderRadius: 6,
       border: "1px solid var(--cmd-border)",
       background: "var(--cmd-surface)",
       overflow: "hidden",
@@ -264,7 +264,7 @@ function ProcessColumn({
         {items.length === 0 ? (
           <div style={{
             border: "1px dashed var(--cmd-border)",
-            borderRadius: 10,
+            borderRadius: 6,
             minHeight: 82,
             display: "flex",
             alignItems: "center",
@@ -326,7 +326,7 @@ function ProcessCard({
         width: "100%",
         textAlign: "left",
         padding: 10,
-        borderRadius: 8,
+        borderRadius: 6,
         border: item.due.overdue
           ? "1px solid color-mix(in srgb, var(--cmd-danger) 45%, transparent)"
           : "1px solid var(--cmd-border)",

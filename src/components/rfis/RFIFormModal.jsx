@@ -688,7 +688,7 @@ const darkSelectButtonStyle = {
   textAlign: "left",
   cursor: "pointer",
   background: "var(--bg-input)",
-  borderRadius: 8,
+  borderRadius: 6,
 };
 
 const darkSelectMenuStyle = {
@@ -702,14 +702,14 @@ const darkSelectMenuStyle = {
   padding: 4,
   background: "var(--bg-surface-secondary)",
   border: "1px solid color-mix(in srgb, var(--accent) 32%, var(--border-default))",
-  borderRadius: 10,
+  borderRadius: 6,
   boxShadow: "0 18px 46px color-mix(in srgb, var(--bg-base) 74%, transparent), inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent)",
 };
 
 const darkSelectOptionStyle = (active) => ({
   width: "100%",
   border: "1px solid transparent",
-  borderRadius: 7,
+  borderRadius: 6,
   background: active ? "var(--accent-muted)" : "transparent",
   color: active ? "var(--accent)" : "var(--text-primary)",
   padding: "8px 10px",

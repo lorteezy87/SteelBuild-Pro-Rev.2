@@ -43,7 +43,7 @@ export default function AdvanceStageDialog({
           maxWidth: 480,
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
-          borderRadius: 16,
+          borderRadius: 8,
         }}
       >
         <DialogHeader>
@@ -75,7 +75,7 @@ export default function AdvanceStageDialog({
           style={{
             background: "var(--info-muted)",
             border: "1px solid var(--info-border)",
-            borderRadius: 8,
+            borderRadius: 6,
             padding: "8px 12px",
             margin: "12px 0",
           }}

@@ -20,7 +20,7 @@ const shimmerStyle = {
     "linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-surface-high) 50%, var(--bg-surface) 75%)",
   backgroundSize: "800px 100%",
   animation: "skeleton-shimmer 1.6s ease-in-out infinite",
-  borderRadius: 8,
+  borderRadius: 6,
 };
 
 /* ── Variant: KPI strip ────────────────────────────────────────────── */
@@ -64,7 +64,7 @@ function TableSkeleton({ rows = 5 }) {
     <div
       style={{
         border: "1px solid var(--border-default)",
-        borderRadius: 8,
+        borderRadius: 6,
         overflow: "hidden",
       }}
     >

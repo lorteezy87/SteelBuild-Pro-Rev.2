@@ -79,7 +79,7 @@ const body = { fontFamily: "var(--font-body)" };
 const cardStyle = {
   background: "var(--bg-surface)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   overflow: "hidden",
 };
 const inputStyle = {
@@ -546,7 +546,7 @@ export default function CranePickCalculator() {
         {/* Header */}
         <div style={{ marginBottom: 14 }}>
           <div style={{
-            fontFamily: "Space Grotesk, var(--font-display)",
+            fontFamily: "var(--font-display)",
             fontSize: 22, fontWeight: 800, textTransform: "uppercase",
             letterSpacing: "-0.01em", color: "var(--text-primary)",
           }}>
@@ -1102,7 +1102,7 @@ function PickSummaryModal({ onClose, data }) {
           width: "min(720px, 100%)", maxHeight: "90vh",
           background: "var(--bg-surface)", color: "var(--text-primary)",
           border: "1px solid var(--border-strong)",
-          borderRadius: 10, overflow: "hidden", display: "flex",
+          borderRadius: 6, overflow: "hidden", display: "flex",
           flexDirection: "column", boxShadow: "var(--shadow-lg)",
         }}
       >
@@ -1113,7 +1113,7 @@ function PickSummaryModal({ onClose, data }) {
           background: "var(--bg-surface-low)",
         }}>
           <div>
-            <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 16, fontWeight: 800, letterSpacing: "0.04em" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, letterSpacing: "0.04em" }}>
               Pick Summary
             </div>
             <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 2 }}>
@@ -1274,7 +1274,7 @@ function keycapButtonStyle(variant, opts = {}) {
     textTransform: "uppercase",
     padding: compact ? "8px 16px" : "10px 18px",
     minHeight: compact ? 38 : 44,
-    borderRadius: 10,
+    borderRadius: 6,
     cursor: disabled ? "not-allowed" : "pointer",
     // Subtle keycap relief — matches the .sbd-calc-key shadow language.
     boxShadow: "0 1px 0 var(--border-strong), inset 0 1px 0 rgba(255,255,255,0.04)",

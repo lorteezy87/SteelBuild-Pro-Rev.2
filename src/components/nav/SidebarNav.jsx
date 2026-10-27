@@ -332,7 +332,7 @@ export default function SidebarNav({
             padding: railMode ? 0 : "0 10px",
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 8,
+            borderRadius: 6,
             color: "var(--text-muted)",
             cursor: "pointer",
             fontFamily: "var(--font-body)",
@@ -940,7 +940,7 @@ function FavoriteRailLink({ item, active, onClick }) {
           border: active
             ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
             : "1px solid transparent",
-          borderRadius: 8,
+          borderRadius: 6,
           cursor: "pointer",
           transition: "all 140ms",
           position: "relative",
@@ -1029,7 +1029,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
             border: active
               ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
               : "1px solid transparent",
-            borderRadius: 8,
+            borderRadius: 6,
             cursor: "pointer",
             transition: "all 140ms",
             position: "relative",

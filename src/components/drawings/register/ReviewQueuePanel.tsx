@@ -128,7 +128,7 @@ export function ReviewQueuePanel({ projectId }: { projectId: string | null }) {
       </div>
 
       {canManage && reqOpen && (
-        <div style={{ padding: 14, borderRadius: 10, background: "var(--cmd-surface)", border: "1px solid var(--cmd-border)", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ padding: 14, borderRadius: 6, background: "var(--cmd-surface)", border: "1px solid var(--cmd-border)", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <select className="sbd-select" value={reqDrawing} onChange={(e) => setReqDrawing(e.target.value)} style={{ minWidth: 240 }}>
             <option value="">Select sheet…</option>
             {attachable.map((r) => (

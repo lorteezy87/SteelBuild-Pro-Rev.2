@@ -379,7 +379,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           {/* Step 1: Template */}
           <div style={{
             padding: 14,
-            borderRadius: 8,
+            borderRadius: 6,
             border: '1px solid var(--border-default)',
             background: 'var(--bg-surface-low)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
@@ -412,7 +412,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           {/* Step 2: Upload / Paste */}
           <div style={{
             padding: 14,
-            borderRadius: 8,
+            borderRadius: 6,
             border: '1px solid var(--border-default)',
             background: 'var(--bg-surface-low)',
           }}>
@@ -484,7 +484,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           {parsed.records.length > 0 && (
             <div style={{
               padding: 14,
-              borderRadius: 8,
+              borderRadius: 6,
               border: '1px solid var(--border-default)',
               background: 'var(--bg-surface-low)',
               display: 'flex', flexDirection: 'column', gap: 10,

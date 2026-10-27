@@ -21,7 +21,7 @@ export default function ContactList({ contacts, view, onEdit, onDelete, onAdd })
         {/* Icon */}
         <div style={{
           width: 64, height: 64, borderRadius: "50%",
-          background: "rgba(200,155,32,0.10)", border: "2px solid rgba(200,155,32,0.22)",
+          background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "2px solid color-mix(in srgb, var(--accent) 22%, transparent)",
           display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28,
         }}>👤</div>
 

@@ -357,7 +357,7 @@ const closeButtonStyle = {
   minWidth: 30,
   height: 30,
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
   color: "var(--text-muted)",
   cursor: "pointer",
@@ -381,7 +381,7 @@ const signalStyle = {
   gap: 2,
   padding: "8px",
   border: "1px solid",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
   color: "var(--text-muted)",
   fontSize: 9,
@@ -403,7 +403,7 @@ const bodyStyle = {
 const sectionStyle = {
   padding: 12,
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
 };
 
@@ -450,7 +450,7 @@ const metaValueStyle = {
 const signoffShellStyle = {
   overflow: "hidden",
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
 };
 
@@ -461,7 +461,7 @@ const linkRowStyle = {
   gap: 4,
   padding: "8px 9px",
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg, var(--bg-surface))",
   color: "inherit",
   cursor: "pointer",

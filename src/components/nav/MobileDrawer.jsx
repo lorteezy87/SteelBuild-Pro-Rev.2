@@ -78,7 +78,7 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
             style={{
               width: 40,
               height: 40,
-              borderRadius: 10,
+              borderRadius: 6,
               border: "1px solid var(--border-default)",
               background: "var(--bg-surface)",
               color: "var(--text-secondary)",

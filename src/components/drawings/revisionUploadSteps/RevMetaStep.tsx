@@ -18,7 +18,7 @@ export default function StepRevMeta(props: any) {
   return (
     <div>
       {/* Current state */}
-      <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 16 }}>
+      <div style={{ padding: "10px 14px", borderRadius: 6, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 4 }}>UPDATING</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{selectedSet.set_name}</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 2, letterSpacing: "0.06em" }}>
@@ -74,7 +74,7 @@ export default function StepRevMeta(props: any) {
             { value: "reference", label: "Keep as Reference Only", desc: "Available but not active" },
           ].map(opt => (
             <div key={opt.value} onClick={() => set("disposition", opt.value)} style={{
-              padding: "8px 12px", borderRadius: 8, cursor: "pointer",
+              padding: "8px 12px", borderRadius: 6, cursor: "pointer",
               background: revMeta.disposition === opt.value ? "var(--warning-muted)" : "var(--hover-bg)",
               border: `1px solid ${revMeta.disposition === opt.value ? "rgba(245,158,11,0.25)" : "var(--divider)"}`,
               display: "flex", alignItems: "center", gap: 10
@@ -94,11 +94,11 @@ export default function StepRevMeta(props: any) {
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 6, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onNext} disabled={!revMeta.revisionLabel} style={{
-          padding: "7px 16px", borderRadius: 8, cursor: revMeta.revisionLabel ? "pointer" : "not-allowed",
+          padding: "7px 16px", borderRadius: 6, cursor: revMeta.revisionLabel ? "pointer" : "not-allowed",
           background: revMeta.revisionLabel ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: revMeta.revisionLabel ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",

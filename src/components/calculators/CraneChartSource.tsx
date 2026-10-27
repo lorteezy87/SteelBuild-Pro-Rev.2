@@ -77,7 +77,7 @@ export default function CraneChartSource({ cranes, craneId, configId, onSelect, 
       )}
 
       {lookup && lookup.ok === true && (
-        <div data-testid="chart-capacity" style={{ border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 12px" }}>
+        <div data-testid="chart-capacity" style={{ border: "1px solid var(--border-default)", borderRadius: 6, padding: "10px 12px" }}>
           <div style={labelStyle}>Rated capacity from chart</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
             <span style={{ ...mono, fontSize: 22, fontWeight: 800 }}>{Math.round(lookup.capacity).toLocaleString("en-US")} lb</span>

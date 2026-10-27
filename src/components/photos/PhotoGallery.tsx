@@ -95,7 +95,7 @@ export default function PhotoGallery({ photos = [] }: PhotoGalleryProps) {
         style={{
           background: "var(--bg-surface)",
           border: "1px dashed var(--border-default)",
-          borderRadius: 12,
+          borderRadius: 6,
           padding: "80px 40px",
           textAlign: "center",
         }}
@@ -215,7 +215,7 @@ export default function PhotoGallery({ photos = [] }: PhotoGalleryProps) {
             textAlign: "center",
             background: "var(--bg-surface)",
             border: "1px dashed var(--border-default)",
-            borderRadius: 10,
+            borderRadius: 6,
             fontFamily: "var(--font-mono)",
             fontSize: 10,
             color: "var(--text-muted)",
@@ -317,7 +317,7 @@ function PhotoCard({ photo, onClick }: PhotoCardProps) {
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
-        borderRadius: 10,
+        borderRadius: 6,
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.18s",

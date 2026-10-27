@@ -17,7 +17,7 @@ function StatusPill({ status }) {
       display: "inline-flex", alignItems: "center", gap: 4,
       background: `${color}18`, color,
       fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-      padding: "3px 10px", borderRadius: 20, letterSpacing: "0.06em",
+      padding: "3px 10px", borderRadius: 8, letterSpacing: "0.06em",
       textTransform: "uppercase", whiteSpace: "nowrap",
     }}>
       {status || "Active"}
@@ -44,7 +44,7 @@ function RiskBadge({ vendor }) {
           display: "inline-flex", alignItems: "center", gap: 3,
           background: "rgba(248,81,73,0.12)", color: "var(--status-error)",
           fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-          padding: "2px 6px", borderRadius: 10, letterSpacing: "0.04em",
+          padding: "2px 6px", borderRadius: 6, letterSpacing: "0.04em",
         }}>
           <AlertTriangle size={8} />{r}
         </span>

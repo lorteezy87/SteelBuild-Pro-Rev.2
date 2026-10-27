@@ -12,7 +12,7 @@ const labelStyle = {
 
 const sectionStyle = {
   background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
-  borderRadius: 8, padding: '18px 16px', marginBottom: 20,
+  borderRadius: 6, padding: '18px 16px', marginBottom: 20,
 };
 
 const legalLinkStyle = { color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' };

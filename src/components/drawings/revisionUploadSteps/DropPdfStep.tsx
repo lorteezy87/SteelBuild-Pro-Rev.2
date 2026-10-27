@@ -26,7 +26,7 @@ export default function StepDropPDF(props: any) {
 
   return (
     <div>
-      <div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+      <div style={{ padding: "8px 12px", borderRadius: 6, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
         <span style={{ color: "var(--status-warning)" }}>{selectedSet.set_name}</span>
         {" · "}Previous: {selectedSet.revision || "—"} ({selectedSet.sheet_count || 0} sheets)
         {" → "}
@@ -40,7 +40,7 @@ export default function StepDropPDF(props: any) {
         onClick={() => fileInputRef.current?.click()}
         style={{
           border: `2px dashed ${dragOver ? "var(--warning-border)" : "rgba(245,158,11,0.3)"}`,
-          borderRadius: 12, padding: "28px 24px", textAlign: "center", cursor: "pointer",
+          borderRadius: 6, padding: "28px 24px", textAlign: "center", cursor: "pointer",
           background: dragOver ? "var(--warning-muted)" : file ? "rgba(0,214,143,0.03)" : "rgba(245,158,11,0.02)",
           transition: "all 0.15s", marginBottom: 12
         }}
@@ -68,11 +68,11 @@ export default function StepDropPDF(props: any) {
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 6, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onExtract} disabled={!file} style={{
-          padding: "7px 16px", borderRadius: 8, cursor: file ? "pointer" : "not-allowed",
+          padding: "7px 16px", borderRadius: 6, cursor: file ? "pointer" : "not-allowed",
           background: file ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: file ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",

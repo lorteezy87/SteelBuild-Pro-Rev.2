@@ -121,7 +121,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
         padding: "10px 12px",
         border: `1px solid ${anyAiFilled ? "rgba(132,204,22,0.30)" : "var(--bg-surface-high)"}`,
         background: anyAiFilled ? "rgba(132,204,22,0.05)" : "var(--bg-surface-low)",
-        borderRadius: 8,
+        borderRadius: 6,
         marginBottom: 10,
       }}>
         <div style={{
@@ -182,7 +182,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
           display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
           background: "var(--danger-muted)",
           border: "1px solid var(--danger-border)",
-          borderRadius: 8, marginBottom: 10,
+          borderRadius: 6, marginBottom: 10,
         }}>
           <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-error)", flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
@@ -199,7 +199,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
         <div key={r.fileName} style={{
           display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
           background: "var(--warning-muted)", border: "1px solid var(--warning-border)",
-          borderRadius: 8, marginBottom: 10,
+          borderRadius: 6, marginBottom: 10,
         }}>
           <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-warning)", flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
@@ -246,7 +246,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
       </div>
 
       {/* Table */}
-      <div style={{ maxHeight: 320, overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, marginBottom: 14 }}>
+      <div style={{ maxHeight: 320, overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, marginBottom: 14 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "var(--bg-surface-low)", position: "sticky", top: 0, zIndex: 1 }}>

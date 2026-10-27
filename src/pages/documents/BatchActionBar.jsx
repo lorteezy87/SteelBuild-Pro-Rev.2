@@ -35,7 +35,7 @@ export default function BatchActionBar({
       padding: "10px 16px",
       background: "var(--success-muted)",
       border: "1px solid var(--success-border)",
-      borderRadius: 10,
+      borderRadius: 6,
       animation: "fadeIn 0.15s ease-out",
     }}>
       <CheckSquare size={16} style={{ color: "var(--status-success)" }} />
@@ -72,7 +72,7 @@ export default function BatchActionBar({
               zIndex: 100,
               background: "var(--bg-surface)",
               border: "1px solid var(--border-default)",
-              borderRadius: 8,
+              borderRadius: 6,
               padding: 4,
               minWidth: 180,
               boxShadow: "var(--shadow-lg)",

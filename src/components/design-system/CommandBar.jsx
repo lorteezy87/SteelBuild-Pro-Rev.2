@@ -2,7 +2,7 @@
  * CommandBar — page header pattern.
  *
  *   eyebrow      — small uppercase context line (project path / breadcrumb)
- *   title        — display heading (Barlow Condensed in SBD), light weight
+ *   title        — display heading (Archivo, condensed via font-stretch), light weight
  *                  with slight tracking
  *   count + unit — compact chip next to the title (e.g. "32 · 2238.9T")
  *   subtitle     — smaller body-tone explainer line below
@@ -32,22 +32,13 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
         backdropFilter: "blur(24px) saturate(150%)",
         WebkitBackdropFilter: "blur(24px) saturate(150%)",
         border: "1px solid color-mix(in srgb, var(--border-default) 88%, var(--border-strong) 12%)",
-        borderRadius: "18px",
+        borderRadius: "8px",
         boxShadow: "inset 0 1px 0 var(--glass-border), var(--shadow-lg)",
         marginBottom: 16,
         position: "relative",
         overflow: "hidden",
       }}
     >
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "linear-gradient(90deg, rgba(86,176,255,0.10) 0%, transparent 28%, transparent 72%, rgba(200,155,32,0.07) 100%)",
-          pointerEvents: "none",
-        }}
-      />
       <div style={{ minWidth: 0, flex: "1 1 auto" }}>
         {eyebrow && (
           <div

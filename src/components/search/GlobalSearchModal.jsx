@@ -332,7 +332,7 @@ export default function GlobalSearchModal({ open, onClose }) {
           maxWidth: 680,
           background: "var(--glass-bg, rgba(16,18,24,0.92))",
           border: "1px solid var(--accent-border)",
-          borderRadius: 14,
+          borderRadius: 8,
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           zIndex: 1001,

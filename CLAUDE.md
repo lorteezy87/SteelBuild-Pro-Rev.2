@@ -38,8 +38,9 @@ The active rebuild covers the entire subcontractor app for structural steel fabr
 - Light (default look): paper `#FAFAF8`, cards `#FFFFFF`, rules `#DEDCD6`, ink `#17191C`. Dark: `data-theme="dark"` + `html.steelbuild-dark`, body `#0C0F12`, panels `#141A1F`. The masthead stays `#141618` in both.
 - The masthead re-points `--bg-*` / `--text-*` on the chrome elements themselves, so anything inside the topbar or sidebar draws dark without component changes. Don't redefine `--bg-sidebar` / `--nav-*` globally; pages reuse them for table headers.
 - Command Control Centers use `[data-skin="command"]` with `--cmd-*`, remapped onto the same paper.
-- Fonts: Archivo for all UI text (display headings use its width axis, `font-stretch: 85%`), IBM Plex Mono for every number, date and document id. Barlow Condensed and Inter are retired from app chrome.
-- Radius: 6px cards/buttons/inputs, 4px badges.
+- Fonts: Archivo for all UI text (display headings use its width axis, `font-stretch: 85%`), IBM Plex Mono for every number, date and document id. Use `var(--font-body|display|mono)`, never a literal family. Barlow, Inter, Space Grotesk and JetBrains Mono are retired and no longer loaded; a test fails if one comes back.
+- Radius: 6px cards/buttons/inputs, 8px dialogs and large panels, 4px badges. A radius equal to half an element's height is a pill or circle, not a corner — leave it.
+- Public pages render outside the Layout, so they read `boardReportTheme.ts` constants directly: legal/trust pages use `src/components/legal/LegalShell.tsx`; the sign-in card is in `Landing.jsx`. `MarketingLanding` (+ `marketing-landing.css`) is a separately approved marketing design and keeps its own faces and palette until the owner says otherwise.
 - Theme preference: `sbp-theme` in localStorage, else `prefers-color-scheme`.
 - Never use `<form>` tags. Never use Radix Dialog.
 

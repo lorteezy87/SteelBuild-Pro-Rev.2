@@ -177,7 +177,7 @@ export default function Settings() {
                         : 'transparent',
                     border: `1px solid ${isActive ? 'var(--accent-border)' : 'transparent'}`,
                     borderLeft: !isMobile && isActive ? '3px solid var(--accent)' : !isMobile ? '3px solid transparent' : undefined,
-                    borderRadius: 8,
+                    borderRadius: 6,
                     cursor: 'pointer',
                     textAlign: 'left',
                     transition: 'all 0.15s',

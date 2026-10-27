@@ -38,7 +38,7 @@ export default function SetupAdminTab({ isAdmin = false }) {
             onClick={() => navigate(createPageUrl(i.page))}
             style={{
               display: "flex", flexDirection: "column", gap: 6, textAlign: "left",
-              padding: 16, borderRadius: 10, cursor: "pointer",
+              padding: 16, borderRadius: 6, cursor: "pointer",
               border: "1px solid var(--border-default)",
               background: "var(--bg-surface-low)",
               transition: "border-color 0.15s, background 0.15s",

@@ -66,7 +66,7 @@ export function PieceRegisterArchiveDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="archive-piece-title"
-        className="w-full max-w-lg rounded-2xl p-6 shadow-2xl"
+        className="w-full max-w-lg rounded-lg p-6 shadow-2xl"
         style={{
           border: "1px solid var(--cmd-border, var(--border-default))",
           background: "var(--cmd-surface, var(--bg-surface))",
@@ -76,7 +76,7 @@ export function PieceRegisterArchiveDialog({
       >
         <div className="flex items-start gap-3">
           <div
-            className="rounded-xl p-2"
+            className="rounded-lg p-2"
             style={{
               background: "var(--cmd-chip-danger-bg, var(--danger-muted))",
               color: "var(--cmd-danger-text, var(--status-error))",

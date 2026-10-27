@@ -232,7 +232,7 @@ export default function ScopeExclusions() {
           gap: 8,
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
-          borderRadius: 8,
+          borderRadius: 6,
           padding: "8px 12px",
         }}
       >
@@ -326,7 +326,7 @@ export default function ScopeExclusions() {
               display: "inline-flex",
               background: "var(--bg-surface)",
               border: "1px solid var(--border-default)",
-              borderRadius: 8,
+              borderRadius: 6,
               padding: 2,
               gap: 2,
               maxWidth: "100%",

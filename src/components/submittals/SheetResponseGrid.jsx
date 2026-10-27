@@ -172,7 +172,7 @@ export default function SheetResponseGrid({
       flexDirection: "column",
       maxHeight: "80vh",
       background: "var(--bg-surface)",
-      borderRadius: 8,
+      borderRadius: 6,
       border: "1px solid var(--border-default)",
       overflow: "hidden",
       padding: 0,

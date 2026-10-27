@@ -47,7 +47,7 @@ export default function SectionCard({
       background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 0%, color-mix(in srgb, var(--bg-surface-low) 88%, #000 12%) 100%)",
       border: "1px solid var(--border-default)",
       borderTop: `2px solid ${accentColor || "var(--accent)"}`,
-      borderRadius: 18,
+      borderRadius: 8,
       overflow: "hidden",
       transition: "border-color 0.12s",
       boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.30)",
@@ -71,7 +71,7 @@ export default function SectionCard({
       >
         {icon && (
           <div style={{
-            width: 36, height: 36, borderRadius: 12,
+            width: 36, height: 36, borderRadius: 6,
             display: "flex", alignItems: "center", justifyContent: "center",
             background: STAT_COLOR[iconColor] + "20",
             border: `1px solid ${STAT_COLOR[iconColor]}33`,
@@ -112,7 +112,7 @@ export default function SectionCard({
                 textAlign: "center",
                 padding: "8px 10px",
                 minWidth: 72,
-                borderRadius: 12,
+                borderRadius: 6,
                 background: "rgba(255,255,255,0.025)",
                 border: "1px solid rgba(255,255,255,0.05)",
               }}>

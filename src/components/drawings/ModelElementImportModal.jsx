@@ -24,7 +24,7 @@ import { parseModelElementsCsv } from "@/lib/importModelElements";
 import { readFileText } from "@/lib/textDecoding";
 
 const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+const display = { fontFamily: "var(--font-display)" };
 const ACCENT  = "var(--accent, #3B82F6)";
 
 const MATCH_BADGE = {
@@ -255,7 +255,7 @@ export default function ModelElementImportModal({
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
           {err && (
             <div role="alert" style={{
-              marginBottom: 12, padding: "10px 12px", borderRadius: 8,
+              marginBottom: 12, padding: "10px 12px", borderRadius: 6,
               border: "1px solid color-mix(in srgb, var(--status-error) 45%, transparent)",
               background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
               color: "var(--text-primary)", fontSize: 12,
@@ -286,7 +286,7 @@ export default function ModelElementImportModal({
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); acceptFile(e.dataTransfer.files?.[0]); }}
                 style={{
-                  border: "1.5px dashed var(--border-default)", borderRadius: 10,
+                  border: "1.5px dashed var(--border-default)", borderRadius: 6,
                   padding: "34px 20px", textAlign: "center", cursor: "pointer",
                   background: "var(--bg-surface-low)",
                 }}
@@ -334,7 +334,7 @@ export default function ModelElementImportModal({
               </div>
 
               {/* Rows table */}
-              <div style={{ border: "1px solid var(--border-default)", borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
                 <div style={{ maxHeight: 360, overflowY: "auto" }}>
                   <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>

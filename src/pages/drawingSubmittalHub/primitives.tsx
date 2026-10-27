@@ -106,7 +106,7 @@ export function FlagToggle({ label, active, disabled, onClick }: { label: string
       style={{
         fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase",
         color: active ? "var(--cmd-pill-warn-fg)" : color, cursor: disabled ? "default" : "pointer",
-        padding: "4px 9px", borderRadius: 8,
+        padding: "4px 9px", borderRadius: 6,
         background: active ? warning : `color-mix(in srgb, ${textMuted} 10%, transparent)`,
         border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
         opacity: disabled ? 0.6 : 1,
@@ -158,7 +158,7 @@ export interface TriageMetricProps {
 
 export function TriageMetric({ icon: Icon, label, value, sub, color }: TriageMetricProps) {
   return (
-    <div className="sbd-card" style={{ padding: "14px 16px", borderRadius: 14, borderTop: `2px solid ${color}`, minWidth: 0 }}>
+    <div className="sbd-card" style={{ padding: "14px 16px", borderRadius: 8, borderTop: `2px solid ${color}`, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
         <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: textMuted, fontWeight: 800 }}>
           {label}
@@ -181,7 +181,7 @@ export function EscalateIconButton({ icon: Icon, label, title, onClick }: { icon
       title={title}
       style={{
         display: "inline-flex", alignItems: "center", gap: 4,
-        minHeight: 30, padding: "4px 8px", borderRadius: 7, cursor: "pointer",
+        minHeight: 30, padding: "4px 8px", borderRadius: 6, cursor: "pointer",
         background: "transparent", border: `1px solid ${border}`,
         color: textMuted, fontFamily: mono, fontSize: 9, fontWeight: 800,
         letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
@@ -219,7 +219,7 @@ export function PipelineBar({ status, count, total }: { status: string; count: n
 
 export function EmptyState({ text }: { text: string }) {
   return (
-    <div style={{ padding: 14, color: textMuted, border: `1px dashed ${border}`, borderRadius: 10, fontSize: 13 }}>
+    <div style={{ padding: 14, color: textMuted, border: `1px dashed ${border}`, borderRadius: 6, fontSize: 13 }}>
       {text}
     </div>
   );

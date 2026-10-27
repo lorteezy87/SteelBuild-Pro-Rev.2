@@ -65,7 +65,7 @@ export default function Billing() {
         <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)" }}>Current plan</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-            <span style={{ fontFamily: "'Space Grotesk', var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--text-primary)" }}>{plan.name}</span>
+            <span style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--text-primary)" }}>{plan.name}</span>
             <StatusPill status={status} isActive={isActive} planKey={planKey} />
           </div>
           {currentOrg?.current_period_end && isActive && planKey !== "enterprise" && (
@@ -108,7 +108,7 @@ export default function Billing() {
                 </span>
               )}
               <div>
-                <div style={{ fontFamily: "'Space Grotesk', var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>{p.name}</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>{p.name}</div>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, minHeight: 32 }}>{p.blurb}</div>
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>

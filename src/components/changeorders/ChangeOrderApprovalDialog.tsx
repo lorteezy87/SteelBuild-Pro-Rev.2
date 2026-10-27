@@ -72,7 +72,7 @@ export default function ChangeOrderApprovalDialog({ open, onClose, onConfirm, is
     <button type="button" style={{ ...button, background: "var(--accent)", color: "var(--on-accent)", borderColor: "var(--accent)" }} disabled={busy || !validAmounts} onClick={() => { void confirm(); }}>{busy ? "Approving…" : `Approve ${changeOrders.length} change order${changeOrders.length === 1 ? "" : "s"}`}</button>
   </>}>
     <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 0 }}>Review the commercial value and choose how these approvals affect scheduled billing.</p>
-    <div style={{ border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden", marginBottom: 20 }}>
+    <div style={{ border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden", marginBottom: 20 }}>
       <ul aria-label="Change orders to approve" style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: 160, overflowY: "auto" }}>
         {changeOrders.map(co => <li key={co.id} style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "10px 14px", borderBottom: "1px solid var(--divider)", fontSize: 13 }}><span>{co.co_number || "Unnumbered change order"}</span><span style={{ fontFamily: "var(--font-mono)" }}>{co.co_amount != null && co.co_amount !== "" && Number.isFinite(Number(co.co_amount)) ? currency.format(Number(co.co_amount)) : "Amount unavailable"}</span></li>)}
       </ul>

@@ -57,7 +57,7 @@ function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = fals
           <div style={{
             display: "flex", gap: 10, alignItems: "flex-start",
             background: "color-mix(in srgb, var(--status-error) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--status-error) 40%, transparent)",
-            borderRadius: 8, padding: "10px 12px", marginTop: 4,
+            borderRadius: 6, padding: "10px 12px", marginTop: 4,
           }}>
             <ShieldAlert size={16} style={{ color: "var(--status-error)", flexShrink: 0, marginTop: 1 }} />
             <div style={{ flex: 1 }}>
@@ -209,7 +209,7 @@ function FabricationShield({ shield, wpLabelById }) {
   const accent = blocked ? "var(--status-error)" : "var(--status-warning)";
   const tint = blocked ? "color-mix(in srgb, var(--status-error) 8%, transparent)" : "color-mix(in srgb, var(--status-warning) 8%, transparent)";
   return (
-    <div style={{ background: tint, border: `1px solid ${accent}`, borderRadius: 10, padding: "12px 16px" }}>
+    <div style={{ background: tint, border: `1px solid ${accent}`, borderRadius: 6, padding: "12px 16px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {blocked ? <ShieldAlert size={16} style={{ color: accent }} /> : <AlertTriangle size={16} style={{ color: accent }} />}
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.08em" }}>

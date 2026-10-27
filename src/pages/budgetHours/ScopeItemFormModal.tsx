@@ -193,7 +193,7 @@ export default function ScopeItemFormModal({
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
-          borderRadius: 12,
+          borderRadius: 6,
           padding: 22,
           width: "100%",
           maxWidth: 520,

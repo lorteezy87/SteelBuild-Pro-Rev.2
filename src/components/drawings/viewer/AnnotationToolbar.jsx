@@ -233,7 +233,7 @@ export default function AnnotationToolbar({
                 border: active ? "2px solid var(--accent)" : "1px solid rgba(255,255,255,0.25)",
                 cursor: "pointer",
                 padding: 0,
-                boxShadow: active ? "0 0 0 2px rgba(200,155,32,0.35)" : "none",
+                boxShadow: active ? "0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent)" : "none",
               }}
             />
           );

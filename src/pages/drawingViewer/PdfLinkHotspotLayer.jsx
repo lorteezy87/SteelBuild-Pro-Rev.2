@@ -47,7 +47,7 @@ export default function PdfLinkHotspotLayer({
             transition: "border-color 0.15s, background 0.15s",
             background: "transparent",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(200,155,32,0.12)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 12%, transparent)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
         />
       ))}

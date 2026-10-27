@@ -50,7 +50,7 @@ const linkStyle: React.CSSProperties = {
   alignItems: "center",
   minHeight: 36,
   padding: "8px 16px",
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid var(--border-default)",
   background: "var(--bg-surface)",
   color: "var(--text-primary)",

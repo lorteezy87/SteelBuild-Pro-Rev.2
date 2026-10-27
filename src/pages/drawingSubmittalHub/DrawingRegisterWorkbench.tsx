@@ -128,7 +128,7 @@ export default function DrawingRegisterWorkbench({
           role="alert"
           style={{
             display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-            padding: "8px 14px", borderRadius: 8,
+            padding: "8px 14px", borderRadius: 6,
             border: "1px solid var(--status-error)",
             background: "var(--bg-surface-low)",
           }}

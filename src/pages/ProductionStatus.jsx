@@ -253,7 +253,7 @@ export default function ProductionStatus() {
           style={{
             margin: "12px 24px 0",
             padding: "12px 16px",
-            borderRadius: 8,
+            borderRadius: 6,
             border: "1px solid var(--warning-border)",
             background: "var(--warning-muted)",
             fontFamily: "var(--font-body)",

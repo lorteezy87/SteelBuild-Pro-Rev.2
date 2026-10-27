@@ -49,7 +49,7 @@ import { useProjectMembersEditor } from "@/pages/projectMembers/useProjectMember
 const inputStyle = {
   background: "var(--bg-surface-low)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   padding: "7px 10px",
   fontSize: 12,
   color: "var(--text-primary)",
@@ -145,7 +145,7 @@ function ProjectMembersContent() {
         style={{
           background: "var(--bg-surface-low)",
           border: "1px solid var(--border-default)",
-          borderRadius: 12,
+          borderRadius: 6,
           padding: 14,
           display: "flex",
           gap: 10,
@@ -189,7 +189,7 @@ function ProjectMembersContent() {
           style={{
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 12,
+            borderRadius: 6,
             padding: 18,
             color: "var(--text-secondary)",
             fontSize: 13,
@@ -204,7 +204,7 @@ function ProjectMembersContent() {
           style={{
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 12,
+            borderRadius: 6,
             padding: 18,
           }}
         >
@@ -249,7 +249,7 @@ function ProjectMembersContent() {
           style={{
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 12,
+            borderRadius: 6,
             padding: 14,
             display: "flex",
             gap: 10,
@@ -294,7 +294,7 @@ function ProjectMembersContent() {
           style={{
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 12,
+            borderRadius: 6,
             padding: 14,
             display: "flex",
             gap: 10,
@@ -341,7 +341,7 @@ function ProjectMembersContent() {
           style={{
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 12,
+            borderRadius: 6,
             overflow: "hidden",
           }}
         >
@@ -524,7 +524,7 @@ function ProjectMembersContent() {
           style={{
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 12,
+            borderRadius: 6,
             padding: 14,
           }}
         >

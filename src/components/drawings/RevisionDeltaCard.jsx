@@ -22,7 +22,7 @@ export default function RevisionDeltaCard({ delta: d, onToggleDismiss, onCreateR
   if (!d) return null;
   return (
     <div style={{
-      border: "1px solid var(--border-default)", borderRadius: 8, padding: "8px 10px",
+      border: "1px solid var(--border-default)", borderRadius: 6, padding: "8px 10px",
       background: "var(--bg-input, rgba(255,255,255,0.02))", opacity: d.dismissed ? 0.45 : 1,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>

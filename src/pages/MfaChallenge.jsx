@@ -69,11 +69,11 @@ export default function MfaChallenge() {
 }
 
 const wrap = { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "var(--bg-page)" };
-const card = { width: "100%", maxWidth: 400, padding: 32, borderRadius: 18, background: "var(--bg-surface)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-lg)" };
+const card = { width: "100%", maxWidth: 400, padding: 32, borderRadius: 8, background: "var(--bg-surface)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-lg)" };
 const title = { color: "var(--text-primary)", margin: "0 0 6px", fontSize: 22, fontWeight: 800, letterSpacing: "-.02em" };
 const body = { color: "var(--text-muted)", margin: 0, fontSize: 14, lineHeight: 1.5 };
 const label = { display: "block", marginBottom: 6, color: "var(--text-secondary)", fontSize: 13, fontWeight: 600 };
 const input = { width: "100%" };
-const errorBox = { padding: "10px 13px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 10, color: "var(--status-error)", fontSize: 13 };
-const primaryBtn = { width: "100%", padding: "11px 16px", borderRadius: 10, border: 0, background: "var(--accent)", color: "var(--on-accent)", fontWeight: 800, fontSize: 15 };
-const ghostBtn = { width: "100%", padding: "9px 16px", borderRadius: 10, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", fontWeight: 600, fontSize: 14, cursor: "pointer" };
+const errorBox = { padding: "10px 13px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 6, color: "var(--status-error)", fontSize: 13 };
+const primaryBtn = { width: "100%", padding: "11px 16px", borderRadius: 6, border: 0, background: "var(--accent)", color: "var(--on-accent)", fontWeight: 800, fontSize: 15 };
+const ghostBtn = { width: "100%", padding: "9px 16px", borderRadius: 6, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", fontWeight: 600, fontSize: 14, cursor: "pointer" };
