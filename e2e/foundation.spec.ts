@@ -193,7 +193,7 @@ for (const preference of [null, 'system', 'invalid', 'dark', 'denied'] as const)
     try {
       await expect(page.locator('#root')).toBeEmpty();
       await expect(page.locator('html')).toHaveAttribute('data-theme', expected);
-      await expect(page.locator('body')).toHaveCSS('background-color', expected === 'dark' ? 'rgb(11, 14, 17)' : 'rgb(241, 245, 249)');
+      await expect(page.locator('body')).toHaveCSS('background-color', expected === 'dark' ? 'rgb(12, 15, 18)' : 'rgb(250, 250, 248)');
     } finally { releaseApp?.(); }
     await expect(page.getByRole('heading', { name: /Privacy Policy/i })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', expected);
