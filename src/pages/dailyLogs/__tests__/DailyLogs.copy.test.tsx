@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import type { ComponentProps } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -91,6 +91,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  onlineManager.setOnline(true);
   cleanup();
   queryClient?.clear();
   vi.restoreAllMocks();
@@ -99,6 +100,42 @@ afterEach(() => {
 });
 
 describe("DailyLogs copy and edit", () => {
+  it("persists a log when TanStack knows the device is offline", async () => {
+    mocks.create.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    openPage();
+    await screen.findByText("1 · ENTRIES");
+    onlineManager.setOnline(false);
+    await copyAndSave();
+    await waitFor(() => expect(mocks.enqueue).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("heading", { name: "New Daily Log" })).not.toBeInTheDocument();
+  });
+
+  it("reuses the submitted draft identity after an ambiguous network and storage failure", async () => {
+    mocks.create.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mocks.enqueue.mockImplementationOnce(() => { throw new Error("Storage full"); });
+    openPage();
+    await copyAndSave();
+    await waitFor(() => expect(mocks.error).toHaveBeenCalled());
+    const original = mocks.create.mock.calls[0][0];
+    mocks.create.mockRejectedValueOnce({ code: "23505" });
+    // The entity write boundary persists blank text fields as null.
+    mocks.filter.mockResolvedValue([{ ...Object.fromEntries(Object.entries(original).map(([key, value]) => [key, value === "" ? null : value])), id: "saved-on-first-attempt" }]);
+    fireEvent.click(screen.getByRole("button", { name: "Save Log" }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
+    expect(mocks.create.mock.calls[1][0].client_op_id).toBe(mocks.create.mock.calls[0][0].client_op_id);
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "New Daily Log" })).not.toBeInTheDocument());
+  });
+  it("keeps the reviewed draft open when offline persistence fails", async () => {
+    mocks.create.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mocks.enqueue.mockImplementationOnce(() => { throw new Error("Cannot save offline on this device"); });
+    openPage();
+    await copyAndSave();
+    await waitFor(() => expect(mocks.error).toHaveBeenCalled());
+    expect(screen.getByRole("heading", { name: "New Daily Log" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Today's reviewed erection work")).toBeInTheDocument();
+    expect(mocks.message).not.toHaveBeenCalled();
+  });
+
   it("creates a fresh log for the current job and local day, keeping only reviewed reusable defaults", async () => {
     openPage();
     await copyAndSave();

@@ -1,5 +1,5 @@
 import { useProjectId } from "@/hooks/useProjectId";
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, ProgressBar, BulkActionBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
 import { useOutbox } from "@/lib/field/OutboxContext";
+import { createWithReceipt } from "@/lib/field/createWithReceipt";
 import { makePunchCreateOp, newClientOpId, isLikelyOfflineError } from "@/lib/field/offlineQueue";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
@@ -19,6 +20,14 @@ import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 export default function Punchlist() {
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
+  const draftId = useRef(null);
+  useEffect(() => {
+    draftId.current = null;
+    setShowForm(false);
+    setEditing(null);
+    setSelectedIds([]);
+  }, [projectId]);
+  useEffect(() => { if (!showForm) draftId.current = null; }, [showForm]);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -77,9 +86,12 @@ export default function Punchlist() {
     : null;
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),
-    onSuccess: (created) => {
-      qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
+    networkMode: "always",
+    mutationFn: ({ record }) => createWithReceipt(record, () => entities.PunchlistItem.create(record),
+      () => entities.PunchlistItem.filter({ project_id: record.project_id, client_op_id: record.client_op_id }, undefined, 2)),
+    onSuccess: (created, request) => {
+      qc.invalidateQueries({ queryKey: ["punchlist", request.record.project_id] });
+      if (request.record.project_id !== projectId) return;
       setShowForm(false);
       setEditing(null);
       toast.success("Item created");
@@ -87,17 +99,18 @@ export default function Punchlist() {
         projectId,
         description: created?.description?.slice(0, 80) || "",
       });
-      flushOutbox(); // online write succeeded → drain any offline backlog
+      request.flush(); // owner-bound callback from submission
     },
-    onError: (err, data) => {
+    onError: (err, request) => {
       // No signal? Queue the create for replay instead of dropping it. The
       // client_op_id (minted in handleSave) rides both this attempt and the
       // retry, so a lost-response replay can't mint a duplicate (punchlist_items
       // has a partial-unique index on client_op_id — see baseline schema).
       if (isLikelyOfflineError(err)) {
         try {
-          const record = withProjectId(data, projectId);
-          enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
+          const { record } = request;
+          request.enqueue(makePunchCreateOp(record, record.client_op_id, Date.now()));
+          if (record.project_id !== projectId) return;
           setShowForm(false);
           setEditing(null);
           toast.message("Saved offline — will sync when you're back online");
@@ -207,7 +220,12 @@ export default function Punchlist() {
     } else {
       // Mint the idempotency key up front so it rides BOTH the online create and
       // any offline retry (dedup'd server-side on replay).
-      createMut.mutate({ ...data, client_op_id: newClientOpId() });
+      draftId.current ||= newClientOpId();
+      try {
+        createMut.mutate({ record: withProjectId({ ...data, client_op_id: draftId.current }, projectId), enqueue: enqueueOutbox, flush: flushOutbox });
+      } catch (error) {
+        toast.error(toUserErrorMessage(error, "Select a project before creating a punch item."));
+      }
     }
   };
 

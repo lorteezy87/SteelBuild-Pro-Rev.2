@@ -12,7 +12,7 @@ const reads = vi.hoisted(() => ({
   schedule: vi.fn(), photos: vi.fn(), punchlist: vi.fn(), safety: vi.fn(),
 }));
 const writes = vi.hoisted(() => ({ schedule: vi.fn(), punchlist: vi.fn(), upload: vi.fn() }));
-const outbox = vi.hoisted(() => ({ pending: 0, enqueue: vi.fn(), flush: vi.fn() }));
+const outbox = vi.hoisted(() => ({ pending: 0, enqueue: vi.fn(), flush: vi.fn(), assertCaptureActive: vi.fn() }));
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
     Project: { list: async () => [{ id: "project-1", name: "Project One" }] },
@@ -39,7 +39,7 @@ vi.mock("@/services/permissions", () => ({ usePermissions: () => ({ can: () => t
 vi.mock("@/lib/field/OutboxContext", () => ({
   useOutbox: () => outbox,
 }));
-vi.mock("@/lib/field/blobStore", () => ({ reconcilePendingPhotos: vi.fn(), putPendingPhoto: vi.fn() }));
+vi.mock("@/lib/field/blobStore", () => ({ reconcilePendingPhotos: vi.fn(), putPendingPhoto: vi.fn(), deletePendingPhoto: vi.fn() }));
 vi.mock("@/utils/compressImage", () => ({ compressImage: async (file: File) => file }));
 vi.mock("@/components/punchlist/PunchlistFormModal", () => ({
   default: ({ projectId, onSave }: { projectId: string; onSave: (record: Record<string, unknown>) => void }) =>

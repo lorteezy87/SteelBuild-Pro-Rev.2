@@ -138,44 +138,47 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const qc = useQueryClient();
 
   // ── Queries ─────────────────────────────────────────────────────────
-  const { data: costCodes = [], isLoading: loadingCC } = useQuery<CostCode[]>({
-    queryKey: getQueryKey("cost_code", projectId),
-    queryFn: () => entities.CostCode.filter({ project_id: projectId }, "cost_code_number", 2000),
+  const { data: costCodes = [], isLoading: loadingCC, isSuccess: readyCC, error: errorCC } = useQuery<CostCode[]>({
+    queryKey: [...getQueryKey("cost_code", projectId), "complete"],
+    queryFn: () => entities.CostCode.filterAll({ project_id: projectId }, "cost_code_number"),
     select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!projectId,
     staleTime: 60_000,
   });
 
-  const { data: expenses = [], isLoading: loadingExp } = useQuery<Expense[]>({
-    queryKey: getQueryKey("expense", projectId),
-    queryFn: () => entities.Expense.filter({ project_id: projectId }, "-created_at", 2000),
+  const { data: expenses = [], isLoading: loadingExp, isSuccess: readyExp, error: errorExp } = useQuery<Expense[]>({
+    queryKey: [...getQueryKey("expense", projectId), "complete"],
+    queryFn: () => entities.Expense.filterAll({ project_id: projectId }, "-created_at"),
     enabled: !!projectId,
     staleTime: 60_000,
   });
 
-  const { data: sovItems = [], isLoading: loadingSOV } = useQuery<SOVItem[]>({
-    queryKey: getQueryKey("sov_item", projectId),
-    queryFn: () => entities.SOVItem.filter({ project_id: projectId }, undefined, 2000),
+  const { data: sovItems = [], isLoading: loadingSOV, isSuccess: readySOV, error: errorSOV } = useQuery<SOVItem[]>({
+    queryKey: [...getQueryKey("sov_item", projectId), "complete"],
+    queryFn: () => entities.SOVItem.filterAll({ project_id: projectId }, undefined),
     enabled: !!projectId,
     staleTime: 60_000,
   });
 
-  const { data: changeOrders = [], isLoading: loadingCO } = useQuery<ChangeOrder[]>({
-    queryKey: getQueryKey("change_order", projectId),
-    queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }, undefined, 2000),
+  const { data: changeOrders = [], isLoading: loadingCO, isSuccess: readyCO, error: errorCO } = useQuery<ChangeOrder[]>({
+    queryKey: [...getQueryKey("change_order", projectId), "complete"],
+    queryFn: () => entities.ChangeOrder.filterAll({ project_id: projectId }, undefined),
     enabled: !!projectId,
     staleTime: 60_000,
   });
 
   // Work packages — needed for EVM-derived scope % in Labor Utilization KPI
-  const { data: workPackages = [], isLoading: loadingWP } = useQuery<WorkPackage[]>({
-    queryKey: getQueryKey("work_package", projectId),
-    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }, undefined, 2000),
+  const { data: workPackages = [], isLoading: loadingWP, isSuccess: readyWP, error: errorWP } = useQuery<WorkPackage[]>({
+    queryKey: [...getQueryKey("work_package", projectId), "complete"],
+    queryFn: () => entities.WorkPackage.filterAll({ project_id: projectId }, undefined),
     enabled: !!projectId,
     staleTime: 60_000,
   });
 
   const isLoading = loadingCC || loadingExp || loadingSOV || loadingCO || loadingWP;
+
+  const error = errorCC || errorExp || errorSOV || errorCO || errorWP;
+  const isReady = Boolean(projectId && readyCC && readyExp && readySOV && readyCO && readyWP && !error);
 
   // ── Derived: active expenses (exclude voided) ───────────────────────
   // Non-voided expenses. Uses the shared predicate so a row saved as "void"
@@ -716,6 +719,8 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     approvedCOs,
     workPackages,
     isLoading,
+    error,
+    isReady,
 
     // Calculations
     costCodeRows,

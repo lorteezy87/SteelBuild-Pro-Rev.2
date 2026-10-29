@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { BrandLogo } from "@/components/nav/BrandLogo";
 import MarketingLanding from "@/components/landing/MarketingLanding";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { isStoreShell } from "@/lib/native/platform";
 
 const C = {
@@ -13,11 +14,11 @@ const C = {
   ink: "#101827",
   navy: "#172033",
   body: "#536179",
-  muted: "#8491A6",
+  muted: "#536179",
   line: "#E2E8F0",
   line2: "#CBD5E1",
   amber: "#F5A800",
-  amberDark: "#C47D00",
+  amberDark: "#805000",
   blue: "#2563EB",
   green: "#059669",
   red: "#DC2626",
@@ -45,6 +46,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
   // remain on the web, so native users never enter the marketing/pricing flow.
   const native = isStoreShell();
   const [showLogin, setShowLogin] = useState(native);
+  const dialogRef = useFocusTrap(showLogin);
   const [authMode, setAuthMode] = useState("signin"); // "signin" | "signup" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,6 +58,15 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotError, setForgotError] = useState(null);
   const [forgotNotice, setForgotNotice] = useState(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    // Switching modes removes the focused action. Restore focus inside the
+    // dialog before the next Tab can reach the marketing page beneath it.
+    if (showLogin && dialog && !dialog.contains(document.activeElement)) {
+      dialog.querySelector("input, button")?.focus();
+    }
+  }, [authMode, signupNotice, forgotNotice, showLogin, dialogRef]);
 
   useEffect(() => {
     if (!showLogin || native) return undefined;
@@ -139,7 +150,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
         .lp-btn-secondary { color: ${C.navy}; background: #FFFFFF; border-color: ${C.line2}; box-shadow: 0 10px 24px rgba(15,23,42,.08); }
         .lp-btn-secondary:hover { border-color: ${C.amber}; box-shadow: 0 14px 28px rgba(15,23,42,.11); }
         .lp-card { background: rgba(255,255,255,.86); border: 1px solid ${C.line}; border-radius: 24px; box-shadow: 0 18px 54px rgba(15,23,42,.08); }
-        .lp-input { width: 100%; box-sizing: border-box; padding: 13px 14px; border: 1px solid ${C.line2}; border-radius: 12px; background: #FFFFFF; color: ${C.ink}; font-family: ${F.body}; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s; }
+        .lp-input { width: 100%; box-sizing: border-box; padding: 13px 14px; border: 1px solid ${C.line2}; border-radius: 12px; background: #FFFFFF; color: ${C.ink}; font-family: ${F.body}; font-size: 16px; outline: none; transition: border-color .15s, box-shadow .15s; }
         .lp-input:focus { border-color: ${C.amber}; box-shadow: 0 0 0 4px rgba(245,168,0,.16); }
         .lp-input::placeholder { color: ${C.muted}; }
         .lp-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,23,42,.56); backdrop-filter: blur(10px); overflow-y: auto; }
@@ -147,8 +158,8 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
       {!native && <MarketingLanding onStart={() => openAuth("signup")} onLogin={() => openAuth("signin")} />}
       {showLogin && (
         <div className="lp-overlay" style={native ? { background: C.base, backdropFilter: "none", paddingTop: "calc(20px + env(safe-area-inset-top, 0px))", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" } : undefined} onClick={(e) => { if (!native && e.target === e.currentTarget) setShowLogin(false); }}>
-          <div role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "Create account" : "Sign in"} className="lp-card" style={{ width: "100%", maxWidth: 438, padding: 32, borderRadius: 24, position: "relative", boxShadow: "0 34px 90px rgba(15,23,42,.28)" }}>
-            {!native && <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "var(--bg-surface-low)", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>}
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "Create account" : authMode === "forgot" ? "Reset password" : "Sign in"} className="lp-card" style={{ width: "100%", maxWidth: 438, maxHeight: "calc(100dvh - 40px)", overflowY: "auto", padding: 32, borderRadius: 24, position: "relative", boxShadow: "0 34px 90px rgba(15,23,42,.28)" }}>
+            {!native && <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: C.surfaceSoft, color: C.body, borderRadius: 10, width: 44, height: 44, cursor: "pointer", fontSize: 18 }}>×</button>}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
               <BrandLogo height={78} title="SteelBuild Pro" />
               <div style={{ color: C.muted, fontSize: 13 }}>Built for people who build</div>

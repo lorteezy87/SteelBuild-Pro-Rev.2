@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
+import { useOrg } from "@/components/shared/OrgContext";
 import { toast } from "sonner";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -15,6 +16,8 @@ import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 export default function Vendors() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
+  const { currentOrg } = useOrg();
+  const orgId = currentOrg?.id;
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -26,6 +29,13 @@ export default function Vendors() {
   // Bulk selection state (new — no Vendor bulk existed before)
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  useEffect(() => {
+    setShowForm(false);
+    setEditing(null);
+    setDeleteTarget(null);
+    setSelectedIds(new Set());
+    setShowBulkDelete(false);
+  }, [orgId]);
 
   // ── Queries ──
   const {
@@ -35,34 +45,35 @@ export default function Vendors() {
     error: vendorsErrorDetail,
     refetch: refetchVendors,
   } = useQuery({
-    queryKey: ["vendors"],
-    queryFn: () => entities.Vendor.list("-is_preferred"),
+    queryKey: ["vendors", orgId, "complete"],
+    queryFn: () => entities.Vendor.filterAll({ org_id: orgId }, "-is_preferred"),
+    enabled: !!orgId,
     staleTime: 5 * 60 * 1000,
   });
 
   // Project-scoped data for performance tracking
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ["deliveries", activeProject?.id],
+  const { data: deliveries = [], isPending: deliveriesPending, error: deliveriesError, refetch: refetchDelivery } = useQuery({
+    queryKey: ["deliveries", activeProject?.id, "vendor-performance-complete"],
     queryFn: () => activeProject?.id
-      ? entities.Delivery.filter({ project_id: activeProject.id })
+      ? entities.Delivery.filterAll({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
     staleTime: 2 * 60 * 1000,
   });
 
-  const { data: changeOrders = [] } = useQuery({
-    queryKey: ["change-orders", activeProject?.id],
+  const { data: changeOrders = [], isPending: changeOrdersPending, error: changeOrdersError, refetch: refetchChangeOrder } = useQuery({
+    queryKey: ["change-orders", activeProject?.id, "vendor-performance-complete"],
     queryFn: () => activeProject?.id
-      ? entities.ChangeOrder.filter({ project_id: activeProject.id })
+      ? entities.ChangeOrder.filterAll({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
     staleTime: 2 * 60 * 1000,
   });
 
-  const { data: expenses = [] } = useQuery({
-    queryKey: ["expenses", activeProject?.id],
+  const { data: expenses = [], isPending: expensesPending, error: expensesError, refetch: refetchExpense } = useQuery({
+    queryKey: ["expenses", activeProject?.id, "vendor-performance-complete"],
     queryFn: () => activeProject?.id
-      ? entities.Expense.filter({ project_id: activeProject.id })
+      ? entities.Expense.filterAll({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
     staleTime: 2 * 60 * 1000,
@@ -203,8 +214,14 @@ export default function Vendors() {
   });
 
   const handleSave = (data) => {
-    if (editing) updateMut.mutate({ ...data, id: editing.id });
-    else createMut.mutate(data);
+    if (!orgId || (editing && editing.org_id !== orgId)) {
+      toast.error("Select the vendor's workspace before saving.");
+      return;
+    }
+    // Explicitly override form content; the DB's legacy default chooses the
+    // oldest membership, which can differ from the selected workspace.
+    if (editing) updateMut.mutate({ ...data, org_id: orgId, id: editing.id });
+    else createMut.mutate({ ...data, org_id: orgId });
   };
 
   // ── Selection helpers (new) ──
@@ -269,25 +286,27 @@ export default function Vendors() {
     </>
   );
 
+  const performanceError = deliveriesError || changeOrdersError || expensesError;
+  const performancePending = Boolean(activeProject?.id && (deliveriesPending || changeOrdersPending || expensesPending));
   // Never render the "no vendors" empty state while loading or after a
   // failed fetch — the register would assert an empty vendor book.
-  if (vendorsLoading) {
+  if (!orgId || vendorsLoading || performancePending) {
     return (
       <div className="vendor-page" style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
   }
-  if (vendorsError) {
+  if (vendorsError || performanceError) {
     return (
       <div className="vendor-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 16 }}>
         <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
-          Couldn’t load vendors
+          {vendorsError ? "Couldn’t load vendors" : "Vendor performance data is unavailable"}
         </p>
         <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
-          {toUserErrorMessage(vendorsErrorDetail, "Something went wrong. Try again.")}
+          {toUserErrorMessage(vendorsErrorDetail || performanceError, "Something went wrong. Try again.")}
         </p>
-        <button type="button" onClick={() => refetchVendors()} style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
+        <button type="button" onClick={() => { void refetchVendors(); if (activeProject?.id) void Promise.all([refetchDelivery(), refetchChangeOrder(), refetchExpense()]); }} style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
           Retry
         </button>
       </div>

@@ -19,7 +19,7 @@ function deps(overrides = {}) {
 const op = makePhotoCreateOp("cid-1", { project_id: "p1", file_name: "shot.jpg" }, 1);
 
 describe("replayPhotoCreate", () => {
-  it("uploads, creates the Photo with the client_op_id, then deletes the blob", async () => {
+  it("uploads and creates the Photo, retaining its blob until the outbox commit", async () => {
     const d = deps();
     await replayPhotoCreate(op, d);
 
@@ -27,13 +27,13 @@ describe("replayPhotoCreate", () => {
     expect(d.createPhoto).toHaveBeenCalledWith(
       expect.objectContaining({ project_id: "p1", file_url: "https://cdn/x.jpg", client_op_id: "cid-1" }),
     );
-    expect(d.deleteBlob).toHaveBeenCalledWith("cid-1");
+    expect(d.deleteBlob).not.toHaveBeenCalled();
   });
 
-  it("treats a unique-violation on create as already-applied and still drops the blob", async () => {
+  it("treats a unique-violation as already-applied while retaining the blob until commit", async () => {
     const d = deps({ createPhoto: vi.fn().mockRejectedValue({ code: "23505" }) });
     await expect(replayPhotoCreate(op, d)).resolves.toBeUndefined();
-    expect(d.deleteBlob).toHaveBeenCalledWith("cid-1"); // dedup -> cleanup, no throw
+    expect(d.deleteBlob).not.toHaveBeenCalled();
   });
 
   it("rethrows a non-dedup create error and keeps the blob (stays queued)", async () => {
@@ -49,8 +49,8 @@ describe("replayPhotoCreate", () => {
     expect(d.deleteBlob).not.toHaveBeenCalled();
   });
 
-  it("is a no-op when the blob is already gone (uploaded on a prior attempt)", async () => {
-    const d = deps({ getBlob: vi.fn().mockResolvedValue(null) });
+  it("recovers a missing blob only when the server confirms the prior upload", async () => {
+    const d = deps({ getBlob: vi.fn().mockResolvedValue(null), findPhoto: vi.fn().mockResolvedValue(true) });
     await replayPhotoCreate(op, d);
     expect(d.uploadFile).not.toHaveBeenCalled();
     expect(d.createPhoto).not.toHaveBeenCalled();

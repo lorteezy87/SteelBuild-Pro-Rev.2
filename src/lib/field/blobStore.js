@@ -6,13 +6,11 @@
  * blob lives here keyed by its client_op_id, while the matching create op lives
  * in the localStorage outbox (see offlineQueue.js). On reconnect the op is
  * replayed: read the blob -> upload -> Photo.create (dedup'd) -> delete the blob
- * (see photoSync.js). Orphaned blobs (op already drained) are reclaimed by
- * reconcilePendingPhotos on mount.
+ * (see photoSync.js). Do not infer orphaned blobs from an outbox snapshot:
+ * another capture may be between its blob write and queue write.
  *
- * Hand-rolled (no new dependency). Every call degrades gracefully — a missing /
- * broken IndexedDB (private mode, SSR, old browser) yields null / no-op so the
- * online photo path is never blocked. Only putPendingPhoto rethrows, because if
- * we can't persist the blob we must NOT tell the foreman it was saved offline.
+ * Reads and writes propagate storage errors. An unavailable store must never
+ * be mistaken for an absent photo or a successful offline save.
  */
 
 const DB_NAME = "sbp-field";
@@ -40,24 +38,29 @@ function openDb() {
 function runOp(mode, makeRequest) {
   return new Promise((resolve, reject) => {
     openDb().then((db) => {
-      let result;
-      const t = db.transaction(STORE, mode);
-      const request = makeRequest(t.objectStore(STORE));
-      request.onsuccess = () => {
-        result = request.result;
-      };
-      t.oncomplete = () => {
+      try {
+        let result;
+        const t = db.transaction(STORE, mode);
+        const request = makeRequest(t.objectStore(STORE));
+        request.onsuccess = () => {
+          result = request.result;
+        };
+        t.oncomplete = () => {
+          db.close();
+          resolve(result);
+        };
+        t.onerror = () => {
+          db.close();
+          reject(t.error);
+        };
+        t.onabort = () => {
+          db.close();
+          reject(t.error);
+        };
+      } catch (error) {
         db.close();
-        resolve(result);
-      };
-      t.onerror = () => {
-        db.close();
-        reject(t.error);
-      };
-      t.onabort = () => {
-        db.close();
-        reject(t.error);
-      };
+        reject(error);
+      }
     }, reject);
   });
 }
@@ -67,13 +70,9 @@ export async function putPendingPhoto(key, blob, meta) {
   await runOp("readwrite", (store) => store.put({ blob, meta }, key));
 }
 
-/** Read a pending photo ({ blob, meta }) or null if absent / unavailable. */
+/** Read a pending photo or null if absent. Storage failures are not absence. */
 export async function getPendingPhoto(key) {
-  try {
-    return (await runOp("readonly", (store) => store.get(key))) || null;
-  } catch {
-    return null;
-  }
+  return (await runOp("readonly", (store) => store.get(key))) || null;
 }
 
 /** Remove a pending photo (best-effort). */

@@ -8,6 +8,28 @@ afterEach(cleanup);
 const callbacks = () => ({ onLogin: vi.fn().mockResolvedValue(undefined), onSignUp: vi.fn().mockResolvedValue({success:true,needsConfirmation:true}), onForgotPassword: vi.fn().mockResolvedValue({success:true}), isSubmitting:false, loginError:null as string | null });
 
 describe("public marketing account entry", () => {
+  it("contains keyboard focus in the account dialog and restores the launcher", () => {
+    render(<Landing {...callbacks()}/>);
+    const launcher = screen.getAllByRole("button", { name: "Log in" })[0];
+    launcher.focus();
+    fireEvent.click(launcher);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    const last = within(dialog).getByRole("button", { name: "Create an account" });
+    last.focus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(within(dialog).getByRole("button", { name: "Close sign in" })).toHaveFocus();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(launcher).toHaveFocus();
+  });
+  it("keeps focus inside the dialog after the focused mode-switch button disappears", () => {
+    render(<Landing {...callbacks()}/>);
+    fireEvent.click(screen.getAllByRole("button", { name: "Log in" })[0]);
+    const forgot = screen.getByRole("button", { name: "Forgot password?" });
+    forgot.focus();
+    fireEvent.click(forgot);
+    expect(screen.getByRole("dialog", { name: "Reset password" }).contains(document.activeElement)).toBe(true);
+  });
   it("uses the approved marketing badge and preserves the app brand inside sign-in", () => {
     render(<Landing {...callbacks()}/>);
     expect(screen.getAllByAltText("SteelBuild Pro steel diamond badge")[0]).toHaveAttribute("src", "/marketing/steelbuild-pro-logo.jpg");

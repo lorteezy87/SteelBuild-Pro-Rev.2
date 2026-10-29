@@ -25,7 +25,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { entities, integrations } from "@/api/supabaseClient";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { withProjectId } from "@/lib/mutations/standardMutation";
@@ -34,17 +34,15 @@ import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import { compressImage } from "@/utils/compressImage";
 import { localToday } from "@/utils/dates";
 import { clampPercent, progressPatch } from "@/lib/field/fieldToday";
-import { persistScheduleProgress } from "@/lib/field/progressSync";
 import { useOutbox } from "@/lib/field/OutboxContext";
 import {
   makeProgressOp,
   makePunchCreateOp,
   makePhotoCreateOp,
   newClientOpId,
-  isLikelyOfflineError,
-  loadQueue,
 } from "@/lib/field/offlineQueue";
-import { putPendingPhoto, reconcilePendingPhotos } from "@/lib/field/blobStore";
+import { putPendingPhoto, deletePendingPhoto } from "@/lib/field/blobStore";
+import { assertUploadAllowed } from "@/lib/uploadValidation";
 import FieldTodayControlCenter from "./fieldToday/FieldTodayControlCenter";
 
 // ── Urgency presentation (logic-free; buckets come from the helper) ──
@@ -67,6 +65,8 @@ export default function FieldToday() {
   const photoInputRef = useRef(null);
 
   const [showPunch, setShowPunch] = useState(false);
+  const punchDraftId = useRef(null);
+  useEffect(() => { setShowPunch(false); punchDraftId.current = null; }, [projectId]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Control-center supplementary queries (photos + punchlist).
@@ -95,44 +95,30 @@ export default function FieldToday() {
   // The single app-wide instance lives in OutboxProvider so the queue drains from
   // ANY page, not just here (see src/lib/field/OutboxContext.jsx); this page just
   // consumes it to enqueue on a no-signal write and surface the pending count.
-  const { pending: pendingSync, enqueue: enqueueOutbox, flush: flushOutbox } = useOutbox();
+  const { pending: pendingSync, enqueue: enqueueOutbox, flush: flushOutbox, assertCaptureActive } = useOutbox();
 
   // ── Task progress: optimistic write back to the schedule (offline-safe) ──
   const progressMut = useMutation({
-    mutationFn: ({ task, pct, capturedDay }) =>
-      persistScheduleProgress({
-        gateway: entities.ScheduleTask,
-        id: task.id,
-        pct,
-        capturedDay,
-      }),
-    onMutate: async ({ task, pct }) => {
-      await queryClient.cancelQueries({ queryKey: ["schedule-tasks", projectId] });
-      const prev = queryClient.getQueryData(["schedule-tasks", projectId]);
+    networkMode: "always",
+    mutationFn: async ({ task, pct, capturedDay, enqueue, flush }) => {
+      // Persist first. One ordered path prevents an old offline percentage
+      // from overwriting a newer online tap.
+      enqueue(makeProgressOp(task.id, pct, Date.now(), capturedDay));
+      toast.message("Progress saved on this device — waiting to sync");
+      await flush();
+    },
+    onMutate: async ({ task, pct, queryKey }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData(queryKey);
       const patch = progressPatch(pct);
-      queryClient.setQueryData(["schedule-tasks", projectId], (old) =>
+      queryClient.setQueryData(queryKey, (old) =>
         Array.isArray(old) ? old.map((t) => (t.id === task.id ? { ...t, ...patch } : t)) : old,
       );
-      return { prev };
+      return { prev, queryKey };
     },
-    onError: (err, vars, ctx) => {
-      // No signal? Keep the optimistic value and queue the write for replay —
-      // don't roll back (that would silently discard the foreman's tap).
-      if (isLikelyOfflineError(err)) {
-        enqueueOutbox(makeProgressOp(vars.task.id, vars.pct, Date.now(), vars.capturedDay));
-        toast.message("Saved offline — will sync when you're back online");
-        return;
-      }
-      if (ctx?.prev) queryClient.setQueryData(["schedule-tasks", projectId], ctx.prev);
-      toast.error("Couldn't save progress — check signal and retry");
-    },
-    onSuccess: () => {
-      // A successful online write means we're connected — drain any backlog.
-      flushOutbox();
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["field-plan-tasks", projectId] });
+    onError: (err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(ctx.queryKey, ctx.prev);
+      toast.error(err.message || "Progress was not saved. Retry when storage is available.");
     },
   });
 
@@ -143,31 +129,25 @@ export default function FieldToday() {
     // online attempt and the offline fallback both reuse it: reading the clock
     // again in onError would record the next calendar day for a tap made just
     // before midnight whose request rejected just after it.
-    progressMut.mutate({ task, pct: next, capturedDay: localToday() });
+    progressMut.mutate({ task, pct: next, capturedDay: localToday(), queryKey: ["schedule-tasks", projectId], enqueue: enqueueOutbox, flush: flushOutbox });
   };
 
   // ── Quick punch add (reuses the production PunchlistFormModal + create path) ──
   // The client_op_id is minted in onSave and rides BOTH the online create and
   // the offline retry, so a replay can't mint a duplicate (server dedups it).
   const punchMut = useMutation({
-    mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["punchlist", projectId] });
-      toast.success("Punch item added");
+    networkMode: "always",
+    mutationFn: async ({ record, enqueue, flush }) => {
+      enqueue(makePunchCreateOp(record, record.client_op_id, Date.now()));
+      void flush();
+    },
+    onSuccess: (_result, { record }) => {
+      if (record.project_id !== projectId) return;
+      toast.message("Punch saved on this device — waiting to sync");
       setShowPunch(false);
-      flushOutbox(); // online write succeeded → drain any backlog
+      punchDraftId.current = null;
     },
-    onError: (err, data) => {
-      if (isLikelyOfflineError(err)) {
-        const record = { ...data, project_id: data.project_id || projectId };
-        enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
-        toast.message("Punch saved offline — will sync when you're back online");
-        setShowPunch(false);
-        return;
-      }
-      toast.error("Couldn't add punch item");
-    },
+    onError: (err) => toast.error(err.message || "Punch was not saved. Keep this draft open and retry."),
   });
 
   // ── Quick photo capture (camera → compress → upload → Photo row).
@@ -182,77 +162,44 @@ export default function FieldToday() {
       return;
     }
     setUploadingPhoto(true);
-    let added = 0;
     let queued = 0;
+    let failed = 0;
     try {
       for (const raw of files) {
         const clientOpId = newClientOpId();
-        const meta = {
-          project_id: projectId,
-          category: "Progress",
-          title: "Field photo",
-          location: "",
-          taken_date: todayIsoForQuery,
-        };
         let file;
+        try { file = await compressImage(raw); } catch { file = raw; }
         try {
-          file = await compressImage(raw);
+          assertCaptureActive();
+          assertUploadAllowed(file, "photo");
+          await putPendingPhoto(clientOpId, file, { name: file.name, type: file.type });
+          // This captured callback refuses an account/workspace switch after
+          // compression. All transport uses the pinned replay client.
+          enqueueOutbox(makePhotoCreateOp(clientOpId, {
+            project_id: projectId, category: "Progress", title: "Field photo",
+            location: "", taken_date: todayIsoForQuery, file_name: file.name,
+          }, Date.now()));
+          queued += 1;
         } catch {
-          file = raw; // compression failed — upload the original
-        }
-        try {
-          const result = await integrations.Core.UploadFile({ file, workflow: "photo" });
-          await entities.Photo.create(withProjectId({
-            ...meta,
-            file_url: result.file_url || result.path,
-            file_name: file.name,
-            client_op_id: clientOpId,
-          }, projectId));
-          added += 1;
-        } catch (err) {
-          if (isLikelyOfflineError(err)) {
-            try {
-              await putPendingPhoto(clientOpId, file, { name: file.name, type: file.type });
-              enqueueOutbox(makePhotoCreateOp(clientOpId, { ...meta, file_name: file.name }, Date.now()));
-              queued += 1;
-            } catch (storeErr) {
-              // Couldn't persist the blob — do NOT claim it was saved offline.
-              console.error("[FieldToday] offline photo store failed:", storeErr);
-            }
-          } else {
-            console.error("[FieldToday] photo upload failed:", err);
-          }
+          // This key is unique to the uncommitted capture; targeted cleanup
+          // cannot remove any other user's or in-flight capture's bytes.
+          await deletePendingPhoto(clientOpId);
+          failed += 1;
         }
       }
-      if (added > 0) {
-        queryClient.invalidateQueries({ queryKey: ["field-hub-photos", projectId] });
+      if (queued > 0) {
+        toast.message(queued + " photos saved on this device — waiting to sync");
+        void flushOutbox();
       }
-      if (added > 0 && queued > 0) {
-        toast.message(`${added} photo${added === 1 ? "" : "s"} added · ${queued} saved offline`);
-      } else if (queued > 0) {
-        toast.message(`${queued} photo${queued === 1 ? "" : "s"} saved offline — will sync when you're back online`);
-      } else if (added > 0) {
-        toast.success(`${added} photo${added === 1 ? "" : "s"} added`);
-      } else {
-        toast.error("Photo upload failed");
-      }
+      if (failed > 0) toast.error(failed + " photos were not saved. Keep the originals and retry those photos.");
     } finally {
       setUploadingPhoto(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
     }
   };
 
-  // Reclaim orphaned pending-photo blobs — blobs in IndexedDB whose outbox op
-  // is gone (synced, or discarded by flushQueue as an unknown type).
-  //
-  // This ran once on mount, so a blob orphaned by a flush sat in IndexedDB for
-  // the rest of the session and only cleared on the next visit to this page.
-  // Re-running it whenever `pendingSync` changes catches the flush too: the
-  // count moves exactly when ops drain, so it is the right trigger and it is
-  // idempotent (it only deletes keys with no live op).
-  useEffect(() => {
-    reconcilePendingPhotos(new Set(loadQueue().map((op) => op.id)));
-  }, [pendingSync]);
+  // Never delete blobs based on a queue snapshot: a capture may be between
+  // its IndexedDB write and enqueue, or the queue may be unreadable.
 
   if (!projectId) {
     return <section role="status" style={{ padding: 32 }}>
@@ -267,7 +214,7 @@ export default function FieldToday() {
   const incompleteEvidence = tasksPending || taskEvidenceUnavailable || photoEvidenceUnavailable || punchEvidenceUnavailable;
 
   // ── Canonical Field Today control center ──────────────────────────────────────────────────
-  // All existing offline outbox + photo sync logic above is UNTOUCHED.
+  // The outbox above owns durable capture and ordered replay.
   // We pass the real handlers through as props so the Control Center's capture
   // buttons (Add Punch, Photo, Log Activity) call the exact same mutation paths.
     const todayPhotos = allPhotos.filter((p) => p.taken_date === todayIsoForQuery);
@@ -275,8 +222,11 @@ export default function FieldToday() {
     const modals = showPunch ? (
       <PunchlistFormModal
         projectId={projectId}
-        onClose={() => setShowPunch(false)}
-        onSave={(data) => punchMut.mutate({ ...data, client_op_id: newClientOpId() })}
+        onClose={() => { setShowPunch(false); punchDraftId.current = null; }}
+        onSave={(data) => {
+          punchDraftId.current ||= newClientOpId();
+          punchMut.mutate({ record: withProjectId({ ...data, client_op_id: punchDraftId.current }, projectId), enqueue: enqueueOutbox, flush: flushOutbox });
+        }}
         isSaving={punchMut.isPending}
       />
     ) : null;
