@@ -30,7 +30,6 @@ Notes:
 
 ## Active claims
 
-| 2026-10-28 | codex-critical-workflow-reliability | Verified commercial-readiness audit repairs | src/lib/field/**; src/hooks/{useFieldOutbox,useFinancials}.*; src/pages/{FieldToday,DailyLogs,Punchlist,Vendors,Landing}.jsx; src/pages/costHub/CostControlCenter.tsx; scoped tests; package manifests; docs/audits | Fix reproduced capture loss, financial incompleteness, vendor workspace scope, and sign-in keyboard accessibility; measure and record remaining acceptance gates. |
 
 
 
