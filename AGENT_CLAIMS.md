@@ -30,7 +30,7 @@ Notes:
 
 ## Active claims
 
-| 2026-10-24 | codex-critical-workflow-reliability | Field offline persistence and critical-path verification | src/lib/field/offlineQueue.js; src/hooks/useFieldOutbox.js; src/lib/field/OutboxContext.jsx; src/pages/{FieldToday,DailyLogs,Punchlist}.jsx; related tests; docs/audits | Reproduce and fix false offline-save success, verify workflow regressions, measure representative workloads, and record hosted acceptance gaps. |
+| 2026-10-28 | codex-critical-workflow-reliability | Verified commercial-readiness audit repairs | src/lib/field/**; src/hooks/{useFieldOutbox,useFinancials}.*; src/pages/{FieldToday,DailyLogs,Punchlist,Vendors,Landing}.jsx; src/pages/costHub/CostControlCenter.tsx; scoped tests; package manifests; docs/audits | Fix reproduced capture loss, financial incompleteness, vendor workspace scope, and sign-in keyboard accessibility; measure and record remaining acceptance gates. |
 
 
 
