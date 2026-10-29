@@ -82,6 +82,9 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
     summary,
     reviewFlags,
     isLoading,
+    isReady,
+    error,
+    refreshAll,
     costCodeCrud,
   } = useFinancials(projectId, project);
 
@@ -310,6 +313,13 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   };
 
   // ── Loading guard ──
+  if (error || isReady === false) {
+    return <section role={error ? "alert" : "status"} className="cost-cc sbp-command-page" style={{ padding: 24 }}>
+      <h2>{error ? "Cost data is unavailable" : "Waiting for complete cost data"}</h2>
+      <p>Budget, cost and margin totals are withheld until all required records load successfully.</p>
+      <button type="button" className="cmd-btn cmd-btn--primary" onClick={() => void refreshAll()}>Retry</button>
+    </section>;
+  }
   if (isLoading) {
     return (
       <div style={{ padding: "40px 24px", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>

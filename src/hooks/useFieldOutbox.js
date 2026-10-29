@@ -14,13 +14,17 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { getActiveOrgGeneration, getActiveOrgId, subscribeActiveOrgChange } from "@/lib/activeOrg";
 import { createReplayClient } from "@/lib/field/replayClient";
+import { deletePendingPhoto } from "@/lib/field/blobStore";
 import {
   loadQueue,
+  loadQueueForWrite,
   saveQueue,
   enqueueOp,
   flushQueue,
   reconcileAfterFlush,
   belongsToOutboxOwner,
+  consumedOpIds,
+  OP_PHOTO_CREATE,
 } from "@/lib/field/offlineQueue";
 
 /** @param {{ userId: string, orgId: string } | null} [owner] */
@@ -41,10 +45,16 @@ export function useFieldOutbox(handlers, owner = null) {
   const mountedRef = useRef(false);
   const [pendingState, setPending] = useState({ key: ownerKey, count: 0 });
 
-  const enqueue = useCallback((op) => {
+  const assertCaptureActive = useCallback(() => {
     if (!mountedRef.current || !scope?.owner || scopeRef.current !== scope ||
-      getActiveOrgId() !== scope.owner.orgId) return;
-    const persisted = loadQueue();
+      getActiveOrgId() !== scope.owner.orgId) {
+      throw new Error("Cannot save offline after your account or workspace changed. Reopen the capture in the original workspace.");
+    }
+  }, [scope]);
+
+  const enqueue = useCallback((op) => {
+    assertCaptureActive();
+    const persisted = loadQueueForWrite();
     const owned = persisted.filter((queued) => belongsToOutboxOwner(queued, scope.owner));
     const nextOwned = enqueueOp(owned, { ...op, owner: scope.owner });
     // Coalescing in one workspace must not overwrite another workspace's op
@@ -52,7 +62,7 @@ export function useFieldOutbox(handlers, owner = null) {
     const next = [...persisted.filter((queued) => !belongsToOutboxOwner(queued, scope.owner)), ...nextOwned];
     saveQueue(next);
     setPending({ key: scope.key, count: nextOwned.length });
-  }, [scope]);
+  }, [scope, assertCaptureActive]);
 
   const flush = useCallback(async () => {
     if (!mountedRef.current || !scope?.owner || scopeRef.current !== scope ||
@@ -70,6 +80,7 @@ export function useFieldOutbox(handlers, owner = null) {
     const assertActive = () => {
       if (!isActive()) throw new Error("Outbox replay identity changed");
     };
+    let drainNewCaptures = false;
     try {
       const client = await createReplayClient(scope.owner.userId, assertActive, run.controller.signal);
       assertActive();
@@ -80,22 +91,29 @@ export function useFieldOutbox(handlers, owner = null) {
       // captured while syncing on marginal signal) is in storage but not in
       // that snapshot — a blind write would silently destroy it. Re-read and
       // subtract only what the flush actually consumed.
-      const persisted = loadQueue();
+      const persisted = loadQueueForWrite();
       const owned = persisted.filter((op) => belongsToOutboxOwner(op, scope.owner));
       const remainingOwned = reconcileAfterFlush(owned, queue, result.remaining);
       const remainingSet = new Set(remainingOwned);
       const merged = persisted.filter((op) => !belongsToOutboxOwner(op, scope.owner) || remainingSet.has(op));
       saveQueue(merged);
+      const consumed = consumedOpIds(queue, result.remaining);
+      for (const op of queue) {
+        if (op.type === OP_PHOTO_CREATE && consumed.has(op.id)) void deletePendingPhoto(op.payload.blobKey);
+      }
       setPending({ key: scope.key, count: remainingOwned.length });
+      drainNewCaptures = !result.error && remainingOwned.length > 0;
       if (result.synced > 0) {
         toast.success(`Synced ${result.synced} field update${result.synced === 1 ? "" : "s"}`);
       }
+      if (result.error) toast.error("Some field captures could not sync. They remain on this device; check your connection or access and retry.");
     } catch {
       // Unresolved/replaced auth leaves captures queued for their original
       // owner. A cancelled run must not publish even a failure notification.
     } finally {
       if (flushingRef.current === run) flushingRef.current = null;
     }
+    if (drainNewCaptures) await flush();
   }, [scope]);
 
   useEffect(() => {
@@ -122,5 +140,5 @@ export function useFieldOutbox(handlers, owner = null) {
   }, [flush, scope]);
 
   const pending = pendingState.key === ownerKey ? pendingState.count : 0;
-  return { pending, enqueue, flush };
+  return { pending, enqueue, flush, assertCaptureActive };
 }

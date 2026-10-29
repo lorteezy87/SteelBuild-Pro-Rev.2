@@ -48,7 +48,7 @@ describe("useFieldOutbox", () => {
     const previousEnqueue = result.current.enqueue;
     const nextOwner = { userId: "user-b", orgId: "org-a" };
     rerender({ identity: nextOwner });
-    act(() => previousEnqueue(makeProgressOp("t1", 25, 1)));
+    expect(() => act(() => previousEnqueue(makeProgressOp("t1", 25, 1)))).toThrow(/workspace changed/);
     expect(loadQueue()).toEqual([]);
     expect(result.current.pending).toBe(0);
     act(() => result.current.enqueue(makeProgressOp("t1", 50, 2)));

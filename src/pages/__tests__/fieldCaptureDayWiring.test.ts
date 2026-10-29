@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 /**
  * The foreman's capture day is read ONCE, where the foreman taps.
  *
- * A progress tap takes two routes out of this page: the online write
+ * A progress tap formerly took two routes: the online write
  * (`persistScheduleProgress`) and, when there is no signal, a queued op
  * (`makeProgressOp`). Both need the LOCAL calendar day the tap happened on,
  * because that is the day `deriveActualsPatch` stamps onto
@@ -45,22 +45,15 @@ describe("field progress captures the local day at the tap", () => {
     expect(reads).toHaveLength(1);
   });
 
-  it("the online write takes the captured day from the mutation variables", () => {
-    expect(PROGRESS_REGION).toMatch(/mutationFn:\s*\(\{[^}]*capturedDay[^}]*\}\)/);
-    expect(PROGRESS_REGION).toMatch(/persistScheduleProgress\(\{[\s\S]*?capturedDay,[\s\S]*?\}\)/);
+  it("the durable path takes the captured day from mutation variables", () => {
+    expect(PROGRESS_REGION).toMatch(/mutationFn:\s*async\s*\(\{[^}]*capturedDay[^}]*\}\)/);
+    expect(PROGRESS_REGION).toMatch(/makeProgressOp\(task\.id, pct, Date\.now\(\), capturedDay\)/);
   });
 
-  it("the offline fallback queues that same captured day, not a fresh one", () => {
-    // vars.capturedDay — the value from the tap — as the captureDay argument.
-    // [\s\S]*? rather than [^)]*: the call already contains Date.now().
-    expect(PROGRESS_REGION).toMatch(/makeProgressOp\([\s\S]*?vars\.capturedDay\s*\)/);
-    // And the onError handler does not reach for the clock itself. Bounded at
-    // onSuccess: setProgress sits inside PROGRESS_REGION too and is the one
-    // place that IS allowed to read it, so an unbounded slice would always fail.
-    const from = PROGRESS_REGION.indexOf("onError:");
-    const to = PROGRESS_REGION.indexOf("onSuccess:", from);
-    expect(from, "onError handler not found").toBeGreaterThan(-1);
-    expect(to, "onSuccess not found — the slice would swallow setProgress").toBeGreaterThan(from);
-    expect(PROGRESS_REGION.slice(from, to)).not.toMatch(/localToday\(\)/);
+  it("online and offline taps share the same queue, with no direct write racing replay", () => {
+    expect(PROGRESS_REGION).not.toContain("persistScheduleProgress(");
+    const body = PROGRESS_REGION.slice(0, PROGRESS_REGION.indexOf("const setProgress"));
+    expect(body).not.toMatch(/localToday\(\)/);
+    expect(body.indexOf("enqueue(makeProgressOp")).toBeLessThan(body.indexOf("await flush()"));
   });
 });

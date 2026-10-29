@@ -2,21 +2,17 @@
  * offlineQueue.js — a tiny, durable outbox for field captures made with no
  * signal (Phase 3, offline slice 1).
  *
- * Scope is deliberately narrow because offline sync is where subtle data-loss
- * bugs live: this queue carries ONLY idempotent operations — today, schedule
- * task progress (set task X to N%). Replaying "set X to 50%" twice is harmless,
- * so we never need server-side dedup, exactly-once delivery, or op ids that
- * survive a create. Non-idempotent captures (punch/photo CREATE) are NOT queued
- * here yet — they need a client-op-id dedup key first, or a replay would mint
- * duplicates.
+ * Supported captures are schedule progress plus punch, daily-log and photo
+ * creates. Progress coalesces by task; creates retain a client_op_id for server
+ * deduplication. Photo bytes live separately in IndexedDB until replay and the
+ * queue acknowledgement have both committed.
  *
  * Design choices that keep it safe:
- *   • localStorage, not IndexedDB — synchronous, survives reload/crash, no async
- *     failure surface. The payloads are tiny (one coalesced op per task), so the
- *     ~5MB cap is irrelevant. Storage is injectable so this is swappable later.
+ *   • localStorage holds queue metadata. Writes must surface quota, corrupt
+ *     data and unavailable-storage failures before acknowledging a capture.
+ *     This read/modify/write store does not serialize concurrent browser tabs.
  *   • Coalescing — a newer progress value for the same task REPLACES the older
- *     queued one (last-value-wins). The queue can never grow past one op per
- *     task, and we never replay a stale intermediate value.
+ *     queued one (last-value-wins). Create operations keep distinct IDs.
  *   • Ordered, fail-stop flush — replay in FIFO order; on the first failure
  *     (still offline) stop and keep that op + the remainder. Nothing is dropped.
  *
@@ -61,21 +57,28 @@ export function newClientOpId() {
 
 function localStorageAdapter() {
   return {
-    read: () => {
-      try {
-        return typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-      } catch {
-        return null;
-      }
-    },
+    read: () => localStorage.getItem(STORAGE_KEY),
     write: (value) => {
       try {
-        if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, value);
+        localStorage.setItem(STORAGE_KEY, value);
       } catch {
-        /* quota / privacy mode — drop silently; the optimistic UI still holds */
+        throw new Error("Cannot save offline on this device. Keep this draft open and retry when storage is available or you are connected.");
       }
     },
   };
+}
+
+/** Mutation reads must not mistake inaccessible/corrupt captures for an empty queue. */
+export function loadQueueForWrite(storage = localStorageAdapter()) {
+  try {
+    const raw = storage.read();
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error("Invalid queue");
+    return parsed;
+  } catch {
+    throw new Error("Cannot read existing offline captures. Keep this draft open and retry without clearing this device's data.");
+  }
 }
 
 /** Read the persisted queue (always returns an array; tolerant of corruption). */
@@ -321,9 +324,10 @@ export function reconcileAfterFlush(persistedQueue, queueAtFlushStart, remaining
  * queued — it would just fail forever.
  */
 export function isLikelyOfflineError(error) {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
   if (!error) return false;
-  if (error.name === "TypeError") return true;
+  // A server rejection remains authoritative even if connectivity changes
+  // before its callback runs. Never queue authorization/validation failures.
+  if (error.code || error.status >= 400 || error.name === "PostgrestError") return false;
   const message = String(error.message || error).toLowerCase();
   return (
     message.includes("failed to fetch") ||

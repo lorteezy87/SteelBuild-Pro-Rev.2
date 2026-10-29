@@ -14,6 +14,7 @@ import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useOutbox } from "@/lib/field/OutboxContext";
+import { createWithReceipt } from "@/lib/field/createWithReceipt";
 import { makeDailyLogCreateOp, newClientOpId, isLikelyOfflineError } from "@/lib/field/offlineQueue";
 import {
   appendRecordToCaches,
@@ -82,7 +83,7 @@ export default function DailyLogs() {
       toast.error("Select the daily log's project before opening this form.");
       return;
     }
-    const scope = { projectId, id: ++nextFormId.current };
+    const scope = { projectId, id: ++nextFormId.current, clientOpId: newClientOpId() };
     formScopeRef.current = scope;
     setFormScope(scope);
     setEditing(log);
@@ -200,9 +201,12 @@ export default function DailyLogs() {
   }, [filteredLogs]);
 
   const createMut = useMutation({
+    networkMode: "always",
     mutationFn: (request) => {
       assertSaveScope(request);
-      return entities.DailyLog.create(withProjectId(request.data, request.scope.projectId));
+      const record = withProjectId(request.data, request.scope.projectId);
+      return createWithReceipt(record, () => entities.DailyLog.create(record),
+        () => entities.DailyLog.filter({ project_id: record.project_id, client_op_id: record.client_op_id }, undefined, 2));
     },
     onSuccess: async (created, request) => {
       const queryKeys = [["daily-logs", request.scope.projectId]];
@@ -226,7 +230,12 @@ export default function DailyLogs() {
       // in the log are online-only — an offline log syncs its text/manning data.
       if (isLikelyOfflineError(err)) {
         const { data } = request;
-        request.enqueue(makeDailyLogCreateOp(data, data.client_op_id, Date.now()));
+        try {
+          request.enqueue(makeDailyLogCreateOp(data, data.client_op_id, Date.now()));
+        } catch (storageError) {
+          if (isCurrentForm(request.scope)) toastCrudError(storageError, "Daily log was not saved offline. Keep this draft open and retry.");
+          return;
+        }
         if (isCurrentForm(request.scope)) {
           closeForm();
           toast.message("Saved offline — will sync when you're back online");
@@ -283,7 +292,7 @@ export default function DailyLogs() {
     } else {
       // Mint the idempotency key up front so it rides BOTH the online create and
       // any offline retry (dedup'd server-side on replay).
-      createMut.mutate({ data: { ...data, client_op_id: newClientOpId() }, scope: formScope, enqueue: enqueueOutbox, flush: flushOutbox });
+      createMut.mutate({ data: { ...data, client_op_id: formScope?.clientOpId }, scope: formScope, enqueue: enqueueOutbox, flush: flushOutbox });
     }
   };
 

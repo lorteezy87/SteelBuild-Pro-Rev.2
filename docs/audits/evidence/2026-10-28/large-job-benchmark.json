@@ -1,0 +1,53 @@
+{
+  "node": "v24.20.0",
+  "platform": "win32",
+  "measuredAt": "2026-10-29T06:28:22.447Z",
+  "method": "Vite SSR module, one warmup plus five runs. Concurrent validation running. CPU derivation only; excludes network, browser rendering and database.",
+  "results": [
+    {
+      "leafLots": 1000,
+      "containers": 10,
+      "workPackages": 20,
+      "stationCompletions": 1000,
+      "medianMs": 1.52,
+      "maxMs": 2.97,
+      "sampleMs": [
+        0.785200000000259,
+        0.8587000000002263,
+        1.5226999999999862,
+        1.6023999999997613,
+        2.9735999999998057
+      ]
+    },
+    {
+      "leafLots": 10000,
+      "containers": 100,
+      "workPackages": 200,
+      "stationCompletions": 10000,
+      "medianMs": 8.46,
+      "maxMs": 10.99,
+      "sampleMs": [
+        6.2824999999998,
+        7.302400000000034,
+        8.461299999999937,
+        10.248800000000301,
+        10.991500000000087
+      ]
+    },
+    {
+      "leafLots": 50000,
+      "containers": 500,
+      "workPackages": 1000,
+      "stationCompletions": 50000,
+      "medianMs": 46.61,
+      "maxMs": 75.49,
+      "sampleMs": [
+        44.39429999999993,
+        45.63580000000002,
+        46.60609999999997,
+        63.23140000000012,
+        75.48880000000008
+      ]
+    }
+  ]
+}

@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   createMutateAsync: vi.fn(),
   updateMutate: vi.fn(),
   updateMutateAsync: vi.fn(),
+  error: null as Error | null,
+  retry: vi.fn(),
 }));
 
 vi.mock("@/components/command", () => ({
@@ -67,6 +69,9 @@ vi.mock("@/hooks/useFinancials", () => ({
     summary: { actual: 0, committed: 0, marginAtRisk: 0, revisedBudget: 0, eac: 0, unallocatedCOTotal: 0 },
     reviewFlags: [] as any[],
     isLoading: false,
+    isReady: !mocks.error,
+    error: mocks.error,
+    refreshAll: mocks.retry,
     costCodeCrud: {
       create: {
         mutate: mocks.createMutate,
@@ -84,6 +89,16 @@ vi.mock("@/hooks/useFinancials", () => ({
 import CostControlCenter from "@/pages/costHub/CostControlCenter";
 
 describe("CostControlCenter cost-code save", () => {
+  it("withholds actions and financial conclusions when evidence fails, with a retry", async () => {
+    mocks.error = new Error("Expense read failed");
+    const rendered = render(<CostControlCenter projectId="project-1" project={{ id: "project-1" } as never} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Cost data is unavailable");
+    expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(mocks.retry).toHaveBeenCalledOnce();
+    rendered.unmount();
+    mocks.error = null;
+  });
   it("keeps the modal open until the create mutation succeeds", async () => {
     const user = userEvent.setup();
     let resolveSave: (() => void) | undefined;

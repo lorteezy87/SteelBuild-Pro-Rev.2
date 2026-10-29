@@ -40,6 +40,7 @@ Notes:
 
 
 
+
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
 | 2026-10-17 | codex-submittal-stale-sqlstate | Nonretryable reviewed workflow conflicts | New submittal conflict migration; supabase/tests/submittal-revision-evidence/**; production ownership classification | Replace only three deterministic stale SQLSTATE 40001 guards with PT409; preserve authority and rollback; no hosted application. |

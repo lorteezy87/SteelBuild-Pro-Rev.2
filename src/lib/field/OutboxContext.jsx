@@ -13,7 +13,7 @@ import {
   isUniqueViolation,
 } from "@/lib/field/offlineQueue";
 import { replayPhotoCreate } from "@/lib/field/photoSync";
-import { getPendingPhoto, deletePendingPhoto } from "@/lib/field/blobStore";
+import { getPendingPhoto } from "@/lib/field/blobStore";
 import OfflineOutboxIndicator from "@/components/field/OfflineOutboxIndicator";
 
 /**
@@ -29,7 +29,7 @@ import OfflineOutboxIndicator from "@/components/field/OfflineOutboxIndicator";
  * op refreshes every project's affected lists — a safe superset of the
  * per-project invalidation the field pages do inline for their optimistic path.
  */
-/** @typedef {{ pending: number, online: boolean, enqueue: (op: unknown) => void, flush: () => Promise<void> }} OutboxValue */
+/** @typedef {{ pending: number, online: boolean, enqueue: (op: unknown) => void, flush: () => Promise<void>, assertCaptureActive: () => void }} OutboxValue */
 /** @type {import('react').Context<OutboxValue | null>} */
 const OutboxContext = createContext(null);
 
@@ -37,10 +37,11 @@ const OutboxContext = createContext(null);
 export function useOutbox() {
   const ctx = useContext(OutboxContext);
   if (!ctx) {
-    // Degrade to a no-op outside the provider (e.g. an isolated unit test) so a
-    // consumer never throws. Enqueue is a no-op → the caller's optimistic write
-    // simply isn't persisted offline, which is the pre-provider behaviour.
-    return { pending: 0, online: true, enqueue: () => {}, flush: async () => {} };
+    // Reading an isolated consumer is harmless; acknowledging an unpersisted
+    // capture is not. Callers retain their drafts when enqueue throws.
+    return { pending: 0, online: true, enqueue: () => {
+      throw new Error("Offline saving is unavailable. Keep this draft open and retry.");
+    }, flush: async () => {}, assertCaptureActive: () => { throw new Error("Offline saving is unavailable."); } };
   }
   return ctx;
 }
@@ -96,9 +97,14 @@ function makeGlobalHandlers(queryClient) {
     [OP_PHOTO_CREATE]: async (_payload, op, assertActive, client) => {
       await replayPhotoCreate(op, {
         getBlob: getPendingPhoto,
-        uploadFile: (args) => integrations.Core.UploadFile({ ...args, client }),
+        uploadFile: (args) => integrations.Core.UploadFile({ ...args, client, workflow: "photo" }),
         createPhoto: (record) => entities.Photo.create(record, { client }),
-        deleteBlob: deletePendingPhoto,
+        findPhoto: async (clientOpId) => {
+          const { data, error } = await client.from("photos").select("id")
+            .eq("client_op_id", clientOpId).eq("project_id", op.payload.meta.project_id).eq("is_deleted", false).maybeSingle();
+          if (error) throw error;
+          return Boolean(data);
+        },
         isUniqueViolation,
       }, assertActive);
       assertActive();
@@ -116,7 +122,7 @@ export function OutboxProvider({ children }) {
     !mfaStatusDegraded && !isPasswordRecovery && !isLoadingOrgs && user?.id && currentOrg?.id;
   const owner = ready ? { userId: user.id, orgId: currentOrg.id } : null;
   const handlers = useMemo(() => makeGlobalHandlers(queryClient), [queryClient]);
-  const { pending, enqueue, flush } = useFieldOutbox(handlers, owner);
+  const { pending, enqueue, flush, assertCaptureActive } = useFieldOutbox(handlers, owner);
 
   const [online, setOnline] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine !== false,
@@ -134,8 +140,8 @@ export function OutboxProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ pending, online, enqueue, flush }),
-    [pending, online, enqueue, flush],
+    () => ({ pending, online, enqueue, flush, assertCaptureActive }),
+    [pending, online, enqueue, flush, assertCaptureActive],
   );
 
   return (
