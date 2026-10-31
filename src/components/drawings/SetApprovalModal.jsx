@@ -23,7 +23,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sbd-card-strong" style={{ maxWidth: 480, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 16 }}>
+      <DialogContent className="sbd-card-strong" style={{ maxWidth: 480, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 8 }}>
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "var(--font-body)", fontSize: 18, color: "var(--text-primary)", letterSpacing: "0.06em" }}>
             Approve Drawing Set
@@ -33,7 +33,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
           </p>
         </DialogHeader>
 
-        <div style={{ background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+        <div style={{ background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 6, padding: "8px 12px", marginBottom: 12 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--accent)" }}>
             APPROVAL WORKFLOW MOVED
           </div>
@@ -52,7 +52,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
                   key={s}
                   onClick={() => setStatus(s)}
                   style={{
-                    flex: 1, padding: "7px 0", borderRadius: 7, cursor: "pointer",
+                    flex: 1, padding: "7px 0", borderRadius: 6, cursor: "pointer",
                     background: status === s
                        ? s === "approved" ? "rgba(0,230,118,0.12)" : s === "rejected" ? "rgba(255,23,68,0.12)" : "var(--info-muted)"
                        : "var(--hover-bg)",
@@ -88,7 +88,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
           </div>
 
           {/* Toggle: apply to sheets */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--hover-bg)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, padding: "10px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--hover-bg)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "10px 14px" }}>
             <div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", fontWeight: 500 }}>
                 Apply to all sheets in this set
@@ -126,12 +126,12 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
           <button onClick={onClose} style={{
-            padding: "8px 16px", borderRadius: 8, cursor: "pointer",
+            padding: "8px 16px", borderRadius: 6, cursor: "pointer",
             background: "transparent", border: "1px solid var(--border-default)",
             color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em"
           }}>Cancel</button>
           <button onClick={handleConfirm} disabled={saving} style={{
-            padding: "8px 18px", borderRadius: 8, cursor: saving ? "not-allowed" : "pointer",
+            padding: "8px 18px", borderRadius: 6, cursor: saving ? "not-allowed" : "pointer",
             background: "var(--accent)", border: "none",
             color: "var(--on-accent)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
             letterSpacing: "0.08em",

@@ -129,7 +129,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
           background: "var(--bg-surface-low)",
           border: "1px solid var(--divider)",
           borderTop: "2px solid var(--accent-border)",
-          borderRadius: 12,
+          borderRadius: 6,
           width: "90%",
           maxWidth: 600,
           maxHeight: "90vh",
@@ -180,7 +180,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
               onClick={() => fileInputRef.current?.click()}
               style={{
                 border: "2px dashed var(--accent-border)",
-                borderRadius: 8,
+                borderRadius: 6,
                 padding: 32,
                 textAlign: "center",
                 background: "var(--accent-muted)",
@@ -225,7 +225,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
                     style={{
                       background: "var(--bg-surface-mid)",
                       border: "1px solid var(--divider)",
-                      borderRadius: 8,
+                      borderRadius: 6,
                       padding: 12
                     }}
                   >

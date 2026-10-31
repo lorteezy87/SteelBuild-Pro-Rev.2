@@ -186,7 +186,7 @@ export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onU
         style={{
           width: "min(860px, 100%)", maxWidth: "100%", maxHeight: "calc(100dvh - 32px)", minHeight: 0, display: "flex", flexDirection: "column",
           background: "var(--bg-surface)", color: "var(--text-primary)", border: "1px solid var(--border-strong)",
-          borderRadius: 10, overflow: "hidden", boxShadow: "var(--shadow-lg)", outline: "none",
+          borderRadius: 6, overflow: "hidden", boxShadow: "var(--shadow-lg)", outline: "none",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border-default)" }}>
@@ -235,7 +235,7 @@ export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onU
               )}
 
               {cranes.map((c) => (
-                <div key={c.id} style={{ border: "1px solid var(--border-default)", borderRadius: 8, padding: 12 }}>
+                <div key={c.id} style={{ border: "1px solid var(--border-default)", borderRadius: 6, padding: 12 }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                     <div style={{ ...mono, fontSize: 13, fontWeight: 800, flex: 1 }}>{craneDisplayName(c)}</div>
                     {c.serial && <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>S/N {c.serial}</div>}
@@ -285,7 +285,7 @@ export default function CraneLibraryPanel({ open, cranes, onChange, onClose, onU
               <div style={{ ...labelStyle, marginTop: 6 }}>Configurations — one per chart</div>
               {draft.configurations.length === 0 && <div style={{ ...hintStyle, fontSize: 11 }}>None yet.</div>}
               {draft.configurations.map((cfg) => (
-                <div key={cfg.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", border: "1px solid var(--border-default)", borderRadius: 8, padding: 10 }}>
+                <div key={cfg.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", border: "1px solid var(--border-default)", borderRadius: 6, padding: 10 }}>
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ ...mono, fontSize: 11, fontWeight: 700 }}>{cfg.label}</div>
                     <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{configurationSummary(cfg)}</div>

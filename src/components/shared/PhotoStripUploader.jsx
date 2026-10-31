@@ -123,7 +123,7 @@ export default function PhotoStripUploader({
                 position: "relative",
                 width: 72,
                 height: 72,
-                borderRadius: 8,
+                borderRadius: 6,
                 border: "1px solid var(--border-default)",
                 overflow: "hidden",
                 background: "var(--bg-input)",
@@ -197,7 +197,7 @@ export default function PhotoStripUploader({
             style={{
               width: 72,
               height: 72,
-              borderRadius: 8,
+              borderRadius: 6,
               border: "1px solid var(--accent)",
               background: "var(--accent-muted)",
               color: "var(--accent)",
@@ -227,7 +227,7 @@ export default function PhotoStripUploader({
           style={{
             width: 72,
             height: 72,
-            borderRadius: 8,
+            borderRadius: 6,
             border: "2px dashed var(--border-default)",
             background: "var(--bg-input)",
             color: "var(--text-muted)",

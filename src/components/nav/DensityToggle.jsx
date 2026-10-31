@@ -57,7 +57,7 @@ export default function DensityToggle() {
       onClick={handleToggle}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleToggle(); } }}
       style={{
-        width: 32, height: 32, borderRadius: 8,
+        width: 32, height: 32, borderRadius: 6,
         background: isCompact ? "var(--accent-muted)" : "var(--hover-bg)",
         border: `1px solid ${isCompact ? "var(--accent-border)" : "var(--border)"}`,
         display: "flex", alignItems: "center", justifyContent: "center",

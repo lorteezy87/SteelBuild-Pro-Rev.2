@@ -48,7 +48,7 @@ export default function PayApplicationVoidDialog({ applicationNumber, allowed, o
       onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}
       style={{ position: 'fixed', inset: 0, zIndex: 9999, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--bg-void) 80%, transparent)' }}>
       <div ref={trapRef} role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`} aria-busy={busy}
-        style={{ width: 460, maxWidth: '100%', maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', boxSizing: 'border-box', padding: 24, borderRadius: 8, background: 'var(--bg-surface-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-lg)' }}>
+        style={{ width: 460, maxWidth: '100%', maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', boxSizing: 'border-box', padding: 24, borderRadius: 6, background: 'var(--bg-surface-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-lg)' }}>
         <h2 id={`${id}-title`} style={{ margin: '0 0 12px', fontFamily: 'var(--font-display)', fontSize: 22 }}>Void Pay Application #{applicationNumber}</h2>
         <p id={`${id}-description`} style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)' }}>Explain why this application should be voided. The reason will remain with its billing record.</p>
         <label htmlFor={`${id}-reason`} style={{ display: 'block', fontFamily: 'var(--font-body)', fontWeight: 600, marginBottom: 8 }}>Reason for voiding</label>

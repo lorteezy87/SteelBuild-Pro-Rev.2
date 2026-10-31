@@ -426,7 +426,7 @@ const bodyTextStyle: React.CSSProperties = { fontFamily: "var(--font-body)", fon
 
 const panelStyle: React.CSSProperties = {
   padding: "10px 12px",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--hover-bg)",
   border: "1px solid var(--divider)",
   marginBottom: 12,
@@ -466,7 +466,7 @@ const copyButtonStyle: React.CSSProperties = {
 };
 
 const cardStyle: React.CSSProperties = {
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid var(--divider)",
   background: "var(--bg-surface)",
 };

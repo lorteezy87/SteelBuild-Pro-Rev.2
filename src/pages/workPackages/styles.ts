@@ -23,7 +23,7 @@ export const eyebrowStyle: CSSProperties = {
 
 export const controlPanelStyle: CSSProperties = {
   border: "1px solid var(--border-default)",
-  borderRadius: 14,
+  borderRadius: 8,
   padding: 10,
   background: "var(--bg-surface)",
   display: "flex",
@@ -41,7 +41,7 @@ export const searchBoxStyle: CSSProperties = {
   gap: 8,
   padding: "0 10px",
   border: "1px solid var(--border-default)",
-  borderRadius: 10,
+  borderRadius: 6,
   background: "var(--bg-input)",
 };
 
@@ -76,7 +76,7 @@ export const filterLabelStyle: CSSProperties = {
 export const filterButtonStyle = (active, tone): CSSProperties => ({
   minHeight: 26,
   padding: "0 8px",
-  borderRadius: 8,
+  borderRadius: 6,
   border: `1px solid ${active ? tone : "var(--border-default)"}`,
   background: active ? `color-mix(in srgb, ${tone} 14%, transparent)` : "var(--bg-surface-low)",
   color: active ? tone : "var(--text-secondary)",
@@ -99,7 +99,7 @@ export const countLabelStyle: CSSProperties = {
 
 export const clearButtonStyle: CSSProperties = {
   border: "1px solid var(--accent-border)",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--accent-muted)",
   color: "var(--accent)",
   ...mono,
@@ -122,7 +122,7 @@ export const sideRailStyle: CSSProperties = {
   position: "sticky",
   top: 12,
   border: "1px solid var(--border-default)",
-  borderRadius: 16,
+  borderRadius: 8,
   background: "linear-gradient(180deg, var(--bg-surface-high), var(--bg-surface))",
   padding: 14,
   display: "grid",
@@ -148,7 +148,7 @@ export const panelTitleStyle: CSSProperties = {
 export const railStatStyle = (tone): CSSProperties => ({
   width: "100%",
   border: `1px solid color-mix(in srgb, ${tone} 28%, var(--border-default))`,
-  borderRadius: 12,
+  borderRadius: 6,
   background: `linear-gradient(90deg, color-mix(in srgb, ${tone} 9%, transparent), transparent)`,
   padding: "9px 10px",
   color: "var(--text-secondary)",
@@ -176,7 +176,7 @@ export const watchItemStyle = (risk): CSSProperties => {
   const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--status-success)";
   return {
     border: `1px solid color-mix(in srgb, ${tone} 26%, var(--border-default))`,
-    borderRadius: 11,
+    borderRadius: 6,
     background: "var(--bg-surface-low)",
     padding: "8px 9px",
     color: "inherit",
@@ -212,13 +212,13 @@ export const watchMetaStyle: CSSProperties = {
 export const riskDotStyle = (risk): CSSProperties => ({
   width: 8,
   height: 8,
-  borderRadius: 8,
+  borderRadius: 6,
   background: risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--status-success)",
 });
 
 export const emptyRailStyle: CSSProperties = {
   border: "1px dashed var(--border-default)",
-  borderRadius: 10,
+  borderRadius: 6,
   padding: 12,
   color: "var(--text-muted)",
   fontSize: 12,
@@ -237,7 +237,7 @@ export const phaseFlowStyle: CSSProperties = {
 export const laneStyle = (phase): CSSProperties => ({
   minWidth: 0,
   border: `1px solid color-mix(in srgb, ${phaseColor(phase)} 30%, var(--border-default))`,
-  borderRadius: 16,
+  borderRadius: 8,
   background: "linear-gradient(180deg, var(--bg-surface), var(--bg-surface-low))",
   padding: 12,
 });
@@ -252,7 +252,7 @@ export const laneHeaderStyle: CSSProperties = {
 export const laneIconStyle = (phase): CSSProperties => ({
   width: 30,
   height: 30,
-  borderRadius: 10,
+  borderRadius: 6,
   display: "grid",
   placeItems: "center",
   color: phaseColor(phase),
@@ -277,7 +277,7 @@ export const laneCountStyle = (phase): CSSProperties => ({
 
 export const laneEmptyStyle: CSSProperties = {
   border: "1px dashed var(--border-default)",
-  borderRadius: 12,
+  borderRadius: 6,
   padding: 16,
   color: "var(--text-muted)",
   textAlign: "center",
@@ -296,7 +296,7 @@ export const statusBoardStyle: CSSProperties = {
 export const statusColumnStyle = (status): CSSProperties => ({
   border: `1px solid color-mix(in srgb, ${STATUS_TONE[status]} 28%, var(--border-default))`,
   borderTop: `3px solid ${STATUS_TONE[status]}`,
-  borderRadius: 16,
+  borderRadius: 8,
   background: "var(--bg-surface)",
   padding: 12,
 });
@@ -319,7 +319,7 @@ export const packageCardStyle = (risk, selected): CSSProperties => {
   const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--border-default)";
   return {
     border: `1px solid ${selected ? "var(--accent)" : tone}`,
-    borderRadius: 13,
+    borderRadius: 8,
     padding: 10,
     background: selected ? "var(--accent-muted)" : "var(--bg-surface-high)",
     display: "grid",
@@ -333,7 +333,7 @@ export const compactCardStyle = (risk): CSSProperties => {
   const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--border-default)";
   return {
     border: `1px solid ${tone}`,
-    borderRadius: 13,
+    borderRadius: 8,
     padding: 10,
     background: "var(--bg-surface-high)",
     display: "grid",
@@ -387,7 +387,7 @@ export const cardMetaGridStyle: CSSProperties = {
 export const factStyle: CSSProperties = {
   minWidth: 0,
   border: "1px solid var(--border-default)",
-  borderRadius: 9,
+  borderRadius: 6,
   padding: "6px 7px",
   display: "flex",
   gap: 6,
@@ -425,7 +425,7 @@ export const flagStyle = (tone): CSSProperties => ({
   alignItems: "center",
   minHeight: 20,
   padding: "0 7px",
-  borderRadius: 7,
+  borderRadius: 6,
   border: `1px solid color-mix(in srgb, ${tone} 32%, transparent)`,
   background: `color-mix(in srgb, ${tone} 10%, transparent)`,
   color: tone,
@@ -442,7 +442,7 @@ export const readinessStyle = (tone): CSSProperties => ({
   alignItems: "center",
   minHeight: 20,
   padding: "0 7px",
-  borderRadius: 7,
+  borderRadius: 6,
   border: `1px solid color-mix(in srgb, ${tone} 35%, transparent)`,
   background: `color-mix(in srgb, ${tone} 10%, transparent)`,
   color: tone,
@@ -465,7 +465,7 @@ export const iconButtonStyle: CSSProperties = {
   width: 24,
   height: 24,
   border: "1px solid var(--border-default)",
-  borderRadius: 7,
+  borderRadius: 6,
   background: "var(--bg-surface)",
   color: "var(--text-muted)",
   display: "inline-flex",
@@ -482,7 +482,7 @@ export const phaseBadgeStyle = (phase): CSSProperties => ({
   width: "fit-content",
   minHeight: 22,
   padding: "0 7px",
-  borderRadius: 8,
+  borderRadius: 6,
   border: `1px solid color-mix(in srgb, ${phaseColor(phase)} 36%, transparent)`,
   background: `color-mix(in srgb, ${phaseColor(phase)} 12%, transparent)`,
   color: phaseColor(phase),
@@ -496,7 +496,7 @@ export const phaseBadgeStyle = (phase): CSSProperties => ({
 
 export const registerShellStyle: CSSProperties = {
   border: "1px solid var(--border-default)",
-  borderRadius: 16,
+  borderRadius: 8,
   background: "var(--bg-surface)",
   overflowX: "auto",
   overflowY: "hidden",

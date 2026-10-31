@@ -70,7 +70,7 @@ export default function MultiSelectChips({
           minHeight: 36,
           background: "var(--bg-input)",
           border: "1px solid var(--border-default)",
-          borderRadius: 8,
+          borderRadius: 6,
         }}
       >
         {selectedOpts.map((o) => (

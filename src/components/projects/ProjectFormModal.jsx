@@ -154,7 +154,7 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
           <textarea style={{ ...inputStyle, height: 72, resize: "vertical" }} value={form.notes} onChange={e => set("notes", e.target.value)} />
         </FormField>
         {!project && (
-          <label style={{ gridColumn: "1 / -1", display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 8, cursor: "pointer" }}>
+          <label style={{ gridColumn: "1 / -1", display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, cursor: "pointer" }}>
             <input
               type="checkbox"
               checked={applyTemplate}

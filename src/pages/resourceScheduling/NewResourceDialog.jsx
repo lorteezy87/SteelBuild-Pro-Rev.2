@@ -55,7 +55,7 @@ export default function NewResourceDialog({
       <div style={{
         position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
         background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)",
-        borderRadius: 12, padding: 28, width: 420, zIndex: 101,
+        borderRadius: 6, padding: 28, width: 420, zIndex: 101,
         boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
       }}>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 20 }}>

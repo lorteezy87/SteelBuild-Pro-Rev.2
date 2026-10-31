@@ -152,7 +152,7 @@ export function WeekActivityStrip({
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
-        borderRadius: 10,
+        borderRadius: 6,
         padding: "12px 16px",
       }}
     >
@@ -370,7 +370,7 @@ function SubPanel({
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
-        borderRadius: 10,
+        borderRadius: 6,
         padding: 16,
       }}
     >
@@ -492,7 +492,7 @@ function DailyLogPreview({
         padding: 12,
         background: "var(--bg-surface-low)",
         border: "1px solid var(--border-default)",
-        borderRadius: 8,
+        borderRadius: 6,
         cursor: "pointer",
         transition: "border-color 0.12s",
       }}

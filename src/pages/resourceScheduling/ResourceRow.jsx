@@ -129,7 +129,7 @@ export default function ResourceRow({
                 <span key={si} style={{
                   fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
                   color: "var(--text-secondary)", background: "var(--hover-bg)",
-                  border: "1px solid var(--bg-surface-high)", borderRadius: 8,
+                  border: "1px solid var(--bg-surface-high)", borderRadius: 6,
                   padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
                 }}>{sk}</span>
               ))}

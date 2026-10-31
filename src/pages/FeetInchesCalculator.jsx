@@ -207,7 +207,7 @@ export default function FeetInchesCalculator() {
       <div style={{ maxWidth: 880, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 22, fontWeight: 800, textTransform: "uppercase", letterSpacing: "-0.01em", color: "var(--text-primary)" }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, textTransform: "uppercase", letterSpacing: "-0.01em", color: "var(--text-primary)" }}>
             Feet &amp; Inches Calculator
           </div>
           <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 4 }}>
@@ -547,7 +547,7 @@ function CutListOptimizerPanel({ precision, onCopy }) {
 
           {/* Results */}
           {result ? (
-            <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--divider)", borderRadius: 8, padding: 14 }}>
+            <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--divider)", borderRadius: 6, padding: 14 }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
                 <ResultStat label="Pieces / stick" value={String(result.perStick)} />
                 <ResultStat
@@ -574,7 +574,7 @@ function CutListOptimizerPanel({ precision, onCopy }) {
               </div>
             </div>
           ) : showRejected ? (
-            <div style={{ ...mono, fontSize: 11, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 8, padding: "10px 12px" }}>
+            <div style={{ ...mono, fontSize: 11, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 6, padding: "10px 12px" }}>
               Can't optimize that — check the part fits inside the stock length and that the quantity is a positive whole number.
             </div>
           ) : (

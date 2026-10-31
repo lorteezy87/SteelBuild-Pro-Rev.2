@@ -282,7 +282,7 @@ export function StageGateDates({
                 : drawerPanel,
               border: `1px solid ${filled ? `color-mix(in srgb, ${meta.color} 48%, ${drawerMutedBorder})` : drawerMutedBorder}`,
               borderLeft: `3px solid ${isActive ? meta.color : filled ? meta.color : drawerBorder}`,
-              borderRadius: 8,
+              borderRadius: 6,
               boxShadow: isActive
                 ? `0 0 0 1px color-mix(in srgb, ${meta.color} 34%, transparent), var(--shadow-lg)`
                 : "none",
@@ -352,7 +352,7 @@ export function StageGateDates({
           padding: "6px 8px",
           background: drawerPanel,
           border: `1px dashed ${drawerMutedBorder}`,
-          borderRadius: 8,
+          borderRadius: 6,
           display: "flex",
           justifyContent: "space-between",
           fontFamily: "var(--font-mono)",

@@ -126,7 +126,7 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: 8px;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;

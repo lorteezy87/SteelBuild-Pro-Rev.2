@@ -53,7 +53,7 @@ export default function BulkActionToolbar({
         bottom: 20,
         background: "var(--bg-surface-high)",
         border: "1px solid var(--accent-border)",
-        borderRadius: 18,
+        borderRadius: 8,
         padding: "12px 16px",
         display: "flex",
         gap: 10,

@@ -11,7 +11,7 @@ import {
 } from "@/lib/importShippingTicket";
 
 const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+const display = { fontFamily: "var(--font-display)" };
 const AI      = "var(--ai-accent, #22D3EE)";
 
 /**
@@ -225,7 +225,7 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
               <div style={{
                 marginBottom: 12,
                 padding: "10px 12px",
-                borderRadius: 8,
+                borderRadius: 6,
                 border: "1px solid var(--border-default)",
                 background: "var(--bg-surface-low)",
                 color: "var(--text-muted)",

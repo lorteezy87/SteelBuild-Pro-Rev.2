@@ -120,20 +120,20 @@ export const labelStyle: CSSProperties = {
 
 export const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", background: "var(--bg-surface-low)",
-  border: "1px solid var(--border-default)", borderRadius: 8,
+  border: "1px solid var(--border-default)", borderRadius: 6,
   fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)",
   outline: "none", boxSizing: "border-box",
 };
 
 export const primaryBtnStyle: CSSProperties = {
   padding: "8px 18px", background: "var(--accent)", border: "1px solid var(--accent-border)",
-  borderRadius: 8, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
+  borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
   color: "var(--on-accent)", cursor: "pointer", transition: "all 120ms",
 };
 
 export const secondaryBtnStyle: CSSProperties = {
   padding: "8px 18px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
-  borderRadius: 8, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500,
+  borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500,
   color: "var(--text-secondary)", cursor: "pointer", transition: "all 120ms",
 };
 

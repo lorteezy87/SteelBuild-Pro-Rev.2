@@ -26,7 +26,7 @@ import { toast } from "sonner";
 const inputStyle = {
   background: "var(--bg-surface-low)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   padding: "7px 10px",
   fontSize: 12,
   color: "var(--text-primary)",
@@ -189,7 +189,7 @@ function FeatureFlagsAdminContent() {
       <div style={{
         background: "var(--bg-surface-low)",
         border: "1px solid var(--border-default)",
-        borderRadius: 12,
+        borderRadius: 6,
         padding: 14,
         display: "flex",
         gap: 10,
@@ -231,7 +231,7 @@ function FeatureFlagsAdminContent() {
       </div>
 
       {/* Flags table */}
-      <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
         <Table>
           <TableHeader>
             <TableRow style={{ background: "var(--bg-surface-low)", borderBottom: "1px solid var(--border-default)" }}>

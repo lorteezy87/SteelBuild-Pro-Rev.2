@@ -59,7 +59,7 @@ export function HealthBreakdownDialog({ health, onClose }: { health: any; onClos
           width: "min(460px, 100%)", maxHeight: "85vh", overflowY: "auto",
           // Opaque panel per the dark-theme modal rule (see LeadTimesModal).
           background: "var(--bg-surface-secondary)",
-          border: `1px solid ${border}`, borderRadius: 12,
+          border: `1px solid ${border}`, borderRadius: 6,
           boxShadow: "var(--shadow-card)", padding: 18,
         }}
       >
@@ -127,7 +127,7 @@ export function FleetHealthStrip({ fleet, onOpenRegister }: { fleet: any; onOpen
   ];
   const worst = (fleet.worst || []).filter((s: any) => s.score < 75).slice(0, 3);
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, padding: "12px 14px", marginBottom: 12, borderRadius: 10, border: `1px solid ${border}`, background: surface1 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, padding: "12px 14px", marginBottom: 12, borderRadius: 6, border: `1px solid ${border}`, background: surface1 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
         <span style={{ fontFamily: mono, fontSize: 8.5, letterSpacing: "0.1em", textTransform: "uppercase", color: textMuted }}>Fleet Health</span>
         <span className="sbd-num" style={{ fontFamily: mono, fontSize: 22, fontWeight: 800, color: textPrimary }}>{fleet.averageScore}<span style={{ fontSize: 12, color: textMuted, fontWeight: 600 }}> avg</span></span>

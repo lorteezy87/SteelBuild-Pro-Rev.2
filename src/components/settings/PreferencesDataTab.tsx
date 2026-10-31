@@ -60,14 +60,14 @@ export function PreferencesDataTab({ preferences, onSave, onPatch, isSaving }: {
       <p style={{ margin: "0 0 24px", fontSize: 11, color: "var(--text-muted)" }}>Back up, move, or safely reset your personal workspace configuration.</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginBottom: 24 }}>
-        <section style={{ padding: 16, border: "1px solid var(--border-default)", borderRadius: 8, background: "var(--bg-surface-low)" }}>
+        <section style={{ padding: 16, border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--bg-surface-low)" }}>
           <Download size={18} color="var(--accent)" />
           <h3 style={{ margin: "8px 0 4px", fontSize: 13, color: "var(--text-primary)" }}>Export settings</h3>
           <p style={{ margin: "0 0 12px", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>Download a versioned JSON file containing personal presentation preferences only.</p>
           <button type="button" onClick={exportSettings} style={{ padding: "8px 12px", border: "1px solid var(--accent-border)", borderRadius: 6, background: "var(--accent-muted)", color: "var(--accent)", fontWeight: 700, cursor: "pointer" }}>Export my settings</button>
         </section>
 
-        <section style={{ padding: 16, border: "1px solid var(--border-default)", borderRadius: 8, background: "var(--bg-surface-low)" }}>
+        <section style={{ padding: 16, border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--bg-surface-low)" }}>
           <Upload size={18} color="var(--accent)" />
           <h3 style={{ margin: "8px 0 4px", fontSize: 13, color: "var(--text-primary)" }}>Import settings</h3>
           <p style={{ margin: "0 0 12px", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>Files are validated before anything is saved. Identity and permission fields are never imported.</p>

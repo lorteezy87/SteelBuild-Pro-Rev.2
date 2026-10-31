@@ -106,7 +106,7 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
 
   const inputStyle = {
     width: "100%", background: "var(--bg-surface-high)", border: "1px solid var(--border-strong)",
-    borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)",
+    borderRadius: 6, padding: "8px 12px", color: "var(--text-primary)",
     fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
   };

@@ -751,7 +751,7 @@ export default function WorkPackages() {
             alignItems: "center",
             gap: 10,
             padding: "10px 14px",
-            borderRadius: 10,
+            borderRadius: 6,
             border: "1px solid var(--warning-border)",
             background: "var(--warning-muted)",
             color: "var(--status-warning)",
@@ -768,7 +768,7 @@ export default function WorkPackages() {
           role="status"
           style={{
             padding: "8px 14px",
-            borderRadius: 10,
+            borderRadius: 6,
             border: "1px solid var(--info-border)",
             background: "var(--info-muted)",
             color: "var(--status-info)",

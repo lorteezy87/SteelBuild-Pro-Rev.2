@@ -5,7 +5,7 @@ const FIELD_STYLE = {
   width: "100%",
   background: "var(--bg-input)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   color: "var(--text-primary)",
   fontFamily: "var(--font-body)",
   fontSize: 13,
@@ -27,7 +27,7 @@ function DateField({ label, enabled, mode, value, onEnabledChange, onModeChange,
     <section
       style={{
         border: "1px solid var(--border-default)",
-        borderRadius: 14,
+        borderRadius: 8,
         background: enabled
           ? "linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--bg-surface)) 0%, var(--bg-surface) 100%)"
           : "var(--bg-surface-low)",
@@ -54,7 +54,7 @@ function DateField({ label, enabled, mode, value, onEnabledChange, onModeChange,
           disabled={!enabled}
           onClick={() => onModeChange("date")}
           style={{
-            borderRadius: 10,
+            borderRadius: 6,
             border: mode === "date" ? "1px solid var(--accent)" : "1px solid var(--border-default)",
             background: mode === "date" ? "var(--accent-muted)" : "var(--bg-surface)",
             color: mode === "date" ? "var(--accent)" : "var(--text-secondary)",
@@ -73,7 +73,7 @@ function DateField({ label, enabled, mode, value, onEnabledChange, onModeChange,
           disabled={!enabled}
           onClick={() => onModeChange("tbd")}
           style={{
-            borderRadius: 10,
+            borderRadius: 6,
             border: mode === "tbd" ? "1px solid var(--status-warning)" : "1px solid var(--border-default)",
             background: mode === "tbd" ? "var(--warning-muted)" : "var(--bg-surface)",
             color: mode === "tbd" ? "var(--status-warning)" : "var(--text-secondary)",
@@ -99,7 +99,7 @@ function DateField({ label, enabled, mode, value, onEnabledChange, onModeChange,
         <div
           style={{
             border: "1px dashed var(--status-warning)",
-            borderRadius: 10,
+            borderRadius: 6,
             padding: "9px 10px",
             color: "var(--status-warning)",
             background: "var(--warning-muted)",
@@ -177,7 +177,7 @@ export default function BulkDateEditModal({ open, count = 0, isSaving = false, o
           width: "min(620px, 94vw)",
           background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 96%, var(--sbd-gantt-bg) 4%) 0%, var(--bg-surface-low) 100%)",
           border: "1px solid var(--accent-border)",
-          borderRadius: 18,
+          borderRadius: 8,
           boxShadow: "var(--shadow-lg)",
           color: "var(--text-primary)",
           zIndex: 999,
@@ -212,7 +212,7 @@ export default function BulkDateEditModal({ open, count = 0, isSaving = false, o
               border: "1px solid var(--border-default)",
               background: "var(--bg-surface)",
               color: "var(--text-muted)",
-              borderRadius: 10,
+              borderRadius: 6,
               width: 34,
               height: 34,
               cursor: isSaving ? "not-allowed" : "pointer",
@@ -227,7 +227,7 @@ export default function BulkDateEditModal({ open, count = 0, isSaving = false, o
           <div
             style={{
               border: "1px solid var(--border-default)",
-              borderRadius: 12,
+              borderRadius: 6,
               padding: "10px 12px",
               background: "var(--accent-muted)",
               color: "var(--text-secondary)",
@@ -279,7 +279,7 @@ export default function BulkDateEditModal({ open, count = 0, isSaving = false, o
             disabled={isSaving}
             style={{
               padding: "10px 16px",
-              borderRadius: 10,
+              borderRadius: 6,
               border: "1px solid var(--border-default)",
               background: "var(--bg-surface)",
               color: "var(--text-secondary)",
@@ -297,7 +297,7 @@ export default function BulkDateEditModal({ open, count = 0, isSaving = false, o
             disabled={!!validation || isSaving}
             style={{
               padding: "10px 18px",
-              borderRadius: 10,
+              borderRadius: 6,
               border: "1px solid var(--accent)",
               background: validation ? "var(--bg-surface)" : "var(--accent)",
               color: validation ? "var(--text-muted)" : "var(--on-accent)",

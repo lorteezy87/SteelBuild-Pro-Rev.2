@@ -24,7 +24,7 @@ export default function AlertChips({ alerts, onDismiss }) {
               alignItems: "center",
               gap: 8,
               padding: "6px 12px",
-              borderRadius: 20,
+              borderRadius: 8,
               background: bg,
               border: `1px solid ${border}`,
               fontFamily: "var(--font-mono)",

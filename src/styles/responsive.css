@@ -276,7 +276,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--field-action-color, var(--accent)) 34%, var(--border-default));
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -298,7 +298,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--field-action-color, var(--accent)) 18%, var(--bg-surface-low));
   color: var(--field-action-color, var(--accent));
 }
@@ -331,7 +331,7 @@ body {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
 }
@@ -339,7 +339,7 @@ body {
 .field-today-stat {
   min-width: 0;
   padding: 8px 10px;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--bg-surface-low);
   border-left: 3px solid var(--field-stat-color, var(--accent));
 }
@@ -385,7 +385,7 @@ body {
     gap: 8px;
     padding: 8px;
     border: 1px solid var(--border-default);
-    border-radius: 8px;
+    border-radius: 6px;
     background: var(--bg-surface);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
   }
@@ -429,7 +429,7 @@ body {
 
   .field-sub-panel,
   .field-week-strip {
-    border-radius: 8px !important;
+    border-radius: 6px !important;
   }
 
   .field-log-feed-row,

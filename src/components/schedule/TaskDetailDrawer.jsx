@@ -317,7 +317,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
               type="button"
               aria-label="Close"
               onClick={onClose}
-              style={{ background: drawerPanelStrong, border: `1px solid ${drawerMutedBorder}`, borderRadius: 8, cursor: 'pointer', color: drawerMutedText, fontSize: 18, width: 34, height: 34 }}
+              style={{ background: drawerPanelStrong, border: `1px solid ${drawerMutedBorder}`, borderRadius: 6, cursor: 'pointer', color: drawerMutedText, fontSize: 18, width: 34, height: 34 }}
             >
               ✕
             </button>
@@ -389,7 +389,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                   <div style={{
                     background: 'var(--accent-muted)',
                     border: '1px solid var(--accent-border)',
-                    borderRadius: 8,
+                    borderRadius: 6,
                     padding: '8px 12px',
                     marginBottom: 8,
                     display: 'flex',
@@ -500,7 +500,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                   padding: '10px 12px',
                   background: drawerPanel,
                   border: `1px solid ${drawerMutedBorder}`,
-                  borderRadius: 8,
+                  borderRadius: 6,
                 }}>
                   <div style={{
                     fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em',
@@ -547,7 +547,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 padding: '10px 12px',
                 background: drawerPanel,
                 border: `1px solid ${drawerMutedBorder}`,
-                borderRadius: 8,
+                borderRadius: 6,
               }}>
                 <ScheduleFlag
                   label="Mark as Milestone"
@@ -623,7 +623,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                       // hardcoded behaviour exactly.
                       const link = predecessorLinks.find((l) => l.id === pred.id) || { type: 'FS', lag_days: 1 };
                       return (
-                        <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: drawerPanel, border: `1px solid ${drawerMutedBorder}`, borderRadius: 8 }}>
+                        <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: drawerPanel, border: `1px solid ${drawerMutedBorder}`, borderRadius: 6 }}>
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{pred.wbs_code || '—'}</span>
                           <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pred.task_name}</span>
                           <select
@@ -682,7 +682,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 {successorTasks.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {successorTasks.map(suc => (
-                      <div key={suc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: drawerPanel, border: `1px solid ${drawerMutedBorder}`, borderRadius: 8 }}>
+                      <div key={suc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: drawerPanel, border: `1px solid ${drawerMutedBorder}`, borderRadius: 6 }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{suc.wbs_code || '—'}</span>
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{suc.task_name}</span>
                         <button
@@ -771,7 +771,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
               flex: 1,
               background: drawerPanel,
               border: `1px solid ${drawerBorder}`,
-              borderRadius: 8,
+              borderRadius: 6,
               padding: '10px 12px',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
@@ -787,7 +787,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
               flex: 1,
               background: 'var(--accent)',
               border: '1px solid var(--accent-border)',
-              borderRadius: 8,
+              borderRadius: 6,
               padding: '10px 12px',
               fontFamily: 'var(--font-body)',
               fontSize: 12,

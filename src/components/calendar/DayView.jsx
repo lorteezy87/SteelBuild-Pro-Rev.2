@@ -44,7 +44,7 @@ export default function DayView({ focus, events, onEventClick }) {
           textAlign: "center",
           background: "var(--bg-surface)",
           border: "1px dashed var(--border-default)",
-          borderRadius: 8,
+          borderRadius: 6,
         }}
       >
         <div
@@ -104,7 +104,7 @@ function DaySection({ group, list, onEventClick }) {
     <div
       style={{
         border: "1px solid var(--border-default)",
-        borderRadius: 8,
+        borderRadius: 6,
         background: "var(--bg-surface)",
         padding: 14,
         display: "flex",

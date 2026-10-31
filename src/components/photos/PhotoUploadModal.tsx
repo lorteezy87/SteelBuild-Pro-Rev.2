@@ -100,7 +100,7 @@ export default function PhotoUploadModal({ projectId, onClose }: PhotoUploadModa
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
-          borderRadius: 16,
+          borderRadius: 8,
           maxWidth: 920,
           width: "100%",
           maxHeight: "92vh",

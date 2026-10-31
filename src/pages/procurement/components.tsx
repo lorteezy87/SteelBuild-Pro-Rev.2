@@ -453,7 +453,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
       <div style={{
         background: 'var(--bg-surface-secondary)',
         border: '1px solid var(--border-default)',
-        borderRadius: 16, padding: 24,
+        borderRadius: 8, padding: 24,
         maxWidth: 720, width: '95%',
         maxHeight: '90vh', overflowY: 'auto',
       }}>
@@ -691,7 +691,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
               style={{
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-default)',
-                borderRadius: 8, padding: '8px 16px',
+                borderRadius: 6, padding: '8px 16px',
                 color: 'var(--text-primary)',
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                 cursor: isSaving ? 'not-allowed' : 'pointer', textTransform: 'uppercase',
@@ -706,7 +706,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
               disabled={isSaving || (!recoveryPending && !form.description?.trim())}
               style={{
                 background: 'var(--accent)', color: 'var(--on-accent)',
-                border: 'none', borderRadius: 8, padding: '8px 20px',
+                border: 'none', borderRadius: 6, padding: '8px 20px',
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                 cursor: isSaving || (!recoveryPending && !form.description?.trim()) ? 'not-allowed' : 'pointer',
                 textTransform: 'uppercase',

@@ -398,7 +398,7 @@ function ProjectConstraints({ projectId, orgId, isLoadingOrgs, scope, currentSco
       ]}
       actions={(
         <>
-          <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
             {[["list", "List"], ["board", "Board"]].map(([v, label]) => (
               <button
                 key={v}

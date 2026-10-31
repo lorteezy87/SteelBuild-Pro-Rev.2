@@ -96,8 +96,8 @@
   --sbd-radius-lg:       20px;
 
   /* Fonts */
-  --sbd-font-display:    'Barlow Condensed', 'Inter', system-ui, sans-serif;
-  --sbd-font-body:       'Inter', system-ui, sans-serif;
+  --sbd-font-display:    'Archivo', system-ui, -apple-system, sans-serif;
+  --sbd-font-body:       'Archivo', system-ui, -apple-system, sans-serif;
   --sbd-font-mono:       'IBM Plex Mono', 'Courier New', monospace;
 
   /* Apply base look + ALWAYS-ON aurora mesh so glass surfaces have

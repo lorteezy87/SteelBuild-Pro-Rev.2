@@ -80,7 +80,7 @@ export default function LookaheadPlanner({ tasks }) {
             style={{
               background: "var(--bg-surface)",
               border: "1px solid var(--border-default)",
-              borderRadius: "12px",
+              borderRadius: "6px",
               padding: "16px",
             }}
           >
@@ -183,7 +183,7 @@ export default function LookaheadPlanner({ tasks }) {
                           : task.status === "Delayed"
                           ? "1px solid var(--status-error)"
                           : "1px solid var(--border-default)",
-                      borderRadius: "8px",
+                      borderRadius: "6px",
                       padding: "8px 10px",
                       opacity: task.status === "Complete" ? 0.6 : 1,
                     }}

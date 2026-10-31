@@ -28,7 +28,7 @@ import { fetchAllProjectRowsPaged } from "@/lib/pieceControl/pagedSelect";
 import { summarizeShippingListCommit } from "@/lib/deliveries/summarizeShippingListCommit";
 
 const mono = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+const display = { fontFamily: "var(--font-display)" };
 const ACCENT = "var(--accent, #3B82F6)";
 
 export default function ShippingListImportModal({ open, projectId, projectName, onClose, onImported }) {
@@ -257,7 +257,7 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
           {err && (
-            <div role="alert" style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--status-error) 45%, transparent)", background: "color-mix(in srgb, var(--status-error) 12%, transparent)", color: "var(--text-primary)", fontSize: 12 }}>
+            <div role="alert" style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 6, border: "1px solid color-mix(in srgb, var(--status-error) 45%, transparent)", background: "color-mix(in srgb, var(--status-error) 12%, transparent)", color: "var(--text-primary)", fontSize: 12 }}>
               {err}
             </div>
           )}
@@ -273,7 +273,7 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
                 onClick={() => fileInput.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); acceptFile(e.dataTransfer.files?.[0]); }}
-                style={{ border: "1.5px dashed var(--border-default)", borderRadius: 10, padding: "34px 20px", textAlign: "center", cursor: "pointer", background: "var(--bg-surface-low)" }}
+                style={{ border: "1.5px dashed var(--border-default)", borderRadius: 6, padding: "34px 20px", textAlign: "center", cursor: "pointer", background: "var(--bg-surface-low)" }}
               >
                 <Upload size={22} style={{ color: "var(--text-muted)" }} />
                 <div style={{ marginTop: 8, color: "var(--text-primary)", fontSize: 13, fontWeight: 600 }}>{file ? file.name : "Drop the shipping list here, or click to browse"}</div>
@@ -295,7 +295,7 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
                 <StatChip label="Pieces" value={totalPieces} tone={ACCENT} />
               </div>
 
-              <div style={{ border: "1px solid var(--border-default)", borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
                 <div style={{ maxHeight: 380, overflowY: "auto" }}>
                   <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>

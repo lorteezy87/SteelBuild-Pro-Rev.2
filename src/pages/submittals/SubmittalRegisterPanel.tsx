@@ -251,7 +251,7 @@ export default function SubmittalRegisterPanel({
               aria-label="Filter by status"
               value={filterStatus}
               onChange={(e) => onFilterStatus(e.target.value)}
-              style={{ padding: "7px 10px", borderRadius: 8, fontSize: 12, minHeight: 34 }}
+              style={{ padding: "7px 10px", borderRadius: 6, fontSize: 12, minHeight: 34 }}
             >
               <option value="all">All Statuses</option>
               <option value="__pending_eor">Incomplete — Pending EOR/AOR Response</option>
@@ -262,7 +262,7 @@ export default function SubmittalRegisterPanel({
               aria-label="Filter by ball-in-court"
               value={filterBIC}
               onChange={(e) => onFilterBIC(e.target.value)}
-              style={{ padding: "7px 10px", borderRadius: 8, fontSize: 12, minHeight: 34 }}
+              style={{ padding: "7px 10px", borderRadius: 6, fontSize: 12, minHeight: 34 }}
             >
               <option value="all">Any Ball-in-Court</option>
               {BIC_CHOICES.map((b) => <option key={b} value={b}>{b}</option>)}

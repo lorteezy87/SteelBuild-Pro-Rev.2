@@ -104,7 +104,7 @@ function FilterChip({ label, count, active, onClick, color }) {
         <span style={{
           background: active ? "var(--accent)" : "var(--bg-surface-high)",
           color: active ? "var(--on-accent)" : "var(--text-muted)",
-          borderRadius: 10, padding: "0 6px", fontSize: 8,
+          borderRadius: 6, padding: "0 6px", fontSize: 8,
         }}>{count}</span>
       )}
     </button>

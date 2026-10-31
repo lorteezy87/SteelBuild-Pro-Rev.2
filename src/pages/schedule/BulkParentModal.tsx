@@ -14,7 +14,7 @@ interface BulkParentModalProps {
 export default function BulkParentModal({ backdrop, count, options, onClose, onSelectParent }: BulkParentModalProps) {
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: backdrop, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-surface-high)", border: "1px solid var(--accent-border)", borderRadius: 14, padding: 20, width: 420 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-surface-high)", border: "1px solid var(--accent-border)", borderRadius: 8, padding: 20, width: 420 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginBottom: 12 }}>
           SET PARENT FOR {count} TASK{count !== 1 ? "S" : ""}
         </div>

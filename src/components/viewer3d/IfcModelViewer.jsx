@@ -928,7 +928,7 @@ const overlay = {
 };
 
 const fitBtn = {
-  position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 8,
+  position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 6,
   border: `1px solid ${HUD_BORDER}`, background: "rgba(13,17,23,0.72)",
   color: HUD_TEXT_DIM, fontFamily: "var(--font-mono)", fontSize: 11,
   fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer", zIndex: 2,

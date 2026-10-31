@@ -304,7 +304,7 @@ export default function SubmittalVisualBoard({
           maxWidth: 420,
           minHeight: 40,
           padding: "8px 11px",
-          borderRadius: 10,
+          borderRadius: 6,
           border: `1px solid ${border}`,
           background: surfaceHigh,
           color: textMuted,
@@ -366,7 +366,7 @@ function ProcessColumn({ stage, items, onOpenTab }) {
       display: "flex",
       flexDirection: "column",
       minHeight: 500,
-      borderRadius: 12,
+      borderRadius: 6,
       border: `1px solid ${border}`,
       background: "color-mix(in srgb, var(--bg-surface) 72%, transparent)",
       overflow: "hidden",
@@ -432,7 +432,7 @@ function ProcessColumn({ stage, items, onOpenTab }) {
         {items.length === 0 ? (
           <div style={{
             border: `1px dashed ${border}`,
-            borderRadius: 10,
+            borderRadius: 6,
             minHeight: 82,
             display: "flex",
             alignItems: "center",
@@ -469,7 +469,7 @@ function ProcessCard({ item, onOpenTab }) {
         width: "100%",
         textAlign: "left",
         padding: 10,
-        borderRadius: 8,
+        borderRadius: 6,
         border: `1px solid ${item.due.overdue ? "color-mix(in srgb, var(--status-error) 55%, transparent)" : border}`,
         borderLeft: `3px solid ${color}`,
         background: item.due.overdue

@@ -573,7 +573,7 @@ export default function ExportFabReleaseModal({
               : exportLocked ? "Resolve the blocking issues or check the PM override to release" : undefined}
             style={{
               ...btnBase,
-              background: exportLocked ? "var(--bg-page)" : "rgba(200,155,32,0.2)",
+              background: exportLocked ? "var(--bg-page)" : "color-mix(in srgb, var(--accent) 20%, transparent)",
               borderColor: exportLocked ? "var(--border-default)" : "var(--accent)",
               color: exportLocked ? "var(--text-muted)" : "var(--accent)",
               opacity: busy || exportLocked ? 0.6 : 1,

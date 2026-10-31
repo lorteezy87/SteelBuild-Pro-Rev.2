@@ -13,7 +13,7 @@ import {
 } from "@/lib/importPsrSpreadsheet";
 
 const mono = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+const display = { fontFamily: "var(--font-display)" };
 const AI = "var(--ai-accent, #22D3EE)";
 
 export default function PsrSpreadsheetImportModal({

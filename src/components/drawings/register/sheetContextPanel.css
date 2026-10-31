@@ -16,7 +16,7 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 16px;
   background: var(--cmd-surface);
   color: var(--cmd-text);

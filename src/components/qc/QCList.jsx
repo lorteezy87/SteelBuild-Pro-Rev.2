@@ -20,7 +20,7 @@ export default function QCList({ records = [] }) {
 
   if (records.length === 0) {
     return (
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "40px", textAlign: "center" }}>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No test records</p>
       </div>
     );
@@ -32,7 +32,7 @@ export default function QCList({ records = [] }) {
         const passRate = record.quantity_tested > 0 ? Math.round((record.quantity_passed / record.quantity_tested) * 100) : 0;
 
         return (
-          <div key={record.id} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "10px", overflow: "hidden", cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}>
+          <div key={record.id} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", overflow: "hidden", cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}>
             {/* Header */}
             <div onClick={() => setExpanded(expanded === record.id ? null : record.id)} style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "16px", alignItems: "center", borderBottom: expanded === record.id ? "1px solid var(--divider)" : "none" }}>
               <div>

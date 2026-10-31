@@ -175,7 +175,7 @@ export default function Layout({ children, currentPageName }) {
         justifyContent: "center",
         padding: 0,
         background: "var(--bg-base)",
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        fontFamily: "var(--font-body)",
       }}
     >
       <SkipToMainContentLink />
@@ -335,7 +335,7 @@ export default function Layout({ children, currentPageName }) {
             </nav>
 
             {isPhone && (
-              <div role="group" aria-label="Workspace and project" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, padding: "6px 10px", background: "var(--bg-sidebar)", borderBottom: "1px solid var(--border-default)", position: "relative", zIndex: 100 }}>
+              <div role="group" aria-label="Workspace and project" className="sbd-topbar-sub" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, padding: "6px 10px", background: "var(--bg-sidebar)", borderBottom: "1px solid var(--border-default)", position: "relative", zIndex: 100 }}>
                 <WorkspaceSelector compact />
                 <ProjectPillDropdown compact />
               </div>
@@ -395,9 +395,9 @@ export default function Layout({ children, currentPageName }) {
                 background: "var(--bg-elevated, var(--sbd-bg-elevated))",
                 border: "1px solid var(--border-strong, var(--sbd-border))",
                 color: "var(--text-primary, var(--sbd-text))",
-                fontFamily: "'Inter', sans-serif",
+                fontFamily: "var(--font-body)",
                 fontSize: 13,
-                borderRadius: 10,
+                borderRadius: 6,
                 boxShadow: "var(--shadow-lg)",
                 backdropFilter: "blur(20px) saturate(140%)",
                 WebkitBackdropFilter: "blur(20px) saturate(140%)",

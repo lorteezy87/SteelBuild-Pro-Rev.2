@@ -97,8 +97,8 @@ export default function SheetListSidebar({
               className="drawing-sheet-card"
               style={{
                 ...sheetCardStyle,
-                borderColor: isActive ? "rgba(200,155,32,0.78)" : "var(--viewer-line, var(--border-default))",
-                background: isActive ? "rgba(200,155,32,0.12)" : "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
+                borderColor: isActive ? "color-mix(in srgb, var(--accent) 78%, transparent)" : "var(--viewer-line, var(--border-default))",
+                background: isActive ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
               }}
             >
               <span style={{ ...sheetAccentStyle, background: stage?.color || "var(--border-default)" }} />
@@ -221,7 +221,7 @@ const kickerStyle = {
 };
 
 const titleStyle = {
-  fontFamily: "Space Grotesk, var(--font-display)",
+  fontFamily: "var(--font-display)",
   color: "var(--text-primary)",
   fontSize: 20,
   lineHeight: 1.1,
@@ -236,7 +236,7 @@ const countBadgeStyle = {
   display: "grid",
   placeItems: "center",
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
   color: "var(--text-primary)",
   fontSize: 13,
@@ -258,7 +258,7 @@ const miniMetricStyle = {
   gap: 6,
   padding: "7px 8px",
   border: "1px solid",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
   fontSize: 9,
   fontWeight: 800,
@@ -272,7 +272,7 @@ const searchWrapStyle = {
   gap: 8,
   padding: "8px 10px",
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--bg-input)",
 };
 
@@ -317,7 +317,7 @@ const sheetCardStyle = {
   display: "block",
   padding: "10px 10px 10px 12px",
   border: "1px solid",
-  borderRadius: 8,
+  borderRadius: 6,
   color: "inherit",
   cursor: "pointer",
   textAlign: "left",
@@ -449,7 +449,7 @@ const navButtonStyle = (disabled) => ({
   minWidth: 38,
   height: 30,
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
   color: "var(--text-secondary)",
   cursor: disabled ? "not-allowed" : "pointer",

@@ -18,7 +18,7 @@ export function AppearancePreview({ dateLabel, currencyLabel, measurementLabel }
       style={{
         marginBottom: 28,
         border: "1px solid var(--border-default)",
-        borderRadius: 10,
+        borderRadius: 6,
         background: "var(--bg-surface-low)",
         overflow: "hidden",
       }}

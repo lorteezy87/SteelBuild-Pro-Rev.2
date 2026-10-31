@@ -305,7 +305,7 @@ function OwnedNotes({ storageKey, legacyNotesAvailable }) {
                 }}
                 style={{
                   padding: "10px 10px",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   marginBottom: 4,
                   cursor: "pointer",
                   background: selected

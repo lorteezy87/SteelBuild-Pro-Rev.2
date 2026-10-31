@@ -72,7 +72,7 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   return (
     <div style={{
       background: "var(--bg-surface-high)",
-      borderRadius: 12,
+      borderRadius: 6,
       border: "1px solid var(--border-default)",
       padding: 16,
       display: "flex",

@@ -121,7 +121,7 @@ export function ImpactBoardPanel({ projectId }: { projectId: string | null }) {
       </div>
 
       {canManage && open && (
-        <div style={{ padding: 14, borderRadius: 10, background: "var(--cmd-surface)", border: "1px solid var(--cmd-border)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px,1fr))", gap: 10 }}>
+        <div style={{ padding: 14, borderRadius: 6, background: "var(--cmd-surface)", border: "1px solid var(--cmd-border)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px,1fr))", gap: 10 }}>
           <select className="sbd-select" value={form.drawing_id} onChange={(e) => setForm((f) => ({ ...f, drawing_id: e.target.value }))}>
             <option value="">Select sheet…</option>
             {attachable.map((r) => <option key={r.drawing_id} value={r.drawing_id}>{r.sheet_number} · {r.current_revision}</option>)}
@@ -155,7 +155,7 @@ export function ImpactBoardPanel({ projectId }: { projectId: string | null }) {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {byStatus[s].map((im) => (
-                  <div key={im.id} style={{ padding: 10, borderRadius: 8, background: "var(--cmd-surface)", border: `1px solid color-mix(in srgb, ${STATUS_ACCENT[s]} 30%, var(--cmd-border))` }}>
+                  <div key={im.id} style={{ padding: 10, borderRadius: 6, background: "var(--cmd-surface)", border: `1px solid color-mix(in srgb, ${STATUS_ACCENT[s]} 30%, var(--cmd-border))` }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 4 }}>
                       <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--cmd-text-muted)" }}>{label(im.impact_type)}</span>
                       <Pill tone={priorityTone(im.priority)}>{im.priority}</Pill>

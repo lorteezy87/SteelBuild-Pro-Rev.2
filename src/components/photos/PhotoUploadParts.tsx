@@ -176,7 +176,7 @@ export function PhotoUploadDropZone({
         style={{
           background: isDragging ? "var(--accent-muted)" : "var(--bg-input)",
           border: `1px dashed ${isDragging ? "var(--accent)" : "var(--border-default)"}`,
-          borderRadius: 8,
+          borderRadius: 6,
           padding: "12px 16px",
           textAlign: "center",
           cursor: "pointer",
@@ -209,7 +209,7 @@ export function PhotoUploadDropZone({
       style={{
         background: isDragging ? "var(--accent-muted)" : "var(--bg-input)",
         border: `2px dashed ${isDragging ? "var(--accent)" : "var(--border-default)"}`,
-        borderRadius: 12,
+        borderRadius: 6,
         padding: "60px 24px",
         textAlign: "center",
         cursor: "pointer",
@@ -269,7 +269,7 @@ export function PhotoUploadItemRow({ item, onChange, onRemove, disabled }: ItemR
         gap: 12,
         background: "var(--bg-surface)",
         border: `1px solid ${statusColor}`,
-        borderRadius: 8,
+        borderRadius: 6,
         padding: 10,
         alignItems: "center",
       }}

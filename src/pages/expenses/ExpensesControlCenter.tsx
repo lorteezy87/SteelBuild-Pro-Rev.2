@@ -211,7 +211,7 @@ export default function ExpensesControlCenter(props: ExpensesControlCenterProps)
           <button
             type="button"
             onClick={onCreate}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", border: "1px solid var(--accent)", borderRadius: 7, background: "var(--accent)", color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.06em", cursor: "pointer", fontWeight: 700 }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", border: "1px solid var(--accent)", borderRadius: 6, background: "var(--accent)", color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.06em", cursor: "pointer", fontWeight: 700 }}
           >
             <Plus size={12} />
             Add Expense
@@ -221,7 +221,7 @@ export default function ExpensesControlCenter(props: ExpensesControlCenterProps)
           type="button"
           onClick={onRefresh}
           disabled={!onRefresh}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 11px", border: "1px solid var(--border-default)", borderRadius: 7, background: "var(--bg-surface)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.06em", cursor: onRefresh ? "pointer" : "default", opacity: onRefresh ? 1 : 0.6 }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 11px", border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--bg-surface)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.06em", cursor: onRefresh ? "pointer" : "default", opacity: onRefresh ? 1 : 0.6 }}
         >
           <RefreshCw size={12} />
           Refresh

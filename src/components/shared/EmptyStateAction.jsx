@@ -77,7 +77,7 @@ export default function EmptyStateAction({ message, actions = [], icon = null })
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = action.secondary
                   ? "var(--bg-surface-high)"
-                  : "rgba(200,155,32,0.18)";
+                  : "color-mix(in srgb, var(--accent) 18%, transparent)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = action.secondary

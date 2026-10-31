@@ -67,7 +67,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
         aria-expanded={open}
         className="sbd-btn-ghost"
         style={{
-          width: 32, height: 32, borderRadius: 8,
+          width: 32, height: 32, borderRadius: 6,
           background: open ? "var(--accent-muted)" : "var(--hover-bg)",
           border: `1px solid ${open ? "var(--accent-border)" : "var(--border)"}`,
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -84,7 +84,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
               : `${unreadCount} unread`}
             style={{
               position: "absolute", top: 3, right: 3,
-              background: "var(--status-error)", borderRadius: 8,
+              background: "var(--status-error)", borderRadius: 6,
               minWidth: 14, height: 14,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
@@ -103,7 +103,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
           width: 320,
           background: "var(--sbd-bg-panel-hi, var(--bg-elevated, #21262D))",
           border: "1px solid var(--border-default)",
-          borderRadius: 14,
+          borderRadius: 8,
           borderTop: "2px solid var(--accent)",
           boxShadow: "var(--shadow-lg, 0 16px 40px rgba(0,0,0,0.45))",
           zIndex: 2000, overflow: "hidden",
@@ -115,7 +115,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)", fontWeight: 700, letterSpacing: "0.08em" }}>ALERTS</span>
               {unreadCount > 0 && (
-                <span style={{ background: "var(--status-error)", color: "var(--on-accent)", borderRadius: 10, padding: "1px 6px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>
+                <span style={{ background: "var(--status-error)", color: "var(--on-accent)", borderRadius: 6, padding: "1px 6px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>
                   {unreadCount}
                 </span>
               )}
@@ -156,7 +156,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
                       alignItems: "center",
                       gap: 4,
                       padding: "2px 7px",
-                      borderRadius: 10,
+                      borderRadius: 6,
                       border: `1px solid ${color}44`,
                       background: `color-mix(in srgb, ${color} 10%, transparent)`,
                       color,

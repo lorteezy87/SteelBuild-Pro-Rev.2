@@ -113,6 +113,8 @@ export const DC_MASTHEAD = {
 export const DC_SIGNAL = {
   accent: "#FF5A1F",
   accentLight: "#FF7442",
+  /** Orange text on light paper — holds 4.5:1 where #FF5A1F does not. */
+  accentInk: "#C2410C",
   onAccent: "#111417",
   green: "oklch(0.62 0.13 150)",
   blue: "oklch(0.62 0.11 245)",

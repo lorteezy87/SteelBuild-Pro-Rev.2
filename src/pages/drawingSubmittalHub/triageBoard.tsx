@@ -237,7 +237,7 @@ export function ModelMappingSection({
           )}
 
           {openBucket && openMeta && (
-            <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflow: "hidden" }}>
               <div style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
                 padding: "8px 12px", borderBottom: `1px solid ${border}`, background: surface1,
@@ -324,7 +324,7 @@ export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[
           {rows.map((row) => (
             <div key={row.sequence} className="drawing-triage__sequence-row" style={{
               gap: 10, alignItems: "center",
-              padding: "10px 12px", borderRadius: 10,
+              padding: "10px 12px", borderRadius: 6,
               border: `1px solid ${row.atRiskCount ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
               background: "var(--bg-surface-low)",
             }}>
@@ -385,7 +385,7 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: RevisionImpac
             return (
               <div key={r.revisionId} className="drawing-triage__revision-row" style={{
                 gap: 12, alignItems: "center",
-                padding: "10px 12px", borderRadius: 10,
+                padding: "10px 12px", borderRadius: 6,
                 border: `1px solid ${r.severity === "critical" ? "color-mix(in srgb, var(--status-error) 56%, transparent)" : border}`,
                 background: "var(--bg-surface-low)",
               }}>
@@ -463,7 +463,7 @@ export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanel
     : scheduleRisk.severity === "at_risk" ? `At risk · ${scheduleRisk.daysLate}d` : "On track";
 
   return (
-    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
+    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 6, background: surface1, border: `1px solid ${border}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
         <div style={{ fontFamily: mono, fontSize: 8, color: textMuted, letterSpacing: "0.12em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
           <CalendarClock size={10} /> Schedule &amp; workflow

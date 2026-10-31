@@ -292,7 +292,7 @@ export function EmailDetail({
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
           {/* Avatar */}
           <div style={{
-            width: 34, height: 34, borderRadius: 8, background: "var(--accent-muted)",
+            width: 34, height: 34, borderRadius: 6, background: "var(--accent-muted)",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
             color: "var(--accent)", fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700,
           }}>
@@ -390,7 +390,7 @@ export function EmailDetail({
               <div style={{
                 position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 100,
                 background: "var(--bg-elevated)", border: "1px solid var(--border-strong)",
-                borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                borderRadius: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
                 width: 180, maxHeight: 200, overflowY: "auto",
               }}>
                 {allLabels.filter((l) => !labels.includes(l)).map((l) => (
@@ -597,7 +597,7 @@ export function EmailBodyContent({ message, attachments }: EmailBodyContentProps
         <div style={{
           fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)",
           lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
-          padding: 12, background: "var(--bg-surface-low)", borderRadius: 8,
+          padding: 12, background: "var(--bg-surface-low)", borderRadius: 6,
         }}>
           {plainText}
         </div>

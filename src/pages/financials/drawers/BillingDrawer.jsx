@@ -157,7 +157,7 @@ export function BillingDrawer({ open, onClose, kpi, sovItems }) {
               label="Position"
               value={
                 <span style={{
-                  fontFamily: "'Space Grotesk', var(--font-display)",
+                  fontFamily: "var(--font-display)",
                   fontSize: 14, fontWeight: 700, color: barColor, lineHeight: 1.2,
                 }}>
                   {positionLabel}

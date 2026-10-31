@@ -31,7 +31,7 @@ export default function BulkImportModal({
       <div style={{ width: 560, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-strong)", borderRadius: 4, overflow: "hidden" }}>
         <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-secondary)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>Bulk Add RFIs</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>Bulk Add RFIs</div>
             <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>One RFI per line · Format: Subject | Priority | BIC | Due Date | Drawing Ref</div>
           </div>
           <button onClick={onClose} style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", fontSize: 20 }}>×</button>

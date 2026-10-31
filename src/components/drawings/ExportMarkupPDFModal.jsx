@@ -169,7 +169,7 @@ export default function ExportMarkupPDFModal({
                 onClick={() => setScope(opt.v)}
                 style={{
                   ...btnBase, flex: 1,
-                  background: scope === opt.v ? "rgba(200,155,32,0.15)" : "var(--bg-page)",
+                  background: scope === opt.v ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "var(--bg-page)",
                   borderColor: scope === opt.v ? "var(--accent)" : "var(--border-default)",
                   color: scope === opt.v ? "var(--accent)" : "var(--text-muted)",
                 }}
@@ -206,7 +206,7 @@ export default function ExportMarkupPDFModal({
             disabled={busy || sheets.length === 0}
             style={{
               ...btnBase,
-              background: "rgba(200,155,32,0.2)",
+              background: "color-mix(in srgb, var(--accent) 20%, transparent)",
               borderColor: "var(--accent)",
               color: "var(--accent)",
               opacity: busy ? 0.6 : 1,

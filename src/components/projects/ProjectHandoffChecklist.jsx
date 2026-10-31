@@ -151,7 +151,7 @@ export default function ProjectHandoffChecklist({ projectId }) {
           padding: "10px 12px",
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
-          borderRadius: 8,
+          borderRadius: 6,
         }}
       >
         <div style={{ flex: 1 }}>

@@ -158,7 +158,7 @@ function RegisterVirtualList({
   });
 
   return (
-    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflowX: "auto", background: surface1 }}>
+    <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflowX: "auto", background: surface1 }}>
       <div style={{
         display: "grid", gridTemplateColumns: REGISTER_GRID_COLS,
         borderBottom: `1px solid ${border}`, borderLeft: "3px solid transparent",
@@ -364,7 +364,7 @@ export function DrawingRegisterTable({
         <div role={focusedPackage ? "status" : "alert"} style={{
           display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
           border: `1px solid ${focusedPackage ? border : "var(--status-error)"}`,
-          background: "var(--bg-surface-low)", borderRadius: 8, padding: "8px 12px",
+          background: "var(--bg-surface-low)", borderRadius: 6, padding: "8px 12px",
           color: focusedPackage ? textPrimary : "var(--status-error)", fontSize: 12,
         }}>
           <span>{focusedPackage
@@ -381,7 +381,7 @@ export function DrawingRegisterTable({
             onChange={(e) => setSearch(e.target.value)}
             disabled={hasLinkedSet}
             placeholder="Search drawing sets…"
-            style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }}
+            style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 6, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }}
           />
         </div>
         <div style={{ flex: 1 }} />
@@ -400,7 +400,7 @@ export function DrawingRegisterTable({
         // kit table styling without breaking the virtual renderer's grid geometry.
         <RegisterVirtualList rows={rows} sortByHealth={sortByHealth} setSortByHealth={setSortByHealth} h={rowHandlers} />
       ) : (
-      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflowX: "auto", background: surface1 }}>
+      <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflowX: "auto", background: surface1 }}>
         {/* desk-table: kit table class — plain-table codepath only (see note on RegisterVirtualList above). */}
         <table className="desk-table" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>

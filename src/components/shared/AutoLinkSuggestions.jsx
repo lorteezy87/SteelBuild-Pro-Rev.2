@@ -10,8 +10,8 @@ const chipStyle = {
   fontSize: 10,
   fontFamily: "var(--font-mono)",
   cursor: "pointer",
-  border: "1px solid rgba(200,155,32,0.3)",
-  background: "rgba(200,155,32,0.08)",
+  border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)",
+  background: "color-mix(in srgb, var(--accent) 8%, transparent)",
   color: "var(--accent)",
   transition: "all 0.15s ease",
 };
@@ -34,8 +34,8 @@ export default function AutoLinkSuggestions({ entity, sources = {}, onLink }) {
   return (
     <div style={{
       padding: "8px 12px",
-      background: "rgba(200,155,32,0.05)",
-      border: "1px solid rgba(200,155,32,0.18)",
+      background: "color-mix(in srgb, var(--accent) 5%, transparent)",
+      border: "1px solid color-mix(in srgb, var(--accent) 18%, transparent)",
       borderLeft: "3px solid var(--accent)",
       borderRadius: "0 6px 6px 0",
       marginBottom: 10,

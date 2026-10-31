@@ -59,7 +59,7 @@ export default function TransmittalModal({
           background: "var(--bg-surface-low)",
           border: "1px solid var(--bg-surface-high)",
           borderTop: "3px solid var(--status-success)",
-          borderRadius: 12,
+          borderRadius: 6,
           width: 520,
           maxHeight: "85vh",
           display: "flex",

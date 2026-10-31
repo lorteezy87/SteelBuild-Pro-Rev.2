@@ -237,7 +237,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
             gap: 10,
             padding: "10px 16px",
             marginBottom: 8,
-            borderRadius: 10,
+            borderRadius: 6,
             border: "1px solid color-mix(in srgb, var(--status-warning) 40%, var(--cmd-border))",
             background: "color-mix(in srgb, var(--status-warning) 10%, var(--cmd-surface))",
             fontSize: 12,

@@ -54,7 +54,7 @@ const usd = new Intl.NumberFormat("en-US", {
 const cardStyle = {
   background: "var(--bg-surface)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   overflow: "hidden",
 };
 const inputStyle = {
@@ -399,7 +399,7 @@ export default function SteelWeightCalculator() {
         {/* Header */}
         <div style={{ marginBottom: 16 }}>
           <div style={{
-            fontFamily: "Space Grotesk, var(--font-display)",
+            fontFamily: "var(--font-display)",
             fontSize: 22, fontWeight: 800,
             textTransform: "uppercase", letterSpacing: "-0.01em",
             color: "var(--text-primary)",

@@ -296,7 +296,7 @@ export default function EmailInbox() {
               display: "inline-flex", alignItems: "center", gap: 5,
               height: 30, padding: "0 12px",
               background: "var(--accent)", border: "1px solid var(--accent-border)",
-              borderRadius: 8, cursor: "pointer",
+              borderRadius: 6, cursor: "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600,
               color: "var(--on-accent)", flexShrink: 0,
             }}
@@ -313,7 +313,7 @@ export default function EmailInbox() {
               style={{
                 height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center",
                 background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-                borderRadius: 8, cursor: "pointer", color: "var(--text-muted)", flexShrink: 0,
+                borderRadius: 6, cursor: "pointer", color: "var(--text-muted)", flexShrink: 0,
               }}
             >
               <Settings size={13} strokeWidth={2} />
@@ -337,7 +337,7 @@ export default function EmailInbox() {
       {/* Main content area */}
       <div style={{
         flex: 1, display: "flex", overflow: "hidden",
-        border: "1px solid var(--border-default)", borderRadius: 12,
+        border: "1px solid var(--border-default)", borderRadius: 6,
         margin: "0 20px 16px", background: "var(--bg-surface)",
       }}>
         {/* ── Left sidebar ──────────────────────────────────────────── */}

@@ -24,14 +24,14 @@ const labelStyle = {
 
 const selectStyle = {
   width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)',
-  borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)',
+  borderRadius: 6, padding: '8px 12px', color: 'var(--text-primary)',
   fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box',
 };
 
 const optionCard = (isSelected) => ({
   padding: '14px', background: isSelected ? 'var(--accent-muted)' : 'var(--bg-surface-low)',
   border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-default)'}`,
-  borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s', textAlign: 'center',
+  borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s', textAlign: 'center',
 });
 
 const Toggle = ({ checked, onChange }) => (

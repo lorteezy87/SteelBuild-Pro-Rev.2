@@ -140,7 +140,7 @@ export default function ShortcutsTab() {
           <div style={{
             background: 'var(--bg-surface-low)',
             border: '1px solid var(--border-default)',
-            borderRadius: 8,
+            borderRadius: 6,
             overflow: 'hidden',
           }}>
             {group.items.map((item, idx) => (

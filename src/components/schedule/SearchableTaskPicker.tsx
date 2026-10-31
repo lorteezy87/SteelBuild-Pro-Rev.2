@@ -256,7 +256,7 @@ export default function SearchableTaskPicker({
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
             border: `1px solid ${drawerBorder}`,
-            borderRadius: 8,
+            borderRadius: 6,
             maxHeight: 220,
             overflowY: "auto",
             zIndex: 100,

@@ -337,7 +337,7 @@ const sheetHeadingStyle = {
   alignItems: "baseline",
   gap: 10,
   minWidth: 0,
-  fontFamily: "Space Grotesk, var(--font-display)",
+  fontFamily: "var(--font-display)",
   fontSize: 22,
   lineHeight: 1.1,
   fontWeight: 850,
@@ -372,7 +372,7 @@ const metaBlockStyle = {
   minWidth: 78,
   padding: "8px 10px",
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
 };
 

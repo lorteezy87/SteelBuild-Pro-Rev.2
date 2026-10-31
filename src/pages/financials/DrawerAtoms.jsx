@@ -54,7 +54,7 @@ export function FinancialDrawer({ open, onClose, barColor, title, subtitle, chil
           <div style={{ width: 4, height: 28, borderRadius: 2, background: barColor, flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              fontFamily: "'Space Grotesk', var(--font-display)",
+              fontFamily: "var(--font-display)",
               fontSize: 14, fontWeight: 700, color: "var(--text-primary)",
             }}>
               {title}

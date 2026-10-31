@@ -29,7 +29,7 @@
   max-width: 360px;
   padding: 9px 12px;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-surface);
 }
 
@@ -69,7 +69,7 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--cmd-border);
-  border-radius: 9px;
+  border-radius: 6px;
   background: var(--cmd-row-hover);
 }
 
@@ -267,7 +267,7 @@
 
 [data-skin="command"] .piece-impact__head strong {
   display: block;
-  font-family: var(--font-display, "Space Grotesk", sans-serif);
+  font-family: var(--font-display);
   font-size: 14px;
 }
 
@@ -354,7 +354,7 @@
   gap: 4px;
   overflow-x: auto;
   border: 1px solid var(--cmd-border);
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   scrollbar-width: thin;
 }
@@ -407,7 +407,7 @@
 [data-skin="command"] .piece-register-setup-step,
 [data-skin="command"] .piece-register-overview {
   border: 1px solid var(--cmd-border);
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   color: var(--cmd-text);
 }
@@ -425,7 +425,7 @@
   height: 30px;
   grid-row: 1 / span 2;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-icon-wash);
   color: var(--cmd-warn-text);
   font-family: "IBM Plex Mono", monospace;
@@ -488,7 +488,7 @@
   margin-top: 16px;
   overflow: hidden;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-border);
 }
 
@@ -548,7 +548,7 @@
   height: 36px;
   min-width: 0;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   outline: none;
   background: var(--cmd-surface);
   color: var(--cmd-text);
@@ -589,7 +589,7 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--cmd-border);
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--cmd-surface);
 }
 
@@ -698,7 +698,7 @@
   margin: 16px 0;
   padding: 18px;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   color: var(--cmd-text);
   box-shadow: inset 3px 0 0 var(--cmd-gold);
@@ -897,7 +897,7 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-icon-wash);
   color: var(--cmd-warn-text);
 }
@@ -928,7 +928,7 @@
   height: 40px;
   padding: 0 10px;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   outline: none;
   background: var(--cmd-surface);
   color: var(--cmd-text);
@@ -1031,7 +1031,7 @@
   grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
   min-width: 0;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -1145,7 +1145,7 @@
 [data-skin="command"] .piece-import-results {
   max-height: 360px;
   margin-top: 14px;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 [data-skin="command"] .piece-import-results .cmd-table {
@@ -1197,7 +1197,7 @@
 [data-skin="command"] .piece-relationship-state {
   padding: 16px;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   color: var(--cmd-text-muted);
   font-size: 13px;
@@ -1233,7 +1233,7 @@
   margin-top: 12px;
   overflow: auto;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 [data-skin="command"] .piece-assignment-row {
@@ -1301,7 +1301,7 @@
   min-height: 38px;
   padding: 7px 9px;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--cmd-text);
   font-size: 12px;
 }
@@ -1350,7 +1350,7 @@
   padding: 12px;
   border: 1px solid var(--cmd-border);
   border-left: 3px solid var(--cmd-warn);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-surface);
 }
 
@@ -1422,7 +1422,7 @@
 [data-skin="command"] .piece-operation-state {
   padding: 16px;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   color: var(--cmd-text-muted);
   font-size: 13px;
@@ -1466,7 +1466,7 @@
   gap: 20px;
   padding: 16px;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-surface);
 }
 
@@ -1484,7 +1484,7 @@
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--cmd-chip-warn-bg);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-icon-wash);
   color: var(--cmd-warn-text);
 }
@@ -1492,7 +1492,7 @@
 [data-skin="command"] .piece-operations__head h2 {
   margin: 0;
   color: var(--cmd-text);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 18px;
   line-height: 1.2;
 }
@@ -1515,7 +1515,7 @@
   flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-row-hover);
 }
 
@@ -1551,7 +1551,7 @@
   margin: 0;
   padding: 26px 14px;
   border: 1px dashed var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--cmd-text-muted);
   font-size: 12px;
   text-align: center;
@@ -1582,7 +1582,7 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-row-hover);
 }
 
@@ -1632,7 +1632,7 @@
   margin-bottom: 12px;
   padding: 10px 12px;
   border: 1px solid var(--cmd-border);
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--cmd-surface);
 }
 
@@ -1681,7 +1681,7 @@
   margin-bottom: 12px;
   padding: 12px 14px;
   border: 1px solid var(--cmd-border);
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--cmd-surface);
 }
 
@@ -1740,7 +1740,7 @@
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--cmd-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   color: var(--cmd-text);
 }
@@ -1812,7 +1812,7 @@
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-surface);
 }
 
@@ -1933,7 +1933,7 @@
   margin-top: 12px;
   padding: 12px;
   border: 1px solid var(--cmd-chip-warn-bg);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-icon-wash);
 }
 
@@ -2038,7 +2038,7 @@
   align-items: start;
   padding: 8px 9px;
   border: 1px solid var(--cmd-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--cmd-row-hover);
 }
 
@@ -2175,7 +2175,7 @@
 [data-skin="command"] .piece-rollout-state {
   min-width: 0;
   border: 1px solid var(--cmd-border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   color: var(--cmd-text);
 }
@@ -2214,7 +2214,7 @@
 [data-skin="command"] .piece-rollout-title h2 {
   margin: 0;
   color: var(--cmd-text);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 18px;
 }
 
@@ -2232,7 +2232,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-row-hover);
 }
 
@@ -2278,7 +2278,7 @@
   padding: 11px 12px;
   border: 1px solid var(--cmd-border);
   border-left: 3px solid var(--cmd-warn);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-icon-wash);
 }
 
@@ -2338,7 +2338,7 @@
   gap: 13px;
   padding: 14px;
   border: 1px solid var(--cmd-border);
-  border-radius: 9px;
+  border-radius: 6px;
 }
 
 [data-skin="command"] .piece-rollout-mode__identity {
@@ -2701,7 +2701,7 @@
   }
 
   [data-skin="command"] .piece-register-nav {
-    border-radius: 10px;
+    border-radius: 6px;
   }
 
   [data-skin="command"] .piece-register-nav__item {
@@ -2988,7 +2988,7 @@
 [data-skin="command"] .package-board-column__title {
   margin: 0;
   color: var(--cmd-text);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 13px;
   font-weight: 700;
 }
@@ -3044,7 +3044,7 @@
 }
 
 [data-skin="command"] .package-board-card__mark {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 14px;
   font-weight: 700;
 }

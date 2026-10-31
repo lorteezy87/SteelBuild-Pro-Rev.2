@@ -44,7 +44,7 @@ const overlayStyle = {
 const dialogStyle = {
   background: "var(--bg-surface-secondary)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   width: "min(1100px, 95vw)",
   height: "min(800px, 92vh)",
   display: "flex", flexDirection: "column",

@@ -120,7 +120,7 @@ export default function EmailAccountSettings({ projectId }) {
     <div style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
-      borderRadius: 10,
+      borderRadius: 6,
       overflow: "hidden",
     }}>
       {/* Header */}
@@ -258,7 +258,7 @@ export default function EmailAccountSettings({ projectId }) {
                 marginTop: 10, padding: "10px 12px",
                 background: "color-mix(in srgb, var(--info) 6%, transparent)",
                 border: "1px solid color-mix(in srgb, var(--info) 20%, transparent)",
-                borderRadius: 8,
+                borderRadius: 6,
               }}>
                 <div style={{
                   fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
@@ -471,7 +471,7 @@ function WebhookUrlBlock({ webhookUrl, copiedUrl, onCopy }) {
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         padding: "6px 10px", background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)", borderRadius: 8,
+        border: "1px solid var(--border-default)", borderRadius: 6,
       }}>
         <code style={{
           flex: 1, fontFamily: "var(--font-mono)", fontSize: 10,
@@ -521,7 +521,7 @@ const inputStyle = {
   padding: "8px 12px",
   background: "var(--bg-surface)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   fontFamily: "var(--font-body)",
   fontSize: 12,
   color: "var(--text-primary)",

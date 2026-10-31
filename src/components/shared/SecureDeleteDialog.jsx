@@ -85,7 +85,7 @@ export default function SecureDeleteDialog({
       background: 'var(--bg-surface-secondary)',
       border: '1px solid var(--danger-border)',
       borderLeft: '4px solid var(--status-error)',
-      borderRadius: 12,
+      borderRadius: 6,
       padding: '24px 28px',
       width: 420,
       maxWidth: '100%',

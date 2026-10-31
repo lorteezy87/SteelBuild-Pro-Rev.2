@@ -70,7 +70,7 @@ export default function Model3dSyncPanel({
       style={{
         marginTop: 12,
         padding: "10px 11px",
-        borderRadius: 8,
+        borderRadius: 6,
         border: "1px solid var(--border-default)",
         background: "var(--bg-surface)",
       }}
@@ -137,7 +137,7 @@ export default function Model3dSyncPanel({
           style={{
             width: "100%",
             padding: "7px 10px",
-            borderRadius: 7,
+            borderRadius: 6,
             cursor: health.withGuid === 0 ? "not-allowed" : "pointer",
             border: "1px solid var(--border-default)",
             background: "var(--bg-surface-low)",

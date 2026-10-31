@@ -98,7 +98,7 @@ export default function NudgeDraftModal({ rfi, open, onClose, fromName }) {
       <div style={{
         display: "flex", gap: 8, alignItems: "flex-start",
         background: "var(--accent-muted, var(--info-muted))",
-        border: "1px solid var(--border-default)", borderRadius: 8,
+        border: "1px solid var(--border-default)", borderRadius: 6,
         padding: "8px 12px", marginBottom: 14,
       }}>
         <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>

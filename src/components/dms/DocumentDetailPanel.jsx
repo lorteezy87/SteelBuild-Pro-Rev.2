@@ -251,7 +251,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
               linkedEntities.map(({ key, value, label, color, bg, border }) => (
                 <div key={key} style={{
                   padding: "12px 14px", background: bg,
-                  border: `1px solid ${border}`, borderRadius: 8,
+                  border: `1px solid ${border}`, borderRadius: 6,
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
                   <div>

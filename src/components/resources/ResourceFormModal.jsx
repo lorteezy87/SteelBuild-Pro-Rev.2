@@ -110,7 +110,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
 
   const inputStyle = {
     width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
-    borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)",
+    borderRadius: "6px", padding: "8px 12px", color: "var(--text-primary)",
     fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
   };
 

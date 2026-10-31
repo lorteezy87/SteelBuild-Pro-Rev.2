@@ -80,7 +80,7 @@ export default function ShortcutsOverlay({ open, onClose }) {
           maxHeight: "90vh",
           background: "var(--bg-surface)",
           border: "1px solid var(--border-strong)",
-          borderRadius: 8,
+          borderRadius: 6,
           boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
           overflow: "hidden",
         }}
@@ -97,7 +97,7 @@ export default function ShortcutsOverlay({ open, onClose }) {
           }}
         >
           <div>
-            <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 14, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
               Keyboard Shortcuts
             </div>
             <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 2 }}>

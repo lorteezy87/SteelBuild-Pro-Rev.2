@@ -118,7 +118,7 @@ export default function ExpenseTable({
                     <td style={{ padding: "9px 14px", fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.vendor || "—"}</td>
                     <td style={{ padding: "9px 14px", fontFamily: "var(--font-mono)", fontSize: 11, textAlign: "right", color: amtColor, fontWeight: 700, textDecoration: isVoided ? "line-through" : "none" }}>{formatCurrency(e.amount)}</td>
                     <td style={{ padding: "9px 14px" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 20, background: `${statusColor}18`, border: `1px solid ${statusColor}44`, fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: statusColor, letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 8, background: `${statusColor}18`, border: `1px solid ${statusColor}44`, fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: statusColor, letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
                         <PaymentCircle status={e.payment_status} />
                         {e.payment_status}
                       </span>

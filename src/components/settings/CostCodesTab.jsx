@@ -12,7 +12,7 @@ const labelStyle = {
 
 const sectionStyle = {
   background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
-  borderRadius: 8, padding: '18px 16px', marginBottom: 20,
+  borderRadius: 6, padding: '18px 16px', marginBottom: 20,
 };
 
 export default function CostCodesTab() {
@@ -87,7 +87,7 @@ export default function CostCodesTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 20, padding: '10px 14px',
         background: 'var(--accent-muted)', border: '1px solid var(--accent-border)',
-        borderRadius: 8,
+        borderRadius: 6,
       }}>
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700,
@@ -235,7 +235,7 @@ export default function CostCodesTab() {
       <div style={{
         marginTop: 24, padding: '12px 14px',
         background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
-        borderRadius: 8,
+        borderRadius: 6,
       }}>
         <p style={{
           fontFamily: 'var(--font-mono)', fontSize: 9,

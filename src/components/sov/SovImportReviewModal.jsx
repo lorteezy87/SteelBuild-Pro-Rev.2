@@ -53,7 +53,7 @@ export default function SovImportReviewModal({ open, onClose, staged = [], onCon
           {invalid > 0 && <span style={{ color: "var(--danger)" }}>{invalid} SKIPPED</span>}
         </div>
 
-        <div style={{ maxHeight: "48vh", overflowY: "auto", marginTop: 8, border: "1px solid var(--border-default)", borderRadius: 8 }}>
+        <div style={{ maxHeight: "48vh", overflowY: "auto", marginTop: 8, border: "1px solid var(--border-default)", borderRadius: 6 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ position: "sticky", top: 0, background: "var(--bg-surface-secondary)", zIndex: 1 }}>

@@ -29,7 +29,7 @@ export function HeaderSignal({ icon: Icon, label, value, tone }: HeaderSignalPro
       gap: 8,
       minHeight: 36,
       padding: "7px 10px",
-      borderRadius: 10,
+      borderRadius: 6,
       background: `color-mix(in srgb, ${tone} 12%, transparent)`,
       border: `1px solid color-mix(in srgb, ${tone} 32%, transparent)`,
       color: tone,

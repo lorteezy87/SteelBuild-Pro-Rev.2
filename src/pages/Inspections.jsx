@@ -392,8 +392,8 @@ export default function Inspections() {
         }}>
           <div style={{
             width: 56, height: 56, borderRadius: "50%",
-            background: "var(--accent-muted, rgba(200,155,32,0.08))",
-            border: "1px solid var(--accent-border, rgba(200,155,32,0.20))",
+            background: "var(--accent-muted, color-mix(in srgb, var(--accent) 8%, transparent))",
+            border: "1px solid var(--accent-border, color-mix(in srgb, var(--accent) 20%, transparent))",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 24,
           }}>

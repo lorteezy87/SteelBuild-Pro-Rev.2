@@ -27,7 +27,7 @@ export default function StepSelectSet(props: any) {
             height: 38,
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 8,
+            borderRadius: 6,
             padding: "0 12px 0 36px",
             color: "var(--text-primary)",
             fontFamily: "var(--font-body)",
@@ -68,7 +68,7 @@ export default function StepSelectSet(props: any) {
                 padding: "0 12px", height: 48,
                 background: isSelected ? "var(--warning-muted)" : "var(--hover-bg)",
                 border: `1px solid ${isSelected ? "rgba(245,158,11,0.35)" : "var(--divider)"}`,
-                borderRadius: 8, cursor: "pointer",
+                borderRadius: 6, cursor: "pointer",
                 transition: "all 0.1s"
               }}
               onMouseEnter={e => {
@@ -99,11 +99,11 @@ export default function StepSelectSet(props: any) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--divider)", paddingTop: 12 }}>
         <button onClick={onClose} style={{
           height: 34, padding: "0 16px", background: "var(--hover-bg)",
-          border: "1px solid var(--border-default)", borderRadius: 8,
+          border: "1px solid var(--border-default)", borderRadius: 6,
           color: "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 12, cursor: "pointer"
         }}>Cancel</button>
         <button onClick={() => selected && onSelect(selected)} disabled={!selected || loading} style={{
-          height: 34, padding: "0 18px", borderRadius: 8, cursor: selected && !loading ? "pointer" : "not-allowed",
+          height: 34, padding: "0 18px", borderRadius: 6, cursor: selected && !loading ? "pointer" : "not-allowed",
           background: selected && !loading ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: selected && !loading ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,

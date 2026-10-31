@@ -367,7 +367,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
               style={{
                 background: "var(--bg-surface)",
                 border: "1px solid var(--border-default)",
-                borderRadius: 12,
+                borderRadius: 6,
                 padding: "14px 18px",
                 flex: "1 1 180px",
                 minWidth: 160,

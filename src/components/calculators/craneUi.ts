@@ -12,7 +12,7 @@ export const mono: CSSProperties = { fontFamily: "var(--font-mono)" };
 export const cardStyle: CSSProperties = {
   background: "var(--bg-surface)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   overflow: "hidden",
 };
 
@@ -58,7 +58,7 @@ export function buttonStyle(variant: "accent" | "fn" | "danger" = "fn", disabled
     textTransform: "uppercase",
     padding: "8px 14px",
     minHeight: 36,
-    borderRadius: 8,
+    borderRadius: 6,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.55 : 1,
     boxShadow: "0 1px 0 var(--border-strong)",

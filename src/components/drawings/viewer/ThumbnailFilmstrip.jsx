@@ -294,7 +294,7 @@ const ThumbCard = memo(function ThumbCard({ drawing, isActive, thumb, onSelect, 
           overflow: "hidden",
           position: "relative",
           boxShadow: isActive
-            ? "0 6px 20px rgba(200,155,32,0.35)"
+            ? "0 6px 20px color-mix(in srgb, var(--accent) 35%, transparent)"
             : "0 2px 8px rgba(0,0,0,0.4)",
         }}
       >

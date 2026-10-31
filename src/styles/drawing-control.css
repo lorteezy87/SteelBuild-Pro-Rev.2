@@ -68,7 +68,7 @@
   width: min(280px, calc(100vw - 32px));
   padding: 5px;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   box-shadow: var(--shadow-lg);
 }
@@ -112,7 +112,7 @@
   width: min(250px, calc(100vw - 32px));
   padding: 5px;
   border: 1px solid var(--cmd-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--cmd-surface);
   box-shadow: var(--shadow-lg);
 }

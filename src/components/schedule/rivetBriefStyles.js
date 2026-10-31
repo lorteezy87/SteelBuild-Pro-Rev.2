@@ -8,7 +8,7 @@ export const shellStyle = {
   flexShrink: 0,
   margin: "0 24px 12px",
   border: "1px solid color-mix(in srgb, var(--border-default) 84%, white 16%)",
-  borderRadius: 18,
+  borderRadius: 8,
   background: "var(--sched-band-bg)",
   boxShadow: "var(--shadow-lg)",
   padding: 14,
@@ -19,7 +19,7 @@ export const toggleButtonStyle = {
   placeItems: "center",
   width: 28,
   height: 28,
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid var(--border-default)",
   background: "var(--bg-surface-high)",
   color: "var(--text-muted)",
@@ -58,7 +58,7 @@ export const titleWrapStyle = {
 export const avatarStyle = {
   width: 34,
   height: 34,
-  borderRadius: 12,
+  borderRadius: 6,
   display: "grid",
   placeItems: "center",
   color: "color-mix(in srgb, var(--status-info) 15%, var(--text-primary))",
@@ -117,7 +117,7 @@ export function metricStyle(tone) {
   return {
     minHeight: 104,
     border: `1px solid color-mix(in srgb, ${tone} 28%, var(--border-default))`,
-    borderRadius: 14,
+    borderRadius: 8,
     background: `linear-gradient(145deg, color-mix(in srgb, ${tone} 10%, var(--bg-surface-high)), var(--bg-surface-low))`,
     padding: 12,
     display: "grid",
@@ -128,7 +128,7 @@ export function metricStyle(tone) {
 export const recommendationStyle = {
   gridColumn: "span 3",
   border: "1px solid var(--border-default)",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "var(--bg-surface-low)",
   padding: 12,
 };
@@ -136,7 +136,7 @@ export const recommendationStyle = {
 export const phasePanelStyle = {
   gridColumn: "span 3",
   border: "1px solid var(--border-default)",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "var(--bg-surface-low)",
   padding: 12,
 };
@@ -144,7 +144,7 @@ export const phasePanelStyle = {
 export const nearTermStyle = {
   gridColumn: "span 3",
   border: "1px solid var(--border-default)",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "var(--bg-surface-low)",
   padding: 12,
 };
@@ -152,7 +152,7 @@ export const nearTermStyle = {
 export const recoveryPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-info) 24%, var(--border-default))",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "linear-gradient(145deg, color-mix(in srgb, var(--status-info) 6%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
@@ -160,7 +160,7 @@ export const recoveryPanelStyle = {
 export const morningPlanStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--accent) 24%, var(--border-default))",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "linear-gradient(145deg, color-mix(in srgb, var(--accent) 6%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
@@ -168,7 +168,7 @@ export const morningPlanStyle = {
 export const handoffPanelStyle = {
   gridColumn: "span 6",
   border: "1px solid color-mix(in srgb, var(--status-info) 30%, var(--border-default))",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "linear-gradient(135deg, color-mix(in srgb, var(--status-info) 7%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
@@ -206,7 +206,7 @@ export const linkButtonStyle = {
 export const criticalPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "linear-gradient(145deg, color-mix(in srgb, var(--status-warning) 6%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
@@ -214,7 +214,7 @@ export const criticalPanelStyle = {
 export const dependencyPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "linear-gradient(145deg, color-mix(in srgb, var(--status-warning) 5%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
@@ -222,7 +222,7 @@ export const dependencyPanelStyle = {
 export const variancePanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-warning) 28%, var(--border-default))",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "linear-gradient(145deg, color-mix(in srgb, var(--status-warning) 6%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
@@ -230,7 +230,7 @@ export const variancePanelStyle = {
 export const ownershipPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-error) 26%, var(--border-default))",
-  borderRadius: 14,
+  borderRadius: 8,
   background: "linear-gradient(145deg, color-mix(in srgb, var(--status-error) 5%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
@@ -256,7 +256,7 @@ export function phaseRowStyle(active) {
   return {
     width: "100%",
     border: `1px solid ${active ? "var(--accent-border)" : "var(--border-default)"}`,
-    borderRadius: 10,
+    borderRadius: 6,
     background: active ? "var(--accent-muted)" : "var(--bg-surface-low)",
     color: "var(--text-muted)",
     padding: "8px 9px",
@@ -278,7 +278,7 @@ export function recoveryRowStyle(tone) {
   return {
     width: "100%",
     border: `1px solid color-mix(in srgb, ${tone} 26%, var(--border-default))`,
-    borderRadius: 12,
+    borderRadius: 6,
     background: `linear-gradient(135deg, color-mix(in srgb, ${tone} 8%, transparent), var(--bg-surface-low))`,
     color: "var(--text-muted)",
     padding: "9px 10px",
@@ -302,7 +302,7 @@ export const morningPlanRowStyle = {
   gap: 9,
   alignItems: "start",
   border: "1px solid var(--border-default)",
-  borderRadius: 11,
+  borderRadius: 6,
   background: "var(--bg-surface-low)",
   color: "var(--text-secondary)",
   padding: "8px 10px",
@@ -318,7 +318,7 @@ export const criticalTaskStyle = {
   gap: 8,
   alignItems: "start",
   border: "1px solid var(--border-default)",
-  borderRadius: 10,
+  borderRadius: 6,
   background: "var(--bg-surface-low)",
   padding: "8px 9px",
   textAlign: "left",
@@ -332,7 +332,7 @@ export const logicTaskStyle = {
   gap: 8,
   alignItems: "start",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
-  borderRadius: 10,
+  borderRadius: 6,
   background: "var(--warning-muted)",
   padding: "8px 9px",
   textAlign: "left",
@@ -346,7 +346,7 @@ export const varianceTaskStyle = {
   gap: 8,
   alignItems: "start",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
-  borderRadius: 10,
+  borderRadius: 6,
   background: "var(--warning-muted)",
   padding: "8px 9px",
   textAlign: "left",
@@ -360,7 +360,7 @@ export const ownershipTaskStyle = {
   gap: 8,
   alignItems: "start",
   border: "1px solid color-mix(in srgb, var(--status-error) 24%, var(--border-default))",
-  borderRadius: 10,
+  borderRadius: 6,
   background: "var(--danger-muted)",
   padding: "8px 9px",
   textAlign: "left",
@@ -372,7 +372,7 @@ export const varianceDaysStyle = {
   alignItems: "center",
   justifyContent: "center",
   minHeight: 22,
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid color-mix(in srgb, var(--status-warning) 38%, var(--border-default))",
   background: "var(--warning-muted)",
   color: "var(--status-warning)",
@@ -390,7 +390,7 @@ export const handoffTaskStyle = {
   gap: 9,
   alignItems: "start",
   border: "1px solid var(--border-default)",
-  borderRadius: 10,
+  borderRadius: 6,
   background: "var(--bg-surface-low)",
   padding: "8px 9px",
   textAlign: "left",
@@ -402,7 +402,7 @@ export const dateChipStyle = {
   alignItems: "center",
   justifyContent: "center",
   minHeight: 22,
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid color-mix(in srgb, var(--status-info) 32%, var(--border-default))",
   background: "var(--info-muted)",
   color: "var(--status-info)",

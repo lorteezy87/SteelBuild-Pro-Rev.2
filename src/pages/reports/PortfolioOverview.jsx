@@ -535,7 +535,7 @@ export default function PortfolioOverview() {
                     padding: "10px 12px",
                     background: "var(--bg-surface-low)",
                     border: "1px solid var(--border-default)",
-                    borderRadius: 8,
+                    borderRadius: 6,
                     cursor: "pointer",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.borderColor = severityColor(r.severity))}

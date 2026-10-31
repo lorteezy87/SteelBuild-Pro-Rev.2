@@ -276,7 +276,7 @@ export default function OrgMembers() {
               value={defaultProjectRole ?? "none"}
               disabled={savingDefaultRole}
               onChange={(e) => onChangeDefaultProjectRole(e.target.value)}
-              style={{ minHeight: 36, padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, cursor: savingDefaultRole ? "wait" : "pointer" }}
+              style={{ minHeight: 36, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, cursor: savingDefaultRole ? "wait" : "pointer" }}
             >
               <option value="viewer">Viewer — read-only on all projects</option>
               <option value="field">Field — field updates on all projects</option>

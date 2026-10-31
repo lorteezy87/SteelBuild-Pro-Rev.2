@@ -39,7 +39,7 @@ export function Tile({
       style={{
         background: "var(--bg-surface)",
         border: `1px solid ${active ? accent : "var(--border-default)"}`,
-        borderRadius: 10,
+        borderRadius: 6,
         padding: "14px 16px",
         cursor: interactive ? "pointer" : "default",
         transition: "border-color 0.12s, transform 0.12s",
@@ -300,7 +300,7 @@ export function DriftRow({
         gap: 14,
         alignItems: "center",
         padding: "10px 12px",
-        borderRadius: 8,
+        borderRadius: 6,
         cursor: onClick ? "pointer" : "default",
         background: "var(--bg-surface-low)",
         border: "1px solid var(--border-default)",
@@ -384,7 +384,7 @@ export function UrgentTile({
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
         borderLeft: `3px solid ${color}`,
-        borderRadius: 8,
+        borderRadius: 6,
         padding: "12px 14px",
         cursor: onClick ? "pointer" : "default",
       }}
@@ -451,7 +451,7 @@ export function WeekStat({
       padding: "12px 14px",
       background: "var(--bg-surface-low)",
       border: "1px solid var(--border-default)",
-      borderRadius: 8,
+      borderRadius: 6,
     }}>
       <div style={{
         ...mono, fontSize: 9, fontWeight: 700,
@@ -494,7 +494,7 @@ export function HealthBucket({
       background: "var(--bg-surface-low)",
       border: "1px solid var(--border-default)",
       borderLeft: `3px solid ${color}`,
-      borderRadius: 8,
+      borderRadius: 6,
     }}>
       <div style={{
         ...mono, fontSize: 9, fontWeight: 700,
@@ -531,7 +531,7 @@ export function ChartPanel({
     <div style={{
       background: "var(--bg-surface-low)",
       border: "1px solid var(--border-default)",
-      borderRadius: 10,
+      borderRadius: 6,
       padding: "14px 16px",
     }}>
       <div style={{

@@ -189,8 +189,8 @@ function ToolbarButton({ active = false, disabled = false, onClick, title, icon,
       style={{
         ...buttonStyle,
         color: active ? "var(--accent)" : "var(--text-secondary)",
-        background: active ? "rgba(200,155,32,0.12)" : "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
-        borderColor: active ? "rgba(200,155,32,0.62)" : "var(--viewer-line, var(--border-default))",
+        background: active ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--viewer-panel-bg-soft, var(--bg-surface-low))",
+        borderColor: active ? "color-mix(in srgb, var(--accent) 62%, transparent)" : "var(--viewer-line, var(--border-default))",
         opacity: disabled ? 0.42 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -208,7 +208,7 @@ const toolbarGroupStyle = {
   gap: 6,
   padding: "4px",
   border: "1px solid var(--viewer-line, var(--border-default))",
-  borderRadius: 8,
+  borderRadius: 6,
   background: "color-mix(in srgb, var(--bg-surface) 86%, transparent)",
 };
 

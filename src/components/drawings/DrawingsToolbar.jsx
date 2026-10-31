@@ -64,7 +64,7 @@ export function DisciplineChips({ discipline, setDiscipline, disciplineCounts })
               ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", padding: "4px 10px",
               borderRadius: "var(--radius-badge)", cursor: "pointer",
               border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
-              background: active ? "rgba(200,155,32,0.15)" : "none",
+              background: active ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "none",
               color: active ? "var(--accent)" : "var(--text-muted)",
             }}
           >
@@ -136,7 +136,7 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
             style={{
               ...mono, fontSize: 10, fontWeight: 700, padding: "6px 12px",
               border: "none", cursor: "pointer",
-              background: view === v ? "rgba(200,155,32,0.2)" : "none",
+              background: view === v ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "none",
               color: view === v ? "var(--accent)" : "var(--text-muted)",
             }}
           >
@@ -160,7 +160,7 @@ export function BulkActionsBar({
     <div className="sbd-card" style={{
       ...surface, padding: "10px 16px", marginBottom: 12,
       display: "flex", alignItems: "center", gap: 12,
-      background: "rgba(200,155,32,0.08)", borderColor: "rgba(200,155,32,0.3)",
+      background: "color-mix(in srgb, var(--accent) 8%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
     }}>
       <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
         {selectedCount} SELECTED

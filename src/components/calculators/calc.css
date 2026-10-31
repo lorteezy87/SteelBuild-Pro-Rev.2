@@ -16,7 +16,7 @@
   padding: 16px;
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 /* ── Display ─────────────────────────────────────────────────── */
@@ -28,7 +28,7 @@
   padding: 10px 14px;
   background: var(--bg-surface-low, var(--bg-surface));
   border: 1px solid var(--border-default, var(--border-strong));
-  border-radius: 8px;
+  border-radius: 6px;
   font-family: var(--font-mono);
   color: var(--text-primary);
   min-height: 56px;
@@ -66,7 +66,7 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   color: var(--text-primary);
@@ -147,7 +147,7 @@
 .sbd-calc-tool-rail__btn {
   min-height: 44px;
   padding: 0 16px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   color: var(--text-secondary);
@@ -272,7 +272,7 @@
   padding: 10px 12px;
   background: var(--bg-surface-low, var(--bg-surface));
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 6px;
   min-width: 180px;
   max-height: 320px;
   overflow: hidden;

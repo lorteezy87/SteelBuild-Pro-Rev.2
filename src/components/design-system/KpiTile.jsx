@@ -101,7 +101,7 @@ export default function KpiTile({
         background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 90%, var(--bg-surface-low) 10%) 0%, color-mix(in srgb, var(--bg-surface-low) 84%, var(--bg-void) 16%) 100%)",
         backdropFilter: "blur(20px) saturate(150%)",
         WebkitBackdropFilter: "blur(20px) saturate(150%)",
-        borderRadius: 16,
+        borderRadius: 8,
         borderTopStyle: "solid",
         borderRightStyle: "solid",
         borderBottomStyle: "solid",

@@ -78,7 +78,7 @@ export default function AuthenticatedApp() {
   if (mfaStatusDegraded) {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, background: "var(--bg-page)" }}>
-        <div style={{ width: "100%", maxWidth: 420, border: "1px solid var(--border-default)", borderRadius: 16, background: "var(--bg-surface)", padding: 24 }}>
+        <div style={{ width: "100%", maxWidth: 420, border: "1px solid var(--border-default)", borderRadius: 8, background: "var(--bg-surface)", padding: 24 }}>
           <h1 style={{ margin: "0 0 8px", fontSize: 22, color: "var(--text-primary)" }}>Verify your sign-in</h1>
           <p style={{ margin: "0 0 16px", color: "var(--text-muted)", lineHeight: 1.5 }}>
             {mfaStatusMessage || "We could not verify your MFA status. Retry to continue."}

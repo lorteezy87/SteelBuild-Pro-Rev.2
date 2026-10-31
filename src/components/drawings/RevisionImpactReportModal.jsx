@@ -353,7 +353,7 @@ function SummaryStrip({ summary, onExport }) {
   return (
     <div style={{
       display: "flex", gap: 18, flexWrap: "wrap", alignItems: "center", padding: "12px 14px",
-      borderRadius: 10, border: "1px solid var(--border-default)", background: "var(--bg-input, rgba(255,255,255,0.02))",
+      borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-input, rgba(255,255,255,0.02))",
     }}>
       <Kpi label="Changes" value={summary.totalDeltas} />
       <Kpi label="Sheets" value={`${summary.sheetsDiffed}/${summary.sheetsChanged}`} />

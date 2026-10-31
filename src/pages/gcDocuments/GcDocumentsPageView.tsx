@@ -23,7 +23,7 @@ import type { GcDocumentsPageState } from "./useGcDocumentsPageState";
 
 const selectStyle: React.CSSProperties = {
   padding: "7px 10px",
-  borderRadius: 8,
+  borderRadius: 6,
   border: "1px solid var(--border-default)",
   background: "var(--bg-surface-low)",
   color: "var(--text-primary)",
@@ -119,7 +119,7 @@ export default function GcDocumentsPageView({
           role="status"
           style={{
             display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-            padding: "8px 14px", marginBottom: 14, borderRadius: 8,
+            padding: "8px 14px", marginBottom: 14, borderRadius: 6,
             border: "1px solid var(--status-review)",
             background: "var(--bg-surface-low)",
           }}

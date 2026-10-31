@@ -53,7 +53,7 @@ export default function PunchlistList({
 
   if (items.length === 0) {
     return (
-      <div className="sbd-card" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
+      <div className="sbd-card" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "40px", textAlign: "center" }}>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No items</p>
       </div>
     );
@@ -71,7 +71,7 @@ export default function PunchlistList({
           style={{
             background: "var(--bg-surface)",
             border: checked ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-            borderRadius: "10px",
+            borderRadius: "6px",
             overflow: "hidden",
             cursor: "pointer",
             transition: "all 0.15s",
@@ -242,7 +242,7 @@ export default function PunchlistList({
                             display: "block",
                             width: 72,
                             height: 72,
-                            borderRadius: 8,
+                            borderRadius: 6,
                             border: "1px solid var(--border-default)",
                             overflow: "hidden",
                             background: "var(--bg-input)",

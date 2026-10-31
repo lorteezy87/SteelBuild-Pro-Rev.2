@@ -685,7 +685,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             position: 'fixed', insetInlineEnd: 16, bottom: 16, zIndex: 2000,
             width: 'min(420px, calc(100vw - 32px))', padding: 16,
             border: '1px solid var(--border-strong, var(--border-default))',
-            borderRadius: 12, background: 'var(--bg-elevated, var(--bg-surface))',
+            borderRadius: 6, background: 'var(--bg-elevated, var(--bg-surface))',
             color: 'var(--text-primary)', boxShadow: 'var(--shadow-lg)',
           }}
         >

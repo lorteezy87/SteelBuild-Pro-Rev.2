@@ -171,7 +171,7 @@ export function AnnotationItemView({
 }: AnnotationItemViewProps) {
   const color = item.color || "#FF3D3D";
   const selectionOutline: CSSProperties = selected
-    ? { filter: "drop-shadow(0 0 3px rgba(200,155,32,0.9))" }
+    ? { filter: "drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 90%, transparent))" }
     : {};
   const style = {
     cursor: interactive ? "pointer" : "default",

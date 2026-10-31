@@ -21,7 +21,7 @@ export default function ThemeToggleButton() {
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       className="sbd-btn-ghost"
       style={{
-        width: 32, height: 32, borderRadius: 8,
+        width: 32, height: 32, borderRadius: 6,
         background: "var(--bg-hover)", border: "1px solid var(--border)",
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: "pointer", color: "var(--text-muted)",

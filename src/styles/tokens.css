@@ -312,10 +312,10 @@ html[data-accent="slate"] {
   --density-font-scale:       1;
 
   /* Fonts */
-  --font-display:             'Barlow Condensed', 'Inter', sans-serif;
-  --font-body:                'Inter', 'Barlow', sans-serif;
+  --font-display:             'Archivo', system-ui, -apple-system, sans-serif;
+  --font-body:                'Archivo', system-ui, -apple-system, sans-serif;
   --font-mono:                'IBM Plex Mono', 'Courier New', monospace;
-  --font-data:                'JetBrains Mono', 'IBM Plex Mono', monospace;
+  --font-data:                'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 }
 
 /* ── LIGHT THEME ────────────────────────────────────────────

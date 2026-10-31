@@ -29,7 +29,7 @@ export function ResourceGuruCommandStrip({ plan, focus, onFocusChange }) {
       gap: 12,
       padding: 14,
       border: "1px solid var(--border-default)",
-      borderRadius: 12,
+      borderRadius: 6,
       background: "var(--bg-surface)",
       boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
     }}>
@@ -52,7 +52,7 @@ export function ResourceGuruCommandStrip({ plan, focus, onFocusChange }) {
                 style={{
                   minHeight: 34,
                   padding: "0 10px",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   border: focus === option.id ? "1px solid var(--accent)" : "1px solid var(--border-default)",
                   background: focus === option.id ? "var(--accent-muted)" : "var(--bg-input)",
                   color: focus === option.id ? "var(--accent)" : "var(--text-secondary)",
@@ -82,7 +82,7 @@ export function ResourceGuruCommandStrip({ plan, focus, onFocusChange }) {
             <div key={row.resource.id} style={{
               minWidth: 0,
               padding: 10,
-              borderRadius: 10,
+              borderRadius: 6,
               border: row.overAllocated ? "1px solid var(--danger-border)" : "1px solid var(--border-default)",
               background: row.overAllocated ? "var(--danger-muted)" : "var(--bg-surface-low)",
             }}>
@@ -135,14 +135,14 @@ export function ResourceGuruCommandStrip({ plan, focus, onFocusChange }) {
         </div>
       </div>
 
-      <aside style={{ minWidth: 0, border: "1px solid var(--border-default)", borderRadius: 10, background: "var(--bg-surface-low)", padding: 10 }}>
+      <aside style={{ minWidth: 0, border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--bg-surface-low)", padding: 10 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 800, marginBottom: 8 }}>
           Waiting List / Approval Queue
         </div>
         {queue.length ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {queue.map((item) => (
-              <div key={item.key} style={{ padding: 8, border: "1px solid var(--border-default)", borderRadius: 8, background: "var(--bg-input)" }}>
+              <div key={item.key} style={{ padding: 8, border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--bg-input)" }}>
                 <div style={{ color: "var(--text-primary)", fontSize: 11, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {item.label}
                 </div>
@@ -167,7 +167,7 @@ export function ResourceGuruCommandStrip({ plan, focus, onFocusChange }) {
 
 export function GuruMetric({ icon: Icon, label, value, sub, color }) {
   return (
-    <div style={{ minWidth: 0, padding: 10, border: "1px solid var(--border-default)", borderRadius: 10, background: "var(--bg-surface-low)" }}>
+    <div style={{ minWidth: 0, padding: 10, border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--bg-surface-low)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, color }}>
         <Icon size={14} />
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</span>
@@ -292,7 +292,7 @@ export function BoardEmptyState({ onAddResource }) {
                 <span key={s} style={{
                   fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 600,
                   color: "var(--text-disabled)", background: "var(--hover-bg)",
-                  border: "1px solid var(--divider)", borderRadius: 10,
+                  border: "1px solid var(--divider)", borderRadius: 6,
                   padding: "2px 7px", textTransform: "uppercase", letterSpacing: "0.04em",
                 }}>{s}</span>
               ))}
@@ -416,7 +416,7 @@ export function ResourcesSidebar({
                 <div key={res.id} style={{
                   background: isOverAllocated ? "rgba(239,68,68,0.06)" : heatBg !== "transparent" ? heatBg : "var(--bg-surface-low)",
                   border: isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid var(--divider)",
-                  borderRadius: 8, padding: 8, marginBottom: 8,
+                  borderRadius: 6, padding: 8, marginBottom: 8,
                   transition: "background 0.2s, border-color 0.2s",
                 }}>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 600, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
@@ -436,7 +436,7 @@ export function ResourcesSidebar({
                         <span key={si} style={{
                           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
                           color: "var(--text-secondary)", background: "var(--hover-bg)",
-                          border: "1px solid var(--bg-surface-high)", borderRadius: 8,
+                          border: "1px solid var(--bg-surface-high)", borderRadius: 6,
                           padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
                         }}>{sk}</span>
                       ))}
@@ -511,7 +511,7 @@ export function HoverTooltipOverlay({ tooltip }) {
     <div style={{
       position: "fixed", left: tooltip.x, top: tooltip.y,
       transform: "translate(-50%, -100%)", background: "var(--bg-surface-low)",
-      border: "1px solid rgba(var(--accent-rgb, 59,130,246),0.25)", borderRadius: 8,
+      border: "1px solid rgba(var(--accent-rgb, 59,130,246),0.25)", borderRadius: 6,
       padding: "10px 14px", zIndex: 10001, pointerEvents: "none",
       boxShadow: "0 8px 32px rgba(0,0,0,0.7)", minWidth: 200,
     }}>
@@ -543,7 +543,7 @@ export function UndoToastBanner({ toast: undoToast }) {
         left: 20,
         background: "var(--bg-surface-low)",
         border: "1px solid rgba(0,214,143,0.30)",
-        borderRadius: 8,
+        borderRadius: 6,
         padding: "10px 14px",
         fontSize: 11,
         fontFamily: "var(--font-body)",

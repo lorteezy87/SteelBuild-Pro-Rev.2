@@ -20,7 +20,7 @@ export default function ChoiceStep({ onNewSet, onNewRevision, onClose }) {
             onMouseEnter={() => setHovered(opt.id)}
             onMouseLeave={() => setHovered(null)}
             style={{
-              padding: "16px 18px", borderRadius: 10, cursor: "pointer",
+              padding: "16px 18px", borderRadius: 6, cursor: "pointer",
               background: hovered === opt.id ? "var(--warning-muted)" : "var(--hover-bg)",
               border: `1px solid ${hovered === opt.id ? "var(--warning-border)" : "var(--bg-surface-high)"}`,
               transition: "all 0.12s", display: "flex", alignItems: "flex-start", gap: 14

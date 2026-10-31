@@ -54,7 +54,7 @@ function RevisionAiPanel({
   return (
     <div style={{
       width: 360, flexShrink: 0, display: "flex", flexDirection: "column",
-      borderRadius: 10, border: "1px solid var(--border-default)",
+      borderRadius: 6, border: "1px solid var(--border-default)",
       // SP4: `--bg-base` isn't remapped by the `.detailing-cc` alias, so swap it
       // to the alias-remapped `--bg-surface` when the parent dialog is light.
       background: light ? "var(--bg-surface)" : "var(--bg-base, #0D1117)", overflow: "hidden",
@@ -75,7 +75,7 @@ function RevisionAiPanel({
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
         {downstream && (
           <div style={{
-            display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px", borderRadius: 8,
+            display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px", borderRadius: 6,
             background: "color-mix(in srgb, #F85149 14%, transparent)", border: "1px solid color-mix(in srgb, #F85149 40%, transparent)",
           }}>
             <AlertTriangle size={14} style={{ color: "var(--status-error)", flexShrink: 0, marginTop: 1 }} />
@@ -430,7 +430,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
         {notEnough ? (
           <div style={{
             flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-            border: "1px dashed var(--border-default)", borderRadius: 10,
+            border: "1px dashed var(--border-default)", borderRadius: 6,
             color: "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 13,
             textAlign: "center", padding: 30, lineHeight: 1.6,
           }}>
@@ -489,7 +489,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                   onClick={() => setMode(key)}
                   style={{
                     display: "inline-flex", alignItems: "center", gap: 5,
-                    minHeight: 30, padding: "4px 10px", borderRadius: 7, cursor: "pointer",
+                    minHeight: 30, padding: "4px 10px", borderRadius: 6, cursor: "pointer",
                     border: `1px solid ${mode === key ? "var(--accent)" : "var(--border-default)"}`,
                     background: mode === key ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent",
                     color: mode === key ? "var(--accent)" : "var(--text-muted)",
@@ -563,7 +563,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                     title="AI: what changed between these revisions?"
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 5,
-                      minHeight: 30, padding: "4px 10px", borderRadius: 7, cursor: aiBusyDisabled ? "not-allowed" : "pointer",
+                      minHeight: 30, padding: "4px 10px", borderRadius: 6, cursor: aiBusyDisabled ? "not-allowed" : "pointer",
                       border: `1px solid ${aiOpen ? "var(--accent)" : "var(--border-default)"}`,
                       background: aiOpen ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent",
                       color: aiOpen ? "var(--accent)" : "var(--text-muted)", opacity: aiBusyDisabled ? 0.5 : 1,
@@ -589,7 +589,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
             {/* minHeight floor keeps the sheet usable when the body scrolls. */}
             <div style={{ flex: 1, minHeight: 260, display: "flex", gap: 10 }}>
             <div style={{
-              flex: 1, minWidth: 0, overflow: "auto", borderRadius: 10,
+              flex: 1, minWidth: 0, overflow: "auto", borderRadius: 6,
               border: "1px solid var(--border-default)", background: "var(--bg-surface-highest)",
               position: "relative",
             }}>

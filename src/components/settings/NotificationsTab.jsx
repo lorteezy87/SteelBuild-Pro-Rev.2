@@ -8,7 +8,7 @@ const labelStyle = {
 
 const inputStyle = {
   background: 'var(--bg-input)', border: '1px solid var(--border-default)',
-  borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)',
+  borderRadius: 6, padding: '8px 12px', color: 'var(--text-primary)',
   fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none',
 };
 
@@ -137,7 +137,7 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{label}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Delivery service not configured</div>
             </div>
-            <button type="button" disabled style={{ border: '1px solid var(--border-default)', borderRadius: 10, background: 'var(--bg-surface-low)', color: 'var(--text-muted)', padding: '4px 9px', fontFamily: 'var(--font-mono)', fontSize: 8 }}>UNAVAILABLE</button>
+            <button type="button" disabled style={{ border: '1px solid var(--border-default)', borderRadius: 6, background: 'var(--bg-surface-low)', color: 'var(--text-muted)', padding: '4px 9px', fontFamily: 'var(--font-mono)', fontSize: 8 }}>UNAVAILABLE</button>
           </div>
         ))}
       </div>

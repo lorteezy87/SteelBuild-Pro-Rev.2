@@ -27,7 +27,7 @@ export function DocControlMovedNotice({ onDismiss }: { onDismiss: () => void }) 
         gap: 12,
         marginBottom: 12,
         padding: "12px 14px",
-        borderRadius: 10,
+        borderRadius: 6,
         border: "1px solid var(--cmd-border)",
         borderLeft: "3px solid var(--cmd-info)",
         background: "var(--cmd-chip-info-bg)",

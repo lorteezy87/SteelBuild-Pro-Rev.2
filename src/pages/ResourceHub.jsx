@@ -113,7 +113,7 @@ export default function ResourceHub() {
               style={{
                 minHeight: 34,
                 padding: "7px 14px",
-                borderRadius: 9,
+                borderRadius: 6,
                 border: `1px solid ${isActive ? "var(--accent)" : "var(--border-default)"}`,
                 background: isActive
                   ? "color-mix(in srgb, var(--accent) 14%, var(--bg-surface-high))"

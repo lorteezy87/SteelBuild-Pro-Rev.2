@@ -21,7 +21,7 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdatin
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "16px" }}>
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 600, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Closeout Progress</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--accent)" }}>{completionPercent}%</span>
@@ -31,7 +31,7 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdatin
         </div>
       </div>
 
-      <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 12px", background: `var(--${status === "Closed" ? "status-success" : status === "Approved" ? "status-info" : "status-warning"})20`, border: `1px solid var(--${status === "Closed" ? "status-success" : status === "Approved" ? "status-info" : "status-warning"})40`, borderRadius: "8px", width: "fit-content" }}>
+      <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 12px", background: `var(--${status === "Closed" ? "status-success" : status === "Approved" ? "status-info" : "status-warning"})20`, border: `1px solid var(--${status === "Closed" ? "status-success" : status === "Approved" ? "status-info" : "status-warning"})40`, borderRadius: "6px", width: "fit-content" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", fontWeight: 700, color: `var(--${status === "Closed" ? "status-success" : status === "Approved" ? "status-info" : "status-warning"})`, textTransform: "uppercase", letterSpacing: "0.08em" }}>
           Status: {status}
         </span>
@@ -52,7 +52,7 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdatin
                 textAlign: "left",
                 background: "var(--bg-surface)",
                 border: isDone ? "1px solid var(--status-success)" : "1px solid var(--border-default)",
-                borderRadius: "10px",
+                borderRadius: "6px",
                 padding: "14px",
                 display: "flex",
                 alignItems: "center",
@@ -78,7 +78,7 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdatin
         })}
       </div>
 
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "16px" }}>
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "16px" }}>
         <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 12px 0" }}>Key Dates</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px" }}>
           {view.completion_date && (

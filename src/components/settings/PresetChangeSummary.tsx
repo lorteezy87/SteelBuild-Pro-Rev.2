@@ -34,7 +34,7 @@ export function PresetChangeSummary({
       return `${labels[key] ?? key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`;
     });
   return (
-    <div style={{ padding: 14, border: "1px solid var(--accent-border)", background: "var(--accent-muted)", borderRadius: 8, marginTop: 12 }}>
+    <div style={{ padding: 14, border: "1px solid var(--accent-border)", background: "var(--accent-muted)", borderRadius: 6, marginTop: 12 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Review changes before applying</div>
       <ul style={{ margin: "0 0 0 16px", padding: 0, fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.6 }}>
         {changes.length > 0 ? changes.map((change) => <li key={change}>{change}</li>) : <li>No preference changes are needed.</li>}

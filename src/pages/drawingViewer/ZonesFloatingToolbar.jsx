@@ -220,7 +220,7 @@ export default function ZonesFloatingToolbar({
               ...mono,
               fontSize: 9,
               padding: "1px 5px",
-              borderRadius: 8,
+              borderRadius: 6,
               background: "var(--accent)",
               color: "var(--on-accent)",
             }}>

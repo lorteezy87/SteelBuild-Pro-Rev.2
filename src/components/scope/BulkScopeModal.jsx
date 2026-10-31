@@ -370,7 +370,7 @@ function splitCsv(line) {
 
 // ─── Style tokens ────────────────────────────────────────────────────
 const mono    = { fontFamily: "var(--font-mono)" };
-const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+const display = { fontFamily: "var(--font-display)" };
 const inputStyle = {
   width: "100%", padding: "8px 10px",
   background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2,

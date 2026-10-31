@@ -30,7 +30,7 @@ export function DesktopConnectShell({ title, subtitle, children, footer }: Deskt
           maxWidth: 460,
           background: "var(--bg-surface-secondary, #161B22)",
           border: "1px solid var(--border-default)",
-          borderRadius: 14,
+          borderRadius: 8,
           padding: "32px 28px",
           boxShadow: "0 24px 60px rgba(0, 0, 0, 0.45)",
         }}
@@ -63,7 +63,7 @@ export function DesktopConnectShell({ title, subtitle, children, footer }: Deskt
         <h1
           id="desktop-connect-title"
           style={{
-            fontFamily: "'Space Grotesk', var(--font-display)",
+            fontFamily: "var(--font-display)",
             fontSize: 24,
             fontWeight: 600,
             color: "var(--text-primary)",
@@ -104,7 +104,7 @@ export function DesktopConnectShell({ title, subtitle, children, footer }: Deskt
 }
 
 export const desktopConnectHeading = {
-  fontFamily: "'Space Grotesk', var(--font-display)",
+  fontFamily: "var(--font-display)",
   fontSize: 24,
   fontWeight: 600,
   color: "var(--text-primary)",
@@ -132,7 +132,7 @@ export const desktopConnectErrorBox = {
   padding: "10px 14px",
   background: "var(--danger-muted, rgba(220, 38, 38, 0.12))",
   border: "1px solid var(--danger-border, rgba(220, 38, 38, 0.35))",
-  borderRadius: 9,
+  borderRadius: 6,
   fontFamily: "var(--font-body)",
   fontSize: 12,
   color: "var(--status-error)",

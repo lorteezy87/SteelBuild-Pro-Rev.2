@@ -64,7 +64,7 @@ const viewerTools = {
 };
 
 const toolBtn = {
-  padding: "6px 12px", borderRadius: 8,
+  padding: "6px 12px", borderRadius: 6,
   border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
   color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
   fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer",
@@ -572,7 +572,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
               disabled={!hasRoster}
               aria-label="Find piece mark"
               style={{
-                flex: 1, minWidth: 0, padding: "6px 9px", borderRadius: 7,
+                flex: 1, minWidth: 0, padding: "6px 9px", borderRadius: 6,
                 border: "1px solid var(--border-default)", background: "var(--bg-surface)",
                 color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 12,
               }}
@@ -609,7 +609,7 @@ function ProjectModel3DTab({ modelMapping, modelElementRows, projectId, rosterLo
                   type="button"
                   onClick={() => setColorMode(m.key)}
                   style={{
-                    padding: "5px 10px", borderRadius: 7, cursor: "pointer",
+                    padding: "5px 10px", borderRadius: 6, cursor: "pointer",
                     border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
                     background: active ? "color-mix(in srgb, var(--accent) 16%, var(--bg-surface-high))" : "var(--bg-surface-low)",
                     color: active ? "var(--accent)" : "var(--text-muted)",

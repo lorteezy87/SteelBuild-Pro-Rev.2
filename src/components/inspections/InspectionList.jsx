@@ -21,7 +21,7 @@ export default function InspectionList({ inspections, onConvertToPunchlist }) {
 
   if (inspections.length === 0) {
     return (
-      <div className="sbd-card" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
+      <div className="sbd-card" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "40px", textAlign: "center" }}>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No inspections</p>
       </div>
     );
@@ -36,7 +36,7 @@ export default function InspectionList({ inspections, onConvertToPunchlist }) {
           style={{
             background: "var(--bg-surface)",
             border: "1px solid var(--border-default)",
-            borderRadius: "10px",
+            borderRadius: "6px",
             overflow: "hidden",
             cursor: "pointer",
             transition: "all 0.15s",

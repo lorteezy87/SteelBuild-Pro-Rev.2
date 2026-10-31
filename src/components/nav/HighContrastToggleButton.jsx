@@ -37,7 +37,7 @@ export default function HighContrastToggleButton() {
       style={{
         width: 32,
         height: 32,
-        borderRadius: 8,
+        borderRadius: 6,
         background: isHigh ? "var(--accent-muted)" : "var(--bg-hover)",
         border: `1px solid ${isHigh ? "var(--accent-border)" : "var(--border)"}`,
         display: "flex",

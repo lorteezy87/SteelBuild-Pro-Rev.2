@@ -88,7 +88,7 @@ export default function ModuleLauncherGrid({ open, onClose, onNavigate }) {
         borderTop: "1px solid var(--border-default)", padding: "7px 14px",
         display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-surface)",
       }}>
-        <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--accent)", textTransform: "uppercase" }}>
+        <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--accent)", textTransform: "uppercase" }}>
           STEELBUILD&nbsp;PRO
         </span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>
@@ -113,7 +113,7 @@ function LauncherTile({ module, onNavigate, onClose }) {
       title={module.label}
       aria-label={`Open ${module.label}`}
       style={{
-        position: "relative", aspectRatio: "1 / 1", borderRadius: 10, overflow: "hidden",
+        position: "relative", aspectRatio: "1 / 1", borderRadius: 6, overflow: "hidden",
         border: "1px solid color-mix(in srgb, var(--text-primary) 12%, transparent)", cursor: "pointer", padding: 0, color: "var(--text-primary)",
         background: "linear-gradient(150deg, var(--bg-surface-high, var(--bg-surface-secondary)) 0%, var(--bg-elevated, var(--bg-surface)) 55%, var(--bg-base) 100%)",
         boxShadow: "var(--shadow-card)", transition: "transform 0.12s ease, box-shadow 0.12s ease",

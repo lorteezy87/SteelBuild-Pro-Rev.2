@@ -1,0 +1,310 @@
+/*
+ * SteelBuild Board Report system — the app-wide design layer.
+ *
+ * Source of truth: the SteelBuild Document Control v2 app (Board Report):
+ * a dark masthead that states the situation over a light, warm-paper working
+ * body. Archivo for every UI word, IBM Plex Mono for every number, date and
+ * document id, orange #FF5A1F as the one accent, 6px corners, hairline rules.
+ *
+ * Imported LAST by globals.css so it is authoritative over the legacy layers
+ * (tokens.css, steelbuild-dark.css, steelbuild-light.css, brand-theme.css).
+ * Components keep reading the same tokens (--bg-*, --text-*, --border-*,
+ * --accent, --sbd-*, --cmd-*); only the values change, so every page moves
+ * together. The exact values mirror src/pages/documentControl/boardReportTheme.ts
+ * (DC_LIGHT / DC_DARK / DC_MASTHEAD) — change both together.
+ *
+ * Specificity notes:
+ *  - tokens.css pins `.steelbuild-dark { --bg-*: var(--sbd-*) !important }`,
+ *    so the dark skin is set through the --sbd-* values it reads.
+ *  - command.css's light [data-skin="command"] block is lazy-loaded after
+ *    globals; `html [data-skin="command"]` outranks it without !important.
+ */
+
+/* ── 1. Type, shape — both skins ─────────────────────────────── */
+:root,
+html.steelbuild-dark,
+.steelbuild-light {
+  --br-font-ui:                'Archivo', system-ui, -apple-system, sans-serif;
+  --br-font-mono:              'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --font-body:                 var(--br-font-ui);
+  --font-display:              var(--br-font-ui);
+  --font-mono:                 var(--br-font-mono);
+  --font-data:                 var(--br-font-mono);
+  --sbd-font-body:             var(--br-font-ui);
+  --sbd-font-display:          var(--br-font-ui);
+  --sbd-font-mono:             var(--br-font-mono);
+
+  --radius:                    6px; /* shadcn/Tailwind rounded-lg|md|sm */
+  --radius-card:               6px;
+  --radius-btn:                6px;
+  --radius-input:              6px;
+  --radius-badge:              4px;
+  --sbd-radius-sm:             4px;
+  --sbd-radius-md:             6px;
+  --sbd-radius-lg:             8px;
+
+  /* Masthead — the same dark brand band in both skins. */
+  --br-mast:                   #141618;
+  --br-mast-2:                 #1B1F23;
+  --br-mast-hover:             #22282E;
+  --br-mast-3:                 #262C32;
+  --br-mast-line:              #303942;
+  --br-mast-line-2:            #46515B;
+  --br-mast-dim:               #5B656E;
+  --br-mast-muted:             #7D8892;
+  --br-mast-text-2:            #A7B0B8;
+  --br-mast-text:              #F2F4F5;
+
+  --br-accent:                 #FF5A1F;
+  --br-accent-hi:              #FF7442;
+  --br-accent-ink:             #C2410C;
+}
+
+/* ── 2. Light skin — warm paper (the v2 default) ─────────────── */
+html[data-theme="light"],
+.steelbuild-light {
+  color-scheme: light;
+
+  --bg-void:                   #ECEAE5;
+  --bg-page:                   #FAFAF8;
+  --bg-base:                   #FAFAF8;
+  --bg-surface:                #FFFFFF;
+  --bg-card:                   #FFFFFF;
+  --bg-surface-secondary:      #FFFFFF;
+  --bg-surface-low:            #F4F3EF;
+  --bg-surface-mid:            #F1EFEA;
+  --bg-elevated:               #FFFFFF;
+  --bg-surface-high:           #ECEAE5;
+  --bg-surface-highest:        #E2E0DA;
+  --bg-input:                  #FFFFFF;
+  --bg-hover:                  #F1EFEA;
+  --bg-row-hover:              #F1EFEA;
+
+  --border-default:            #DEDCD6;
+  --border:                    #DEDCD6;
+  --border-strong:             #CFCCC5;
+  --divider:                   #E8E6E0;
+
+  --text-primary:              #17191C;
+  --text-secondary:            #45494D;
+  --text-muted:                #6B6F73;
+
+  --accent-text:               #111417;
+  --on-accent:                 #111417;
+
+
+  --sbd-bg-base:               #FAFAF8;
+  --sbd-bg-page:               #FAFAF8;
+  --sbd-bg-surface:            #FFFFFF;
+  --sbd-bg-surface-hi:         #F4F3EF;
+  --sbd-bg-elevated:           #FFFFFF;
+  --sbd-bg-input:              #FFFFFF;
+  --sbd-bg-row-hover:          #F1EFEA;
+  --sbd-border:                #DEDCD6;
+  --sbd-border-strong:         #CFCCC5;
+  --sbd-divider:               #E8E6E0;
+  --sbd-text:                  #17191C;
+  --sbd-text-secondary:        #45494D;
+  --sbd-text-muted:            #6B6F73;
+  --sbd-accent:                var(--br-accent);
+  --sbd-accent-light:          var(--br-accent-hi);
+  --sbd-accent-muted:          rgba(255, 90, 31, 0.10);
+  --sbd-accent-border:         rgba(255, 90, 31, 0.35);
+}
+
+/* ── 3. Dark skin — same system, dark body ───────────────────── */
+html.steelbuild-dark,
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --sbd-bg-base:               #0C0F12;
+  --sbd-bg-page:               #0C0F12;
+  --sbd-bg-surface:            #141A1F;
+  --sbd-bg-surface-hi:         #182027;
+  --sbd-bg-elevated:           #141A1F;
+  --sbd-bg-input:              #141A1F;
+  --sbd-bg-row-hover:          #151D23;
+  --sbd-bg-panel:              #141A1F;
+  --sbd-bg-panel-hi:           #182027;
+  --sbd-bg-panel-input:        #141A1F;
+  --sbd-bg-panel-hover:        #1C2329;
+
+  --sbd-border:                #222A31;
+  --sbd-border-card:           #222A31;
+  --sbd-border-strong:         #303942;
+  --sbd-divider:               #1C2329;
+
+  --sbd-text:                  #F2F4F5;
+  --sbd-text-secondary:        #A7B0B8;
+  --sbd-text-muted:            #7D8892;
+
+  --sbd-accent:                var(--br-accent);
+  --sbd-accent-light:          var(--br-accent-hi);
+  --sbd-accent-muted:          rgba(255, 90, 31, 0.12);
+  --sbd-accent-border:         rgba(255, 90, 31, 0.40);
+  --sbd-gold:                  var(--br-accent);
+  --sbd-gold-light:            var(--br-accent-hi);
+
+  --bg-void:                   #080A0C;
+  --bg-surface-low:            #11161A;
+  --bg-surface-mid:            #182027;
+  --bg-surface-high:           #1C2329;
+  --bg-surface-highest:        #222A31;
+  --bg-hover:                  #151D23;
+  --bg-row-hover:              #151D23;
+}
+
+/* Flat surfaces: the Board Report has no frosted glass or mesh backdrop. */
+html .sbd-mesh-bg {
+  background-image: none;
+}
+
+/* ── 4. Command Control Centers — onto the same paper ────────── */
+html[data-theme="light"] [data-skin="command"],
+html[data-theme="light"][data-skin="command"] {
+  --cmd-bg:                    #FAFAF8;
+  --cmd-surface:               #FFFFFF;
+  --cmd-border:                #DEDCD6;
+  --cmd-text:                  #17191C;
+  --cmd-text-muted:            #55595D;
+  --cmd-gold:                  var(--br-accent);
+  --cmd-on-gold:               #111417;
+  --cmd-chip-bg:               #ECEAE5;
+  --cmd-icon-wash:             rgba(255, 90, 31, 0.10);
+  --cmd-kpi-icon-bg:           #F4F3EF;
+  --cmd-row-hover:             #F1EFEA;
+  --cmd-menu:                  #FFFFFF;
+  --cmd-menu-hover:            #F1EFEA;
+  --cmd-hero-fade:             rgba(250, 250, 248, 0.42);
+}
+
+html.steelbuild-dark [data-skin="command"],
+html.steelbuild-dark[data-skin="command"] {
+  --cmd-gold:                  var(--br-accent);
+  --cmd-on-gold:               #111417;
+  --cmd-icon-wash:             rgba(255, 90, 31, 0.14);
+}
+
+/* Command kit panels: Board Report corners, not the old 10–14px cards. */
+html [data-skin="command"] :is(.cmd-hero, .cmd-panel, .cmd-kpi, .cmd-statcard, .cmd-filterbar, .cmd-table-wrap) {
+  border-radius: var(--radius-card);
+}
+html [data-skin="command"] :is(.cmd-btn) {
+  border-radius: var(--radius-btn);
+}
+html :is(.sbd-card, .sbd-panel) {
+  border-radius: var(--radius-card);
+}
+
+/* ── 5. App shell — the dark masthead band ───────────────────── *
+ * The topbar and the sidebar are the masthead in both skins. Re-pointing the
+ * surface/text tokens on the chrome itself makes every control already inside
+ * it (project picker, search, bell, nav items) draw dark without touching a
+ * component. */
+html .sbd-topbar,
+html .sbd-sidebar,
+html .sb-dashboard-reference-sidebar,
+html .sb-dashboard-topbar,
+html .sbd-topbar-sub,
+html [aria-label="Mobile navigation"] {
+  color-scheme: dark;
+
+  --bg-page:                   var(--br-mast);
+  --bg-base:                   var(--br-mast);
+  --bg-sidebar:                var(--br-mast);
+  --bg-surface:                var(--br-mast-2);
+  --bg-card:                   var(--br-mast-2);
+  --bg-surface-secondary:      var(--br-mast-2);
+  --bg-surface-low:            var(--br-mast);
+  --bg-surface-mid:            var(--br-mast-3);
+  --bg-surface-high:           var(--br-mast-3);
+  --bg-elevated:               var(--br-mast-2);
+  --bg-input:                  var(--br-mast-2);
+  --bg-hover:                  var(--br-mast-hover);
+  --bg-row-hover:              var(--br-mast-hover);
+  --nav-bg:                    var(--br-mast);
+  --nav-hover-bg:              var(--br-mast-hover);
+
+  --border-default:            var(--br-mast-line);
+  --border:                    var(--br-mast-line);
+  --border-strong:             var(--br-mast-line-2);
+  --divider:                   var(--br-mast-line);
+
+  --text-primary:              var(--br-mast-text);
+  --text-secondary:            var(--br-mast-text-2);
+  --text-muted:                var(--br-mast-muted);
+
+  --sbd-bg-surface:            var(--br-mast-2);
+  --sbd-bg-elevated:           var(--br-mast-2);
+  --sbd-bg-input:              var(--br-mast-2);
+  --sbd-border:                var(--br-mast-line);
+  --sbd-border-strong:         var(--br-mast-line-2);
+  --sbd-text:                  var(--br-mast-text);
+  --sbd-text-secondary:        var(--br-mast-text-2);
+  --sbd-text-muted:            var(--br-mast-muted);
+
+  background: var(--br-mast) !important;
+  color: var(--br-mast-text);
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+html .sbd-topbar,
+html .sb-dashboard-topbar {
+  border-bottom: 1px solid var(--br-mast-line) !important;
+}
+
+html .sbd-sidebar,
+html .sb-dashboard-reference-sidebar {
+  border-right: 1px solid var(--br-mast-line) !important;
+}
+
+/* Active nav item: orange rule, not a filled pill. */
+html .sbd-sidebar .sbd-nav-item.is-active,
+html .sb-dashboard-reference-sidebar .sb-dashboard-reference-nav__item.is-active {
+  color: var(--br-mast-text) !important;
+  background: var(--br-mast-hover) !important;
+  border-color: transparent !important;
+  box-shadow: inset 2px 0 0 var(--br-accent);
+}
+
+/* Section labels: the masthead's mono eyebrow. */
+html .sbd-sidebar .sbd-nav-section,
+html .sbd-topbar .sbd-topbar-eyebrow {
+  font-family: var(--br-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--br-mast-muted);
+}
+
+/* ── 6. Body type — the Board Report scale ───────────────────── */
+html body {
+  font-family: var(--br-font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display headings: Archivo condensed on the width axis, not a second face. */
+html .sbd-topbar-title,
+html .sbp-page-header__title,
+html .sbd-display {
+  font-family: var(--br-font-ui);
+  font-stretch: 85%;
+  letter-spacing: -0.01em;
+}
+
+/* Every number, date and id: Plex Mono, tabular. */
+html .sbd-mono,
+html .font-mono {
+  font-family: var(--br-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus: the v2 orange ring. */
+html :is(a, button, input, select, textarea, [role="button"], [role="option"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--br-accent);
+  outline-offset: 2px;
+}

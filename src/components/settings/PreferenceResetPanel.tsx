@@ -28,7 +28,7 @@ export function PreferenceResetPanel({
 }) {
   const [confirmation, setConfirmation] = useState("");
   return (
-    <section style={{ padding: 16, border: "1px solid var(--danger-border, var(--border-default))", borderRadius: 8, background: "var(--danger-muted, var(--bg-surface-low))" }}>
+    <section style={{ padding: 16, border: "1px solid var(--danger-border, var(--border-default))", borderRadius: 6, background: "var(--danger-muted, var(--bg-surface-low))" }}>
       <h3 style={{ margin: "0 0 6px", fontSize: 13, color: "var(--text-primary)" }}>Reset one section</h3>
       <p style={{ margin: "0 0 10px", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>Restore one group without changing your other personal choices.</p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>

@@ -251,7 +251,7 @@ export default function CrossSetSupersedePanel({
     return (
       <div role="alert" style={{
         ...bodyText, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-        padding: "8px 12px", marginBottom: 14, borderRadius: 8,
+        padding: "8px 12px", marginBottom: 14, borderRadius: 6,
         background: "var(--bg-surface-low)", border: "1px solid var(--status-error-bright)",
       }}>
         <span>Couldn&apos;t check other sets — no pages will be superseded.</span>
@@ -283,7 +283,7 @@ export default function CrossSetSupersedePanel({
 
   return (
     <section aria-labelledby={titleId} style={{
-      padding: "10px 12px", marginBottom: 14, borderRadius: 8,
+      padding: "10px 12px", marginBottom: 14, borderRadius: 6,
       background: "var(--bg-surface-low)", border: "1px solid var(--warning-border)",
     }}>
       <h3 id={titleId} style={{

@@ -25,7 +25,7 @@ const CustomTooltip = ({ active, payload }) => {
     <div style={{
       background: "var(--bg-surface-secondary)",
       border: "1px solid var(--border-default)",
-      borderRadius: 10,
+      borderRadius: 6,
       padding: "12px 16px",
       fontFamily: "var(--font-mono)",
       fontSize: 11,
@@ -100,7 +100,7 @@ export default function TrueHealthChart({ projects, wps }) {
     <div style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
-      borderRadius: 12,
+      borderRadius: 6,
       padding: "18px 20px",
     }}>
       {/* Header */}

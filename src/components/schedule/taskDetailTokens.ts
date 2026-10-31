@@ -11,7 +11,7 @@ export const drawerControlStyle = {
   width: "100%",
   background: drawerPanelStrong,
   border: `1px solid ${drawerBorder}`,
-  borderRadius: 8,
+  borderRadius: 6,
   padding: "8px 10px",
   fontFamily: "var(--font-body)",
   fontSize: 12,

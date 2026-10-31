@@ -35,7 +35,7 @@ const mono = { fontFamily: "var(--font-mono)" };
 const cardStyle = {
   background: "var(--bg-surface)",
   border: "1px solid var(--border-strong)",
-  borderRadius: 12,
+  borderRadius: 6,
   overflow: "hidden",
 };
 const inputStyle = {
@@ -109,7 +109,7 @@ export default function DecimalFractionConverter() {
         {/* Header */}
         <div style={{ marginBottom: 16 }}>
           <div style={{
-            fontFamily: "Space Grotesk, var(--font-display)",
+            fontFamily: "var(--font-display)",
             fontSize: 22, fontWeight: 800,
             textTransform: "uppercase", letterSpacing: "-0.01em",
             color: "var(--text-primary)",

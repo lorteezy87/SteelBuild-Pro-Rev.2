@@ -56,7 +56,7 @@ const styles = `
 .ops-page-title {
   margin: 0;
   color: var(--text-primary);
-  font-family: Space Grotesk, var(--font-display);
+  font-family: var(--font-display);
   font-size: clamp(24px, 3.2vw, 38px);
   line-height: 1.05;
   font-weight: 850;
@@ -157,7 +157,7 @@ button.ops-page-metric:hover,
 .ops-page-metric-value {
   display: block;
   color: var(--metric-color, var(--text-primary));
-  font-family: Space Grotesk, var(--font-display);
+  font-family: var(--font-display);
   font-size: 24px;
   line-height: 1;
   font-weight: 850;

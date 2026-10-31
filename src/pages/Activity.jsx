@@ -131,7 +131,7 @@ export default function ActivityPage() {
               padding: "6px 14px",
               background: "transparent",
               border: "1px solid var(--border-default)",
-              borderRadius: 8,
+              borderRadius: 6,
               color: "var(--text-secondary)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
@@ -154,7 +154,7 @@ export default function ActivityPage() {
             PROJECT
           </label>
           <Select value={filterProject} onValueChange={setFilterProject}>
-            <SelectTrigger style={{ borderRadius: 8 }} className={selectTriggerClass}>
+            <SelectTrigger style={{ borderRadius: 6 }} className={selectTriggerClass}>
               <SelectValue placeholder="All projects" />
             </SelectTrigger>
             <SelectContent>
@@ -171,7 +171,7 @@ export default function ActivityPage() {
             USER
           </label>
           <Select value={filterUser} onValueChange={setFilterUser}>
-            <SelectTrigger style={{ borderRadius: 8 }} className={selectTriggerClass}>
+            <SelectTrigger style={{ borderRadius: 6 }} className={selectTriggerClass}>
               <SelectValue placeholder="All users" />
             </SelectTrigger>
             <SelectContent>
@@ -188,7 +188,7 @@ export default function ActivityPage() {
             ENTITY TYPE
           </label>
           <Select value={filterEntity} onValueChange={setFilterEntity}>
-            <SelectTrigger style={{ borderRadius: 8 }} className={selectTriggerClass}>
+            <SelectTrigger style={{ borderRadius: 6 }} className={selectTriggerClass}>
               <SelectValue placeholder="All types" />
             </SelectTrigger>
             <SelectContent>
@@ -205,7 +205,7 @@ export default function ActivityPage() {
             DATE RANGE
           </label>
           <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger style={{ borderRadius: 8 }} className={selectTriggerClass}>
+            <SelectTrigger style={{ borderRadius: 6 }} className={selectTriggerClass}>
               <SelectValue placeholder="All time" />
             </SelectTrigger>
             <SelectContent>
@@ -225,7 +225,7 @@ export default function ActivityPage() {
               padding: "8px 12px",
               background: filtered.length > 0 ? "var(--accent-glow)" : "var(--bg-surface)",
               border: "1px solid var(--accent-border)",
-              borderRadius: 8,
+              borderRadius: 6,
               color: filtered.length > 0 ? "var(--accent)" : "var(--text-muted)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
@@ -244,7 +244,7 @@ export default function ActivityPage() {
 
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-        <div style={{ background: "var(--hover-bg)", borderRadius: 10, padding: 14, border: "1px solid var(--divider)" }}>
+        <div style={{ background: "var(--hover-bg)", borderRadius: 6, padding: 14, border: "1px solid var(--divider)" }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", letterSpacing: "0.06em" }}>
             TOTAL ACTIVITIES
           </div>
@@ -258,7 +258,7 @@ export default function ActivityPage() {
           )}
         </div>
 
-        <div style={{ background: "var(--hover-bg)", borderRadius: 10, padding: 14, border: "1px solid var(--divider)" }}>
+        <div style={{ background: "var(--hover-bg)", borderRadius: 6, padding: 14, border: "1px solid var(--divider)" }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", letterSpacing: "0.06em" }}>
             UNIQUE USERS
           </div>
@@ -267,7 +267,7 @@ export default function ActivityPage() {
           </div>
         </div>
 
-        <div style={{ background: "var(--hover-bg)", borderRadius: 10, padding: 14, border: "1px solid var(--divider)" }}>
+        <div style={{ background: "var(--hover-bg)", borderRadius: 6, padding: 14, border: "1px solid var(--divider)" }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", letterSpacing: "0.06em" }}>
             ENTITY TYPES
           </div>
@@ -278,7 +278,7 @@ export default function ActivityPage() {
       </div>
 
       {/* Activity Feed */}
-      <div style={{ background: "var(--hover-bg)", borderRadius: 12, padding: 16, border: "1px solid var(--divider)" }}>
+      <div style={{ background: "var(--hover-bg)", borderRadius: 6, padding: 16, border: "1px solid var(--divider)" }}>
         {activitiesLoading ? (
           <LoadingSkeleton variant="table" rows={6} />
         ) : filtered.length === 0 && !hasActiveFilters ? (
@@ -294,7 +294,7 @@ export default function ActivityPage() {
             <div style={{
               width: 56,
               height: 56,
-              borderRadius: 14,
+              borderRadius: 8,
               background: "var(--accent-glow)",
               border: "1px solid var(--accent-border)",
               display: "flex",
@@ -335,7 +335,7 @@ export default function ActivityPage() {
                   padding: "8px 16px",
                   background: "var(--accent-glow)",
                   border: "1px solid var(--accent-border)",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   color: "var(--accent)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
@@ -354,7 +354,7 @@ export default function ActivityPage() {
                   padding: "8px 16px",
                   background: "transparent",
                   border: "1px solid var(--border-default)",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   color: "var(--text-secondary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
@@ -373,7 +373,7 @@ export default function ActivityPage() {
                   padding: "8px 16px",
                   background: "transparent",
                   border: "1px solid var(--border-default)",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   color: "var(--text-secondary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
@@ -416,7 +416,7 @@ export default function ActivityPage() {
                 padding: "6px 14px",
                 background: "transparent",
                 border: "1px solid var(--accent-border)",
-                borderRadius: 8,
+                borderRadius: 6,
                 color: "var(--accent)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 10,

@@ -9,7 +9,7 @@ export default function StepSuccess(props: any) {
         <Check style={{ width: 22, height: 22, color: "var(--status-success-bright)" }} />
       </div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>Revision Applied</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start", maxWidth: 340, margin: "0 auto 24px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 10, padding: "14px 16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start", maxWidth: 340, margin: "0 auto 24px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6, padding: "14px 16px" }}>
         {[
           `✓ "${selectedSet.set_name}" updated ${selectedSet.revision || "—"} → ${revMeta.revisionLabel}`,
           `✓ ${stats.updated} drawing records updated`,
@@ -21,7 +21,7 @@ export default function StepSuccess(props: any) {
         ))}
       </div>
       <button onClick={onClose} style={{
-        padding: "9px 22px", borderRadius: 8, cursor: "pointer",
+        padding: "9px 22px", borderRadius: 6, cursor: "pointer",
         background: "var(--accent)", border: "none", color: "var(--on-accent)",
         fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em"
       }}>View Drawing Log</button>

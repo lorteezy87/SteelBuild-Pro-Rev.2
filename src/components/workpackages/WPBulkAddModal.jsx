@@ -323,7 +323,7 @@ export default function WPBulkAddModal({
             lineHeight: 1.55,
             background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
-            borderRadius: 8,
+            borderRadius: 6,
             padding: "10px 12px",
           }}
         >
@@ -399,7 +399,7 @@ export default function WPBulkAddModal({
           <div
             style={{
               border: "1px solid var(--border-default)",
-              borderRadius: 8,
+              borderRadius: 6,
               overflow: "auto",
               maxHeight: 320,
               background: "var(--bg-surface)",

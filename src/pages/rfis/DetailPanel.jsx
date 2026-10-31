@@ -43,7 +43,7 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...mono, fontSize: 12, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.08em" }}>{rfi.rfi_number}</div>
-                <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 16, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.3, letterSpacing: "-0.01em" }}>{rfi.title}</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.3, letterSpacing: "-0.01em" }}>{rfi.title}</div>
                 <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>{projectName || "—"}</div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                   <Pill label={rfi.status} color={(STATUS_CFG[rfi.status] || STATUS_CFG.Open).color} bg={(STATUS_CFG[rfi.status] || STATUS_CFG.Open).bg} />

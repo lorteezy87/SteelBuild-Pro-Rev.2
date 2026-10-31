@@ -104,7 +104,7 @@ export function ContractOverviewPanel({
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 800, color: "var(--status-success)" }}>+{formatCurrencyShort(approvedCOTotal)}</div>
         </div>
         <FlowArrow />
-        <div style={{ textAlign: "center", padding: "8px 16px", background: "rgba(234,88,12,0.08)", borderRadius: 8, border: "1px solid rgba(234,88,12,0.25)" }}>
+        <div style={{ textAlign: "center", padding: "8px 16px", background: "rgba(234,88,12,0.08)", borderRadius: 6, border: "1px solid rgba(234,88,12,0.25)" }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 4 }}>Revised Contract</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, color: "var(--accent)" }}>{formatCurrencyShort(revisedValue)}</div>
         </div>

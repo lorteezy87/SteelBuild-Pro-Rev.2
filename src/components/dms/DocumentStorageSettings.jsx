@@ -182,7 +182,7 @@ export default function DocumentStorageSettings({ projectId }) {
     <div style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
-      borderRadius: 10,
+      borderRadius: 6,
       overflow: "hidden",
     }}>
       {/* Header */}
@@ -532,7 +532,7 @@ const inputStyle = {
   padding: "8px 12px",
   background: "var(--bg-surface)",
   border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  borderRadius: 6,
   fontFamily: "var(--font-body)",
   fontSize: 12,
   color: "var(--text-primary)",

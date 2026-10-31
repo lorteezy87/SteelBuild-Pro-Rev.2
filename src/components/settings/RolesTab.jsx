@@ -48,7 +48,7 @@ export default function RolesTab({ user }) {
       {/* Your Role */}
       <div style={{ marginBottom: 32 }}>
         <label style={labelStyle}>Your Role</label>
-        <div style={{ background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px 14px', marginBottom: 12 }}>
+        <div style={{ background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '16px 14px', marginBottom: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{roleInfo.title}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>{roleInfo.description}</div>
           <div>{roleInfo.permissions.map(p => <PermBadge key={p} type={p} />)}</div>
@@ -60,11 +60,11 @@ export default function RolesTab({ user }) {
         <div>
           <label style={labelStyle}>Team Members ({allUsers.length})</label>
           {allUsers.length === 0 ? (
-            <div style={{ padding: 16, background: 'var(--warning-muted)', border: '1px solid var(--warning-border)', borderRadius: 8, color: 'var(--text-secondary)', fontSize: 12 }}>
+            <div style={{ padding: 16, background: 'var(--warning-muted)', border: '1px solid var(--warning-border)', borderRadius: 6, color: 'var(--text-secondary)', fontSize: 12 }}>
               No team members yet
             </div>
           ) : allUsers.map(member => (
-            <div key={member.id} style={{ background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '14px 16px', marginBottom: 10 }}>
+            <div key={member.id} style={{ background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '14px 16px', marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2, color: 'var(--text-primary)' }}>{member.full_name || 'Unnamed'}</div>
@@ -83,7 +83,7 @@ export default function RolesTab({ user }) {
       )}
 
       {!isAdmin && (
-        <div style={{ padding: 16, background: 'rgba(13,148,136,0.08)', border: '1px solid rgba(13,148,136,0.25)', borderRadius: 8, color: 'var(--accent)', fontSize: 12, lineHeight: 1.6 }}>
+        <div style={{ padding: 16, background: 'rgba(13,148,136,0.08)', border: '1px solid rgba(13,148,136,0.25)', borderRadius: 6, color: 'var(--accent)', fontSize: 12, lineHeight: 1.6 }}>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>👑 Admin access required</div>
           <div>Contact your administrator to manage team members and roles.</div>
         </div>

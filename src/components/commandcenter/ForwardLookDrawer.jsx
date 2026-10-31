@@ -27,7 +27,7 @@ const SectionLabel = ({ label, count }) => (
   >
     <span
       style={{
-        fontFamily: "'Space Grotesk', var(--font-display)",
+        fontFamily: "var(--font-display)",
         fontSize: 11,
         fontWeight: 700,
         color: "var(--text-primary)",
@@ -229,7 +229,7 @@ export default function ForwardLookDrawer({
         >
           <span
             style={{
-              fontFamily: "'Space Grotesk', var(--font-display)",
+              fontFamily: "var(--font-display)",
               fontSize: 15,
               fontWeight: 700,
               color: "var(--text-primary)",
