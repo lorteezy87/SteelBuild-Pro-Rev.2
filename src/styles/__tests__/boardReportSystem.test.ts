@@ -39,10 +39,7 @@ describe("Board Report app-wide design layer", () => {
 });
 
 describe("retired type faces stay retired", () => {
-  // MarketingLanding is a separately approved marketing design with its own
-  // faces; everything else reads the Board Report font tokens.
-  const allowed = new Set(["src/styles/marketing-landing.css", "src/components/landing/MarketingLanding.tsx"]);
-  const retired = /Barlow|Space Grotesk|JetBrains Mono|['"]Inter['"]/;
+  const retired = /Barlow|Space Grotesk|JetBrains Mono|Geist|['"]Inter['"]/;
 
   function walk(dir: string, out: string[] = []): string[] {
     for (const name of readdirSync(dir)) {
@@ -54,10 +51,9 @@ describe("retired type faces stay retired", () => {
     return out;
   }
 
-  it("no app source names Barlow, Space Grotesk, JetBrains Mono or Inter", () => {
+  it("no source names Barlow, Space Grotesk, JetBrains Mono, Geist or Inter", () => {
     const offenders = walk(resolve(process.cwd(), "src"))
       .map((f) => relative(process.cwd(), f).split(sep).join("/"))
-      .filter((f) => !allowed.has(f))
       .filter((f) => retired.test(readFileSync(resolve(process.cwd(), f), "utf8")));
     expect(offenders).toEqual([]);
   });
