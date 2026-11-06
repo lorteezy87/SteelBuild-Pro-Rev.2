@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
+import { CalendarDays, MapPin } from "lucide-react";
 
 const RESULT_COLORS = {
   Pass: "var(--status-success)",
@@ -38,11 +39,11 @@ export default function QCList({ records = [] }) {
               <div>
                 <div style={{ fontSize: "10px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "2px" }}>{record.test_type}</div>
                 <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{record.material_or_component}</div>
-                {record.location && <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "2px" }}>📍 {record.location}</div>}
+                {record.location && <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "2px" }}><MapPin size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{record.location}</div>}
               </div>
 
               <div>
-                <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {formatLocalDate(record.test_date)}</div>
+                <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}><CalendarDays size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{formatLocalDate(record.test_date)}</div>
                 {record.test_lab_or_inspector && <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>{record.test_lab_or_inspector}</div>}
                 {record.specification && <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>{record.specification}</div>}
               </div>

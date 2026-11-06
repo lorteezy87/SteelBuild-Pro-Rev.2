@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { entities, auth, integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { FileText } from "lucide-react";
 
 export default function UploadModal({ projectId, folderId = null, onClose }) {
   const [files, setFiles] = useState([]);
@@ -232,7 +233,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                       <div>
                         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
-                          📄 {file.name}
+                          <FileText size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{file.name}
                         </div>
                         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
                           {(file.size / 1024).toFixed(1)} KB
@@ -459,7 +460,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
             }}
           >
             {uploadMutation.isPending
-              ? `UPLOADING ${files.length} FILE${files.length !== 1 ? "S" : ""}...`
+              ? `UPLOADING ${files.length} FILE${files.length !== 1 ? "S" : ""}…`
               : `UPLOAD ${files.length} FILE${files.length !== 1 ? "S" : ""}`}
           </button>
         </div>

@@ -15,6 +15,7 @@ import { useTheme } from '@/components/shared/ThemeContext';
 import { AppearancePreview } from './AppearancePreview';
 import { formatUserCurrency, formatUserDate, formatUserMeasurement } from '@/lib/userPreferences/formatters';
 import { setRuntimeUserPreferences } from '@/lib/userPreferences/runtime';
+import { Monitor, Moon, Sun } from "lucide-react";
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -44,7 +45,7 @@ const ACCENT_PRESETS = [
   { id: 'gold',  label: 'Gold',  swatch: '#C89B20' },
   { id: 'teal',  label: 'Teal',  swatch: '#0D9488' },
   { id: 'blue',  label: 'Blue',  swatch: '#2563EB' },
-  { id: 'amber', label: 'Amber', swatch: '#F59E0B' },
+  { id: 'amber', label: 'Amber', swatch: '#D99A2B' },
   { id: 'slate', label: 'Slate', swatch: '#64748B' },
 ];
 
@@ -108,11 +109,11 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
       <div style={{ marginBottom: 28 }}>
         <label style={labelStyle}>Theme</label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          {[{ id: 'system', icon: '◐', label: 'System' }, { id: 'dark', icon: '🌙', label: 'Dark Mode' }, { id: 'light', icon: '☀️', label: 'Light Mode' }].map(t => (
+          {[{ id: 'system', icon: Monitor, label: 'Match system' }, { id: 'dark', icon: Moon, label: 'Dark' }, { id: 'light', icon: Sun, label: 'Light' }].map(t => (
             <div key={t.id} onClick={() => handleChange('theme', t.id)} style={{ ...optionCard(prefs.theme === t.id), padding: '20px 14px' }}>
-              <div style={{ fontSize: 24, marginBottom: 6 }}>{t.icon}</div>
+              <t.icon size={22} strokeWidth={1.5} aria-hidden="true" style={{ marginBottom: 8, color: prefs.theme === t.id ? 'var(--accent)' : 'var(--text-muted)' }} />
               <div style={{ fontSize: 12, fontWeight: 600, color: prefs.theme === t.id ? 'var(--accent)' : 'var(--text-primary)' }}>{t.label}</div>
-              {prefs.theme === t.id && <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 4 }}>✓ Selected</div>}
+              {prefs.theme === t.id && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Current</div>}
             </div>
           ))}
         </div>
@@ -310,7 +311,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         ))}
       </div>
 
-      {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--status-success)', fontFamily: 'var(--font-mono)' }}>✓ Saving...</div>}
+      {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--status-success)', fontFamily: 'var(--font-mono)' }}>✓ Saving…</div>}
     </div>
   );
 }

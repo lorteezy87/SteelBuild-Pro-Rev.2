@@ -11,8 +11,8 @@
   --cmd-text-muted: #57606f;
   --cmd-gold: #f2a706;
   --cmd-good: #12b76a;
-  --cmd-warn: #f59e0b;
-  --cmd-danger: #ef4444;
+  --cmd-warn: #d99a2b;
+  --cmd-danger: #d2452f;
   /* AA-contrast (WCAG >=4.5:1) text tones for vivid-status text on the pastel
      chip fills. The --cmd-good/warn/danger hues stay for FILLS (pills, icons),
      but as text on the light chip backgrounds they fail contrast — chips use
@@ -23,7 +23,7 @@
   --cmd-info-text: #175cd3;
   --cmd-review-text: #6927da;
   --cmd-info: #2e90e0;
-  --cmd-review: #8b5cf6;
+  --cmd-review: #6e5aa8;
   --cmd-chip-bg: #e9edf2;
   --cmd-chip-good-bg: #d6f0de;
   --cmd-chip-warn-bg: #fbe5c0;
@@ -212,8 +212,8 @@ html.steelbuild-dark [data-skin="command"],
   --cmd-review: var(--sbd-review, var(--status-review));
   /* Text-on-chip: lighter tones for dark pastel fills */
   --cmd-good-text: #6ee7b7;
-  --cmd-warn-text: #fcd34d;
-  --cmd-danger-text: #fca5a5;
+  --cmd-warn-text: #e6c068;
+  --cmd-danger-text: #eba092;
   --cmd-info-text: #93c5fd;
   --cmd-review-text: #c4b5fd;
   --cmd-chip-bg: var(--sbd-bg-panel-hi, #21262D);

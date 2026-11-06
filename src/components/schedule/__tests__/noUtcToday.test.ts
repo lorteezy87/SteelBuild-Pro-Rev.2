@@ -24,7 +24,7 @@ const ROOTS = [
   join(__dirname, "../../../pages/schedule"), // src/pages/schedule
 ];
 
-/** Deriving today's date string from UTC: `new Date().toISOString()...`. */
+/** Deriving today's date string from UTC: `new Date().toISOString()…`. */
 const UTC_TODAY_STRING = /new\s+Date\(\)\s*\.\s*toISOString\s*\(\)/;
 
 /** Deriving today's calendar date from UTC getters on a fresh Date. */

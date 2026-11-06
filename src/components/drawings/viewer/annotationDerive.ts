@@ -44,9 +44,9 @@ export const MARKUP_STATUS_ORDER: MarkupStatus[] = [
 
 export const MARKUP_STATUS_COLOR: Record<MarkupStatus, string> = {
   open: "#9ca3af",
-  addressed: "#10b981",
-  rejected: "#ef4444",
-  clarification: "#f59e0b",
+  addressed: "#2f8f6a",
+  rejected: "#d2452f",
+  clarification: "#d99a2b",
 };
 
 export const MARKUP_STATUS_LABEL: Record<MarkupStatus, string> = {

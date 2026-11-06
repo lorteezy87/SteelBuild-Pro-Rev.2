@@ -13,7 +13,7 @@ export function OverdueBadge() {
       letterSpacing: "0.1em",
       color: "var(--status-error)",
       background: "var(--danger-muted)",
-      border: "1px solid var(--danger-border, rgba(239,68,68,0.3))",
+      border: "1px solid var(--danger-border, rgba(210,69,47,0.3))",
       borderRadius: "var(--radius-badge)",
       padding: "2px 6px",
     }}>
@@ -47,8 +47,8 @@ export function RFILinkBadge({ linkedIds, rfiMap }) {
         letterSpacing: "0.06em",
         padding: "2px 7px",
         borderRadius: "var(--radius-badge)",
-        background: openCount > 0 ? "rgba(245,158,11,0.12)" : "rgba(16,185,129,0.12)",
-        border: `1px solid ${openCount > 0 ? "rgba(245,158,11,0.25)" : "rgba(16,185,129,0.25)"}`,
+        background: openCount > 0 ? "rgba(217,154,43,0.12)" : "rgba(47,143,106,0.12)",
+        border: `1px solid ${openCount > 0 ? "rgba(217,154,43,0.25)" : "rgba(47,143,106,0.25)"}`,
         color: openCount > 0 ? "var(--status-warning)" : "var(--status-success)",
       }}>
         {openCount > 0
@@ -88,8 +88,8 @@ export function SupersededBadge() {
       fontWeight: 700,
       letterSpacing: "0.1em",
       color: "var(--status-error)",
-      background: "rgba(239,68,68,0.10)",
-      border: "1px solid rgba(239,68,68,0.25)",
+      background: "rgba(210,69,47,0.10)",
+      border: "1px solid rgba(210,69,47,0.25)",
       borderRadius: "var(--radius-badge)",
       padding: "2px 6px",
       whiteSpace: "nowrap",

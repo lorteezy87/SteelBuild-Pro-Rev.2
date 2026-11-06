@@ -351,7 +351,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
             disabled={saving}
             style={{ padding: "8px 14px", background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
           >
-            {saving ? "SAVING..." : isSplit ? "CREATE CHILD" : isEdit ? "SAVE" : "CREATE"}
+            {saving ? "SAVING…" : isSplit ? "CREATE CHILD" : isEdit ? "SAVE" : "CREATE"}
           </button>
         </DialogFooter>
       </DialogContent>

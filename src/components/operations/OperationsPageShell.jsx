@@ -13,8 +13,8 @@ const styles = `
   min-height: 100%;
   padding: 18px;
   background:
-    radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.10), transparent 28rem),
-    radial-gradient(circle at 100% 2%, rgba(16, 185, 129, 0.08), transparent 24rem),
+    radial-gradient(circle at 0% 0%, rgba(63, 111, 181, 0.10), transparent 28rem),
+    radial-gradient(circle at 100% 2%, rgba(47, 143, 106, 0.08), transparent 24rem),
     var(--bg-base);
 }
 
@@ -211,8 +211,8 @@ button.ops-page-metric:hover,
 }
 
 .ops-page-action--danger {
-  border-color: rgba(239,68,68,0.42);
-  background: rgba(239,68,68,0.12);
+  border-color: rgba(210,69,47,0.42);
+  background: rgba(210,69,47,0.12);
   color: var(--status-error);
 }
 

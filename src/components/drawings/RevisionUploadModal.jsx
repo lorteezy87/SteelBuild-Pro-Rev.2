@@ -115,10 +115,10 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       }
       setFlowError("");
       setStep("processing");
-      setProcessingMsg("Uploading PDF...");
+      setProcessingMsg("Uploading PDF…");
       setProcessingPct(10);
       const res = await integrations.Core.UploadFile({ file: pdfFile, workflow: "drawings" });
-      setProcessingMsg("AI is reading the drawing set...");
+      setProcessingMsg("AI is reading the drawing set…");
       setProcessingPct(40);
       setExtraction({ setMeta: null, scanned: false });
       // The preflight already extracted this exact File and let a person key
@@ -137,7 +137,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       if (samePreflightPdf && initialReview) {
         setExtraction({ setMeta: initialReview.setMeta ?? null, scanned: initialReview.scanned === true });
       }
-      setProcessingMsg("Comparing sheets...");
+      setProcessingMsg("Comparing sheets…");
       setProcessingPct(80);
 
     let oldSheets = [];
@@ -241,7 +241,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         return;
       }
       setStep("processing");
-      setProcessingMsg("Updating drawing records...");
+      setProcessingMsg("Updating drawing records…");
       setProcessingPct(10);
 
     const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.file_url;
@@ -355,7 +355,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       // This client sequence is still not a DB transaction: an RPC is needed
       // for true all-or-nothing sheet, history, and header updates.
       if (failed === 0 && historyFailed === 0 && selectedSet.id) {
-        setProcessingMsg("Updating drawing set...");
+        setProcessingMsg("Updating drawing set…");
         setProcessingPct(90);
         let history = [];
         try { history = JSON.parse(selectedSet.revision_history || "[]"); } catch {}

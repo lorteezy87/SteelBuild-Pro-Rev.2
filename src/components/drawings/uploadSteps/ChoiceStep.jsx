@@ -6,8 +6,8 @@ import { ChevronRight } from "lucide-react";
 export default function ChoiceStep({ onNewSet, onNewRevision, onClose }) {
   const [hovered, setHovered] = useState(null);
   const options = [
-    { id: "new", icon: "📐", title: "New Drawing Set", desc: "First time uploading this drawing package — creates a new entry in the Drawing Log.", action: onNewSet },
-    { id: "revision", icon: "↑", title: "New Revision", desc: "Updating an existing set (OFA → IFC, IFC → IFC Rev 1…) — replaces old revision in place.", action: onNewRevision },
+    { id: "new", icon: "+", title: "New drawing set", desc: "First time uploading this drawing package — creates a new entry in the Drawing Log.", action: onNewSet },
+    { id: "revision", icon: "↑", title: "New revision", desc: "Updating an existing set (OFA → IFC, IFC → IFC Rev 1…) — replaces old revision in place.", action: onNewRevision },
   ];
   return (
     <div>

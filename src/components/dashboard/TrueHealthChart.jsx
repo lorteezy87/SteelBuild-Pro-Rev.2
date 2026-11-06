@@ -4,6 +4,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
 import { formatCurrencyShort } from "../shared/formatters";
+import { ChartNoAxesColumn } from "lucide-react";
 
 /**
  * "True Health" chart — per-project EVM snapshot showing BAC, EV, and AC side-by-side.
@@ -135,9 +136,9 @@ export default function TrueHealthChart({ projects, wps }) {
 
       {!hasData ? (
         <div style={{ textAlign: "center", padding: "40px 0" }}>
-          <div style={{ fontSize: 28, marginBottom: 10 }}>📊</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.35)", letterSpacing: "0.12em", lineHeight: 1.8 }}>
-            SET BUDGETED + ACTUAL VALUES ON WORK PACKAGES<br />TO ENABLE EVM VISUALIZATION
+          <ChartNoAxesColumn size={28} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-muted)", marginBottom: 10 }} />
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 320, margin: "0 auto" }}>
+            Enter budgeted and actual values on your work packages to see earned value here.
           </div>
         </div>
       ) : (

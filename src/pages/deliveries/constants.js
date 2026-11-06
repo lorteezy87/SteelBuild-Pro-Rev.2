@@ -6,9 +6,9 @@
 export const STATUS_COLORS = {
   Scheduled:    { bg: "rgba(234,179,8,0.18)",  text: "var(--status-warning)", border: "var(--status-warning)" },
   "In Transit": { bg: "rgba(0,229,255,0.06)",  text: "var(--status-info)",    border: "var(--status-info)"    },
-  Delivered:    { bg: "rgba(34,197,94,0.18)",  text: "var(--status-success)", border: "var(--status-success)" },
+  Delivered:    { bg: "rgba(58,154,99,0.18)",  text: "var(--status-success)", border: "var(--status-success)" },
   Partial:      { bg: "rgba(251,146,60,0.20)", text: "var(--status-warning)", border: "var(--status-warning)" },
-  Rejected:     { bg: "rgba(239,68,68,0.20)",  text: "var(--status-error)",   border: "var(--status-error)"   },
+  Rejected:     { bg: "rgba(210,69,47,0.20)",  text: "var(--status-error)",   border: "var(--status-error)"   },
 };
 
 export const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected"];

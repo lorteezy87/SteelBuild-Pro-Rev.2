@@ -68,3 +68,35 @@ describe("retired type faces stay retired", () => {
     expect(families).toEqual(["Archivo", "IBM+Plex+Mono"]);
   });
 });
+
+describe("Blueline palette stays the palette", () => {
+  // Stock Tailwind 500-level literals were the single loudest "generated UI"
+  // tell in the codebase. Signals and phases come from --status-* / --phase-*
+  // (or their refined hex mirrors), never these.
+  const stock = /#(EF4444|22C55E|F59E0B|3B82F6|10B981|F97316|A855F7|8B5CF6|06B6D4|EC4899)\b/i;
+  const allowed = new Set(["src/styles/marketing-landing.css", "src/components/landing/MarketingLanding.tsx"]);
+
+  function walk(dir: string, out: string[] = []): string[] {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (name === "__tests__" || name === "node_modules") continue;
+      if (statSync(full).isDirectory()) walk(full, out);
+      else if (/\.(css|[jt]sx?)$/.test(name) && !/\.test\./.test(name)) out.push(full);
+    }
+    return out;
+  }
+
+  it("no app source uses stock Tailwind palette hex", () => {
+    const offenders = walk(resolve(process.cwd(), "src"))
+      .map((f) => relative(process.cwd(), f).split(sep).join("/"))
+      .filter((f) => !allowed.has(f))
+      .filter((f) => stock.test(readFileSync(resolve(process.cwd(), f), "utf8")));
+    expect(offenders).toEqual([]);
+  });
+
+  it("primer is the accent and white text on it holds AA", () => {
+    expect(DC_SIGNAL.accent).toBe("#CC4E17");
+    expect(DC_SIGNAL.onAccent).toBe("#FFFFFF");
+    expect(css).toContain("--br-accent:                 #CC4E17");
+  });
+});

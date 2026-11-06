@@ -119,7 +119,7 @@ describe("ProcessingStep failure details", () => {
         fileResults={[{ fileName: "bad.pdf", status: "failed", error: "boom", sheetCount: 0 }] as FileResult[]}
       />,
     );
-    expect(screen.getByText("Processing Drawing Set")).toBeInTheDocument();
+    expect(screen.getByText("Reading drawing set")).toBeInTheDocument();
     expect(screen.queryByText("boom")).not.toBeInTheDocument();
   });
 });

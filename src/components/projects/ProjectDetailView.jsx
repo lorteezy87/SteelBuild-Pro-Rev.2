@@ -31,9 +31,9 @@ const PHASE_CONFIG = {
 };
 
 const HEALTH_CONFIG = {
-  'On Track': { color: 'var(--status-success)', dot: '#22C55E' },
-  'Watch':    { color: 'var(--status-warning)', dot: '#F59E0B' },
-  'At Risk':  { color: 'var(--status-error)',   dot: '#EF4444' },
+  'On Track': { color: 'var(--status-success)', dot: '#3A9A63' },
+  'Watch':    { color: 'var(--status-warning)', dot: '#D99A2B' },
+  'At Risk':  { color: 'var(--status-error)',   dot: '#D2452F' },
 };
 
 function KpiStrip({ items }) {
@@ -172,8 +172,8 @@ function WorkPackagesTab({ workPackages }) {
   const PHASE_COLORS = {
     Detailing:   '#0D9488',
     Fabrication: 'var(--accent)',
-    Delivery:    '#06B6D4',
-    Erection:    '#22C55E',
+    Delivery:    '#2C8C9E',
+    Erection:    '#3A9A63',
   };
 
   if (!workPackages.length) return <EmptyState label="No Work Packages" />;

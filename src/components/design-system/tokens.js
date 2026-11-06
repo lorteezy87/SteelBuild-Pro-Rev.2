@@ -23,9 +23,9 @@ export const PHASE_COLOR = {
  */
 export const PHASE_HEX = {
   Detailing:   "#2EA8FF",
-  Fabrication: "#D97706",
-  Delivery:    "#34D399",
-  Erection:    "#22D3EE",
+  Fabrication: "#B8741A",
+  Delivery:    "#4DB384",
+  Erection:    "#4FA9BA",
 };
 
 /**
@@ -86,12 +86,12 @@ export const BIC_COLOR = {
  */
 export const DRAWING_STAGES = [
   { id: "Not Started", key: "Not Started", label: "NOT STARTED", color: "var(--text-muted)", bg: "rgba(100,116,139,0.16)" },
-  { id: "IFA",         key: "IFA",         label: "IFA",         color: "#60A5FA", bg: "rgba(96,165,250,0.16)"  }, // sky
+  { id: "IFA",         key: "IFA",         label: "IFA",         color: "#6F9AD6", bg: "rgba(96,165,250,0.16)"  }, // sky
   { id: "OFA",         key: "OFA",         label: "OFA",         color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // blue
-  { id: "BFA",         key: "BFA",         label: "BFA",         color: "#FBBF24", bg: "rgba(251,191,36,0.16)"  }, // amber
-  { id: "OFS",         key: "OFS",         label: "OFS — Out for Scrub", color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // orange
-  { id: "IFC",         key: "IFC",         label: "IFC",         color: "#34D399", bg: "rgba(52,211,153,0.16)"  }, // mint
-  { id: "Released",    key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // emerald
+  { id: "BFA",         key: "BFA",         label: "BFA",         color: "#E4B04A", bg: "rgba(228,176,74,0.16)"  }, // amber
+  { id: "OFS",         key: "OFS",         label: "OFS — Out for Scrub", color: "#CC4E17", bg: "rgba(204,78,23,0.18)"  }, // orange
+  { id: "IFC",         key: "IFC",         label: "IFC",         color: "#4DB384", bg: "rgba(52,211,153,0.16)"  }, // mint
+  { id: "Released",    key: "Released",    label: "RELEASED",    color: "#2F8F6A", bg: "rgba(47,143,106,0.18)"  }, // emerald
 ];
 
 /** Derived workflow-only stage; never written to `drawings.stage`. */
@@ -99,8 +99,8 @@ export const DRAWING_RR_STAGE = {
   id: "R&R",
   key: "R&R",
   label: "R&R",
-  color: "#F59E0B",
-  bg: "rgba(245,158,11,0.16)",
+  color: "#D99A2B",
+  bg: "rgba(217,154,43,0.16)",
 };
 
 /** Small utility: convert #RRGGBB → rgb triplet. */

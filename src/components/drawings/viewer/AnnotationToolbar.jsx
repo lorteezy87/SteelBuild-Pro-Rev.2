@@ -18,7 +18,7 @@ export const MARKUP_COLORS = [
   { value: "#FFB347", label: "Orange" },
   { value: "#F5D547", label: "Yellow" },
   { value: "#3DCC5C", label: "Green" },
-  { value: "#3B82F6", label: "Blue" },
+  { value: "#3F6FB5", label: "Blue" },
   { value: "#111111", label: "Black" },
 ];
 

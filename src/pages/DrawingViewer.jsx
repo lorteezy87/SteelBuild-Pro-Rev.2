@@ -614,9 +614,9 @@ export default function DrawingViewer() {
                     letterSpacing: "0.08em",
                     padding: "5px 10px",
                     borderRadius: 4,
-                    background: hideResolved ? "rgba(245,158,11,0.15)" : "var(--bg-surface)",
-                    border: `1px solid ${hideResolved ? "rgba(245,158,11,0.4)" : "var(--border-default)"}`,
-                    color: hideResolved ? "#f59e0b" : "var(--text-muted)",
+                    background: hideResolved ? "rgba(217,154,43,0.15)" : "var(--bg-surface)",
+                    border: `1px solid ${hideResolved ? "rgba(217,154,43,0.4)" : "var(--border-default)"}`,
+                    color: hideResolved ? "#d99a2b" : "var(--text-muted)",
                     cursor: "pointer",
                     textTransform: "uppercase",
                   }}

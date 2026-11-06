@@ -575,7 +575,7 @@ function CompletionRing({ pct }: { pct: number }) {
   const circ = 2 * Math.PI * r;
   const dash = (pct / 100) * circ;
   const isComplete = pct >= 100;
-  const color = isComplete ? "var(--status-success, #22c55e)" : pct > 0 ? "var(--accent)" : "var(--cmd-border)";
+  const color = isComplete ? "var(--status-success, #3a9a63)" : pct > 0 ? "var(--accent)" : "var(--cmd-border)";
 
   return (
     <svg

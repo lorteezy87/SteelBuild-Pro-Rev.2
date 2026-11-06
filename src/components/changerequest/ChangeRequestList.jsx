@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
+import { CalendarDays } from "lucide-react";
 
 const STATUS_COLORS = {
   Submitted: "var(--status-warning)",
@@ -44,7 +45,7 @@ export default function ChangeRequestList({ requests = [] }) {
             </div>
 
             <div>
-              <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {request.request_date ? formatLocalDate(request.request_date) : "—"}</div>
+              <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}><CalendarDays size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{request.request_date ? formatLocalDate(request.request_date) : "—"}</div>
               {request.estimated_cost_impact !== 0 && (
                 <div style={{ fontSize: "10px", fontWeight: 600, color: request.estimated_cost_impact > 0 ? "var(--status-warning)" : "var(--status-success)" }}>
                   {request.estimated_cost_impact > 0 ? "+" : ""} ${Math.abs(request.estimated_cost_impact || 0).toLocaleString()}

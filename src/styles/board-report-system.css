@@ -1,17 +1,25 @@
 /*
- * SteelBuild Board Report system — the app-wide design layer.
+ * SteelBuild Board Report system — "Blueline" (rev. 2026-11).
  *
- * Source of truth: the SteelBuild Document Control v2 app (Board Report):
- * a dark masthead that states the situation over a light, warm-paper working
- * body. Archivo for every UI word, IBM Plex Mono for every number, date and
- * document id, orange #FF5A1F as the one accent, 6px corners, hairline rules.
+ * The app-wide design layer. A deep blueprint-navy masthead states the
+ * situation over a warm vellum working body. Navy-tinted ink for text,
+ * primer orange as the single accent (the colour of shop-primed steel), and
+ * a desaturated signal set so status reads as information, not alarm.
+ * Archivo for every UI word, IBM Plex Mono for every number, date and
+ * document id. 6px corners, hairline rules, no glass, no gradients.
  *
  * Imported LAST by globals.css so it is authoritative over the legacy layers
  * (tokens.css, steelbuild-dark.css, steelbuild-light.css, brand-theme.css).
  * Components keep reading the same tokens (--bg-*, --text-*, --border-*,
  * --accent, --sbd-*, --cmd-*); only the values change, so every page moves
  * together. The exact values mirror src/pages/documentControl/boardReportTheme.ts
- * (DC_LIGHT / DC_DARK / DC_MASTHEAD) — change both together.
+ * (DC_LIGHT / DC_DARK / DC_MASTHEAD / DC_SIGNAL) — change both together.
+ *
+ * Contrast (WCAG 2.x), checked when the palette was set:
+ *   ink #141B22 on vellum 16.0:1 · secondary #3B4652 8.9:1 · muted #5F6974 5.2:1
+ *   white on primer #CC4E17 4.5:1 · primer ink #A63C12 on vellum 5.9:1
+ *   dark text #ECF0F3 on #0A1118 16.6:1 · muted #7F8E9C 5.6:1
+ *   masthead text-2 #B3C0CC on #0E1824 9.6:1 · muted #8698AA 6.0:1
  *
  * Specificity notes:
  *  - tokens.css pins `.steelbuild-dark { --bg-*: var(--sbd-*) !important }`,
@@ -44,115 +52,227 @@ html.steelbuild-dark,
   --sbd-radius-md:             6px;
   --sbd-radius-lg:             8px;
 
-  /* Masthead — the same dark brand band in both skins. */
-  --br-mast:                   #141618;
-  --br-mast-2:                 #1B1F23;
-  --br-mast-hover:             #22282E;
-  --br-mast-3:                 #262C32;
-  --br-mast-line:              #303942;
-  --br-mast-line-2:            #46515B;
-  --br-mast-dim:               #5B656E;
-  --br-mast-muted:             #7D8892;
-  --br-mast-text-2:            #A7B0B8;
-  --br-mast-text:              #F2F4F5;
+  /* Masthead — blueprint navy, the same band in both skins. */
+  --br-mast:                   #0E1824;
+  --br-mast-2:                 #142130;
+  --br-mast-hover:             #1A2A3B;
+  --br-mast-3:                 #1F3144;
+  --br-mast-line:              #26384B;
+  --br-mast-line-2:            #36506A;
+  --br-mast-dim:               #5A6C7E;
+  --br-mast-muted:             #8698AA;
+  --br-mast-text-2:            #B3C0CC;
+  --br-mast-text:              #EEF2F6;
 
-  --br-accent:                 #FF5A1F;
-  --br-accent-hi:              #FF7442;
-  --br-accent-ink:             #C2410C;
+  /* Primer — shop-primed steel. One accent, used sparingly. */
+  --br-accent:                 #CC4E17;
+  --br-accent-hi:              #E36A2C;
+  --br-accent-ink:             #A63C12;
+  --br-on-accent:              #FFFFFF;
+  --br-accent-wash:            rgba(204, 78, 23, 0.09);
+  --br-accent-rule:            rgba(204, 78, 23, 0.34);
+
+  /* Elevation — two quiet steps; the system leans on rules, not shadow. */
+  --shadow-sm:                 0 1px 2px rgba(14, 24, 36, 0.06);
+  --shadow-md:                 0 1px 2px rgba(14, 24, 36, 0.06), 0 4px 12px rgba(14, 24, 36, 0.06);
+  --shadow-lg:                 0 2px 4px rgba(14, 24, 36, 0.06), 0 12px 32px rgba(14, 24, 36, 0.10);
+
+  --accent:                    var(--br-accent);
+  --accent-light:              var(--br-accent-hi);
+  --accent-hover:              #B8461C;
+  --accent-muted:              var(--br-accent-wash);
+  --accent-border:             var(--br-accent-rule);
+  --accent-text:               var(--br-on-accent);
+  --on-accent:                 var(--br-on-accent);
 }
 
-/* ── 2. Light skin — warm paper (the v2 default) ─────────────── */
+/* ── 2. Light skin — warm vellum (the default) ───────────────── */
 html[data-theme="light"],
 .steelbuild-light {
   color-scheme: light;
 
-  --bg-void:                   #ECEAE5;
-  --bg-page:                   #FAFAF8;
-  --bg-base:                   #FAFAF8;
+  --bg-void:                   #EDEBE5;
+  --bg-page:                   #F7F6F2;
+  --bg-base:                   #F7F6F2;
   --bg-surface:                #FFFFFF;
   --bg-card:                   #FFFFFF;
   --bg-surface-secondary:      #FFFFFF;
-  --bg-surface-low:            #F4F3EF;
-  --bg-surface-mid:            #F1EFEA;
+  --bg-surface-low:            #F3F1EC;
+  --bg-surface-mid:            #EFEDE7;
   --bg-elevated:               #FFFFFF;
-  --bg-surface-high:           #ECEAE5;
-  --bg-surface-highest:        #E2E0DA;
+  --bg-surface-high:           #E9E6DF;
+  --bg-surface-highest:        #DEDAD2;
   --bg-input:                  #FFFFFF;
-  --bg-hover:                  #F1EFEA;
-  --bg-row-hover:              #F1EFEA;
+  --bg-hover:                  #EFEDE7;
+  --bg-row-hover:              #F3F1EC;
 
-  --border-default:            #DEDCD6;
-  --border:                    #DEDCD6;
-  --border-strong:             #CFCCC5;
-  --divider:                   #E8E6E0;
+  --border-default:            #DFDBD3;
+  --border:                    #DFDBD3;
+  --border-strong:             #CBC6BC;
+  --divider:                   #E9E6E0;
 
-  --text-primary:              #17191C;
-  --text-secondary:            #45494D;
-  --text-muted:                #6B6F73;
+  --text-primary:              #141B22;
+  --text-secondary:            #3B4652;
+  --text-muted:                #5F6974;
+  --text-disabled:             rgba(95, 105, 116, 0.55);
 
-  --accent-text:               #111417;
-  --on-accent:                 #111417;
+  --accent-text:               var(--br-on-accent);
+  --on-accent:                 var(--br-on-accent);
 
+  /* Signals — AA on white, desaturated so a full register stays calm. */
+  --status-success:            #23744A;
+  --status-warning:            #9A5B0B;
+  --status-error:              #B42318;
+  --status-info:               #2A5B9E;
+  --status-review:             var(--br-accent-ink);
+  --status-review-muted:       rgba(166, 60, 18, 0.09);
+  --status-review-border:      rgba(166, 60, 18, 0.32);
+  --status-success-bright:     #2E8B57;
+  --status-warning-bright:     #C98A12;
+  --status-error-bright:       #C8321F;
+  --success:                   #23744A;
+  --success-muted:             rgba(35, 116, 74, 0.09);
+  --success-border:            rgba(35, 116, 74, 0.30);
+  --warning:                   #9A5B0B;
+  --warning-muted:             rgba(154, 91, 11, 0.09);
+  --warning-border:            rgba(154, 91, 11, 0.30);
+  --danger:                    #B42318;
+  --danger-muted:              rgba(180, 35, 24, 0.08);
+  --danger-border:             rgba(180, 35, 24, 0.30);
+  --info:                      #2A5B9E;
+  --info-muted:                rgba(42, 91, 158, 0.08);
+  --info-border:               rgba(42, 91, 158, 0.28);
 
-  --sbd-bg-base:               #FAFAF8;
-  --sbd-bg-page:               #FAFAF8;
+  --sbd-bg-base:               #F7F6F2;
+  --sbd-bg-page:               #F7F6F2;
   --sbd-bg-surface:            #FFFFFF;
-  --sbd-bg-surface-hi:         #F4F3EF;
+  --sbd-bg-surface-hi:         #F3F1EC;
   --sbd-bg-elevated:           #FFFFFF;
   --sbd-bg-input:              #FFFFFF;
-  --sbd-bg-row-hover:          #F1EFEA;
-  --sbd-border:                #DEDCD6;
-  --sbd-border-strong:         #CFCCC5;
-  --sbd-divider:               #E8E6E0;
-  --sbd-text:                  #17191C;
-  --sbd-text-secondary:        #45494D;
-  --sbd-text-muted:            #6B6F73;
+  --sbd-bg-row-hover:          #F3F1EC;
+  --sbd-border:                #DFDBD3;
+  --sbd-border-strong:         #CBC6BC;
+  --sbd-divider:               #E9E6E0;
+  --sbd-text:                  #141B22;
+  --sbd-text-secondary:        #3B4652;
+  --sbd-text-muted:            #5F6974;
   --sbd-accent:                var(--br-accent);
   --sbd-accent-light:          var(--br-accent-hi);
-  --sbd-accent-muted:          rgba(255, 90, 31, 0.10);
-  --sbd-accent-border:         rgba(255, 90, 31, 0.35);
+  --sbd-accent-muted:          var(--br-accent-wash);
+  --sbd-accent-border:         var(--br-accent-rule);
+
+  /* Workflow phases — detailing → procurement → fab → delivery → erection.
+     One hue per phase, read left to right on the Gantt and in phase chips. */
+  --phase-detailing:           #2F5E9E;
+  --phase-procurement:         #9A6A12;
+  --phase-fab:                 #A63C12;
+  --phase-delivery:            #1F7584;
+  --phase-erection:            #23744A;
+  --phase-closeout:            #5F6974;
+  --sbd-phase-detailing:       #2F5E9E;
+  --sbd-phase-fabrication:     #A63C12;
+  --sbd-phase-delivery:        #1F7584;
+  --sbd-phase-erection:        #23744A;
+  --sbd-gantt-preconstruction: #7A848F;
+  --sbd-gantt-detailing:       #2F5E9E;
+  --sbd-gantt-procurement:     #9A6A12;
+  --sbd-gantt-fabrication:     #A63C12;
+  --sbd-gantt-delivery:        #1F7584;
+  --sbd-gantt-installation:    #23744A;
+  --sbd-gantt-closeout:        #5F6974;
+  --sbd-gantt-today:           #CC4E17;
+  --sbd-gantt-today-soft:      rgba(204, 78, 23, 0.12);
 }
 
-/* ── 3. Dark skin — same system, dark body ───────────────────── */
+/* ── 3. Dark skin — night drafting table ─────────────────────── */
 html.steelbuild-dark,
 html[data-theme="dark"] {
   color-scheme: dark;
 
-  --sbd-bg-base:               #0C0F12;
-  --sbd-bg-page:               #0C0F12;
-  --sbd-bg-surface:            #141A1F;
-  --sbd-bg-surface-hi:         #182027;
-  --sbd-bg-elevated:           #141A1F;
-  --sbd-bg-input:              #141A1F;
-  --sbd-bg-row-hover:          #151D23;
-  --sbd-bg-panel:              #141A1F;
-  --sbd-bg-panel-hi:           #182027;
-  --sbd-bg-panel-input:        #141A1F;
-  --sbd-bg-panel-hover:        #1C2329;
+  --sbd-bg-base:               #0A1118;
+  --sbd-bg-page:               #0A1118;
+  --sbd-bg-surface:            #111B25;
+  --sbd-bg-surface-hi:         #16222E;
+  --sbd-bg-elevated:           #111B25;
+  --sbd-bg-input:              #111B25;
+  --sbd-bg-row-hover:          #142030;
+  --sbd-bg-panel:              #111B25;
+  --sbd-bg-panel-hi:           #16222E;
+  --sbd-bg-panel-input:        #111B25;
+  --sbd-bg-panel-hover:        #18263A;
 
-  --sbd-border:                #222A31;
-  --sbd-border-card:           #222A31;
-  --sbd-border-strong:         #303942;
-  --sbd-divider:               #1C2329;
+  --sbd-border:                #1D2A37;
+  --sbd-border-card:           #1D2A37;
+  --sbd-border-strong:         #2A3A4A;
+  --sbd-divider:               #18242F;
 
-  --sbd-text:                  #F2F4F5;
-  --sbd-text-secondary:        #A7B0B8;
-  --sbd-text-muted:            #7D8892;
+  --sbd-text:                  #ECF0F3;
+  --sbd-text-secondary:        #A8B5C1;
+  --sbd-text-muted:            #7F8E9C;
 
   --sbd-accent:                var(--br-accent);
   --sbd-accent-light:          var(--br-accent-hi);
-  --sbd-accent-muted:          rgba(255, 90, 31, 0.12);
-  --sbd-accent-border:         rgba(255, 90, 31, 0.40);
+  --sbd-accent-muted:          rgba(227, 106, 44, 0.12);
+  --sbd-accent-border:         rgba(227, 106, 44, 0.40);
   --sbd-gold:                  var(--br-accent);
   --sbd-gold-light:            var(--br-accent-hi);
 
-  --bg-void:                   #080A0C;
-  --bg-surface-low:            #11161A;
-  --bg-surface-mid:            #182027;
-  --bg-surface-high:           #1C2329;
-  --bg-surface-highest:        #222A31;
-  --bg-hover:                  #151D23;
-  --bg-row-hover:              #151D23;
+  --sbd-success:               #5BBF86;
+  --sbd-warning:               #E0AE45;
+  --sbd-error:                 #EF6A55;
+  --sbd-info:                  #6FA3E6;
+  --sbd-review:                #E8823F;
+
+  --status-success:            #5BBF86;
+  --status-warning:            #E0AE45;
+  --status-error:              #EF6A55;
+  --status-info:               #6FA3E6;
+  --status-review:             #E8823F;
+  --status-success-bright:     #3FAE72;
+  --status-warning-bright:     #E9A23B;
+  --status-error-bright:       #E5533D;
+  --success-muted:             rgba(91, 191, 134, 0.12);
+  --success-border:            rgba(91, 191, 134, 0.34);
+  --warning-muted:             rgba(224, 174, 69, 0.12);
+  --warning-border:            rgba(224, 174, 69, 0.34);
+  --danger-muted:              rgba(239, 106, 85, 0.12);
+  --danger-border:             rgba(239, 106, 85, 0.36);
+  --info-muted:                rgba(111, 163, 230, 0.12);
+  --info-border:               rgba(111, 163, 230, 0.34);
+
+  --bg-void:                   #060B10;
+  --bg-surface-low:            #0E1720;
+  --bg-surface-mid:            #16222E;
+  --bg-surface-high:           #1A2733;
+  --bg-surface-highest:        #1F2E3C;
+  --bg-hover:                  #142030;
+  --bg-row-hover:              #142030;
+
+  --shadow-sm:                 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md:                 0 1px 2px rgba(0, 0, 0, 0.30), 0 4px 12px rgba(0, 0, 0, 0.28);
+  --shadow-lg:                 0 2px 4px rgba(0, 0, 0, 0.30), 0 12px 32px rgba(0, 0, 0, 0.40);
+
+  /* Workflow phases — detailing → procurement → fab → delivery → erection.
+     One hue per phase, read left to right on the Gantt and in phase chips. */
+  --phase-detailing:           #6F9AD6;
+  --phase-procurement:         #D9A64A;
+  --phase-fab:                 #E36A2C;
+  --phase-delivery:            #4FA9BA;
+  --phase-erection:            #5BBF86;
+  --phase-closeout:            #8B97A3;
+  --sbd-phase-detailing:       #6F9AD6;
+  --sbd-phase-fabrication:     #E36A2C;
+  --sbd-phase-delivery:        #4FA9BA;
+  --sbd-phase-erection:        #5BBF86;
+  --sbd-gantt-preconstruction: #6E7B88;
+  --sbd-gantt-detailing:       #6F9AD6;
+  --sbd-gantt-procurement:     #D9A64A;
+  --sbd-gantt-fabrication:     #E36A2C;
+  --sbd-gantt-delivery:        #4FA9BA;
+  --sbd-gantt-installation:    #5BBF86;
+  --sbd-gantt-closeout:        #8B97A3;
+  --sbd-gantt-today:           #E36A2C;
+  --sbd-gantt-today-soft:      rgba(227, 106, 44, 0.16);
 }
 
 /* Flat surfaces: the Board Report has no frosted glass or mesh backdrop. */
@@ -160,30 +280,30 @@ html .sbd-mesh-bg {
   background-image: none;
 }
 
-/* ── 4. Command Control Centers — onto the same paper ────────── */
+/* ── 4. Command Control Centers — onto the same vellum ───────── */
 html[data-theme="light"] [data-skin="command"],
 html[data-theme="light"][data-skin="command"] {
-  --cmd-bg:                    #FAFAF8;
+  --cmd-bg:                    #F7F6F2;
   --cmd-surface:               #FFFFFF;
-  --cmd-border:                #DEDCD6;
-  --cmd-text:                  #17191C;
-  --cmd-text-muted:            #55595D;
+  --cmd-border:                #DFDBD3;
+  --cmd-text:                  #141B22;
+  --cmd-text-muted:            #4E5965;
   --cmd-gold:                  var(--br-accent);
-  --cmd-on-gold:               #111417;
-  --cmd-chip-bg:               #ECEAE5;
-  --cmd-icon-wash:             rgba(255, 90, 31, 0.10);
-  --cmd-kpi-icon-bg:           #F4F3EF;
-  --cmd-row-hover:             #F1EFEA;
+  --cmd-on-gold:               var(--br-on-accent);
+  --cmd-chip-bg:               #EFEDE7;
+  --cmd-icon-wash:             var(--br-accent-wash);
+  --cmd-kpi-icon-bg:           #F3F1EC;
+  --cmd-row-hover:             #F3F1EC;
   --cmd-menu:                  #FFFFFF;
-  --cmd-menu-hover:            #F1EFEA;
-  --cmd-hero-fade:             rgba(250, 250, 248, 0.42);
+  --cmd-menu-hover:            #EFEDE7;
+  --cmd-hero-fade:             rgba(247, 246, 242, 0.42);
 }
 
 html.steelbuild-dark [data-skin="command"],
 html.steelbuild-dark[data-skin="command"] {
   --cmd-gold:                  var(--br-accent);
-  --cmd-on-gold:               #111417;
-  --cmd-icon-wash:             rgba(255, 90, 31, 0.14);
+  --cmd-on-gold:               var(--br-on-accent);
+  --cmd-icon-wash:             rgba(227, 106, 44, 0.14);
 }
 
 /* Command kit panels: Board Report corners, not the old 10–14px cards. */
@@ -197,7 +317,7 @@ html :is(.sbd-card, .sbd-panel) {
   border-radius: var(--radius-card);
 }
 
-/* ── 5. App shell — the dark masthead band ───────────────────── *
+/* ── 5. App shell — the blueprint masthead band ──────────────── *
  * The topbar and the sidebar are the masthead in both skins. Re-pointing the
  * surface/text tokens on the chrome itself makes every control already inside
  * it (project picker, search, bell, nav items) draw dark without touching a
@@ -235,6 +355,8 @@ html [aria-label="Mobile navigation"] {
   --text-secondary:            var(--br-mast-text-2);
   --text-muted:                var(--br-mast-muted);
 
+  --accent:                    var(--br-accent-hi);
+
   --sbd-bg-surface:            var(--br-mast-2);
   --sbd-bg-elevated:           var(--br-mast-2);
   --sbd-bg-input:              var(--br-mast-2);
@@ -261,30 +383,58 @@ html .sb-dashboard-reference-sidebar {
   border-right: 1px solid var(--br-mast-line) !important;
 }
 
-/* Active nav item: orange rule, not a filled pill. */
+/* Nav rows: quiet until touched; the active row gets a primer rule. */
+html .sbd-sidebar .sbd-nav-item,
+html .sb-dashboard-reference-sidebar .sb-dashboard-reference-nav__item {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
 html .sbd-sidebar .sbd-nav-item.is-active,
 html .sb-dashboard-reference-sidebar .sb-dashboard-reference-nav__item.is-active {
   color: var(--br-mast-text) !important;
   background: var(--br-mast-hover) !important;
   border-color: transparent !important;
-  box-shadow: inset 2px 0 0 var(--br-accent);
+  box-shadow: inset 3px 0 0 var(--br-accent-hi);
+  font-weight: 600;
 }
 
-/* Section labels: the masthead's mono eyebrow. */
+/* Section labels: the masthead's eyebrow. */
 html .sbd-sidebar .sbd-nav-section,
 html .sbd-topbar .sbd-topbar-eyebrow {
-  font-family: var(--br-font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-family: var(--br-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--br-mast-muted);
+  color: var(--br-mast-dim);
 }
 
-/* ── 6. Body type — the Board Report scale ───────────────────── */
+/* ── 6. Typography — the Board Report scale ──────────────────── */
 html body {
   font-family: var(--br-font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings: tight, deliberate, never wrap to a single orphaned word. */
+html :is(h1, h2, h3, h4) {
+  font-family: var(--br-font-ui);
+  text-wrap: balance;
+  letter-spacing: -0.012em;
+  line-height: 1.2;
+}
+html h1 { font-weight: 700; }
+html :is(h2, h3) { font-weight: 650; }
+html h4 { font-weight: 600; letter-spacing: -0.005em; }
+
+/* Running text: comfortable measure, no ragged widows. */
+html :is(p, li, dd, figcaption, blockquote) {
+  text-wrap: pretty;
 }
 
 /* Display headings: Archivo condensed on the width axis, not a second face. */
@@ -293,18 +443,67 @@ html .sbp-page-header__title,
 html .sbd-display {
   font-family: var(--br-font-ui);
   font-stretch: 85%;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  text-wrap: balance;
 }
 
-/* Every number, date and id: Plex Mono, tabular. */
+/* Every number, date and id: Plex Mono, tabular, slashed zero. */
 html .sbd-mono,
-html .font-mono {
+html .font-mono,
+html :is(code, kbd, samp) {
   font-family: var(--br-font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: 0;
+}
+
+/* Tables: columns of figures line up regardless of face. */
+html :is(table, [role="grid"], [role="table"]) {
   font-variant-numeric: tabular-nums;
 }
+html :is(th, [role="columnheader"]) {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
 
-/* Focus: the v2 orange ring. */
+/* Links read as links without shouting. */
+html :is(p, li, td, dd) a:not([class]) {
+  color: var(--br-accent-ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+html.steelbuild-dark :is(p, li, td, dd) a:not([class]) {
+  color: var(--br-accent-hi);
+}
+
+/* Selection: primer wash, ink stays ink. */
+html ::selection {
+  background: rgba(204, 78, 23, 0.20);
+  color: inherit;
+}
+
+/* Placeholders sit below muted text, never compete with entered values. */
+html :is(input, textarea)::placeholder {
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+/* Scrollbars: thin, tinted to the surface they sit on. */
+html * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* Focus: one primer ring, offset so it never sits on the text. */
 html :is(a, button, input, select, textarea, [role="button"], [role="option"], [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: 2px solid var(--br-accent);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html .sbd-sidebar .sbd-nav-item,
+  html .sb-dashboard-reference-sidebar .sb-dashboard-reference-nav__item {
+    transition: none;
+  }
 }

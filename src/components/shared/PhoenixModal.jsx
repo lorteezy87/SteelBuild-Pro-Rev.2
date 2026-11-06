@@ -41,8 +41,8 @@ export const btnSecondary = {
 };
 
 export const btnDanger = {
-  background: "rgba(239,68,68,0.13)",
-  border: "1px solid rgba(239,68,68,0.35)",
+  background: "rgba(210,69,47,0.13)",
+  border: "1px solid rgba(210,69,47,0.35)",
   borderRadius: 6,
   padding: "7px 18px",
   color: "var(--status-error)",

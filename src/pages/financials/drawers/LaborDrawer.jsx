@@ -312,7 +312,7 @@ export function LaborDrawer({ open, onClose, kpi, selectedProject }) {
                       opacity: updateMut.isPending ? 0.6 : 1,
                     }}
                   >
-                    {updateMut.isPending ? "Saving..." : "Save"}
+                    {updateMut.isPending ? "Saving…" : "Save"}
                   </button>
                   <button
                     onClick={onCancel}

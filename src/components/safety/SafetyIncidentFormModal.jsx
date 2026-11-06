@@ -92,7 +92,7 @@ export default function SafetyIncidentFormModal({ projectId, incident = null, on
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
           <Button variant="primary" onClick={handleSubmit} disabled={isSaving || !formData.project_id || !formData.incident_date || !formData.description?.trim()}>
-            {isSaving ? (isEditing ? "Saving..." : "Reporting...") : (isEditing ? "Save Incident" : "Report Incident")}
+            {isSaving ? (isEditing ? "Saving…" : "Reporting…") : (isEditing ? "Save Incident" : "Report Incident")}
           </Button>
         </>
       }
@@ -101,7 +101,7 @@ export default function SafetyIncidentFormModal({ projectId, incident = null, on
         <div>
           <label style={labelStyle}>Project</label>
           <select value={formData.project_id} onChange={(e) => { setFormData({ ...formData, project_id: e.target.value }); clearField("project_id"); }} style={{ ...inputStyle, borderColor: fieldErrors.project_id ? "var(--status-error)" : undefined }}>
-            <option value="">Select project...</option>
+            <option value="">Select project…</option>
             {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
           </select>
           {fieldErrors.project_id && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", marginTop: 2, display: "block" }}>{fieldErrors.project_id}</span>}
@@ -160,7 +160,7 @@ export default function SafetyIncidentFormModal({ projectId, incident = null, on
         {formData.incident_type === "Injury" && (
           <div>
             <label style={labelStyle}>Injury Details</label>
-            <textarea value={formData.injuries} onChange={(e) => setFormData({ ...formData, injuries: e.target.value })} placeholder="Nature and extent of injuries..." style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
+            <textarea value={formData.injuries} onChange={(e) => setFormData({ ...formData, injuries: e.target.value })} placeholder="Nature and extent of injuries…" style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
           </div>
         )}
 

@@ -94,7 +94,7 @@ export default function WPContextMenu({
           <button
             key={res.id}
             onClick={() => reassign(res)}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.10)")}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(217,154,43,0.10)")}
             onMouseLeave={(e) => (e.currentTarget.style.background = isCurrent ? "var(--accent-muted)" : "transparent")}
             style={{
               display: "block", width: "100%", padding: "7px 12px", textAlign: "left",

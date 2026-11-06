@@ -35,8 +35,8 @@ function getActivityStatus(user) {
 }
 
 const activityDotColors = {
-  active: "#10B981",
-  pending: "#F59E0B",
+  active: "#2F8F6A",
+  pending: "#D99A2B",
   inactive: "var(--text-muted)",
 };
 
@@ -133,7 +133,7 @@ function UsersManagementContent() {
         />
         <input
           type="text"
-          placeholder="Search users by name, email, or role..."
+          placeholder="Search users by name, email, or role…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="sbd-input"

@@ -25,7 +25,7 @@ export default function NewResourceDialog({
     { key: "unit",               label: "Unit",             type: "select",        options: ["hours", "tons", "pieces", "days"] },
     { key: "cost_rate",          label: "Cost Rate ($/hr)", type: "number",        placeholder: "0.00" },
     { key: "availability",       label: "Availability",     type: "select",        options: ["Available", "Partially Available", "Committed", "On Leave", "Unavailable"] },
-    { key: "notes",              label: "Notes",            type: "textarea",      placeholder: "Optional notes..." },
+    { key: "notes",              label: "Notes",            type: "textarea",      placeholder: "Optional notes…" },
   ];
 
   const handleCreate = () => {

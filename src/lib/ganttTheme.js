@@ -1,12 +1,12 @@
 export const GANTT_PHASE_HEX = {
-  "Pre-Construction": "#64748B",
-  Detailing: "#2EA8FF",
-  Procurement: "#F59E0B",
-  Fabrication: "#D97706",
-  Delivery: "#34D399",
-  Erection: "#22D3EE",
-  Installation: "#22D3EE",
-  Closeout: "#64748B",
+  "Pre-Construction": "#7A848F",
+  Detailing: "#2F5E9E",
+  Procurement: "#9A6A12",
+  Fabrication: "#A63C12",
+  Delivery: "#1F7584",
+  Erection: "#23744A",
+  Installation: "#23744A",
+  Closeout: "#5F6974",
 };
 
 export const GANTT_PHASE_VAR = {
@@ -46,13 +46,17 @@ export const GANTT_STATUS_HEX = {
 
 export const GANTT_TODAY_HEX = GANTT_TODAY_VAR;
 
+// Flat fills. The bars carry phase by hue alone; a gradient adds noise, not
+// information. Kept as `linear-gradient(...)` strings so existing consumers
+// that write them to `background` keep working.
+const flat = (hex) => `linear-gradient(90deg, ${hex} 0%, ${hex} 100%)`;
 export const GANTT_GRADIENT = {
-  Detailing: "linear-gradient(90deg, #2EA8FF 0%, #56B0FF 100%)",
-  Procurement: "linear-gradient(90deg, #F59E0B 0%, #FBBF24 100%)",
-  Fabrication: "linear-gradient(90deg, #D97706 0%, #F97316 100%)",
-  Delivery: "linear-gradient(90deg, #34D399 0%, #10B981 100%)",
-  Erection: "linear-gradient(90deg, #22D3EE 0%, #06B6D4 100%)",
-  Installation: "linear-gradient(90deg, #22D3EE 0%, #06B6D4 100%)",
-  Closeout: "linear-gradient(90deg, #64748B 0%, #475569 100%)",
-  default: "linear-gradient(90deg, #64748B 0%, #334155 100%)",
+  Detailing: flat(GANTT_PHASE_HEX.Detailing),
+  Procurement: flat(GANTT_PHASE_HEX.Procurement),
+  Fabrication: flat(GANTT_PHASE_HEX.Fabrication),
+  Delivery: flat(GANTT_PHASE_HEX.Delivery),
+  Erection: flat(GANTT_PHASE_HEX.Erection),
+  Installation: flat(GANTT_PHASE_HEX.Installation),
+  Closeout: flat(GANTT_PHASE_HEX.Closeout),
+  default: flat(GANTT_PHASE_HEX["Pre-Construction"]),
 };

@@ -15,10 +15,10 @@ export const display = { fontFamily: "var(--font-display)" };
 // semantic zone-status marks — allowlisted; used as drawing/viewer ink and
 // translucent fills, not page chrome.
 export const STATUS_COLOR = {
-  green:   "#22C55E",
-  blue:    "#3B82F6",
-  amber:   "#F59E0B",
-  red:     "#EF4444",
+  green:   "#3A9A63",
+  blue:    "#3F6FB5",
+  amber:   "#D99A2B",
+  red:     "#D2452F",
   purple:  "#0d9488", /* legacy categorical key — renders teal (no-purple palette) */
   neutral: "#94A3B8",
 };
@@ -38,8 +38,8 @@ export const TABS = [
 // ZoneLayer arrow palette so the visual language stays consistent.
 // semantic zone-dependency marks — allowlisted; matches canvas arrow encodings.
 export const RELATIONSHIP_COLOR = {
-  blocks:     "#EF4444",
-  depends_on: "#F59E0B",
+  blocks:     "#D2452F",
+  depends_on: "#D99A2B",
   relates_to: "#94A3B8",
 };
 export const RELATIONSHIP_LABEL = {
@@ -60,22 +60,22 @@ export const PICKER_TYPES = [
 
 // semantic zone-activity marks — allowlisted; timeline dots encode event type.
 export const ACTIVITY_COLOR = {
-  zone_created:       "#3B82F6",
+  zone_created:       "#3F6FB5",
   zone_renamed:       "#0d9488",
-  status_changed:     "#F59E0B",
-  zone_deleted:       "#EF4444",
-  link_added:         "#22C55E",
+  status_changed:     "#D99A2B",
+  zone_deleted:       "#D2452F",
+  link_added:         "#3A9A63",
   link_removed:       "#94A3B8",
   // V3.1 — zone-to-zone dependency edges. Color matches the canvas
   // arrow palette (blocks=red, depends_on=amber) at the strongest
   // semantic; the timeline dot stays a single color per event_type.
-  dependency_added:   "#F59E0B",
+  dependency_added:   "#D99A2B",
   dependency_removed: "#94A3B8",
 };
 
 // semantic zone-status marks — allowlisted; compact duplicate for dot-only
 // consumers that need the original categorical keys.
 export const STATUS_DOT = {
-  red: "#EF4444", amber: "#F59E0B", purple: "#0d9488",
-  blue: "#3B82F6", green: "#22C55E", neutral: "#94A3B8",
+  red: "#D2452F", amber: "#D99A2B", purple: "#0d9488",
+  blue: "#3F6FB5", green: "#3A9A63", neutral: "#94A3B8",
 };

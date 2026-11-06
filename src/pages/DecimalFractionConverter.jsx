@@ -717,8 +717,8 @@ const inlineErrorStyle = {
   ...mono,
   fontSize: 11, fontWeight: 600,
   color: "var(--status-review)",
-  background: "var(--status-review-muted, rgba(249,115,22,0.12))",
-  border: "1px solid var(--status-review-border, rgba(249,115,22,0.40))",
+  background: "var(--status-review-muted, rgba(204,78,23,0.12))",
+  border: "1px solid var(--status-review-border, rgba(204,78,23,0.40))",
   padding: "6px 10px", borderRadius: 4,
   marginTop: 6,
 };

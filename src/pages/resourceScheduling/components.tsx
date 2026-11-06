@@ -338,7 +338,7 @@ export function HoursSummaryStrip({ stats }: { stats: ScheduleStats }) {
         return (
           <div key={label} style={{
             padding: "6px 10px", background: "var(--hover-bg)", borderRadius: 6,
-            border: isOverAlloc ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--hover-bg)",
+            border: isOverAlloc ? "1px solid rgba(210,69,47,0.35)" : "1px solid var(--hover-bg)",
             animation: isOverAlloc ? "rsOverAllocPulse 2s ease-in-out infinite" : undefined,
             transition: "border-color 0.2s",
           }}>
@@ -414,8 +414,8 @@ export function ResourcesSidebar({
               const heatBg = getRowCapacityBg(resBurnPct, isOverAllocated);
               return (
                 <div key={res.id} style={{
-                  background: isOverAllocated ? "rgba(239,68,68,0.06)" : heatBg !== "transparent" ? heatBg : "var(--bg-surface-low)",
-                  border: isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid var(--divider)",
+                  background: isOverAllocated ? "rgba(210,69,47,0.06)" : heatBg !== "transparent" ? heatBg : "var(--bg-surface-low)",
+                  border: isOverAllocated ? "1px solid rgba(210,69,47,0.20)" : "1px solid var(--divider)",
                   borderRadius: 6, padding: 8, marginBottom: 8,
                   transition: "background 0.2s, border-color 0.2s",
                 }}>
@@ -482,7 +482,7 @@ export function DragTooltipOverlay({ tooltip }) {
         top: tooltip.y,
         transform: "translateX(-50%)",
         background: "var(--bg-surface-low)",
-        border: "1px solid rgba(245,158,11,0.5)",
+        border: "1px solid rgba(217,154,43,0.5)",
         borderRadius: 6,
         padding: "4px 12px",
         fontSize: 10,

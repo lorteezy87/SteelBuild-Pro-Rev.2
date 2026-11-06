@@ -190,7 +190,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                   boxSizing: 'border-box'
                 }}>
 
-                <option value="">Select cost code...</option>
+                <option value="">Select cost code…</option>
                 {COST_CODES_GROUPED.map((group) =>
                 <optgroup key={group.category} label={group.category}>
                     {group.codes.map((cc) => {

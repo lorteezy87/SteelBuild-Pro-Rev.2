@@ -445,7 +445,7 @@ function ProjectConstraints({ projectId, orgId, isLoadingOrgs, scope, currentSco
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search constraints..."
+            placeholder="Search constraints…"
             style={{ ...inputStyle, paddingLeft: 30, width: "100%" }}
           />
         </div>

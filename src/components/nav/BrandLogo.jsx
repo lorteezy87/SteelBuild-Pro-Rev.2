@@ -33,7 +33,7 @@ export function BrandLogo({
         objectFit: "contain",
         maxWidth: "100%",
         flexShrink: 0,
-        ...(plate ? { border: "1px solid var(--border-default, #303942)" } : {}),
+        ...(plate ? { border: "1px solid var(--border-default, #26384B)" } : {}),
         ...style,
       }}
     />

@@ -36,7 +36,7 @@ export default function FilterBar({
   return (
     <div className="filter-bar-responsive" style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
       <input
-        placeholder="Search description, #, vendor..."
+        placeholder="Search description, #, vendor…"
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         style={{ ...selectStyle, flex: 1, minWidth: 180 }}

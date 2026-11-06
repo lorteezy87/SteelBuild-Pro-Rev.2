@@ -212,7 +212,7 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
         )}
       </div>
 
-      {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>✓ Saving...</div>}
+      {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>✓ Saving…</div>}
     </div>
   );
 }

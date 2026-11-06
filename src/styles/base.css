@@ -82,25 +82,25 @@ input::placeholder, textarea::placeholder {
 
 /* Landing / marketing page inputs must stay dark-on-white regardless of app theme.
    Global input !important rules above otherwise make typed credentials unreadable
-   on the light sign-in card. Values: Board Report paper (boardReportTheme.ts). */
+   on the light sign-in card. Values: Board Report vellum (boardReportTheme.ts DC_LIGHT). */
 .lp-page input.lp-input,
 .lp-page textarea.lp-input {
   background: #FFFFFF !important;
-  border: 1px solid #DEDCD6 !important;
-  color: #17191C !important;
-  -webkit-text-fill-color: #17191C !important;
-  caret-color: #17191C !important;
+  border: 1px solid #DFDBD3 !important;
+  color: #141B22 !important;
+  -webkit-text-fill-color: #141B22 !important;
+  caret-color: #141B22 !important;
   box-shadow: none !important;
 }
 .lp-page input.lp-input:focus,
 .lp-page textarea.lp-input:focus {
-  border-color: #17191C !important;
-  box-shadow: 0 0 0 2px #FF5A1F !important;
+  border-color: #141B22 !important;
+  box-shadow: 0 0 0 3px rgba(204, 78, 23, 0.28) !important;
 }
 .lp-page input.lp-input::placeholder,
 .lp-page textarea.lp-input::placeholder {
-  color: #6F7377 !important;
-  -webkit-text-fill-color: #6F7377 !important;
+  color: #5F6974 !important;
+  -webkit-text-fill-color: #5F6974 !important;
   opacity: 1 !important;
 }
 .lp-page input.lp-input:-webkit-autofill,

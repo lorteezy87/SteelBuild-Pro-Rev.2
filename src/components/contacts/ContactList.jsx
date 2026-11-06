@@ -1,4 +1,5 @@
 import React from "react";
+import { Mail, Phone, StickyNote, UsersRound } from "lucide-react";
 
 const TYPE_COLORS = {
   Owner: "var(--status-error)",
@@ -22,12 +23,12 @@ export default function ContactList({ contacts, view, onEdit, onDelete, onAdd })
         <div style={{
           width: 64, height: 64, borderRadius: "50%",
           background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "2px solid color-mix(in srgb, var(--accent) 22%, transparent)",
-          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28,
-        }}>👤</div>
+          display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)",
+        }}><UsersRound size={26} strokeWidth={1.5} aria-hidden="true" /></div>
 
         <div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
-            No Contacts Yet
+            No contacts yet
           </div>
           <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", maxWidth: 360, margin: "0 auto", lineHeight: 1.5 }}>
             Add your project team, vendors, and stakeholders to keep everyone connected. Import from a spreadsheet or add them one at a time.
@@ -129,7 +130,7 @@ const GridView = ({ contacts, onEdit, onDelete }) => (
                   background: "var(--bg-surface-high)", border: "1px solid var(--border-default)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, textDecoration: "none", color: "var(--text-secondary)",
-                }}>✉</a>
+                }}><Mail size={13} strokeWidth={1.75} aria-hidden="true" /></a>
             )}
             {c.phone && (
               <a href={`tel:${c.phone}`} title={`Call ${c.first_name}`}
@@ -139,7 +140,7 @@ const GridView = ({ contacts, onEdit, onDelete }) => (
                   background: "var(--bg-surface-high)", border: "1px solid var(--border-default)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, textDecoration: "none", color: "var(--text-secondary)",
-                }}>☎</a>
+                }}><Phone size={13} strokeWidth={1.75} aria-hidden="true" /></a>
             )}
           </div>
           {c.notes && !c.email && !c.phone && (
@@ -147,7 +148,7 @@ const GridView = ({ contacts, onEdit, onDelete }) => (
               title={c.notes}
               style={{ position: "absolute", top: 10, right: 10, fontSize: 10, color: "var(--text-muted)" }}
             >
-              📝
+              <StickyNote size={12} strokeWidth={1.75} aria-hidden="true" />
             </span>
           )}
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -187,11 +188,11 @@ const GridView = ({ contacts, onEdit, onDelete }) => (
 
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-secondary)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
-              <span style={{ color, marginRight: 6, fontSize: 10 }}>✉</span>
+              <Mail size={11} strokeWidth={1.75} aria-hidden="true" style={{ color, marginRight: 6, verticalAlign: "-1px" }} />
               {c.email || "—"}
             </div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-secondary)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
-              <span style={{ color, marginRight: 6, fontSize: 10 }}>☎</span>
+              <Phone size={11} strokeWidth={1.75} aria-hidden="true" style={{ color, marginRight: 6, verticalAlign: "-1px" }} />
               {c.phone || "—"}
             </div>
           </div>

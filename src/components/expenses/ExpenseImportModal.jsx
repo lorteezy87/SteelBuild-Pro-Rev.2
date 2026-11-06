@@ -536,9 +536,9 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
                         <tr key={i} style={{
                           borderBottom: '1px solid var(--divider)',
                           background: hasError
-                            ? 'rgba(239,68,68,0.06)'
+                            ? 'rgba(210,69,47,0.06)'
                             : hasWarn
-                              ? 'rgba(245,158,11,0.04)'
+                              ? 'rgba(217,154,43,0.04)'
                               : 'transparent',
                         }}>
                           <td style={{ padding: '6px 10px', color: 'var(--text-muted)' }}>{rec._row}</td>

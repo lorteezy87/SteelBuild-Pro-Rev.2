@@ -34,8 +34,8 @@ export default class ErrorBoundary extends React.Component {
       return (
         <div className="sbd-card" style={{
           padding: 24, textAlign: "center",
-          background: "rgba(239,68,68,0.06)",
-          border: "1px solid rgba(239,68,68,0.2)",
+          background: "rgba(210,69,47,0.06)",
+          border: "1px solid rgba(210,69,47,0.2)",
           borderRadius: 6, margin: 8
         }}>
           <div style={{

@@ -119,8 +119,8 @@ export interface BadgeStyle {
 const { green, blue, amber, red, accent, onAccent } = DC_SIGNAL;
 
 const BADGE_LIGHT: Record<DcStatus, BadgeStyle> = {
-  REL: { bg: "#1A1C1E", fg: "#FAFAF8", border: "1px solid #1A1C1E" },
-  REV: { bg: "oklch(0.92 0.04 245)", fg: "oklch(0.38 0.1 245)", border: "1px solid oklch(0.85 0.05 245)" },
+  REL: { bg: DC_LIGHT.text, fg: DC_LIGHT.pageBg, border: `1px solid ${DC_LIGHT.text}` },
+  REV: { bg: "oklch(0.93 0.035 252)", fg: "oklch(0.38 0.09 252)", border: "1px solid oklch(0.86 0.045 252)" },
   "R&R": { bg: "oklch(0.93 0.07 80)", fg: "oklch(0.42 0.1 65)", border: "1px solid oklch(0.85 0.09 78)" },
   LATE: { bg: red, fg: "#fff", border: `1px solid ${red}` },
   DET: { bg: DC_LIGHT.badgeNeutralBg, fg: DC_LIGHT.badgeNeutralFg, border: `1px solid ${DC_LIGHT.badgeNeutralBorder}` },
@@ -129,8 +129,8 @@ const BADGE_LIGHT: Record<DcStatus, BadgeStyle> = {
 };
 
 const BADGE_DARK: Record<DcStatus, BadgeStyle> = {
-  REL: { bg: green, fg: "#0C0F12", border: `1px solid ${green}` },
-  REV: { bg: "oklch(0.62 0.11 245 / .18)", fg: "oklch(0.82 0.08 245)", border: "1px solid oklch(0.62 0.11 245 / .45)" },
+  REL: { bg: green, fg: DC_DARK.pageBg, border: `1px solid ${green}` },
+  REV: { bg: "oklch(0.55 0.10 252 / .20)", fg: "oklch(0.82 0.07 252)", border: "1px solid oklch(0.55 0.10 252 / .48)" },
   "R&R": { bg: "oklch(0.76 0.14 75 / .16)", fg: "oklch(0.85 0.12 80)", border: "1px solid oklch(0.76 0.14 75 / .45)" },
   LATE: { bg: red, fg: "#fff", border: `1px solid ${red}` },
   DET: { bg: DC_DARK.badgeNeutralBg, fg: DC_DARK.badgeNeutralFg, border: `1px solid ${DC_DARK.badgeNeutralBorder}` },
@@ -345,9 +345,9 @@ export interface PillStyle {
 }
 
 const impactPalette = (dark: boolean): Record<RfiImpact, PillStyle> => ({
-  "Fab hold": { color: "#C2410C", background: "rgba(255,90,31,.12)" },
+  "Fab hold": { color: dark ? DC_SIGNAL.accentLight : DC_SIGNAL.accentInk, background: "rgba(204,78,23,.12)" },
   Cost: { color: "oklch(0.5 0.11 65)", background: "oklch(0.76 0.14 75 / .2)" },
-  Schedule: { color: "oklch(0.42 0.1 245)", background: "oklch(0.62 0.11 245 / .14)" },
+  Schedule: { color: "oklch(0.42 0.09 252)", background: "oklch(0.55 0.10 252 / .14)" },
   Info: { color: skinFor(dark).badgeNeutralFg, background: skinFor(dark).badgeNeutralBg },
 });
 
@@ -434,8 +434,8 @@ export interface BicSlice {
 export function bicSlices(counts: Array<{ party: string; count: number }>, dark = false): BicSlice[] {
   const total = counts.reduce((sum, c) => sum + c.count, 0);
   const palette = dark
-    ? ["#5B656E", "#A7B0B8", accent, blue, amber, green]
-    : ["#B9B4AA", "#1A1C1E", accent, blue, amber, green];
+    ? ["#566676", DC_DARK.textSecondary, accent, blue, amber, green]
+    : ["#B7B1A6", DC_LIGHT.text, accent, blue, amber, green];
   return counts.map((c, i) => ({
     party: c.party,
     count: c.count,

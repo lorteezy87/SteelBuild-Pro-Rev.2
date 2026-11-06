@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
+import { MapPin } from "lucide-react";
 
 const STATUS_COLORS = {
   Scheduled: "var(--status-info)",
@@ -66,7 +67,7 @@ export default function InspectionList({ inspections, onConvertToPunchlist }) {
               </div>
               {inspection.location && (
                 <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
-                  📍 {inspection.location}
+                  <MapPin size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{inspection.location}
                 </div>
               )}
             </div>

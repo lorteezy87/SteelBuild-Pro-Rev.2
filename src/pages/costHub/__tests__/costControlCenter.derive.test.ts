@@ -13,7 +13,7 @@ vi.mock("@/components/shared/costCodes", () => ({
     { code: "01-200", name: "Misc Metals", category: "Labor" },
   ],
   CATEGORY_ORDER: ["Labor", "Materials", "Subcontractor"],
-  CATEGORY_COLORS: { Labor: "#3B82F6", Materials: "#F59E0B", Subcontractor: "#10B981" },
+  CATEGORY_COLORS: { Labor: "#3F6FB5", Materials: "#D99A2B", Subcontractor: "#2F8F6A" },
 }));
 
 import {

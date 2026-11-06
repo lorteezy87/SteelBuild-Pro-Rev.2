@@ -172,7 +172,7 @@ export default function QualityControl() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by material, location, heat number, spec..."
+          placeholder="Search by material, location, heat number, spec…"
           style={{
             width: "100%",
             boxSizing: "border-box",

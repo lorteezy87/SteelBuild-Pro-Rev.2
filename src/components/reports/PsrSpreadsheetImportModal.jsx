@@ -14,7 +14,7 @@ import {
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "var(--font-display)" };
-const AI = "var(--ai-accent, #22D3EE)";
+const AI = "var(--ai-accent, #4FA9BA)";
 
 export default function PsrSpreadsheetImportModal({
   open,
@@ -269,7 +269,7 @@ export default function PsrSpreadsheetImportModal({
           )}
 
           {step === "parsing" && (
-            <CenteredStatus icon={<Loader2 size={22} className="spin-icon" />} title="PARSING PSR WORKBOOKS..." />
+            <CenteredStatus icon={<Loader2 size={22} className="spin-icon" />} title="PARSING PSR WORKBOOKS…" />
           )}
 
           {step === "review" && (
@@ -286,7 +286,7 @@ export default function PsrSpreadsheetImportModal({
           )}
 
           {step === "committing" && (
-            <CenteredStatus icon={<Loader2 size={22} className="spin-icon" />} title="APPLYING APPROVED PSR UPDATES..." />
+            <CenteredStatus icon={<Loader2 size={22} className="spin-icon" />} title="APPLYING APPROVED PSR UPDATES…" />
           )}
 
           {step === "done" && (

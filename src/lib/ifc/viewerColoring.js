@@ -11,8 +11,8 @@ import { ELEMENT_STATUS_META, normalizePieceMark } from "@/services/modelElement
 import { buildCanonicalViewerLinks } from "@/lib/ifc/canonicalViewerLinks";
 import { FAB_STATUS_META } from "@/lib/fabStatus";
 
-export const TYPE_PALETTE = { beam: "#3b82f6", column: "#f97316", plate: "#22c55e", member: "#a855f7", other: "#94a3b8" };
-export const SEQ_PALETTE = ["#3b82f6", "#f97316", "#22c55e", "#a855f7", "#eab308", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#84cc16", "#06b6d4", "#f59e0b"];
+export const TYPE_PALETTE = { beam: "#3f6fb5", column: "#cc4e17", plate: "#3a9a63", member: "#7a5ba6", other: "#94a3b8" };
+export const SEQ_PALETTE = ["#3f6fb5", "#cc4e17", "#3a9a63", "#7a5ba6", "#c9a227", "#d2452f", "#2e8f84", "#b04a7a", "#6e5aa8", "#7fa33a", "#2c8c9e", "#d99a2b"];
 // One palette for both the canonical Piece Control lifecycle and the legacy
 // per-part fab_status, so a linked lot and an unlinked part at the same stage
 // paint the same color (the legend used to disagree with the model).

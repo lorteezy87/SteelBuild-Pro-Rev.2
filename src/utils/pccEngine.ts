@@ -345,7 +345,7 @@ export interface ReleaseGateActionDraft {
 export const SEVERITY: Record<SeverityKey, SeverityBand> = {
   CRITICAL: { label: "CRITICAL", value: 4, color: "var(--status-error-bright)",   bg: "rgba(255,59,59,0.10)",   border: "rgba(255,59,59,0.25)"   },
   HIGH:     { label: "HIGH",     value: 3, color: "var(--status-warning-bright)", bg: "rgba(255,180,0,0.10)",   border: "rgba(255,180,0,0.25)"   },
-  MEDIUM:   { label: "MEDIUM",   value: 2, color: "var(--status-warning)",        bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.18)"  },
+  MEDIUM:   { label: "MEDIUM",   value: 2, color: "var(--status-warning)",        bg: "rgba(217,154,43,0.08)",  border: "rgba(217,154,43,0.18)"  },
   LOW:      { label: "LOW",      value: 1, color: "var(--text-muted)",            bg: "rgba(136,152,168,0.07)", border: "rgba(136,152,168,0.15)" },
 };
 
@@ -358,7 +358,7 @@ export const IMPACT_TAGS = {
   BLOCKS_DETAILING:  { label: "BLOCKS DETAILING",  color: "#0EA5E9" },
   BLOCKS_FAB:        { label: "BLOCKS FAB",         color: "var(--status-review)" },
   BLOCKS_DELIVERY:   { label: "BLOCKS DELIVERY",    color: "var(--status-success)" },
-  BLOCKS_ERECTION:   { label: "BLOCKS ERECTION",    color: "#06B6D4" },
+  BLOCKS_ERECTION:   { label: "BLOCKS ERECTION",    color: "#2C8C9E" },
   COST_EXPOSURE:     { label: "COST EXPOSURE",       color: "var(--status-warning-bright)" },
   REVISION_CONFLICT: { label: "REVISION CONFLICT",  color: "var(--status-error)" },
   EXTERNAL_WAIT:     { label: "EXTERNAL WAIT",       color: "var(--text-muted)" },

@@ -9,6 +9,7 @@ import { formatDateShort as formatShortDate } from "@/components/shared/formatte
 import { PRIORITY_CONFIG, STATUS_CONFIG, TYPE_COLORS, TYPE_ICONS, PRIORITIES } from "./constants";
 import { abbreviateType, isOverdue, isResolved } from "./utils";
 import { MiniBtn } from "./subcomponents";
+import { CalendarDays, UserRound } from "lucide-react";
 
 export default function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete }) {
   const grouped = PRIORITIES.map((p) => ({
@@ -158,8 +159,8 @@ export default function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete 
                           marginBottom: 8,
                         }}
                       >
-                        {c.assigned_to && <span>👤 {c.assigned_to}</span>}
-                        {c.due_date && <span>📅 {formatShortDate(c.due_date)}</span>}
+                        {c.assigned_to && <span><UserRound size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{c.assigned_to}</span>}
+                        {c.due_date && <span><CalendarDays size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{formatShortDate(c.due_date)}</span>}
                         <span
                           style={{
                             background: statusCfg.bg,

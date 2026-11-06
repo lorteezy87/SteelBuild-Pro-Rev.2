@@ -197,7 +197,7 @@ export function PieceRegisterArchiveDialog({
               color: "var(--cmd-pill-on-solid, #fff)",
             }}
           >
-            {isPending ? "Archiving..." : "Archive pieces"}
+            {isPending ? "Archiving…" : "Archive pieces"}
           </button>
         </div>
       </div>

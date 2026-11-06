@@ -68,8 +68,8 @@ async function copyAndSave() {
   fireEvent.click(screen.getByRole("button", { name: "Copy Yesterday" }));
   expect(screen.getByRole("heading", { name: "New Daily Log" })).toBeInTheDocument();
   expect(screen.getByDisplayValue("Erection A")).toBeInTheDocument();
-  expect(screen.getByPlaceholderText("Describe work performed, progress, accomplishments...")).toHaveValue("");
-  fireEvent.change(screen.getByPlaceholderText("Describe work performed, progress, accomplishments..."), { target: { value: "Today's reviewed erection work" } });
+  expect(screen.getByPlaceholderText("Describe work performed, progress, accomplishments…")).toHaveValue("");
+  fireEvent.change(screen.getByPlaceholderText("Describe work performed, progress, accomplishments…"), { target: { value: "Today's reviewed erection work" } });
   fireEvent.click(screen.getByRole("button", { name: "Save Log" }));
 }
 
@@ -123,7 +123,7 @@ describe("DailyLogs copy and edit", () => {
   it("updates an existing log opened from its record link, retaining its historical evidence", async () => {
     openPage("/DailyLogs?id=prior-log");
     await screen.findByRole("heading", { name: "Edit Daily Log" });
-    fireEvent.change(screen.getByPlaceholderText("Describe work performed, progress, accomplishments..."), { target: { value: "Corrected erection work" } });
+    fireEvent.change(screen.getByPlaceholderText("Describe work performed, progress, accomplishments…"), { target: { value: "Corrected erection work" } });
     fireEvent.click(screen.getByRole("button", { name: "Update Log" }));
     await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
     expect(mocks.create).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe("DailyLogs copy and edit", () => {
     await screen.findByText("1 · ENTRIES");
     fireEvent.click(screen.getByRole("button", { name: "Copy Yesterday" }));
     expect(mocks.error).toHaveBeenCalledWith("Select a project before copying a daily log.");
-    expect(screen.queryByPlaceholderText("Describe work performed, progress, accomplishments...")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Describe work performed, progress, accomplishments…")).not.toBeInTheDocument();
     expect(mocks.create).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
   });
@@ -173,7 +173,7 @@ describe("DailyLogs copy and edit", () => {
     await screen.findByText("1 · ENTRIES");
     fireEvent.click(screen.getByRole("button", { name: "Copy Yesterday" }));
     expect(mocks.error).toHaveBeenCalledWith("No previous logs to copy from");
-    expect(screen.queryByPlaceholderText("Describe work performed, progress, accomplishments...")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Describe work performed, progress, accomplishments…")).not.toBeInTheDocument();
     expect(mocks.create).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
   });
@@ -201,7 +201,7 @@ describe("DailyLogs copy and edit", () => {
     mocks.projectId = "project-2";
     mocks.filter.mockResolvedValue([]);
     page.rerender(page.tree());
-    expect(screen.queryByPlaceholderText("Describe work performed, progress, accomplishments...")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Describe work performed, progress, accomplishments…")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "New Log" }));
     await act(async () => { staleSave({ ...previousLog, activities: "Old project draft" }); });
     expect(mocks.create).not.toHaveBeenCalled();
@@ -225,9 +225,9 @@ describe("DailyLogs copy and edit", () => {
     page.rerender(page.tree());
     await screen.findByText("0 · ENTRIES");
     fireEvent.click(screen.getByRole("button", { name: "New Log" }));
-    fireEvent.change(screen.getByPlaceholderText("Describe work performed, progress, accomplishments..."), { target: { value: "Project B unsaved work" } });
+    fireEvent.change(screen.getByPlaceholderText("Describe work performed, progress, accomplishments…"), { target: { value: "Project B unsaved work" } });
     await act(async () => { finish(created); });
-    expect(screen.getByPlaceholderText("Describe work performed, progress, accomplishments...")).toHaveValue("Project B unsaved work");
+    expect(screen.getByPlaceholderText("Describe work performed, progress, accomplishments…")).toHaveValue("Project B unsaved work");
     expect(queryClient.getQueryData(["daily-logs", "project-2"])).toEqual([]);
     expect(mocks.audit).toHaveBeenCalledWith("daily_log", mode === "create" ? "created" : "updated", created, expect.objectContaining({ projectId: "project-1" }));
     expect(mocks.success).not.toHaveBeenCalled();
@@ -240,9 +240,9 @@ describe("DailyLogs copy and edit", () => {
     await copyAndSave();
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: "New Log" }));
-    fireEvent.change(screen.getByPlaceholderText("Describe work performed, progress, accomplishments..."), { target: { value: "Next unsaved draft" } });
+    fireEvent.change(screen.getByPlaceholderText("Describe work performed, progress, accomplishments…"), { target: { value: "Next unsaved draft" } });
     await act(async () => { finish({ ...previousLog, id: "created-a" }); });
-    expect(screen.getByPlaceholderText("Describe work performed, progress, accomplishments...")).toHaveValue("Next unsaved draft");
+    expect(screen.getByPlaceholderText("Describe work performed, progress, accomplishments…")).toHaveValue("Next unsaved draft");
   });
 
   it("queues a late offline failure through its captured outbox with its original project and operation", async () => {

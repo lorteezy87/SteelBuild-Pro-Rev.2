@@ -36,6 +36,7 @@ import {
   hasLogicGapTask,
 } from "./scheduleGanttHelpers";
 import { GANTT_ROW_H, GANTT_SUM_H } from "./scheduleGanttDerive";
+import { Truck } from "lucide-react";
 
 const DELIVERY_STATUS_DOT: Record<string, string> = {
   "Scheduled":  GANTT_PHASE_VAR.Procurement,
@@ -165,7 +166,7 @@ export function GanttLeftPanelRows(props: any) {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>—</span>
           {/* Name + vendor */}
           <span style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
-            <span style={{ fontSize: 10, flexShrink: 0 }}>🚛</span>
+            <Truck size={11} strokeWidth={1.75} aria-hidden="true" style={{ flexShrink: 0, color: "var(--text-muted)" }} />
             <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500, color: isLate ? GANTT_STATUS_HEX.delayed : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
           </span>
           {/* Tonnage instead of duration */}

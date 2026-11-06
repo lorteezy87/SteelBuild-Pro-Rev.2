@@ -46,7 +46,7 @@ export default function BulkImportModal({
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Paste your RFI list here, one per line..."
+            placeholder="Paste your RFI list here, one per line…"
             autoFocus
             style={{ width: "100%", minHeight: 160, background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "10px 12px", fontSize: 12, color: "var(--text-primary)", outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6, boxSizing: "border-box" }}
           />
@@ -61,7 +61,7 @@ export default function BulkImportModal({
                 onClick={onImport}
                 style={{ padding: "8px 20px", borderRadius: 4, border: "none", background: "var(--accent)", color: "var(--accent-text)", ...mono, fontSize: 9, fontWeight: 700, cursor: text.trim() && projectId ? "pointer" : "not-allowed", opacity: text.trim() && projectId ? 1 : 0.5 }}
               >
-                {isImporting ? "Importing..." : `Import ${lines} RFIs`}
+                {isImporting ? "Importing…" : `Import ${lines} RFIs`}
               </button>
             </div>
           </div>

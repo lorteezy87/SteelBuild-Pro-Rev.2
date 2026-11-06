@@ -7,8 +7,8 @@ const brandCss = readFileSync(resolve(process.cwd(), "src/styles/brand-theme.css
 const globalsCss = readFileSync(resolve(process.cwd(), "src/globals.css"), "utf8");
 
 describe("SteelBuild brand tokens", () => {
-  it("defines the approved orange brand contract in the final theme layer", () => {
-    expect(brandCss).toContain("--brand-orange:              #FF5A1F");
+  it("defines the approved primer brand contract in the final theme layer", () => {
+    expect(brandCss).toContain("--brand-orange:              #CC4E17");
     expect(brandCss).toMatch(/--accent:\s+var\(--brand-orange\)/);
     expect(globalsCss).toContain("@import './styles/brand-theme.css';");
   });
@@ -16,7 +16,7 @@ describe("SteelBuild brand tokens", () => {
   it("keeps semantic success/error colors separate from the brand accent", () => {
     expect(baseCss).toContain("--status-success:");
     expect(baseCss).toContain("--status-error:");
-    expect(brandCss).not.toContain("--status-error:             #FF5A1F");
+    expect(brandCss).not.toContain("--status-error:             #CC4E17");
   });
 
   it("contains explicit dark and light theme surface contracts", () => {

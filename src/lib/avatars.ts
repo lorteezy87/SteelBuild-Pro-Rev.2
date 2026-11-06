@@ -7,13 +7,13 @@
  */
 
 const AVATAR_COLORS = [
-  "#3B82F6", // blue
-  "#10B981", // green
-  "#F59E0B", // amber
-  "#EF4444", // red
+  "#3F6FB5", // blue
+  "#2F8F6A", // green
+  "#D99A2B", // amber
+  "#D2452F", // red
   "#0D9488", // teal
-  "#F97316", // orange
-  "#06B6D4", // cyan
+  "#CC4E17", // orange
+  "#2C8C9E", // cyan
 ] as const;
 
 /**

@@ -98,7 +98,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
   const projectNameLimit = compact ? 14 : 20;
   const label =
     loading
-      ? "Loading..."
+      ? "Loading…"
       : activeProject
         ? `${activeProject.name.slice(0, 20)}${show_project_numbers ? ` · ${activeProject.project_number || "—"}` : ""}`
         : projects.length === 0
@@ -298,7 +298,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
             <input
               ref={searchRef}
               type="text"
-              placeholder="Search projects..."
+              placeholder="Search projects…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setActiveOptionIndex(0); }}
               onKeyDown={handleSearchKeyDown}

@@ -171,7 +171,7 @@ export function PieceRegisterRegisterView(props: PieceRegisterRegisterViewProps)
               onChange={(event) =>
                 updateRegisterFilters({ search: event.target.value })
               }
-              placeholder="Mark, package, profile..."
+              placeholder="Mark, package, profile…"
               className="cmd-search__input"
             />
           </span>

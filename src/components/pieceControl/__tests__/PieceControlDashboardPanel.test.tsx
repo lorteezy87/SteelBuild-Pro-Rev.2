@@ -97,7 +97,7 @@ describe("PieceControlDashboardPanel", () => {
 
     renderPanel();
 
-    expect(screen.getByText("Loading piece reporting...")).toBeInTheDocument();
+    expect(screen.getByText("Loading piece reporting…")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open Piece Register" }),
     ).toBeInTheDocument();

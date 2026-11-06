@@ -26,7 +26,7 @@ export const OLD_TINT = "#FF4D4D";
 /** Content present only in the NEW revision — i.e. added. */
 export const NEW_TINT = "#2F81F7";
 /** The wipe handle. Canvas can't read CSS custom properties, so this is literal. */
-const WIPE_DIVIDER = "#F59E0B";
+const WIPE_DIVIDER = "#D99A2B";
 const PAPER = "#FFFFFF";
 
 /** A rasterized page: anything with intrinsic pixel dimensions that drawImage accepts. */

@@ -491,7 +491,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
           <textarea
             value={formData.activities}
             onChange={set("activities")}
-            placeholder="Describe work performed, progress, accomplishments..."
+            placeholder="Describe work performed, progress, accomplishments…"
             style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }}
           />
         </div>
@@ -539,21 +539,21 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
             value={formData.related_action_item_ids}
             options={actionItemOptions}
             onChange={(v) => setField("related_action_item_ids", v)}
-            placeholder={actionItemOptions.length === 0 ? "No items in project" : "Add action item..."}
+            placeholder={actionItemOptions.length === 0 ? "No items in project" : "Add action item…"}
           />
           <MultiSelectChips
             label="Related RFIs"
             value={formData.related_rfi_ids}
             options={rfiOptions}
             onChange={(v) => setField("related_rfi_ids", v)}
-            placeholder={rfiOptions.length === 0 ? "No RFIs in project" : "Add RFI..."}
+            placeholder={rfiOptions.length === 0 ? "No RFIs in project" : "Add RFI…"}
           />
           <MultiSelectChips
             label="Linked Deliveries"
             value={formData.delivery_ids}
             options={deliveryOptions}
             onChange={(v) => setField("delivery_ids", v)}
-            placeholder={deliveryOptions.length === 0 ? "No deliveries in project" : "Add delivery..."}
+            placeholder={deliveryOptions.length === 0 ? "No deliveries in project" : "Add delivery…"}
           />
         </div>
 
@@ -604,7 +604,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
               opacity: isSaving ? 0.5 : 1,
             }}
           >
-            {isSaving ? "Saving..." : isEditing ? "Update Log" : "Save Log"}
+            {isSaving ? "Saving…" : isEditing ? "Update Log" : "Save Log"}
           </button>
         </div>
       </form>

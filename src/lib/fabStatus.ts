@@ -8,9 +8,9 @@
 export const FAB_STATUS_META = {
   not_started:    { label: "Not Started",    color: "#64748b" },
   released:       { label: "Released",       color: "#7c3aed" },
-  in_fabrication: { label: "In Fabrication", color: "#3b82f6" },
-  fabricated:     { label: "Fabricated",     color: "#22c55e" },
-  shipped:        { label: "Shipped",        color: "#f59e0b" },
+  in_fabrication: { label: "In Fabrication", color: "#3f6fb5" },
+  fabricated:     { label: "Fabricated",     color: "#3a9a63" },
+  shipped:        { label: "Shipped",        color: "#d99a2b" },
   delivered:      { label: "Delivered",      color: "#0891b2" },
   erected:        { label: "Erected",        color: "#16a34a" },
 } as const;

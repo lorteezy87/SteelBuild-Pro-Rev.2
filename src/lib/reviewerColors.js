@@ -21,17 +21,17 @@
 
 export const REVIEWER_COLORS = Object.freeze({
   // Trade roles
-  EOR:         "#3b82f6", // blue
-  GC:          "#10b981", // green
-  Architect:   "#a855f7", // purple
-  Owner:       "#f97316", // orange
-  Detailer:    "#f59e0b", // amber
-  Fabricator:  "#f59e0b", // amber (shared bucket per spec)
+  EOR:         "#3f6fb5", // blue
+  GC:          "#2f8f6a", // green
+  Architect:   "#7a5ba6", // purple
+  Owner:       "#cc4e17", // orange
+  Detailer:    "#d99a2b", // amber
+  Fabricator:  "#d99a2b", // amber (shared bucket per spec)
 
   // App-permission roles (from useAppSecurity)
-  admin:  "#a855f7", // purple — high authority
-  pm:     "#3b82f6", // blue — project lead
-  field:  "#10b981", // green — execution
+  admin:  "#7a5ba6", // purple — high authority
+  pm:     "#3f6fb5", // blue — project lead
+  field:  "#2f8f6a", // green — execution
   viewer: "#6b7280", // grey
 
   // Explicit "unknown / other"

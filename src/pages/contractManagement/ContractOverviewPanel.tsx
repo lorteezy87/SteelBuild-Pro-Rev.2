@@ -127,7 +127,7 @@ export function ContractOverviewPanel({
                   border: "1px solid var(--accent)", borderRadius: 6, padding: "3px 8px",
                 }}
               >
-                <option value="">Select...</option>
+                <option value="">Select…</option>
                 {CONTRACT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
             </div>
@@ -163,7 +163,7 @@ export function ContractOverviewPanel({
             background: "var(--accent)", color: "var(--bg-base)", border: "none",
             borderRadius: "var(--radius-btn)", cursor: isSaving ? "wait" : "pointer",
             opacity: isSaving || writesDisabled ? 0.6 : 1,
-          }}>{isSaving ? "Saving..." : "Save Changes"}</button>
+          }}>{isSaving ? "Saving…" : "Save Changes"}</button>
         </div>
       )}
 

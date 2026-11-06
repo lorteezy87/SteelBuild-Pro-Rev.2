@@ -59,7 +59,7 @@ export default function ResourceRow({
       style={{
         display: "flex",
         background: isOverAllocated
-          ? "rgba(239,68,68,0.04)"
+          ? "rgba(210,69,47,0.04)"
           : rowHeatBg !== "transparent"
             ? rowHeatBg
             : (idx % 2 === 0 ? "var(--bg-page)" : "var(--bg-surface-low)"),

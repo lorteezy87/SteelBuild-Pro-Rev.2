@@ -37,10 +37,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 // STATUS_PRIORITY); the rendered colour is teal so we stay inside the
 // project's no-purple/no-pink industrial palette.
 const STATUS_COLORS = {
-  green:   { fill: "rgba(34,197,94,0.14)",   border: "var(--status-success)" },
-  blue:    { fill: "rgba(59,130,246,0.14)",  border: "var(--status-info)" },
-  amber:   { fill: "rgba(245,158,11,0.16)",  border: "var(--status-warning)" },
-  red:     { fill: "rgba(239,68,68,0.16)",   border: "var(--status-error)" },
+  green:   { fill: "rgba(58,154,99,0.14)",   border: "var(--status-success)" },
+  blue:    { fill: "rgba(63,111,181,0.14)",  border: "var(--status-info)" },
+  amber:   { fill: "rgba(217,154,43,0.16)",  border: "var(--status-warning)" },
+  red:     { fill: "rgba(210,69,47,0.16)",   border: "var(--status-error)" },
   purple:  { fill: "rgba(13,148,136,0.14)",  border: "var(--accent)" },
   neutral: { fill: "rgba(148,163,184,0.12)", border: "var(--text-muted)" },
 };
@@ -363,10 +363,10 @@ export default function ZoneLayer({
       {showDependencies && Array.isArray(dependencyEdges) && dependencyEdges.length > 0 && (
         <defs>
           <marker id="dep-arrow-blocks"     viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#EF4444" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#D2452F" />
           </marker>
           <marker id="dep-arrow-depends_on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#F59E0B" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#D99A2B" />
           </marker>
           <marker id="dep-arrow-relates_to" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#94A3B8" />
@@ -465,7 +465,7 @@ export default function ZoneLayer({
             const h = Math.max(0, (p.y_max - p.y_min)) * canvasHeight;
             const colorByStatus = {
               pending:  { fill: "rgba(0,229,255,0.10)",  border: "var(--accent)" },
-              accepted: { fill: "rgba(34,197,94,0.10)",  border: "var(--status-success)" },
+              accepted: { fill: "rgba(58,154,99,0.10)",  border: "var(--status-success)" },
               rejected: { fill: "rgba(148,163,184,0.08)", border: "var(--text-muted)" },
               merged:   { fill: "rgba(13,148,136,0.10)", border: "var(--accent)" },
             };
@@ -521,8 +521,8 @@ export default function ZoneLayer({
             const sx = Number(e.sourceCenter[0]) * canvasWidth;
             const sy = Number(e.sourceCenter[1]) * canvasHeight;
             const color =
-              e.relationship === "blocks"     ? "#EF4444" :
-              e.relationship === "depends_on" ? "#F59E0B" :
+              e.relationship === "blocks"     ? "#D2452F" :
+              e.relationship === "depends_on" ? "#D99A2B" :
                                                 "#94A3B8";
             // Stroke width scales with propagation_weight: 1.0 →
             // baseline 1.75 px; capped at 4 px so a hot blocker

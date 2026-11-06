@@ -128,7 +128,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
             style={{ ...h.rowBtn, marginLeft: 6, color: "var(--cmd-danger)" }}>Delete set</button>
         )}
         {h.aiDiffEnabled && (
-          <button type="button" title="AI Revision Impact Report" onClick={() => h.setReportSet(r.pkg)} style={{ ...h.rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>
+          <button type="button" title="Revision impact report" onClick={() => h.setReportSet(r.pkg)} style={{ ...h.rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>
         )}
       </GridCell>
     </>
@@ -495,7 +495,7 @@ export function DrawingRegisterTable({
                       style={{ ...rowBtn, marginLeft: 6, color: "var(--cmd-danger)" }}>Delete set</button>
                   )}
                   {aiDiffEnabled && (
-                    <button type="button" title="AI Revision Impact Report" onClick={() => setReportSet(r.pkg)} style={{ ...rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>
+                    <button type="button" title="Revision impact report" onClick={() => setReportSet(r.pkg)} style={{ ...rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>
                   )}
                 </Td>
               </tr>

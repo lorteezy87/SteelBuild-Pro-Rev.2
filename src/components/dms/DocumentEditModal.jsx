@@ -280,7 +280,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
               opacity: mut.isPending ? 0.6 : 1,
             }}
           >
-            {mut.isPending ? "Saving..." : "Save"}
+            {mut.isPending ? "Saving…" : "Save"}
           </button>
         </div>
       </div>

@@ -151,7 +151,7 @@ export default function ChangeRequestFormModal({
               onChange={(e) => setField("project_id", e.target.value)}
               style={inputStyle}
             >
-              <option value="">Select project...</option>
+              <option value="">Select project…</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -287,7 +287,7 @@ export default function ChangeRequestFormModal({
                 opacity: isSaving || (!recoveryPending && (!formData.project_id || !formData.title?.trim() || !formData.description?.trim())) ? 0.5 : 1,
               }}
             >
-              {isSaving ? (isEdit ? "Saving..." : "Submitting...") : recoveryPending ? "Recover saved request" : (isEdit ? "Save Changes" : "Submit Request")}
+              {isSaving ? (isEdit ? "Saving…" : "Submitting…") : recoveryPending ? "Recover saved request" : (isEdit ? "Save Changes" : "Submit Request")}
             </button>
           </div>
         </div>

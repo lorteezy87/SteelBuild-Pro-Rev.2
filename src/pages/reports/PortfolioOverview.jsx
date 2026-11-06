@@ -333,7 +333,7 @@ export default function PortfolioOverview() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search projects by name, number, phase..."
+            placeholder="Search projects by name, number, phase…"
             style={{
               flex: 1, minWidth: 280,
               background: "var(--bg-input)",
@@ -472,7 +472,7 @@ export default function PortfolioOverview() {
             label="Pending CO Value"
             value={formatCurrencyShort(pendingCOValue)}
             sub={`${pendingCOs.length} CO${pendingCOs.length === 1 ? "" : "s"} awaiting approval`}
-            accent="#F97316"
+            accent="#CC4E17"
           />
           <Tile
             label="Budget Variance"
@@ -613,7 +613,7 @@ export default function PortfolioOverview() {
         }}>
           <WeekStat label="New RFIs" value={weekly.newRFIs} color="var(--status-info)" />
           <WeekStat label="Closed RFIs" value={weekly.closedRFIs} color="var(--status-success-bright)" />
-          <WeekStat label="New COs" value={weekly.newCOs} color="#F97316" />
+          <WeekStat label="New COs" value={weekly.newCOs} color="#CC4E17" />
           <WeekStat
             label="Approved COs"
             value={weekly.approvedCOs}
@@ -673,7 +673,7 @@ export default function PortfolioOverview() {
                 value={(budgetVariance >= 0 ? "+" : "") + formatCurrencyShort(budgetVariance)}
                 color={budgetVariance <= 0 ? "var(--status-success-bright)" : "var(--status-error)"}
               />
-              <ExecutiveLine label="Pending COs" value={formatCurrencyShort(pendingCOValue)} color="#F97316" />
+              <ExecutiveLine label="Pending COs" value={formatCurrencyShort(pendingCOValue)} color="#CC4E17" />
             </ExecutiveColumn>
             <ExecutiveColumn title="Action Required" accent="var(--status-error)">
               {overdueRFIs.length > 0 && (
@@ -687,7 +687,7 @@ export default function PortfolioOverview() {
                 </ExecutiveCallout>
               )}
               {lateDeliveries.length > 0 && (
-                <ExecutiveCallout color="#F97316">
+                <ExecutiveCallout color="#CC4E17">
                   {lateDeliveries.length} late deliver{lateDeliveries.length !== 1 ? "ies" : "y"}
                 </ExecutiveCallout>
               )}

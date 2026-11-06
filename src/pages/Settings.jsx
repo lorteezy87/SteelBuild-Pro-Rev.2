@@ -18,6 +18,7 @@ import { WorkspaceTab } from "@/components/settings/WorkspaceTab";
 import { sanitizeUserPreferences } from "@/lib/userPreferences/schema";
 import { PreferencesDataTab } from "@/components/settings/PreferencesDataTab";
 import { useOrg } from "@/components/shared/OrgContext";
+import { ArchiveRestore, Bell, Coins, Keyboard, LayoutDashboard, Palette, Settings2, Star, UserRound, Wrench } from "lucide-react";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -25,20 +26,20 @@ const TAB_GROUPS = [
     id: 'personal',
     label: 'My Settings',
     tabs: [
-      { id: 'profile',       label: 'Profile',       icon: '\u{1F464}', desc: 'Your account information' },
-      { id: 'display',       label: 'Display',       icon: '\u{1F3A8}', desc: 'Theme, accent, accessibility, locale' },
-      { id: 'workspace',     label: 'My Workspace',  icon: '\u{2B50}', desc: 'Presets, favorite modules and projects' },
-      { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules, KPI order, default project' },
-      { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
-      { id: 'shortcuts',     label: 'Shortcuts',     icon: '⌨',    desc: 'Keyboard reference card' },
-      { id: 'preferences-data', label: 'Reset & Portability', icon: '\u{1F4E6}', desc: 'Export, import, or reset personal settings' },
+      { id: 'profile',       label: 'Profile',       icon: UserRound, desc: 'Your account information' },
+      { id: 'display',       label: 'Display',       icon: Palette, desc: 'Theme, accent, accessibility, locale' },
+      { id: 'workspace',     label: 'My Workspace',  icon: Star, desc: 'Presets, favorite modules and projects' },
+      { id: 'dashboard',     label: 'Dashboard',     icon: LayoutDashboard, desc: 'Pinned modules, KPI order, default project' },
+      { id: 'notifications', label: 'Notifications', icon: Bell, desc: 'Alerts, digests, and quiet hours' },
+      { id: 'shortcuts',     label: 'Shortcuts',     icon: Keyboard,    desc: 'Keyboard reference card' },
+      { id: 'preferences-data', label: 'Reset & Portability', icon: ArchiveRestore, desc: 'Export, import, or reset personal settings' },
     ],
   },
   {
     id: 'setup-help',
     label: 'Setup & Help',
     tabs: [
-      { id: 'setup', label: 'Setup & Admin', icon: '🧩', desc: 'Onboarding, data exchange, integrations, users, feature flags, help' },
+      { id: 'setup', label: 'Setup & Admin', icon: Wrench, desc: 'Onboarding, data exchange, integrations, users, feature flags, help' },
     ],
   },
   {
@@ -46,8 +47,8 @@ const TAB_GROUPS = [
     label: 'Workspace',
     adminOnly: true,
     tabs: [
-      { id: 'costcodes',  label: 'Cost Codes', icon: '\u{1F4B0}', desc: 'Default budget codes for new projects', adminOnly: true },
-      { id: 'system',     label: 'System',     icon: '\u2699',    desc: 'Data and app management', adminOnly: true },
+      { id: 'costcodes',  label: 'Cost Codes', icon: Coins, desc: 'Default budget codes for new projects', adminOnly: true },
+      { id: 'system',     label: 'System',     icon: Settings2,    desc: 'Data and app management', adminOnly: true },
     ],
   },
 ];
@@ -186,7 +187,7 @@ export default function Settings() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14 }}>{tab.icon}</span>
+                    <tab.icon size={15} strokeWidth={1.75} aria-hidden="true" style={{ flexShrink: 0, color: isActive ? 'var(--accent)' : 'var(--text-muted)' }} />
                     <span style={{
                       fontFamily: 'var(--font-body)',
                       fontSize: 13,

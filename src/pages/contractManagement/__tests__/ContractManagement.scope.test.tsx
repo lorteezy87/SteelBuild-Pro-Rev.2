@@ -206,7 +206,7 @@ describe('contract commercial evidence and origin-bound writes', () => {
   it('keeps the real delete dialog open on failure and awaits successful retry', async () => {
     const pending = deferred<object>(); mocks.remove.mockReturnValueOnce(pending.promise); mount(); await billing();
     fireEvent.click(screen.getByTitle('Delete line item')); fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(await screen.findByRole('button', { name: 'Deleting...' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Deleting…' })).toBeDisabled();
     await act(async () => { pending.reject(new Error('Permission changed')); });
     expect(screen.getByRole('alertdialog')).toBeTruthy(); fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());

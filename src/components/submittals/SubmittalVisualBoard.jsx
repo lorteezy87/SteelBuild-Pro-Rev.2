@@ -314,7 +314,7 @@ export default function SubmittalVisualBoard({
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search packages, submittals, owners..."
+            placeholder="Search packages, submittals, owners…"
             style={{
               width: "100%",
               border: 0,

@@ -369,7 +369,7 @@ export default function ResourceScheduling() {
     ghostRef.current = ghost;
 
     e.currentTarget.style.opacity = "0.25";
-    e.currentTarget.style.outline = "2px dashed rgba(245,158,11,0.5)";
+    e.currentTarget.style.outline = "2px dashed rgba(217,154,43,0.5)";
 
     const rawStart = wp.scheduled_start_date || wp.released_date;
     dragRef.current = {

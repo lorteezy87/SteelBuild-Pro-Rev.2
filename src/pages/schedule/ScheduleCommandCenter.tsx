@@ -249,7 +249,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
             onClick={onImportMpp}
             title="Import Microsoft Project XML"
           >
-            <Upload size={14} /> {importing ? "Importing..." : "Import MS Project"}
+            <Upload size={14} /> {importing ? "Importing…" : "Import MS Project"}
           </button>
           <button
             type="button"
@@ -276,7 +276,7 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
             onClick={onExportPdf}
             title={view !== "gantt" ? "Switch to the Gantt view to export" : "Export the Gantt chart as a PDF for distribution"}
           >
-            <Download size={14} /> {exportingPdf ? "Exporting..." : "Export PDF"}
+            <Download size={14} /> {exportingPdf ? "Exporting…" : "Export PDF"}
           </button>
         </div>
         <div className="sched-cc__action-group" aria-label="Task actions" style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>

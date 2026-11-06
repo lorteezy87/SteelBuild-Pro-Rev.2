@@ -266,7 +266,7 @@ export default function UpcomingMilestones() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search milestones, projects..."
+            placeholder="Search milestones, projects…"
           />
           <SelectFilter
             label="Window"

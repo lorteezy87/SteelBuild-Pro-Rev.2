@@ -12,7 +12,7 @@ const EXPAND_LS_KEY = "sbp-drawings-grid-expanded-sets";
 function ActionBtn({ label, onClick, danger, disabled, title }) {
   const [hovered, setHovered] = React.useState(false);
   const baseColor = danger ? "var(--status-error)" : "var(--text-muted)";
-  const hoverBg = danger ? "rgba(239,68,68,0.08)" : "rgba(255,255,255,0.04)";
+  const hoverBg = danger ? "rgba(210,69,47,0.08)" : "rgba(255,255,255,0.04)";
   return (
     <button
       onClick={onClick}
@@ -26,7 +26,7 @@ function ActionBtn({ label, onClick, danger, disabled, title }) {
         fontWeight: 700,
         padding: "3px 7px",
         borderRadius: 6,
-        border: `1px solid ${hovered && !disabled ? `${baseColor}60` : danger ? "rgba(239,68,68,0.3)" : "var(--border-default)"}`,
+        border: `1px solid ${hovered && !disabled ? `${baseColor}60` : danger ? "rgba(210,69,47,0.3)" : "var(--border-default)"}`,
         background: hovered && !disabled ? hoverBg : "none",
         color: baseColor,
         cursor: disabled ? "not-allowed" : "pointer",
@@ -141,8 +141,8 @@ function ApprovalPill({ approval }) {
     approval === "approved"
       ? {
           color: "var(--status-success)",
-          background: "rgba(16,185,129,0.12)",
-          border: "rgba(16,185,129,0.25)",
+          background: "rgba(47,143,106,0.12)",
+          border: "rgba(47,143,106,0.25)",
         }
       : approval === "rejected"
         ? {
@@ -153,8 +153,8 @@ function ApprovalPill({ approval }) {
         : approval === "pending_review"
           ? {
               color: "var(--status-warning)",
-              background: "rgba(245,158,11,0.14)",
-              border: "rgba(245,158,11,0.25)",
+              background: "rgba(217,154,43,0.14)",
+              border: "rgba(217,154,43,0.25)",
             }
           : {
               color: "var(--text-muted)",

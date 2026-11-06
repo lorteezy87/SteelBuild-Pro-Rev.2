@@ -11,6 +11,7 @@ import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { ScanSearch } from "lucide-react";
 
 const TYPES = [
   "Steel Fabrication",
@@ -35,8 +36,8 @@ const STATUSES = ["Scheduled", "In Progress", "Completed", "On Hold", "Cancelled
 
 const STATUS_COLORS = {
   Scheduled: "var(--status-info, #0EA5E9)",
-  "In Progress": "var(--status-warning, #F59E0B)",
-  Completed: "var(--status-success, #10B981)",
+  "In Progress": "var(--status-warning, #D99A2B)",
+  Completed: "var(--status-success, #2F8F6A)",
   "On Hold": "var(--text-muted, #8898A8)",
   Cancelled: "var(--status-error, #FF3B3B)",
 };
@@ -397,7 +398,7 @@ export default function Inspections() {
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 24,
           }}>
-            {inspections.length === 0 ? "🔍" : "🔎"}
+            <ScanSearch size={24} strokeWidth={1.5} aria-hidden="true" />
           </div>
           <div style={{
             fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,

@@ -349,7 +349,7 @@ export default function ExpenseFormModal({
               border: `1px solid ${willExceed ? 'var(--warning-border)' : 'var(--accent-border)'}`,
             }}>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 10, color: willExceed ? 'var(--status-warning)' : 'var(--text-muted)', fontWeight: 700 }}>
-                {willExceed ? '⚠ OVER BUDGET' : '📊 BUDGET IMPACT'} — {form.cost_code}
+                {willExceed ? '⚠ Over budget' : 'Budget impact'} — {form.cost_code}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 {[
@@ -365,7 +365,7 @@ export default function ExpenseFormModal({
                 ))}
               </div>
               {willExceed && (
-                <div style={{ marginTop: 10, padding: '6px 10px', background: 'rgba(245,158,11,0.10)', borderLeft: '2px solid var(--status-warning)', borderRadius: 4, fontSize: 10, color: 'var(--status-warning)', fontFamily: 'var(--font-body)' }}>
+                <div style={{ marginTop: 10, padding: '6px 10px', background: 'rgba(217,154,43,0.10)', borderLeft: '2px solid var(--status-warning)', borderRadius: 4, fontSize: 10, color: 'var(--status-warning)', fontFamily: 'var(--font-body)' }}>
                   ⚠ Exceeds budget by ${exceedAmount.toFixed(2)} — expense will still be saved
                 </div>
               )}
@@ -428,7 +428,7 @@ export default function ExpenseFormModal({
                 transition: 'all 0.15s',
               }}
             >
-              {isSaving ? (expense ? 'UPDATING...' : 'CREATING...') : (expense ? 'UPDATE EXPENSE' : 'CREATE EXPENSE')}
+              {isSaving ? (expense ? 'UPDATING…' : 'CREATING…') : (expense ? 'UPDATE EXPENSE' : 'CREATE EXPENSE')}
             </button>
           </div>
         </div>

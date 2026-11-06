@@ -157,7 +157,7 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
               }}
               required
             >
-              <option value="">Select project...</option>
+              <option value="">Select project…</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -496,7 +496,7 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
                 opacity: saving ? 0.5 : 1,
               }}
             >
-              {saving ? "Saving..." : editing ? "Save" : "Create Item"}
+              {saving ? "Saving…" : editing ? "Save" : "Create Item"}
             </button>
           </div>
         </form>

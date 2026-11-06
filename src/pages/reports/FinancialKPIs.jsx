@@ -439,7 +439,7 @@ export default function FinancialKPIs() {
       }
       filters={
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search projects..." />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search projects…" />
         </FilterBar>
       }
     >

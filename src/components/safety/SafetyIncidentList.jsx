@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { StatusPill } from "@/components/design-system";
 import { formatLocalDate } from "@/utils/dates";
+import { Cog, FileText, Hammer, HeartPulse, Leaf, MapPin, OctagonAlert, TriangleAlert, UserRound } from "lucide-react";
 
 const SEVERITY_COLORS = {
   Critical: "var(--status-error)",
@@ -10,14 +11,14 @@ const SEVERITY_COLORS = {
 };
 
 const TYPE_ICONS = {
-  Injury: "🚑",
-  "Near Miss": "⚠",
-  Hazard: "🛑",
-  "Property Damage": "💥",
-  Environmental: "🌍",
-  Behavioral: "👤",
-  "Equipment Failure": "⚙",
-  Other: "📋",
+  Injury: HeartPulse,
+  "Near Miss": TriangleAlert,
+  Hazard: OctagonAlert,
+  "Property Damage": Hammer,
+  Environmental: Leaf,
+  Behavioral: UserRound,
+  "Equipment Failure": Cog,
+  Other: FileText,
 };
 
 const STATUS_COLORS = {
@@ -48,11 +49,11 @@ export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, o
         <div key={incident.id} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", overflow: "hidden", cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}>
           {/* Header */}
           <div onClick={() => setExpanded(expanded === incident.id ? null : incident.id)} style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "auto 1fr 1fr auto", gap: "16px", alignItems: "center", borderBottom: expanded === incident.id ? "1px solid var(--divider)" : "none" }}>
-            <div style={{ fontSize: "20px" }}>{TYPE_ICONS[incident.incident_type] || "📋"}</div>
+            {(() => { const Icon = TYPE_ICONS[incident.incident_type] || FileText; return <div style={{ width: 32, height: 32, display: "grid", placeItems: "center", borderRadius: 6, background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", color: "var(--text-secondary)", flexShrink: 0 }}><Icon size={16} strokeWidth={1.75} aria-hidden="true" /></div>; })()}
 
             <div>
               <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{incident.incident_type}</div>
-              {incident.location && <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>📍 {incident.location}</div>}
+              {incident.location && <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}><MapPin size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4 }} />{incident.location}</div>}
             </div>
 
             <div>
@@ -96,7 +97,7 @@ export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, o
 
               {incident.injuries && (
                 <div style={{ marginBottom: "12px" }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--status-error)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>🚑 Injuries</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--status-error)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Injuries</div>
                   <p style={{ fontSize: "11px", color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>{incident.injuries}</p>
                 </div>
               )}

@@ -52,8 +52,8 @@ export default function TopBarSearchButton({ onClick, compact = false, variant =
           whiteSpace: "nowrap",
         }}>
           {isDashboardSearch
-            ? "Search drawings, submittals, RFIs, or documents..."
-            : "Search projects, submittals, RFIs, drawings..."}
+            ? "Search drawings, submittals, RFIs, or documents…"
+            : "Search projects, submittals, RFIs, drawings…"}
         </span>
       )}
       {isDashboardSearch && (

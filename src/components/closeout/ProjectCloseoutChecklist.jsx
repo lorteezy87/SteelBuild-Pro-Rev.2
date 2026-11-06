@@ -1,14 +1,15 @@
 import React from "react";
 import { formatLocalDate } from "@/utils/dates";
 import { presentCloseoutForUi } from "@/lib/closeout/closeoutPayload";
+import { ClipboardCheck, DraftingCompass, ListChecks, Receipt, ShieldCheck, Stamp } from "lucide-react";
 
 const CHECKLIST_ITEMS = [
-  { key: "final_inspection_completed", label: "Final Inspection", icon: "✓" },
-  { key: "punch_list_cleared", label: "Punchlist Cleared", icon: "☑" },
-  { key: "all_invoices_processed", label: "Invoices Processed", icon: "💰" },
-  { key: "warranties_registered", label: "Warranties Registered", icon: "📋" },
-  { key: "as_built_docs_completed", label: "As-Built Docs", icon: "📐" },
-  { key: "permits_closed", label: "Permits Closed", icon: "🔐" },
+  { key: "final_inspection_completed", label: "Final Inspection", icon: ClipboardCheck },
+  { key: "punch_list_cleared", label: "Punchlist Cleared", icon: ListChecks },
+  { key: "all_invoices_processed", label: "Invoices Processed", icon: Receipt },
+  { key: "warranties_registered", label: "Warranties Registered", icon: ShieldCheck },
+  { key: "as_built_docs_completed", label: "As-Built Docs", icon: DraftingCompass },
+  { key: "permits_closed", label: "Permits Closed", icon: Stamp },
 ];
 
 export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdating = false }) {
@@ -63,11 +64,11 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdatin
                 color: "inherit",
               }}
             >
-              <div style={{ fontSize: "20px" }}>{item.icon}</div>
+              <div style={{ width: 32, height: 32, display: "grid", placeItems: "center", borderRadius: 6, background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", color: "var(--text-secondary)", flexShrink: 0 }}><item.icon size={16} strokeWidth={1.75} aria-hidden="true" /></div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-primary)" }}>{item.label}</div>
                 <div style={{ fontSize: "9px", color: isDone ? "var(--status-success)" : "var(--text-muted)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
-                  {isDone ? "✓ DONE" : isUpdating ? "SAVING…" : "CLICK TO MARK DONE"}
+                  {isDone ? "Complete" : isUpdating ? "Saving…" : "Mark complete"}
                 </div>
               </div>
               <div style={{ fontSize: "18px", color: isDone ? "var(--status-success)" : "var(--border-default)", transition: "color 0.15s" }}>

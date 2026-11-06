@@ -472,10 +472,10 @@ describe("Document Control Board Report", () => {
     try {
       const { container: darkC } = renderPage();
       expect(darkC.innerHTML).not.toBe(lightHtml);
-      // jsdom serialises inline colours as rgb(). #0C0F12 is the dark page
-      // surface; #FAFAF8 (250,250,248) is the light one it must not use.
-      expect(darkC.innerHTML).toContain("rgb(12, 15, 18)");
-      expect(lightHtml).toContain("rgb(250, 250, 248)");
+      // jsdom serialises inline colours as rgb(). #0A1118 is the dark page
+      // surface; #F7F6F2 (247,246,242) is the light one it must not use.
+      expect(darkC.innerHTML).toContain("rgb(10, 17, 24)");
+      expect(lightHtml).toContain("rgb(247, 246, 242)");
     } finally {
       m.theme = "light";
     }

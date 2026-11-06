@@ -302,7 +302,7 @@ export default function TasksDueThisWeek() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search task, project, assignee..."
+            placeholder="Search task, project, assignee…"
           />
           <ToggleGroup
             options={[

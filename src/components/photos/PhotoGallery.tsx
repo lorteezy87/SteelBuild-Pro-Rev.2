@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, MapPin } from "lucide-react";
+import { Calendar, Camera, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
@@ -100,7 +100,7 @@ export default function PhotoGallery({ photos = [] }: PhotoGalleryProps) {
           textAlign: "center",
         }}
       >
-        <div style={{ fontSize: 48, marginBottom: 14, opacity: 0.4 }}>📷</div>
+        <Camera size={32} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-muted)", marginBottom: 12 }} />
         <p
           style={{
             fontFamily: "var(--font-mono)",

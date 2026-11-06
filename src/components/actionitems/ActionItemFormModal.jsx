@@ -9,9 +9,9 @@ import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutat
 
 const PRIORITY_OPTIONS = [
   { value: "Low",      label: "Low",      color: "var(--text-muted)",     bg: "rgba(100,116,139,0.12)", border: "rgba(100,116,139,0.3)" },
-  { value: "Medium",   label: "Med",      color: "var(--status-info)",    bg: "rgba(37,99,235,0.12)",   border: "rgba(37,99,235,0.3)"   },
-  { value: "High",     label: "High",     color: "var(--status-warning)", bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.3)"  },
-  { value: "Critical", label: "🔥 Crit",  color: "var(--status-error)",   bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.3)"   },
+  { value: "Medium",   label: "Med",      color: "var(--status-info)",    bg: "rgba(63,111,181,0.12)",   border: "rgba(63,111,181,0.3)"   },
+  { value: "High",     label: "High",     color: "var(--status-warning)", bg: "rgba(217,154,43,0.12)",  border: "rgba(217,154,43,0.3)"  },
+  { value: "Critical", label: "Critical",  color: "var(--status-error)",   bg: "rgba(210,69,47,0.12)",   border: "rgba(210,69,47,0.3)"   },
 ];
 
 const tomorrow = () => {
@@ -200,7 +200,7 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
         <div>
           <label style={labelStyle}>Project *</label>
           <select value={formData.project_id} onChange={e => { field("project_id", e.target.value); clearField("project_id"); }} style={{ ...inputStyle, ...(fieldErrors.project_id ? { borderColor: "var(--status-error)" } : {}) }} required>
-            <option value="">Select project...</option>
+            <option value="">Select project…</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           {fieldErrors.project_id && <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--status-error)", marginTop: 4 }}>{fieldErrors.project_id}</p>}

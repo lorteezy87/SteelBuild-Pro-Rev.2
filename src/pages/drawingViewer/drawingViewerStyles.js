@@ -17,7 +17,7 @@ export const drawingViewerStyles = `
   color: var(--text-primary);
   background:
     radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.12), transparent 26rem),
-    radial-gradient(circle at 92% 8%, rgba(16, 185, 129, 0.10), transparent 24rem),
+    radial-gradient(circle at 92% 8%, rgba(47, 143, 106, 0.10), transparent 24rem),
     var(--bg-page);
 }
 
@@ -325,7 +325,7 @@ export const drawingViewerStyles = `
   height: calc(100dvh - 36px);
   background:
     radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.06), transparent 26rem),
-    radial-gradient(circle at 92% 8%, rgba(16, 185, 129, 0.05), transparent 24rem),
+    radial-gradient(circle at 92% 8%, rgba(47, 143, 106, 0.05), transparent 24rem),
     var(--bg-page);
   /* Re-light the viewer chrome vars (they color-mix the surface vars back with
      dark literals above — override to clean light so the chrome isn't muddy). */

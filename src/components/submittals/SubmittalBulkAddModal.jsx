@@ -469,7 +469,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit, busy =
               fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
             }}
           >
-            {busy ? "ADDING..." : `CREATE ${parsed.rows.length}`}
+            {busy ? "ADDING…" : `CREATE ${parsed.rows.length}`}
           </button>
         </div>
       </div>

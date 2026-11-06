@@ -147,11 +147,11 @@ export default function UserSettingsTab({ user, workspaceRole }) {
       {/* Bio */}
       <div style={{ marginBottom: 24 }}>
         <div style={S.sectionTitle}>Notes / Bio</div>
-        <textarea style={{ ...S.input, minHeight: 80, resize: 'vertical' }} value={form.bio} onChange={e => set('bio', e.target.value)} placeholder="Optional — project areas, specialties, notes for teammates..." />
+        <textarea style={{ ...S.input, minHeight: 80, resize: 'vertical' }} value={form.bio} onChange={e => set('bio', e.target.value)} placeholder="Optional — project areas, specialties, notes for teammates…" />
       </div>
 
       <button onClick={handleSave} disabled={isSaving} style={{ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 6, padding: '9px 20px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: isSaving ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: isSaving ? 0.6 : 1 }}>
-        {isSaving ? 'Saving...' : 'Save Profile'}
+        {isSaving ? 'Saving…' : 'Save Profile'}
       </button>
 
       <SupportLegalSection />

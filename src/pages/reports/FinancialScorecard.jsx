@@ -367,9 +367,9 @@ export default function FinancialScorecard() {
 
   if (!kpis) {
     return (
-      <ReportShell title="Financial Scorecard" subtitle="Loading..." shareProjectId={projectId}>
+      <ReportShell title="Financial Scorecard" subtitle="Loading…" shareProjectId={projectId}>
         <div style={{ ...CARD, textAlign: "center", padding: 60 }}>
-          <div style={{ ...body, fontSize: 14, color: "var(--text-muted)" }}>Loading project data...</div>
+          <div style={{ ...body, fontSize: 14, color: "var(--text-muted)" }}>Loading project data…</div>
         </div>
       </ReportShell>
     );

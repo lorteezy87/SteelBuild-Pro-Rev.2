@@ -255,7 +255,7 @@ export default function GcCompareModal({
                   fontFamily: mono, fontSize: 11, letterSpacing: "0.08em",
                 }}
               >
-                <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid rgba(245,158,11,0.25)", borderTopColor: "var(--accent)", animation: "spin 0.7s linear infinite" }} />
+                <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid rgba(217,154,43,0.25)", borderTopColor: "var(--accent)", animation: "spin 0.7s linear infinite" }} />
                 RENDERING SHEETS…
               </div>
             )}

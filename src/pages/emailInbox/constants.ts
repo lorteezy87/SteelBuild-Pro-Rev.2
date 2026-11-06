@@ -41,10 +41,10 @@ export const ENTITY_TYPE_OPTIONS: EntityTypeOption[] = [
 export const DEFAULT_LABELS = ["Urgent", "Follow-up", "Waiting", "Important"];
 
 const LABEL_COLORS: Record<string, string> = {
-  "Urgent":     "#EF4444",
-  "Follow-up":  "#F59E0B",
-  "Waiting":    "#8B5CF6",
-  "Important":  "#3B82F6",
+  "Urgent":     "#D2452F",
+  "Follow-up":  "#D99A2B",
+  "Waiting":    "#6E5AA8",
+  "Important":  "#3F6FB5",
 };
 
 export function getLabelColor(label: string): string {

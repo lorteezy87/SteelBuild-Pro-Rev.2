@@ -1,5 +1,5 @@
 /*
- * SteelBuild Pro brand theme overlay.
+ * SteelBuild Pro brand theme overlay — primer accent (Blueline, 2026-11).
  *
  * tokens.css remains the broad compatibility catalog used by legacy surfaces.
  * This final overlay establishes the approved SteelBuild-Pro identity without
@@ -8,19 +8,19 @@
  */
 
 :root {
-  --brand-orange:              #FF5A1F;
-  --brand-orange-hover:        #E94C14;
-  --brand-orange-light:        #FF7442;
-  --brand-orange-muted:        rgba(255, 90, 31, 0.11);
-  --brand-orange-border:       rgba(255, 90, 31, 0.38);
+  --brand-orange:              #CC4E17;
+  --brand-orange-hover:        #B8461C;
+  --brand-orange-light:        #E36A2C;
+  --brand-orange-muted:        rgba(204, 78, 23, 0.10);
+  --brand-orange-border:       rgba(204, 78, 23, 0.36);
 
   /* Supporting product palette. The approved steel-plate badge is served as
      artwork; its metal and lettering are not redrawn with CSS colors. */
-  --sbp-foundry-black:         #0D1117;
-  --sbp-structural-graphite:   #19212B;
+  --sbp-foundry-black:         #0A1118;
+  --sbp-structural-graphite:   #0E1824;
   --sbp-signal-amber:          #F5BB00;
-  --sbp-steel-gray:            #64748B;
-  --sbp-blueprint-white:       #F5F7FA;
+  --sbp-steel-gray:            #5F6974;
+  --sbp-blueprint-white:       #F7F6F2;
 
 }
 
@@ -56,8 +56,8 @@
   --accent-hover:              var(--brand-orange-hover);
   --accent-muted:              var(--brand-orange-muted);
   --accent-border:             var(--brand-orange-border);
-  --accent-text:               #111417;
-  --on-accent:                 #111417;
+  --accent-text:               #FFFFFF;
+  --on-accent:                 #FFFFFF;
   --secondary:                 var(--brand-orange);
   --secondary-muted:           var(--brand-orange-muted);
   --secondary-border:          var(--brand-orange-border);
@@ -68,7 +68,7 @@
   --accent-orange-border:      var(--brand-orange-border);
 
   --nav-bg:                    rgba(16, 20, 24, 0.98);
-  --nav-hover-bg:              rgba(255, 90, 31, 0.09);
+  --nav-hover-bg:              rgba(204, 78, 23, 0.09);
   --bg-hover:                  rgba(255, 255, 255, 0.045);
   --bg-row-hover:              rgba(255, 255, 255, 0.035);
 }
@@ -104,8 +104,8 @@
   --accent-hover:              var(--brand-orange-hover);
   --accent-muted:              var(--brand-orange-muted);
   --accent-border:             var(--brand-orange-border);
-  --accent-text:               #111417;
-  --on-accent:                 #111417;
+  --accent-text:               #FFFFFF;
+  --on-accent:                 #FFFFFF;
   --secondary:                 var(--brand-orange);
   --secondary-muted:           var(--brand-orange-muted);
   --secondary-border:          var(--brand-orange-border);
@@ -116,7 +116,7 @@
   --accent-orange-border:      var(--brand-orange-border);
 
   --nav-bg:                    rgba(255, 255, 255, 0.98);
-  --nav-hover-bg:              rgba(255, 90, 31, 0.08);
+  --nav-hover-bg:              rgba(204, 78, 23, 0.08);
   --bg-hover:                  rgba(24, 28, 32, 0.045);
   --bg-row-hover:              rgba(24, 28, 32, 0.035);
 }

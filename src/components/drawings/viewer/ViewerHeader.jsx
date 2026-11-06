@@ -453,8 +453,8 @@ const lockBadgeStyle = {
   gap: 6,
   padding: "5px 8px",
   borderRadius: 6,
-  background: "rgba(245, 158, 11, 0.12)",
-  border: "1px solid rgba(245, 158, 11, 0.42)",
+  background: "rgba(217, 154, 43, 0.12)",
+  border: "1px solid rgba(217, 154, 43, 0.42)",
   color: "var(--status-warning)",
   fontSize: 10,
   fontWeight: 900,
@@ -466,8 +466,8 @@ const openBadgeStyle = {
   ...mono,
   padding: "5px 8px",
   borderRadius: 6,
-  background: "rgba(16, 185, 129, 0.12)",
-  border: "1px solid rgba(16, 185, 129, 0.36)",
+  background: "rgba(47, 143, 106, 0.12)",
+  border: "1px solid rgba(47, 143, 106, 0.36)",
   color: "var(--status-success)",
   fontSize: 10,
   fontWeight: 900,
@@ -483,8 +483,8 @@ const unlockButtonStyle = {
   marginLeft: 4,
   padding: "2px 7px",
   borderRadius: 5,
-  background: "rgba(245, 158, 11, 0.18)",
-  border: "1px solid rgba(245, 158, 11, 0.48)",
+  background: "rgba(217, 154, 43, 0.18)",
+  border: "1px solid rgba(217, 154, 43, 0.48)",
   color: "var(--status-warning)",
   cursor: "pointer",
   fontSize: 9,
@@ -522,5 +522,5 @@ const unlockCancelButton = {
 function truncate(value, max) {
   const text = String(value || "");
   if (text.length <= max) return text;
-  return `${text.slice(0, max - 3)}...`;
+  return `${text.slice(0, max - 3)}…`;
 }

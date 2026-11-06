@@ -47,7 +47,7 @@ export default function DeleteDialog({ open, onClose, onConfirm, title, descript
              Cancel
            </AlertDialogCancel>
            <AlertDialogAction className="sbd-btn" onClick={handleConfirm} disabled={isBusy} style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", color: "var(--status-error)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600 }}>
-             {isBusy ? "Deleting..." : "Delete"}
+             {isBusy ? "Deleting…" : "Delete"}
            </AlertDialogAction>
          </AlertDialogFooter>
        </AlertDialogContent>

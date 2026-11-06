@@ -92,7 +92,7 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
           steps: makeProgressSteps("extract", ["upload", "encode"]),
           currentStepId: "extract",
           progress: baseProgress + 10,
-          message: `Claude is reading ${file.name}… (${i + 1} of ${totalFiles})`,
+          message: `Reading ${file.name} (${i + 1} of ${totalFiles})…`,
         });
 
         const sizeMB = file.size / (1024 * 1024);
@@ -110,7 +110,7 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
                 } else if (status.phase === 'llm-calling') {
                   setProcessingStatus(prev => ({
                     ...prev,
-                    message: `Claude is reading ${file.name}… (${i + 1} of ${totalFiles})`,
+                    message: `Reading ${file.name} (${i + 1} of ${totalFiles})…`,
                   }));
                 }
               },

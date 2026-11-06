@@ -250,7 +250,7 @@ export default function BulkDurationEditModal({ open, count = 0, isSaving = fals
               opacity: validation || isSaving ? 0.65 : 1,
             }}
           >
-            {isSaving ? "APPLYING..." : "APPLY DURATIONS"}
+            {isSaving ? "APPLYING…" : "APPLY DURATIONS"}
           </button>
         </footer>
       </div>

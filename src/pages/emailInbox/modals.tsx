@@ -219,7 +219,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
         <>
           <button onClick={close} disabled={saving} style={secondaryBtnStyle}>Cancel</button>
           <button onClick={handleCreate} disabled={saving || !isCurrent()} style={primaryBtnStyle}>
-            {saving ? "Creating..." : attempt.current?.record ? "Retry email link" : draft.recoveryPending ? "Recover saved record" : "Create Record"}
+            {saving ? "Creating…" : attempt.current?.record ? "Retry email link" : draft.recoveryPending ? "Recover saved record" : "Create Record"}
           </button>
         </>
       }
@@ -405,7 +405,7 @@ export function LinkToExistingModal({ message, projectId, onClose, onSuccess }: 
           ))}
         </div>
         <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={`Search ${ENTITY_TYPE_OPTIONS.find((o) => o.value === searchType)?.label || "records"}...`}
+          placeholder={`Search ${ENTITY_TYPE_OPTIONS.find((o) => o.value === searchType)?.label || "records"}…`}
           style={inputStyle} autoFocus />
       </div>
 
@@ -499,7 +499,7 @@ export function ComposeEmailModal({ projectId, onClose, onSent }: ComposeEmailMo
             opacity: sending ? 0.7 : 1,
           }}>
             <Send size={12} strokeWidth={2} />
-            {sending ? "Sending..." : "Send"}
+            {sending ? "Sending…" : "Send"}
           </button>
         </>
       }
@@ -527,7 +527,7 @@ export function ComposeEmailModal({ projectId, onClose, onSent }: ComposeEmailMo
           <label style={labelStyle}>Message</label>
           <textarea
             value={bodyText} onChange={(e) => setBodyText(e.target.value)}
-            rows={12} placeholder="Type your message..."
+            rows={12} placeholder="Type your message…"
             style={{ ...inputStyle, resize: "vertical", minHeight: 160, lineHeight: 1.5 }}
           />
         </div>
@@ -611,7 +611,7 @@ export function ReplyEmailModal({ projectId, originalMessage, mode, currentUserE
             opacity: sending ? 0.7 : 1,
           }}>
             <ModeIcon size={12} strokeWidth={2} />
-            {sending ? "Sending..." : modeLabel}
+            {sending ? "Sending…" : modeLabel}
           </button>
         </>
       }
@@ -635,7 +635,7 @@ export function ReplyEmailModal({ projectId, originalMessage, mode, currentUserE
           <label style={labelStyle}>Message</label>
           <textarea
             value={bodyText} onChange={(e) => setBodyText(e.target.value)}
-            rows={8} placeholder="Type your reply..."
+            rows={8} placeholder="Type your reply…"
             style={{ ...inputStyle, resize: "vertical", minHeight: 120, lineHeight: 1.5 }}
             autoFocus
           />

@@ -80,7 +80,7 @@ describe('status bar strip (MOB-10)', () => {
     document.documentElement.setAttribute('data-theme', 'light');
     pageTopWith('rgba(0, 0, 0, 0)');
     await boot();
-    await vi.waitFor(() => expect(mocks.setBackgroundColor).toHaveBeenCalledWith({ color: '#F2F4F5' }));
+    await vi.waitFor(() => expect(mocks.setBackgroundColor).toHaveBeenCalledWith({ color: '#F7F6F2' }));
     expect(mocks.setStyle).toHaveBeenCalledWith({ style: 'LIGHT' });
   });
 

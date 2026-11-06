@@ -113,7 +113,7 @@ export default function TransmittalModal({
             <Label>Notes (optional)</Label>
             <textarea
               rows={3}
-              placeholder="Any remarks or special instructions..."
+              placeholder="Any remarks or special instructions…"
               value={form.notes}
               onChange={(e) => onFormChange("notes", e.target.value)}
               style={{ ...inputStyle, resize: "vertical", boxSizing: "border-box" }}

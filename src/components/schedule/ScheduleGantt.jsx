@@ -727,7 +727,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             type="search"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Search WBS, task, resource, status..."
+            placeholder="Search WBS, task, resource, status…"
             aria-label="Search Gantt tasks"
             style={{
               width: 260,
@@ -808,7 +808,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
             }}
           >
-            📂 Submittals ({submittals.filter(s => s.is_submittal && s.linked_wp_id).length})
+            Submittals ({submittals.filter(s => s.is_submittal && s.linked_wp_id).length})
           </button>
         )}
         {deliveries.length > 0 && (
@@ -823,7 +823,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
             }}
           >
-            🚛 Deliveries ({deliveries.length})
+            Deliveries ({deliveries.length})
           </button>
         )}
         {baselineTaskCount > 0 && (

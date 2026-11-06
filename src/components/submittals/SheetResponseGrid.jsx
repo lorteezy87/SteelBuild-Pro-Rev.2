@@ -338,7 +338,7 @@ export default function SheetResponseGrid({
                       type="text"
                       value={row.reviewer_comment}
                       onChange={(e) => updateRow(idx, "reviewer_comment", e.target.value)}
-                      placeholder="Comment..."
+                      placeholder="Comment…"
                       style={{
                         width: "100%",
                         padding: "4px 8px",
@@ -417,7 +417,7 @@ export default function SheetResponseGrid({
             letterSpacing: "0.06em",
           }}
         >
-            {saving ? "SAVING..." : "SAVE RESPONSES"}
+            {saving ? "SAVING…" : "SAVE RESPONSES"}
         </button>
       </div>
     </div>

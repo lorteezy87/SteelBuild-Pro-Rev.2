@@ -673,8 +673,8 @@ export default function SteelWeightCalculator() {
                     ...mono,
                     fontSize: 11, fontWeight: 700,
                     color: "var(--status-review)",
-                    background: "var(--status-review-muted, rgba(249,115,22,0.12))",
-                    border: "1px solid var(--status-review-border, rgba(249,115,22,0.40))",
+                    background: "var(--status-review-muted, rgba(204,78,23,0.12))",
+                    border: "1px solid var(--status-review-border, rgba(204,78,23,0.40))",
                     padding: "8px 12px",
                     borderRadius: 6,
                   }}

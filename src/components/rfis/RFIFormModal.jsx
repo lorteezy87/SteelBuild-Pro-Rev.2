@@ -337,7 +337,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 value={formData.project_id}
                 disabled={Boolean(projectId || rfi)}
                 onChange={(value) => set("project_id", value)}
-                placeholder="Select project..."
+                placeholder="Select project…"
                 options={projects.map((p) => ({ value: p.id, label: p.name || p.project_number || "Unnamed project" }))}
               />
             </Field>
@@ -350,7 +350,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               <DarkSelect
                 value={formData.rfi_type || ""}
                 onChange={(value) => set("rfi_type", value)}
-                placeholder="Classify this RFI..."
+                placeholder="Classify this RFI…"
                 options={RFI_TYPES.map((t) => ({ value: t, label: t }))}
               />
             </Field>
@@ -623,7 +623,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             Cancel
           </button>
           <button type="button" onClick={handleSubmit} disabled={isSaving} style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
-            {isSaving ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
+            {isSaving ? "Saving…" : rfi ? "Update RFI" : "Submit RFI"}
           </button>
         </div>
       </div>
@@ -631,7 +631,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   );
 }
 
-function DarkSelect({ value, options, onChange, placeholder = "Select...", disabled = false }) {
+function DarkSelect({ value, options, onChange, placeholder = "Select…", disabled = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selected = options.find((option) => option.value === value);

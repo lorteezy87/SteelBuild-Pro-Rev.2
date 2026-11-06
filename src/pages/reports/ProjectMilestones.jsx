@@ -166,7 +166,7 @@ export default function ProjectMilestones() {
       })}
       filters={
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search milestones, projects..." />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search milestones, projects…" />
           <SelectFilter
             label="Project"
             value={projectFilter}

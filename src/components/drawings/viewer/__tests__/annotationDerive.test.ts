@@ -21,7 +21,7 @@ const createdAt = "2026-09-12T20:00:00.000Z";
 const commitOptions = {
   id: "markup-1",
   pdfPage: 3,
-  color: "#ef4444",
+  color: "#d2452f",
   createdAt,
 };
 
@@ -163,7 +163,7 @@ describe("annotation view models", () => {
       x1: 72,
       y1: 0,
       tracking: true,
-    }, viewport, "#ef4444", 96);
+    }, viewport, "#d2452f", 96);
     const measurement = deriveDraftView({
       kind: "measure",
       x0: 0,
@@ -171,7 +171,7 @@ describe("annotation view models", () => {
       x1: 72,
       y1: 0,
       tracking: true,
-    }, viewport, "#ef4444", 96);
+    }, viewport, "#d2452f", 96);
 
     expect(calibration).toMatchObject({
       kind: "calibrate",
@@ -181,7 +181,7 @@ describe("annotation view models", () => {
     expect(measurement).toMatchObject({
       kind: "measure",
       label: `8'-0"`,
-      stroke: "#ef4444",
+      stroke: "#d2452f",
     });
   });
 
@@ -206,7 +206,7 @@ describe("annotation view models", () => {
     })).toMatchObject({
       cx: 45,
       cy: 37,
-      statusColor: "#10b981",
+      statusColor: "#2f8f6a",
       statusLabel: "DONE",
       statusTransform: "translate(50, 14)",
     });

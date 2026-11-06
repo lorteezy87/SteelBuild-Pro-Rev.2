@@ -83,9 +83,9 @@ export function extractSkillsRS(resource) {
 
 // ─── Heatmap backgrounds for resource rows ──────────────────────────
 export function getRowCapacityBg(burnPct, isOverAllocated) {
-  if (isOverAllocated || burnPct > 100) return "rgba(239,68,68,0.04)";
-  if (burnPct > 80) return "rgba(245,158,11,0.03)";
-  if (burnPct > 0) return "rgba(34,197,94,0.02)";
+  if (isOverAllocated || burnPct > 100) return "rgba(210,69,47,0.04)";
+  if (burnPct > 80) return "rgba(217,154,43,0.03)";
+  if (burnPct > 0) return "rgba(58,154,99,0.02)";
   return "transparent";
 }
 
@@ -107,8 +107,8 @@ export function injectKeyframes() {
   style.id = RS_STYLE_ID;
   style.textContent = `
     @keyframes rsOverAllocPulse {
-      0%, 100% { box-shadow: 0 0 6px rgba(239,68,68,0.15); color: #EF4444; }
-      50%      { box-shadow: 0 0 18px rgba(239,68,68,0.45); color: #FF6B6B; }
+      0%, 100% { box-shadow: 0 0 6px rgba(210,69,47,0.15); color: #D2452F; }
+      50%      { box-shadow: 0 0 18px rgba(210,69,47,0.45); color: #FF6B6B; }
     }
     @keyframes rsDropGlow {
       0%   { box-shadow: inset 0 0 0 1px rgba(46,168,255,0.0); }

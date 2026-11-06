@@ -285,7 +285,7 @@ export default function ScheduleReport() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search task, project, WBS, assignee..."
+            placeholder="Search task, project, WBS, assignee…"
           />
           <SelectFilter
             label="Phase"

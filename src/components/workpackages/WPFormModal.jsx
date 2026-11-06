@@ -323,7 +323,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           </select>
         </FormField>
         <FormField label="Name *" error={errors.name} span2>
-          <input style={inputStyle} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Work package name..." />
+          <input style={inputStyle} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Work package name…" />
         </FormField>
         <div style={{ gridColumn: "span 2" }}>
           <AutoLinkSuggestions
@@ -418,7 +418,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           />
         </FormField>
         <FormField label="Crew / Responsible" span2>
-          <input style={inputStyle} value={form.crew} onChange={e => set("crew", e.target.value)} placeholder="Crew name or person..." />
+          <input style={inputStyle} value={form.crew} onChange={e => set("crew", e.target.value)} placeholder="Crew name or person…" />
         </FormField>
         <FormField label="Released Date">
           <input
@@ -520,7 +520,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <div style={{ position: "relative" }}>
             <input
               type="text"
-              placeholder="Search drawing sets by name..."
+              placeholder="Search drawing sets by name…"
               value={setSearch}
               onChange={e => setSetSearch(e.target.value)}
               onFocus={() => setShowSetDropdown(true)}
@@ -590,7 +590,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input type="checkbox" checked={form.vif_confirmed} onChange={e => set("vif_confirmed", e.target.checked)} style={{ cursor: "pointer", width: 16, height: 16 }} />
         </FormField>
         <FormField label="Confirmed By">
-          <input style={inputStyle} value={form.vif_confirmed_by} onChange={e => set("vif_confirmed_by", e.target.value)} placeholder="Name or email..." disabled={!form.vif_confirmed} />
+          <input style={inputStyle} value={form.vif_confirmed_by} onChange={e => set("vif_confirmed_by", e.target.value)} placeholder="Name or email…" disabled={!form.vif_confirmed} />
         </FormField>
         <FormField label="VIF Confirmed Date">
           <input type="date" style={inputStyle} value={form.vif_confirmed_date || ""} onChange={e => set("vif_confirmed_date", e.target.value)} disabled={!form.vif_confirmed} />
@@ -606,7 +606,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         <SectionDivider label="Notes" />
 
         <FormField label="Notes" span2>
-          <textarea style={{ ...inputStyle, height: 72, resize: "vertical" }} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Additional notes..." />
+          <textarea style={{ ...inputStyle, height: 72, resize: "vertical" }} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Additional notes…" />
         </FormField>
 
       </div>

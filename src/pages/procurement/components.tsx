@@ -674,7 +674,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
               style={{ ...iStyle, minHeight: 60, resize: 'vertical' }}
               value={form.notes || ''}
               onChange={e => set('notes', e.target.value)}
-              placeholder="PO terms, special requirements, vendor contact..."
+              placeholder="PO terms, special requirements, vendor contact…"
             />
           </div>
 
@@ -713,7 +713,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
                 opacity: isSaving || (!recoveryPending && !form.description?.trim()) ? 0.5 : 1,
               }}
             >
-              {isSaving ? (item ? 'Saving...' : 'Adding...') : recoveryPending ? 'Recover saved item' : (item ? 'Save' : 'Add Item')}
+              {isSaving ? (item ? 'Saving…' : 'Adding…') : recoveryPending ? 'Recover saved item' : (item ? 'Save' : 'Add Item')}
             </button>
           </div>
         </div>

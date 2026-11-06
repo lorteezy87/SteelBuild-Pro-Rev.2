@@ -324,7 +324,7 @@ export default function PortfolioTracker() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search by project, number, or client..."
+            placeholder="Search by project, number, or client…"
           />
           <SelectFilter
             label="Phase"

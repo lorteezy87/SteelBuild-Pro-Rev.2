@@ -276,7 +276,7 @@ function Signal({ label, value, tone = "neutral" }) {
   return (
     <div style={{
       ...signalStyle,
-      borderColor: tone === "risk" ? "rgba(239,68,68,0.34)" : "var(--viewer-line, var(--border-default))",
+      borderColor: tone === "risk" ? "rgba(210,69,47,0.34)" : "var(--viewer-line, var(--border-default))",
     }}>
       <strong style={{ color: tone === "risk" ? "var(--status-error)" : "var(--text-primary)" }}>{value}</strong>
       <span>{label}</span>
