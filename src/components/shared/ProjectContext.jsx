@@ -221,7 +221,7 @@ function ProjectProviderState({ children, cacheOwner, workspaceReady }) {
       } finally {
         // Always clear loading when this request finishes, even if a newer
         // local mutation invalidated the payload — otherwise archive during
-        // the initial fetch leaves the switcher stuck on "Loading...".
+        // the initial fetch leaves the switcher stuck on "Loading…".
         if (!cancelled) setLoading(false);
       }
     };

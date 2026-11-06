@@ -131,7 +131,7 @@ export default function TaskBoard() {
       subtitle="Kanban view of every schedule task. Click a card to drill into its project."
       filters={
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search tasks..." />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search tasks…" />
           <SelectFilter
             label="Project"
             value={projectFilter}

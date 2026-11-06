@@ -34,18 +34,18 @@
 
   /* Accents — bronze gold primary, structural-trade secondaries */
   --sbd-accent:          #B45309;
-  --sbd-accent-light:    #D97706;
+  --sbd-accent-light:    #B8741A;
   --sbd-accent-muted:    rgba(180,83,9,0.10);
   --sbd-accent-border:   rgba(180,83,9,0.45);
   --sbd-gold:            #B45309;
-  --sbd-gold-light:      #D97706;
+  --sbd-gold-light:      #B8741A;
 
   /* Status — contrast-tested on white (4.5:1+) */
   --sbd-success:         #047857;
   --sbd-warning:         #B45309;
   --sbd-error:           #B91C1C;
   --sbd-info:            #1D4ED8;
-  --sbd-review:          #C2410C;
+  --sbd-review:          #A63C12;
 
   /* Phase palette (gantt / pipeline) */
   --sbd-phase-detailing:   #B45309;
@@ -70,7 +70,7 @@
   --sbd-gantt-preconstruction: #64748B;
   --sbd-gantt-detailing:       #2563EB;
   --sbd-gantt-procurement:     #B45309;
-  --sbd-gantt-fabrication:     #D97706;
+  --sbd-gantt-fabrication:     #B8741A;
   --sbd-gantt-delivery:        #047857;
   --sbd-gantt-installation:    #0891B2;
   --sbd-gantt-closeout:        #475569;

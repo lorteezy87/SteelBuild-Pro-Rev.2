@@ -52,7 +52,7 @@ export const STAGES = DESIGN_DRAWING_STAGES.map(({ key, label, color, bg }) => (
 /**
  * R&R — a first-class DERIVED workflow stage (never a sheet-enum value).
  * Amber, matching the pre-existing R&R badge / "Revise and Resubmit"
- * status color (#f59e0b) so the promotion doesn't change the R&R hue.
+ * status color (#d99a2b) so the promotion doesn't change the R&R hue.
  */
 export const RR_STAGE = {
   key: DRAWING_RR_STAGE.key,

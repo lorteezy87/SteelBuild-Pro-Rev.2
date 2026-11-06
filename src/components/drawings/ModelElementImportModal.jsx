@@ -25,7 +25,7 @@ import { readFileText } from "@/lib/textDecoding";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "var(--font-display)" };
-const ACCENT  = "var(--accent, #3B82F6)";
+const ACCENT  = "var(--accent, #3F6FB5)";
 
 const MATCH_BADGE = {
   matched:   { label: "linked",    color: "var(--status-success)" },

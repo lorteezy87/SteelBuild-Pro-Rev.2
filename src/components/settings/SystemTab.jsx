@@ -121,7 +121,7 @@ export default function SystemTab({ user }) {
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Export Your Data</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>Download a complete JSON backup of every project in your workspace — drawings, submittals, RFIs, change orders, schedule, costs, and more. Each export is recorded in your activity log.</div>
           <ActionBtn onClick={handleExportData} disabled={isExporting} color="info">
-            {isExporting ? 'Exporting…' : '📥 Export Data'}
+            {isExporting ? 'Exporting…' : 'Export data'}
           </ActionBtn>
           {isExporting && exportMsg && (
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>{exportMsg}</div>
@@ -130,7 +130,7 @@ export default function SystemTab({ user }) {
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Clear Cache</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>Clear stored data to free up space or resolve sync issues.</div>
-          <ActionBtn onClick={handleClearCache} color="warning">🗑️ Clear Cache</ActionBtn>
+          <ActionBtn onClick={handleClearCache} color="warning">Clear cache</ActionBtn>
         </div>
       </div>
 

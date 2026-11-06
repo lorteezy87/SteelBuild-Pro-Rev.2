@@ -241,7 +241,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
               opacity: (saving || uploading) ? 0.7 : 1,
             }}
           >
-            {uploading ? "UPLOADING..." : saving ? "SAVING..." : "SAVE SHEET"}
+            {uploading ? "UPLOADING…" : saving ? "SAVING…" : "SAVE SHEET"}
           </button>
         </div>
       </div>

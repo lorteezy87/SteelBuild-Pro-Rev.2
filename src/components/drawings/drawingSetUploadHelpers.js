@@ -114,10 +114,10 @@ export function buildInitialRevisionRecords(drawings = []) {
 
 export function makeProgressSteps(activeId, doneIds = [], warnings = {}) {
   return [
-    { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload")  },
-    { id: "encode",  label: "Preparing PDF for AI reading...",       done: doneIds.includes("encode")  },
-    { id: "extract", label: "✦ Claude is reading your drawing set...", detail: "Scanning title blocks and sheet index", done: doneIds.includes("extract"), warning: warnings["extract"] },
-    { id: "parse",   label: "Building sheet list...",                done: doneIds.includes("parse")   },
+    { id: "upload",  label: "Uploading files…",        done: doneIds.includes("upload")  },
+    { id: "encode",  label: "Preparing PDF…",       done: doneIds.includes("encode")  },
+    { id: "extract", label: "Reading title blocks…", detail: "Sheet numbers, titles and revisions from each page", done: doneIds.includes("extract"), warning: warnings["extract"] },
+    { id: "parse",   label: "Building sheet list…",                done: doneIds.includes("parse")   },
     { id: "done",    label: null,                                    done: doneIds.includes("done")    },
   ];
 }

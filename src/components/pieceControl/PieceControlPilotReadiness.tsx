@@ -150,7 +150,7 @@ export function PieceControlPilotReadiness({
         aria-label="Loading Piece Control readiness"
       >
         <span className="piece-rollout-state__skeleton" aria-hidden="true" />
-        <span>Building the Piece Control readiness report...</span>
+        <span>Building the Piece Control readiness report…</span>
       </section>
     );
   }
@@ -220,7 +220,7 @@ export function PieceControlPilotReadiness({
               onClick={() => modeMutation.mutate(expectedConfirmation)}
               className="cmd-btn cmd-btn--primary piece-rollout-setup__action"
             >
-              {modeMutation.isPending ? "Enabling Piece Register..." : "Enable Piece Register"}
+              {modeMutation.isPending ? "Enabling Piece Register…" : "Enable Piece Register"}
             </button>
           )}
         </div>

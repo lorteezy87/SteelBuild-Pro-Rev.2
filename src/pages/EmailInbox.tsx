@@ -458,7 +458,7 @@ export default function EmailInbox() {
               }} />
               <input
                 type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search emails..."
+                placeholder="Search emails…"
                 style={{
                   width: "100%", height: 30, padding: "0 8px 0 28px",
                   background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",

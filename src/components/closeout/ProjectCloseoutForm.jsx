@@ -73,7 +73,7 @@ export default function ProjectCloseoutForm({ projectId, onSave }) {
 
         <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
           <button type="button" onClick={handleSubmit} disabled={saving || !onSave} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: saving ? 0.5 : 1 }}>
-            {saving ? "Creating..." : "Start Closeout"}
+            {saving ? "Creating…" : "Start Closeout"}
           </button>
         </div>
       </div>

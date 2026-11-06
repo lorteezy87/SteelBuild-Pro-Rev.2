@@ -125,7 +125,7 @@ describe("WPFormModal — new WP drawing assignment", () => {
     const onSave = vi.fn();
     const { container } = renderModal({ defaultProjectId: "proj-1", onSave });
     expect(container.querySelectorAll("select")[1]).toBeEnabled();
-    fireEvent.change(screen.getByPlaceholderText("Work package name..."), { target: { value: "New framing scope" } });
+    fireEvent.change(screen.getByPlaceholderText("Work package name…"), { target: { value: "New framing scope" } });
     fireEvent.click(screen.getByText("Create", { selector: "button" }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "New framing scope", phase: "Detailing", status: "Not Started", percent_complete: 0 }));
     expect(gateMocks.project).not.toHaveBeenCalled();

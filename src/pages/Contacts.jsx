@@ -6,7 +6,7 @@ import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ContactList from "@/components/contacts/ContactList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
-import { Upload } from "lucide-react";
+import { Search, Upload } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CONTACT_TYPE } from "@/lib/enums";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
@@ -147,12 +147,12 @@ export default function Contacts() {
       <div style={{ position: "relative" }}>
         <span style={{
           position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
-          fontSize: 14, color: "var(--text-muted)", pointerEvents: "none",
-        }}>🔍</span>
+          color: "var(--text-muted)", pointerEvents: "none", display: "flex",
+        }}><Search size={15} strokeWidth={1.75} aria-hidden="true" /></span>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, company, email, or role..."
+          placeholder="Search by name, company, email, or role…"
           style={{
             background: "var(--bg-input)",
             border: "1px solid var(--border-default)",

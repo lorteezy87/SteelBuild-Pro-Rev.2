@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { X, ChevronRight, ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, FileUp, X } from "lucide-react";
 import { isPdfFile } from "@/lib/drawingUploadUtils";
 import { MAX_PDF_SIZE_MB, formatBytes } from "../drawingSetUploadHelpers";
 
@@ -35,18 +35,18 @@ export default function FileDropStep({ files, setFiles, onBack, onUpload, setNam
         onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
         onClick={() => fileInputRef.current?.click()}
         style={{
-          border: `2px dashed ${dragOver ? "var(--warning-border)" : "rgba(245,158,11,0.3)"}`,
+          border: `2px dashed ${dragOver ? "var(--warning-border)" : "rgba(217,154,43,0.3)"}`,
           borderRadius: 6, padding: "32px 24px", textAlign: "center", cursor: "pointer",
-          background: dragOver ? "var(--warning-muted)" : "rgba(245,158,11,0.02)",
+          background: dragOver ? "var(--warning-muted)" : "rgba(217,154,43,0.02)",
           transition: "all 0.15s", marginBottom: 16,
         }}
       >
-        <div style={{ fontSize: 32, marginBottom: 8 }}>📐</div>
+        <FileUp size={28} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-muted)", marginBottom: 10 }} />
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-secondary)", marginBottom: 4 }}>
           Drop drawing PDFs or click to browse
         </div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.1em" }}>
-          PDF ONLY · MULTIPLE FILES ALLOWED · MAX {MAX_PDF_SIZE_MB}MB PER FILE FOR AI EXTRACTION
+          PDF only · multiple files · up to {MAX_PDF_SIZE_MB} MB each for title-block reading
         </div>
       </div>
       <input ref={fileInputRef} type="file" accept=".pdf" multiple style={{ display: "none" }}
@@ -61,10 +61,10 @@ export default function FileDropStep({ files, setFiles, onBack, onUpload, setNam
                 display: "flex", alignItems: "center", gap: 10, padding: "9px 12px",
                 borderBottom: i < files.length - 1 ? "1px solid var(--divider)" : "none",
               }}>
-                <span style={{ fontSize: 14 }}>📄</span>
+                <FileText size={14} strokeWidth={1.75} aria-hidden="true" style={{ color: "var(--text-muted)", flexShrink: 0 }} />
                 <span style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
                 {tooBig && (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 4, padding: "1px 5px" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", border: "1px solid rgba(217,154,43,0.3)", borderRadius: 4, padding: "1px 5px" }}>
                     ⚠ TOO LARGE — MANUAL
                   </span>
                 )}

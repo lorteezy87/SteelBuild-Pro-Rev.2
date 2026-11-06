@@ -220,7 +220,7 @@ export default function EmailAccountSettings({ projectId }) {
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10 }}>
                 <button onClick={() => setShowAddForm(false)} style={secondaryBtnStyle}>Cancel</button>
                 <button onClick={handleAdd} disabled={createMut.isPending} style={primaryBtnStyle}>
-                  {createMut.isPending ? "Adding..." : "Add Account"}
+                  {createMut.isPending ? "Adding…" : "Add Account"}
                 </button>
               </div>
             </>
@@ -306,7 +306,7 @@ export default function EmailAccountSettings({ projectId }) {
                   disabled={createMut.isPending}
                   style={primaryBtnStyle}
                 >
-                  {createMut.isPending ? "Adding..." : "Add Account"}
+                  {createMut.isPending ? "Adding…" : "Add Account"}
                 </button>
               </div>
             </>

@@ -87,7 +87,7 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
         className="sbd-input"
         value={search}
         onChange={e => setSearch(e.target.value)}
-        placeholder="Search sheets, titles, reviewers..."
+        placeholder="Search sheets, titles, reviewers…"
         style={{
           flex: 1, minWidth: 200, padding: "7px 12px",
           background: "var(--bg-surface)", border: "1px solid var(--border-default)",
@@ -118,8 +118,8 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
         style={{
           ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
           padding: "6px 12px", borderRadius: "var(--radius-btn)", cursor: "pointer",
-          background: stageFilter === "Released" ? "rgba(16,185,129,0.15)" : "none",
-          border: `1px solid ${stageFilter === "Released" ? "rgba(16,185,129,0.35)" : "var(--border-default)"}`,
+          background: stageFilter === "Released" ? "rgba(47,143,106,0.15)" : "none",
+          border: `1px solid ${stageFilter === "Released" ? "rgba(47,143,106,0.35)" : "var(--border-default)"}`,
           color: stageFilter === "Released" ? "var(--status-success)" : "var(--text-muted)",
           transition: "all 0.15s",
         }}

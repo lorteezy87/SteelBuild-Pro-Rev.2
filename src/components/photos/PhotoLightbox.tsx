@@ -548,7 +548,7 @@ function panelButtonStyle({
         ? "1px solid var(--accent)"
         : "1px solid var(--border-default)",
     background: destructive
-      ? "rgba(239,68,68,0.12)"
+      ? "rgba(210,69,47,0.12)"
       : primary
         ? "var(--accent)"
         : "var(--bg-surface)",

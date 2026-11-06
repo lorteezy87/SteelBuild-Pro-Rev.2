@@ -85,12 +85,12 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
   );
 
   const aiBadge = (filled) => filled ? (
-    <span title="Auto-filled by AI — edit if wrong" style={{
-      fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.1em",
+    <span title="Read from the title block — edit if wrong" style={{
+      fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 500,
       padding: "1px 4px", borderRadius: 3, marginLeft: 6,
       background: "var(--success-muted)", color: "var(--status-success)",
-      border: "1px solid rgba(132,204,22,0.3)", verticalAlign: "middle",
-    }}>✦ AI</span>
+      border: "1px solid var(--success-border)", verticalAlign: "middle",
+    }}>Auto-filled</span>
   ) : null;
 
   const metaFieldStyle = {
@@ -127,9 +127,9 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
         <div style={{
           display: "flex", alignItems: "center", gap: 6, marginBottom: 8,
           fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em",
-          color: anyAiFilled ? "#84CC16" : "var(--text-muted)", textTransform: "uppercase", fontWeight: 700,
+          color: anyAiFilled ? "var(--status-success)" : "var(--text-muted)", textTransform: "uppercase", fontWeight: 700,
         }}>
-          {anyAiFilled ? "✦ AI-DETECTED SET METADATA" : "SET METADATA"}
+          {anyAiFilled ? "Set details — read from title blocks" : "Set details"}
           <span style={{ fontWeight: 400, color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "none" }}>
             — verify before creating
           </span>
@@ -225,7 +225,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
         <button onClick={() => toggleAll(true)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", background: "none", border: "1px solid var(--warning-border)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☑ ALL</button>
         <button onClick={() => toggleAll(false)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", background: "none", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☐ NONE</button>
-        <input placeholder="Search sheets..." value={search} onChange={e => setSearch(e.target.value)}
+        <input placeholder="Search sheets…" value={search} onChange={e => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: 100, background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 10px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12 }} />
         <select value={discFilter} onChange={e => setDiscFilter(e.target.value)}
           style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
@@ -270,7 +270,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <input value={s.sheetNumber || ""} onChange={e => updateSheet(i, "sheetNumber", e.target.value)}
                       style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, width: 76 }}
-                      onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
+                      onFocus={e => e.target.style.borderColor = "rgba(217,154,43,0.4)"}
                       onBlur={e => e.target.style.borderColor = "transparent"} />
                     {s.sheetNumber && existingDrawings.some(d => d.sheet_number === s.sheetNumber) && (
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
@@ -288,7 +288,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
                 <td style={{ padding: "6px 10px" }}>
                   <input value={s.sheetTitle || ""} onChange={e => updateSheet(i, "sheetTitle", e.target.value)}
                     style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, width: "100%", minWidth: 140 }}
-                    onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
+                    onFocus={e => e.target.style.borderColor = "rgba(217,154,43,0.4)"}
                     onBlur={e => e.target.style.borderColor = "transparent"} />
                 </td>
                 <td style={{ padding: "6px 10px" }}>
@@ -300,7 +300,7 @@ export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMe
                 <td style={{ padding: "6px 10px" }}>
                   <input value={s.revision || "0"} onChange={e => updateSheet(i, "revision", e.target.value)}
                     style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, width: 36 }}
-                    onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
+                    onFocus={e => e.target.style.borderColor = "rgba(217,154,43,0.4)"}
                     onBlur={e => e.target.style.borderColor = "transparent"} />
                 </td>
                 {multiFile && (

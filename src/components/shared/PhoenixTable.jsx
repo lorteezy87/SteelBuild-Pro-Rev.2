@@ -22,7 +22,7 @@ export default function PhoenixTable({ columns, children, loading, empty, colSpa
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={colSpan || columns.length} style={{ textAlign: "center", padding: "40px 0", fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.30)", letterSpacing: "0.1em" }}>LOADING...</td></tr>
+            <tr><td colSpan={colSpan || columns.length} style={{ textAlign: "center", padding: "40px 0", fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.30)", letterSpacing: "0.1em" }}>LOADING…</td></tr>
           ) : !children || (Array.isArray(children) && children.length === 0) ? (
             <tr><td colSpan={colSpan || columns.length} style={{ textAlign: "center", padding: "40px 0", fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.25)", letterSpacing: "0.1em" }}>{empty || "NO DATA"}</td></tr>
           ) : children}

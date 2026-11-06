@@ -23,9 +23,9 @@ export function ReadinessRing({ pct, label, drivers = [], dragInfo = null }) {
   const safe = hasData ? Math.max(0, Math.min(100, pct)) : 0;
   const color =
     !hasData ? "#94A3B8" :
-    safe >= 80 ? "#22C55E" :
-    safe >= 50 ? "#F59E0B" :
-                 "#EF4444";
+    safe >= 80 ? "#3A9A63" :
+    safe >= 50 ? "#D99A2B" :
+                 "#D2452F";
   // V3.1: dragInfo enriches the tooltip with a "Drag from N upstream
   // zones: …" line and the top contributors. dragInfo.drag is a number
   // in [0,1]; contributors is a sorted array from computeDependencyImpact.
@@ -106,7 +106,7 @@ export function ReadinessRing({ pct, label, drivers = [], dragInfo = null }) {
         {dragInfo && dragInfo.drag > 0 && (
           <ArrowDown
             size={10}
-            color="#EF4444"
+            color="#D2452F"
             aria-label="Dragged down by upstream zones"
           />
         )}

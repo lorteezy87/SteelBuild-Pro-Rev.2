@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { searchResultHref } from "./searchResultHref";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
-import { Search } from "lucide-react";
+import { CircleDollarSign, FileText, FolderKanban, LayoutGrid, MessageSquareWarning, Package, Search, UserRound } from "lucide-react";
+import { getPageIcon } from "@/config/pageIcons";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 
 // Stable empty array — prevents infinite re-render loops from useCallback/useEffect
@@ -12,38 +13,38 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 const EMPTY = [];
 
 const ICON_MAP = {
-  Project: "▤",
-  RFI: "⚑",
-  Drawing: "▦",
-  WorkPackage: "☰",
-  ChangeOrder: "$",
-  Contact: "👤",
-  Module: "◈",
+  Project: FolderKanban,
+  RFI: MessageSquareWarning,
+  Drawing: FileText,
+  WorkPackage: Package,
+  ChangeOrder: CircleDollarSign,
+  Contact: UserRound,
+  Module: LayoutGrid,
 };
 
 const COLOR_MAP = {
   Project: "var(--accent)",
   RFI: "var(--status-warning-bright)",
-  Drawing: "#0EA5E9",
+  Drawing: "var(--status-info)",
   WorkPackage: "var(--status-review)",
   ChangeOrder: "var(--status-review)",
-  Contact: "#0D9488",
+  Contact: "var(--phase-delivery)",
   Module: "var(--accent)",
 };
 
 /* ── Quick-nav modules for empty-query state ────────────────────────────── */
 const QUICK_NAV = [
-  { icon: "◈", name: "Dashboard",    page: "Dashboard",               group: "Navigate" },
-  { icon: "⚑", name: "RFI Hub",      page: "RFIs",                    group: "Navigate" },
-  { icon: "▦", name: "Detailing",    page: "DrawingSubmittalHub",     group: "Navigate" },
-  { icon: "☰", name: "Work Packages",page: "WorkPackages",            group: "Navigate" },
-  { icon: "📦", name: "Deliveries",  page: "Deliveries",              group: "Navigate" },
-  { icon: "◎", name: "Budget Control",   page: "CostHub",              group: "Navigate" },
-  { icon: "▣", name: "Piece Register", page: "PieceRegister",         group: "Navigate" },
-  { icon: "📑", name: "Contracts",   page: "ContractManagement",      group: "Navigate" },
-  { icon: "$", name: "Change Orders", page: "ChangeOrders",            group: "Navigate" },
-  { icon: "📁", name: "Documents",   page: "Documents",               group: "Navigate" },
-  { icon: "✨", name: "Portfolio",              page: "PortfolioHub",              group: "Navigate" },
+  { name: "Dashboard",    page: "Dashboard",               group: "Navigate" },
+  { name: "RFI Hub",      page: "RFIs",                    group: "Navigate" },
+  { name: "Detailing",    page: "DrawingSubmittalHub",     group: "Navigate" },
+  { name: "Work Packages",page: "WorkPackages",            group: "Navigate" },
+  { name: "Deliveries",  page: "Deliveries",              group: "Navigate" },
+  { name: "Budget Control",   page: "CostHub",              group: "Navigate" },
+  { name: "Piece Register", page: "PieceRegister",         group: "Navigate" },
+  { name: "Contracts",   page: "ContractManagement",      group: "Navigate" },
+  { name: "Change Orders", page: "ChangeOrders",            group: "Navigate" },
+  { name: "Documents",   page: "Documents",               group: "Navigate" },
+  { name: "Portfolio",              page: "PortfolioHub",              group: "Navigate" },
 ];
 
 const SCOPE_OPTIONS = [
@@ -245,7 +246,6 @@ export default function GlobalSearchModal({ open, onClose }) {
       title: m.name,
       subtitle: m.group,
       page: m.page,
-      icon: m.icon,
     }));
   }, [results, filteredModules]);
 
@@ -336,7 +336,7 @@ export default function GlobalSearchModal({ open, onClose }) {
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           zIndex: 1001,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(59,130,246,0.08)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(63,111,181,0.08)",
           animation: "slideUp 0.2s ease",
           overflow: "hidden",
         }}
@@ -516,7 +516,7 @@ export default function GlobalSearchModal({ open, onClose }) {
                   alignItems: "center",
                   gap: 12,
                   cursor: "pointer",
-                  background: isSelected ? "rgba(59,130,246,0.08)" : "transparent",
+                  background: isSelected ? "rgba(63,111,181,0.08)" : "transparent",
                   borderLeft: isSelected ? "2px solid var(--accent)" : "2px solid transparent",
                   transition: "all 0.1s",
                   minHeight: 44,
@@ -531,7 +531,10 @@ export default function GlobalSearchModal({ open, onClose }) {
                   width: 24,
                   textAlign: "center",
                 }}>
-                  {item.icon || ICON_MAP[item.type]}
+                  {(() => {
+                    const Icon = item.type === "Module" && item.page ? getPageIcon(item.page) : (ICON_MAP[item.type] || Search);
+                    return <Icon size={16} strokeWidth={1.75} aria-hidden="true" style={{ display: "block", margin: "0 auto" }} />;
+                  })()}
                 </span>
 
                 {/* Content */}

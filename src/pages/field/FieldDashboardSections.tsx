@@ -1,15 +1,5 @@
 import type { ComponentType, CSSProperties, ReactNode } from "react";
-import {
-  AlertOctagon,
-  ArrowRight,
-  CalendarDays,
-  Camera,
-  Cloud,
-  ClipboardList,
-  ListChecks,
-  Users,
-  type LucideProps,
-} from "lucide-react";
+import { AlertOctagon, ArrowRight, CalendarDays, Camera, ClipboardList, Cloud, ListChecks, Users, type LucideProps } from "lucide-react";
 import type {
   DailyLogRecord,
   FieldActionItem,
@@ -576,7 +566,7 @@ function DailyLogPreview({
             color: "var(--accent)",
           }}
         >
-          📷 {photos.length} photo{photos.length === 1 ? "" : "s"}
+          <Camera size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{photos.length} photo{photos.length === 1 ? "" : "s"}
         </div>
       )}
     </div>
@@ -699,7 +689,7 @@ function LogFeedRow({
             color: "var(--accent)",
           }}
         >
-          📷 {photoCount}
+          <Camera size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{photoCount}
         </span>
       )}
     </div>

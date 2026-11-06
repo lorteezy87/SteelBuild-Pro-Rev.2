@@ -140,12 +140,12 @@ const KIND_CONFIG = {
 
 // Leading glyph per gate-reason kind for the "not ready for fab" panel.
 const GATE_REASON_ICON = {
-  open_rfis: "❓",
+  open_rfis: "?",
   rejected_sheets: "⊘",
   revision_conflict: "⟳",
   unresolved_revision: "◎",
   not_ifc_ready: "⊘",
-  missing_signoffs: "✍",
+  missing_signoffs: "✎",
 };
 
 export default function ExportFabReleaseModal({

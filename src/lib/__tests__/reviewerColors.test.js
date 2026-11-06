@@ -9,25 +9,25 @@ import {
 
 describe("reviewerColors", () => {
   it("maps the trade roles named in the spec", () => {
-    expect(getReviewerColor("EOR")).toBe("#3b82f6");
-    expect(getReviewerColor("GC")).toBe("#10b981");
-    expect(getReviewerColor("Architect")).toBe("#a855f7");
-    expect(getReviewerColor("Owner")).toBe("#f97316");
-    expect(getReviewerColor("Detailer")).toBe("#f59e0b");
-    expect(getReviewerColor("Fabricator")).toBe("#f59e0b");
+    expect(getReviewerColor("EOR")).toBe("#3f6fb5");
+    expect(getReviewerColor("GC")).toBe("#2f8f6a");
+    expect(getReviewerColor("Architect")).toBe("#7a5ba6");
+    expect(getReviewerColor("Owner")).toBe("#cc4e17");
+    expect(getReviewerColor("Detailer")).toBe("#d99a2b");
+    expect(getReviewerColor("Fabricator")).toBe("#d99a2b");
   });
 
   it("maps app-permission roles too (useAppSecurity output)", () => {
-    expect(getReviewerColor("admin")).toBe("#a855f7");
-    expect(getReviewerColor("pm")).toBe("#3b82f6");
-    expect(getReviewerColor("field")).toBe("#10b981");
+    expect(getReviewerColor("admin")).toBe("#7a5ba6");
+    expect(getReviewerColor("pm")).toBe("#3f6fb5");
+    expect(getReviewerColor("field")).toBe("#2f8f6a");
     expect(getReviewerColor("viewer")).toBe("#6b7280");
   });
 
   it("matches case-insensitively", () => {
-    expect(getReviewerColor("eor")).toBe("#3b82f6");
-    expect(getReviewerColor("ARCHITECT")).toBe("#a855f7");
-    expect(getReviewerColor("Pm")).toBe("#3b82f6");
+    expect(getReviewerColor("eor")).toBe("#3f6fb5");
+    expect(getReviewerColor("ARCHITECT")).toBe("#7a5ba6");
+    expect(getReviewerColor("Pm")).toBe("#3f6fb5");
   });
 
   it("falls back to grey for unknown / null / non-string input", () => {
@@ -41,7 +41,7 @@ describe("reviewerColors", () => {
   it("inferReviewerColor returns the same fallback when no label", () => {
     expect(inferReviewerColor()).toBe(REVIEWER_COLOR_FALLBACK);
     expect(inferReviewerColor({})).toBe(REVIEWER_COLOR_FALLBACK);
-    expect(inferReviewerColor({ roleLabel: "EOR" })).toBe("#3b82f6");
+    expect(inferReviewerColor({ roleLabel: "EOR" })).toBe("#3f6fb5");
   });
 
   it("exposes a stable, frozen color map", () => {

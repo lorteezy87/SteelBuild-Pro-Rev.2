@@ -128,7 +128,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
       footer={<>
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button variant="primary" onClick={handleSubmit} disabled={mutation.isPending}>
-          {mutation.isPending ? "Saving..." : editing ? "Save" : "Add Resource"}
+          {mutation.isPending ? "Saving…" : editing ? "Save" : "Add Resource"}
         </Button>
       </>}
     >
@@ -136,7 +136,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
         <div>
           <label style={labelStyle}>Project</label>
           <select value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })} style={inputStyle} required>
-            <option value="">Select project...</option>
+            <option value="">Select project…</option>
             {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
           </select>
         </div>

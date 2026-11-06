@@ -13,9 +13,9 @@ import { fetchThreadComments } from "./commentQueries";
 const COMMENT_STATUS_ORDER = ["open", "addressed", "rejected", "clarification"];
 const COMMENT_STATUS_COLOR = {
   open:          "#9ca3af",
-  addressed:     "#10b981",
-  rejected:      "#ef4444",
-  clarification: "#f59e0b",
+  addressed:     "#2f8f6a",
+  rejected:      "#d2452f",
+  clarification: "#d99a2b",
 };
 const COMMENT_STATUS_LABEL = {
   open:          "OPEN",

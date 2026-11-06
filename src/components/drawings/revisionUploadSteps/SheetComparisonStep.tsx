@@ -134,7 +134,7 @@ export default function StepSheetComparison(props: any) {
                     value={m.newSheet.sheetTitle || ""}
                     onChange={e => updateTitle(i, e.target.value)}
                     style={{ background: "transparent", border: "1px solid transparent", borderRadius: 3, padding: "1px 4px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 10, width: "100%" }}
-                    onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
+                    onFocus={e => e.target.style.borderColor = "rgba(217,154,43,0.4)"}
                     onBlur={e => e.target.style.borderColor = "transparent"}
                   />
                 ) : (

@@ -65,7 +65,7 @@ describe("DataExchange page integration", () => {
       expect(mocks.filter).toHaveBeenCalledWith({ project_id: "project-1" }, "-created_at");
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Paste CSV or TSV rows here..."), {
+    fireEvent.change(screen.getByPlaceholderText("Paste CSV or TSV rows here…"), {
       target: { value: "RFI #,Title\n7,Column base plate conflict" },
     });
     fireEvent.click(screen.getByRole("checkbox"));
@@ -114,13 +114,13 @@ describe("DataExchange page integration", () => {
     const approval = screen.getByRole("checkbox");
     fireEvent.click(approval);
     expect(approval).toBeChecked();
-    expect(screen.getByPlaceholderText("Paste CSV or TSV rows here...")).not.toHaveValue("");
+    expect(screen.getByPlaceholderText("Paste CSV or TSV rows here…")).not.toHaveValue("");
 
     fireEvent.change(screen.getByLabelText("Dataset"), {
       target: { value: "scheduleTasks" },
     });
 
-    expect(screen.getByPlaceholderText("Paste CSV or TSV rows here...")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Paste CSV or TSV rows here…")).toHaveValue("");
     expect(approval).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Commit 0 rows" })).toBeDisabled();
   });

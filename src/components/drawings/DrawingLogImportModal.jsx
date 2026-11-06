@@ -26,7 +26,7 @@ import { parseDrawingLog, classifyDrawingRows } from "@/lib/importDrawingLog";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "var(--font-display)" };
-const ACCENT = "var(--accent, #3B82F6)";
+const ACCENT = "var(--accent, #3F6FB5)";
 
 const isUniqueViolation = (e) => {
   const m = String(e?.message || e || "").toLowerCase();

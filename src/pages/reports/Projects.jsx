@@ -167,7 +167,7 @@ export default function Projects() {
       })}
       filters={
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search projects, numbers, or clients..." />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search projects, numbers, or clients…" />
           <SelectFilter
             label="Phase"
             value={phaseFilter}

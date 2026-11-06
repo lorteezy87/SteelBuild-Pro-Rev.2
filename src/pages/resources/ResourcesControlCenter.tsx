@@ -54,11 +54,11 @@ function availabilityTone(av: string): KpiTone {
 /** Small inline utilization bar — no SVG ring needed, simpler to maintain. */
 function UtilBar({ pct, tone }: { pct: number; tone: KpiTone }) {
   const colors: Record<KpiTone, string> = {
-    good: "#22c55e",
-    warn: "#f59e0b",
-    danger: "#ef4444",
+    good: "#3a9a63",
+    warn: "#d99a2b",
+    danger: "#d2452f",
     neutral: "#6b7280",
-    info: "#3b82f6",
+    info: "#3f6fb5",
   };
   const color = colors[tone] ?? colors.neutral;
   return (

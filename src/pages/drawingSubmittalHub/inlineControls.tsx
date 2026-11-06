@@ -71,7 +71,7 @@ export function InlineOwnerControl({ currentOwner, onAssign, disabled, label = "
           }}
           title={`Click to assign ${label.toLowerCase()}`}
         >
-          {isUnassigned ? "Assign..." : currentOwner}
+          {isUnassigned ? "Assign…" : currentOwner}
         </button>
       ) : (
         <select
@@ -99,7 +99,7 @@ export function InlineOwnerControl({ currentOwner, onAssign, disabled, label = "
             cursor: "pointer",
           }}
         >
-          <option value="" disabled>Select owner...</option>
+          <option value="" disabled>Select owner…</option>
           {BIC_CHOICES.map((choice) => (
             <option key={choice} value={choice}>{choice}</option>
           ))}
@@ -181,7 +181,7 @@ export function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled 
           }}
           title="Click to set due date"
         >
-          {hasDate ? fmtDate(currentDate) : "Set date..."}
+          {hasDate ? fmtDate(currentDate) : "Set date…"}
         </button>
       ) : (
         <input

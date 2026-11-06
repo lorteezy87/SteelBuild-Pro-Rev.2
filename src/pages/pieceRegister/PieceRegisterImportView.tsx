@@ -201,7 +201,7 @@ export function PieceRegisterImportView(props: PieceRegisterImportViewProps) {
             onClick={onStage}
             className="cmd-btn cmd-btn--primary piece-import-stage-action"
           >
-            {stagePending ? "Reconciling..." : "Stage for review"}
+            {stagePending ? "Reconciling…" : "Stage for review"}
           </button>
         </div>
       </DecisionPanel>

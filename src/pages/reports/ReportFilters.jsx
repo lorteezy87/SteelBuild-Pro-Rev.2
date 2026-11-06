@@ -29,7 +29,7 @@ export function FilterBar({ children }) {
   );
 }
 
-export function SearchInput({ value, onChange, placeholder = "Search..." }) {
+export function SearchInput({ value, onChange, placeholder = "Search…" }) {
   return (
     <input
       value={value}

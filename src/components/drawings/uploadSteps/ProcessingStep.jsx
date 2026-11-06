@@ -1,5 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 
 // ─── Step 3: Processing UI ────────────────────────────────────────────
 //
@@ -70,9 +71,9 @@ export default function ProcessingStep({ processingStatus, onCancel, error, file
   return (
     <div style={{ padding: "20px 0" }}>
       <div style={{ textAlign: "center", marginBottom: 24 }}>
-        <div style={{ fontSize: 36, marginBottom: 10 }}>✦</div>
+        <Loader2 size={26} strokeWidth={1.5} aria-hidden="true" className="animate-spin" style={{ color: "var(--accent)", marginBottom: 12 }} />
         <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
-          Processing Drawing Set
+          Reading drawing set
         </div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>{message}</div>
       </div>
@@ -96,7 +97,7 @@ export default function ProcessingStep({ processingStatus, onCancel, error, file
               display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px",
               borderRadius: 6,
               background: isActive ? "var(--warning-muted)" : isDone ? "rgba(0,214,143,0.04)" : "transparent",
-              border: `1px solid ${isActive ? "rgba(245,158,11,0.2)" : isDone ? "rgba(0,214,143,0.12)" : "var(--hover-bg)"}`,
+              border: `1px solid ${isActive ? "rgba(217,154,43,0.2)" : isDone ? "rgba(0,214,143,0.12)" : "var(--hover-bg)"}`,
               transition: "all 0.2s",
             }}>
               <span style={{

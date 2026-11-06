@@ -324,7 +324,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                   </div>
                 ) : (
                   <select value={formData.project_id} onChange={(e) => set("project_id", e.target.value)} style={inputStyle} required>
-                    <option value="">Select project...</option>
+                    <option value="">Select project…</option>
                     {projects.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
@@ -376,7 +376,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               </div>
               <div>
                 <label style={labelStyle}>Procurement Category</label>
-                <input type="text" value={formData.procurement_category} onChange={(e) => set("procurement_category", e.target.value)} style={inputStyle} placeholder="Steel, Joists, Misc Metals..." />
+                <input type="text" value={formData.procurement_category} onChange={(e) => set("procurement_category", e.target.value)} style={inputStyle} placeholder="Steel, Joists, Misc Metals…" />
               </div>
             </div>
 
@@ -499,7 +499,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                   value={formData.special_instructions || ""}
                   onChange={(e) => set("special_instructions", e.target.value)}
                   style={{ ...inputStyle, minHeight: 60, resize: "vertical" }}
-                  placeholder="Crane required, escort, laydown constraints..."
+                  placeholder="Crane required, escort, laydown constraints…"
                 />
               </div>
             </div>
@@ -595,7 +595,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               opacity: mutation.isPending ? 0.6 : 1,
             }}
           >
-            {mutation.isPending ? (isEdit ? "Saving..." : "Creating...") : createDraft.recoveryPending ? "Recover saved delivery" : isEdit ? "Save Changes" : "Create Delivery"}
+            {mutation.isPending ? (isEdit ? "Saving…" : "Creating…") : createDraft.recoveryPending ? "Recover saved delivery" : isEdit ? "Save Changes" : "Create Delivery"}
           </button>
         </div>
       </div>

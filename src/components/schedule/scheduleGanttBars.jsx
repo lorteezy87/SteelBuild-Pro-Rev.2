@@ -28,6 +28,7 @@ import {
   sanitizeTaskName,
   statusColor,
 } from "./scheduleTaskUtils";
+import { FolderOpen, Truck } from "lucide-react";
 
 const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
@@ -484,9 +485,9 @@ export function SubmittalBar({ submittal, leftPx, widthPx }) {
       background: c.bg, border: `1.5px dashed ${isLate ? GANTT_STATUS_HEX.delayed : c.border}`,
       borderRadius: 3, display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden", gap: 4,
     }}
-    title={`📂 ${submittal.display_name || submittal.file_name}${isLate ? " — OVERDUE" : ""}`}
+    title={`Submittal: ${submittal.display_name || submittal.file_name}${isLate ? " — OVERDUE" : ""}`}
     >
-      <span style={{ fontSize: 9, flexShrink: 0 }}>📂</span>
+      <FolderOpen size={10} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
       <span style={{ fontSize: 8, fontWeight: 600, color: isLate ? GANTT_STATUS_HEX.delayed : c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {submittal.display_name || submittal.file_name}
       </span>
@@ -514,9 +515,9 @@ export function DeliveryBar({ delivery, leftPx, widthPx }) {
       background: c.bg, border: `1.5px solid ${isLate ? GANTT_STATUS_HEX.delayed : c.border}`,
       borderRadius: 3, display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden", gap: 4,
     }}
-    title={`🚛 ${label} · ${delivery.vendor || "—"} · ${delivery.pieces || 0}pc ${delivery.weight_tons || 0}T${isLate ? " — OVERDUE" : ""}`}
+    title={`Delivery: ${label} · ${delivery.vendor || "—"} · ${delivery.pieces || 0}pc ${delivery.weight_tons || 0}T${isLate ? " — OVERDUE" : ""}`}
     >
-      <span style={{ fontSize: 9, flexShrink: 0 }}>🚛</span>
+      <Truck size={10} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
       <span style={{ fontSize: 8, fontWeight: 600, color: isLate ? GANTT_STATUS_HEX.delayed : c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {label}
       </span>

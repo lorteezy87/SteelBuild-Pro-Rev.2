@@ -35,12 +35,12 @@ export const DETAILING_STAGE_GATES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Releas
 // Labels + colors for each gate — pulled into both the drawer form
 // and the Gantt cell so the visual language stays consistent.
 export const DETAILING_STAGE_META = {
-  IFA:      { label: "IFA",      caption: "In For Approval",            color: "#60A5FA" },
+  IFA:      { label: "IFA",      caption: "In For Approval",            color: "#6F9AD6" },
   OFA:      { label: "OFA",      caption: "Out For Approval",           color: "#0EA5E9" },
-  BFA:      { label: "BFA",      caption: "Back From Approval",         color: "#F59E0B" },
-  OFS:      { label: "OFS",      caption: "Out For Scrub",              color: "#F97316" },
+  BFA:      { label: "BFA",      caption: "Back From Approval",         color: "#D99A2B" },
+  OFS:      { label: "OFS",      caption: "Out For Scrub",              color: "#CC4E17" },
   IFC:      { label: "IFC",      caption: "Issued For Construction",    color: "#0d9488" },
-  Released: { label: "Released", caption: "Released for Fabrication",   color: "#22C55E" },
+  Released: { label: "Released", caption: "Released for Fabrication",   color: "#3A9A63" },
 };
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

@@ -340,8 +340,8 @@ export function buildRevisionAlerts(drawings, rfiMap) {
       detail: `${unacknowledged.map(d => d.sheet_number).slice(0, 5).join(", ")}${unacknowledged.length > 5 ? ` +${unacknowledged.length - 5} more` : ""} — revised but not yet reviewed/approved`,
       sheets: unacknowledged,
       color: "var(--status-warning)",
-      bg: "rgba(245,158,11,0.08)",
-      border: "rgba(245,158,11,0.25)",
+      bg: "rgba(217,154,43,0.08)",
+      border: "rgba(217,154,43,0.25)",
     });
   }
 
@@ -353,13 +353,13 @@ export function buildRevisionAlerts(drawings, rfiMap) {
   if (superseded.length > 0) {
     alerts.push({
       type: "danger",
-      icon: "⛔",
+      icon: "⊘",
       title: `${superseded.length} Superseded Drawing${superseded.length !== 1 ? "s" : ""} Still Active`,
       detail: `${superseded.map(d => d.sheet_number).slice(0, 5).join(", ")}${superseded.length > 5 ? ` +${superseded.length - 5} more` : ""} — marked superseded but not at IFC stage. Remove or replace.`,
       sheets: superseded,
       color: "var(--status-error)",
-      bg: "rgba(239,68,68,0.06)",
-      border: "rgba(239,68,68,0.25)",
+      bg: "rgba(210,69,47,0.06)",
+      border: "rgba(210,69,47,0.25)",
     });
   }
 
@@ -380,8 +380,8 @@ export function buildRevisionAlerts(drawings, rfiMap) {
       detail: `${withOpenRFIs.map(d => d.sheet_number).slice(0, 5).join(", ")}${withOpenRFIs.length > 5 ? ` +${withOpenRFIs.length - 5} more` : ""} — linked RFIs still unresolved`,
       sheets: withOpenRFIs,
       color: "var(--status-info)",
-      bg: "rgba(59,130,246,0.06)",
-      border: "rgba(59,130,246,0.25)",
+      bg: "rgba(63,111,181,0.06)",
+      border: "rgba(63,111,181,0.25)",
     });
   }
 
@@ -395,8 +395,8 @@ export function buildRevisionAlerts(drawings, rfiMap) {
       detail: `${rejected.map(d => d.sheet_number).slice(0, 5).join(", ")}${rejected.length > 5 ? ` +${rejected.length - 5} more` : ""}`,
       sheets: rejected,
       color: "var(--status-error)",
-      bg: "rgba(239,68,68,0.06)",
-      border: "rgba(239,68,68,0.25)",
+      bg: "rgba(210,69,47,0.06)",
+      border: "rgba(210,69,47,0.25)",
     });
   }
 

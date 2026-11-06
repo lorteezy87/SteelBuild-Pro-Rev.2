@@ -303,7 +303,7 @@ export default function ProjectStatus() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search by project name or number..."
+            placeholder="Search by project name or number…"
           />
           <SelectFilter
             label="Phase"

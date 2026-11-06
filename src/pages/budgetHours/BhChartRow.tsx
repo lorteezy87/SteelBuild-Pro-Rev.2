@@ -37,7 +37,7 @@ const EMPTY_STYLE: React.CSSProperties = {
 
 const PIE_COLORS: Record<string, string> = {
   Shop: "var(--accent)",
-  Field: "#3B82F6",
+  Field: "#3F6FB5",
 };
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ export default function BhChartRow({ barData, pieData }: BhChartRowProps) {
               <Legend verticalAlign="top" align="center" iconSize={8} height={24} wrapperStyle={{ ...LEGEND_STYLE, paddingBottom: 8 }} />
               <Bar dataKey="shopBudget" name="Shop Budget" fill="var(--accent)" radius={[3, 3, 0, 0]} />
               <Bar dataKey="shopActual" name="Shop Actual" fill="var(--accent-muted, #5ab0ff)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="fieldBudget" name="Field Budget" fill="#3B82F6" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="fieldBudget" name="Field Budget" fill="#3F6FB5" radius={[3, 3, 0, 0]} />
               <Bar dataKey="fieldActual" name="Field Actual" fill="#93C5FD" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

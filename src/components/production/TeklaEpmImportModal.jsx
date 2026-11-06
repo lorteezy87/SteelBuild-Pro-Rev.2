@@ -28,7 +28,7 @@ import { readFileText } from "@/lib/textDecoding";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "var(--font-display)" };
-const ACCENT = "var(--accent, #3B82F6)";
+const ACCENT = "var(--accent, #3F6FB5)";
 
 /**
  * Read and parse an uploaded Tekla EPM / FabSuite XML. Decodes by byte-order

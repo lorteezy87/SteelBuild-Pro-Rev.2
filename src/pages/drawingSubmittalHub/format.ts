@@ -56,12 +56,12 @@ export const PRIMARY_TAB_KEYS = ["overview", "drawings", "gc", "submittals"] as 
 // semantic submittal workflow hues — allowlisted for status identity in matrix chips.
 export const STATUS_COLORS: Record<string, string> = {
   Draft:                 "#64748b",
-  Submitted:             "#3b82f6",
+  Submitted:             "#3f6fb5",
   "Under Review":        "#0d9488",
-  Approved:              "#10b981",
-  "Approved as Noted":   "#84cc16",
-  "Revise and Resubmit": "#f59e0b",
-  Rejected:              "#ef4444",
+  Approved:              "#2f8f6a",
+  "Approved as Noted":   "#7fa33a",
+  "Revise and Resubmit": "#d99a2b",
+  Rejected:              "#d2452f",
   "Released for Fabrication": "#0ea5e9",
   Void:                  "#6b7280",
 };
@@ -874,8 +874,8 @@ const OPERATIONAL_STATE_COLORS: Record<string, string> = {
   "In Detailing":         "#64748b", // slate
   "Internal Review":      "#38bdf8", // sky
   "Ready to Submit":      "#818cf8", // indigo
-  "Partially Released":   "#10b981", // emerald
-  "Released for Erection":"#14b8a6", // teal
+  "Partially Released":   "#2f8f6a", // emerald
+  "Released for Erection":"#2e8f84", // teal
 };
 
 /**

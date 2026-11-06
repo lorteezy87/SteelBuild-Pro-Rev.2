@@ -163,7 +163,7 @@ describe("ContractManagement contract save", () => {
       contract_type: "GMP",
     });
     expect(screen.getByRole("spinbutton")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Saving..." })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
 
     resolveSave!({
       id: "project-1",

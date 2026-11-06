@@ -221,12 +221,12 @@ function ProjectCloseoutLessons({ closeout }) {
       </div>
 
       <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "16px" }}>
-        <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: "var(--status-info)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 12px 0" }}>💡 Recommendations</h3>
+        <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: "var(--status-info)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 12px 0" }}>Recommendations</h3>
         <p style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.6, margin: 0 }}>{closeout.recommendations || "No recommendations documented"}</p>
       </div>
 
       <div style={{ gridColumn: "1 / -1", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "16px" }}>
-        <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 12px 0" }}>📚 Lessons Learned</h3>
+        <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 12px 0" }}>Lessons learned</h3>
         <p style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{closeout.lessons_learned || "No lessons learned documented"}</p>
       </div>
     </div>

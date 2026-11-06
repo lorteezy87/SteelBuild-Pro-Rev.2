@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
+import { CalendarDays, Mail, Phone } from "lucide-react";
 
 const TYPE_COLORS = {
   Material: "var(--status-info)",
@@ -52,7 +53,7 @@ export default function WarrantyList({ warranties }) {
               </div>
 
               <div>
-                <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {formatLocalDate(warranty.start_date)}</div>
+                <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}><CalendarDays size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{formatLocalDate(warranty.start_date)}</div>
                 <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>Expires: {expDate.toLocaleDateString()}</div>
                 <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "2px" }}>{warranty.vendor_name}</div>
               </div>
@@ -82,8 +83,8 @@ export default function WarrantyList({ warranties }) {
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Vendor Contact</div>
                     <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
                       {warranty.vendor_contact && <div>{warranty.vendor_contact}</div>}
-                      {warranty.vendor_phone && <div>📞 {warranty.vendor_phone}</div>}
-                      {warranty.vendor_email && <div>📧 {warranty.vendor_email}</div>}
+                      {warranty.vendor_phone && <div><Phone size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{warranty.vendor_phone}</div>}
+                      {warranty.vendor_email && <div><Mail size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4, flexShrink: 0 }} />{warranty.vendor_email}</div>}
                     </div>
                   </div>
                   <div>

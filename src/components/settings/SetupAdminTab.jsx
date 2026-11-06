@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { isHiddenOnNative } from "@/config/moduleRegistry";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
+import { getPageIcon } from "@/config/pageIcons";
 
 /**
  * SetupAdminTab — the "Setup & Admin" panel in Settings. Surfaces the
@@ -47,7 +48,7 @@ export default function SetupAdminTab({ isAdmin = false }) {
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "var(--bg-surface-low)"; }}
           >
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 16 }} aria-hidden="true">{i.icon}</span>
+              {(() => { const Icon = getPageIcon(i.page); return <Icon size={16} strokeWidth={1.75} aria-hidden="true" style={{ color: "var(--text-muted)", flexShrink: 0 }} />; })()}
               <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{i.label}</span>
               {i.adminOnly && (
                 <span style={{

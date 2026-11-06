@@ -12,7 +12,7 @@ import {
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "var(--font-display)" };
-const AI      = "var(--ai-accent, #22D3EE)";
+const AI      = "var(--ai-accent, #4FA9BA)";
 
 /**
  * Multi-file shipping ticket import wizard:

@@ -163,7 +163,7 @@ describe("SOV financial workspace and draft boundary", () => {
     const remove = deferred<object>(); mocks.remove.mockReturnValueOnce(remove.promise); mount();
     fireEvent.click(await screen.findByRole("button", { name: "Edit a-line" })); fireEvent.click(screen.getByRole("button", { name: "Delete line" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(await screen.findByRole("button", { name: "Deleting..." })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Deleting…" })).toBeDisabled();
     await act(async () => { remove.reject(new Error("Denied")); });
     expect(screen.getByRole("alertdialog")).toBeTruthy(); fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());

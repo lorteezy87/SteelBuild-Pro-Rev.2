@@ -49,17 +49,17 @@
   --sbd-gold-light:      #E0B030;
 
   /* Status */
-  --sbd-success:         #34D399;
+  --sbd-success:         #4DB384;
   --sbd-warning:         #E0B030;
-  --sbd-error:           #F87171;
-  --sbd-info:            #60A5FA;
+  --sbd-error:           #E0705C;
+  --sbd-info:            #6F9AD6;
   --sbd-review:          #FB923C;
 
   /* Phase palette (gantt / pipeline) */
   --sbd-phase-detailing:   #E0B030;
-  --sbd-phase-fabrication: #60A5FA;
+  --sbd-phase-fabrication: #6F9AD6;
   --sbd-phase-delivery:    #2DD4BF;
-  --sbd-phase-erection:    #34D399;
+  --sbd-phase-erection:    #4DB384;
 
   /* Gantt surfaces and lockstep phase palette (app-specific; preserved
      across theme handoffs — the Gantt/Schedule views read these and they
@@ -79,10 +79,10 @@
   --sbd-gantt-today-soft:      rgba(255, 107, 0, 0.14);
   --sbd-gantt-preconstruction: #64748B;
   --sbd-gantt-detailing:       #2EA8FF;
-  --sbd-gantt-procurement:     #F59E0B;
-  --sbd-gantt-fabrication:     #D97706;
-  --sbd-gantt-delivery:        #34D399;
-  --sbd-gantt-installation:    #22D3EE;
+  --sbd-gantt-procurement:     #D99A2B;
+  --sbd-gantt-fabrication:     #B8741A;
+  --sbd-gantt-delivery:        #4DB384;
+  --sbd-gantt-installation:    #4FA9BA;
   --sbd-gantt-closeout:        #64748B;
 
   /* Text */
@@ -275,14 +275,14 @@
   border-color: rgba(255,255,255,0.16);
 }
 .steelbuild-dark .sbd-btn-primary {
-  background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+  background: linear-gradient(135deg, #6F9AD6 0%, #3F6FB5 100%);
   border-color: rgba(96,165,250,0.55);
   color: #061018;
   font-weight: 600;
   box-shadow: 0 6px 20px rgba(96,165,250,0.30), inset 0 1px 0 rgba(255,255,255,0.25);
 }
 .steelbuild-dark .sbd-btn-primary:hover {
-  background: linear-gradient(135deg, #93C5FD 0%, #60A5FA 100%);
+  background: linear-gradient(135deg, #93C5FD 0%, #6F9AD6 100%);
   box-shadow: 0 10px 28px rgba(96,165,250,0.45), inset 0 1px 0 rgba(255,255,255,0.30);
 }
 .steelbuild-dark .sbd-btn-ghost {

@@ -88,7 +88,7 @@ export default function AlertsCenter() {
           onMouseLeave={(e) => !generating && (e.currentTarget.style.background = "var(--accent)")}
         >
           {generating
-            ? <><Loader2 className="w-3 h-3 animate-spin" /> Refreshing...</>
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> Refreshing…</>
             : <><RefreshCw className="w-3 h-3" /> Refresh</>}
         </button>
       </CommandBar>

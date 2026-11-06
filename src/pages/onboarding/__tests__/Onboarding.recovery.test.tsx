@@ -71,9 +71,9 @@ it("shares the original in-flight project request after the setup view remounts"
   render(page());
   fireEvent.click(screen.getByRole("button", { name: /Load demo setup/i }));
   fireEvent.click(screen.getByRole("button", { name: /^Create project$/i }));
-  await screen.findByRole("button", { name: "Creating..." });
+  await screen.findByRole("button", { name: "Creating…" });
   await act(async () => finish({ id: "pending-project", name: "Original project", start_date: "2026-06-01" }));
-  await waitFor(() => expect(screen.queryByRole("button", { name: "Creating..." })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Creating…" })).not.toBeInTheDocument());
   expect(mocks.projectCreate).toHaveBeenCalledTimes(1);
   expect(mocks.entities.WorkPackage.bulkCreate).toHaveBeenCalledTimes(1);
 });

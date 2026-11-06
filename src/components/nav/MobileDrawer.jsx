@@ -3,6 +3,7 @@ import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/mod
 import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { BrandLogo } from "./BrandLogo";
+import { getPageIcon } from "@/config/pageIcons";
 
 export default function MobileDrawer({ open, onClose, onNavigate, currentPageName }) {
   const ref = useFocusTrap(open);
@@ -155,7 +156,7 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
                           e.currentTarget.style.color = isActive ? "var(--accent)" : "var(--text-secondary)";
                         }}
                       >
-                        <span style={{ fontSize: 15, width: 18, textAlign: "center", opacity: isActive ? 0.9 : 0.62, flexShrink: 0 }}>{item.icon}</span>
+                        {(() => { const Icon = getPageIcon(item.page); return <Icon size={17} strokeWidth={1.75} aria-hidden="true" style={{ width: 18, opacity: isActive ? 1 : 0.7, flexShrink: 0 }} />; })()}
                         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
                       </button>
                     );

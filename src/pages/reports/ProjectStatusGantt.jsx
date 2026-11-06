@@ -251,7 +251,7 @@ export default function ProjectStatusGantt() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search by project name or number..."
+            placeholder="Search by project name or number…"
           />
           <SelectFilter
             label="Health"

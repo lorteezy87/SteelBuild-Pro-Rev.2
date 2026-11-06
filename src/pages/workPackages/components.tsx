@@ -151,7 +151,7 @@ export function ControlPanel({
         <input
           value={search}
           onChange={(event) => onSearch(event.target.value)}
-          placeholder="Search WP #, package, crew, area, sequence, status, notes..."
+          placeholder="Search WP #, package, crew, area, sequence, status, notes…"
           aria-label="Search work packages"
           style={searchInputStyle}
         />

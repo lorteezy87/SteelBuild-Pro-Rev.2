@@ -57,7 +57,7 @@ export function OperationalStateChip({ state }: { state: string }) {
 // 2026-07-25 R&R is a first-class derived stage, so most chips render it
 // directly; callers skip this badge when the state chip is itself "R&R").
 export function RRChip() {
-  const color = "#f59e0b"; // matches "Revise and Resubmit" in format.ts
+  const color = "#d99a2b"; // matches "Revise and Resubmit" in format.ts
   return (
     <span
       title="Revise & Resubmit — the review sent this package back; the detailer owns the rework until resubmission (→ OFA)"

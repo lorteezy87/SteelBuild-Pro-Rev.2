@@ -126,9 +126,9 @@ export const dataExchangeStyles = `
   gap: 10px;
   margin-bottom: 14px;
   padding: 12px 14px;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  border: 1px solid rgba(217, 154, 43, 0.35);
   border-radius: 8px;
-  background: rgba(245, 158, 11, 0.12);
+  background: rgba(217, 154, 43, 0.12);
   color: var(--text-primary);
   font-size: 13px;
 }
@@ -340,9 +340,9 @@ export const dataExchangeStyles = `
   gap: 10px;
   margin-bottom: 14px;
   padding: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.35);
+  border: 1px solid rgba(210, 69, 47, 0.35);
   border-radius: 8px;
-  background: rgba(239, 68, 68, 0.10);
+  background: rgba(210, 69, 47, 0.10);
   color: var(--text-primary);
 }
 

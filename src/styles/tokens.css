@@ -45,10 +45,10 @@ html {
 
 
   /* Status text — bump to ensure legibility over muted bg chips */
-  --status-success: #4ADE80;
-  --status-warning: #FCD34D;
-  --status-error:   #FCA5A5;
-  --status-info:    #7DD3FC;
+  --status-success: #5BB37E;
+  --status-warning: #E6C068;
+  --status-error:   #EBA092;
+  --status-info:    #8FB8DE;
 }
 
 /* Font-weight bump for small text in high-contrast mode.
@@ -107,8 +107,8 @@ html {
    through to its own teal default (the DrawControl look). */
 html[data-accent="teal"] {
   --accent:        #0D9488;
-  --accent-light:  #14B8A6;
-  --accent-hover:  #14B8A6;
+  --accent-light:  #2E8F84;
+  --accent-hover:  #2E8F84;
   --accent-muted:  rgba(13, 148, 136, 0.12);
   --accent-border: rgba(13, 148, 136, 0.40);
   --secondary:        var(--accent);
@@ -117,8 +117,8 @@ html[data-accent="teal"] {
 }
 html[data-accent="blue"] {
   --accent:        #2563EB;
-  --accent-light:  #3B82F6;
-  --accent-hover:  #3B82F6;
+  --accent-light:  #3F6FB5;
+  --accent-hover:  #3F6FB5;
   --accent-muted:  rgba(37, 99, 235, 0.12);
   --accent-border: rgba(37, 99, 235, 0.40);
   --secondary:        var(--accent);
@@ -126,11 +126,11 @@ html[data-accent="blue"] {
   --secondary-border: var(--accent-border);
 }
 html[data-accent="amber"] {
-  --accent:        #F59E0B;
-  --accent-light:  #FBBF24;
-  --accent-hover:  #FBBF24;
-  --accent-muted:  rgba(245, 158, 11, 0.12);
-  --accent-border: rgba(245, 158, 11, 0.40);
+  --accent:        #D99A2B;
+  --accent-light:  #E4B04A;
+  --accent-hover:  #E4B04A;
+  --accent-muted:  rgba(217, 154, 43, 0.12);
+  --accent-border: rgba(217, 154, 43, 0.40);
   --secondary:        var(--accent);
   --secondary-muted:  var(--accent-muted);
   --secondary-border: var(--accent-border);
@@ -217,9 +217,9 @@ html[data-accent="slate"] {
   --status-warning:           #E3B341;
   --status-error:             #F85149;
   --status-info:              #58A6FF;
-  --status-review:            #F97316;
-  --status-review-muted:      rgba(249,115,22,0.12);
-  --status-review-border:     rgba(249,115,22,0.40);
+  --status-review:            #CC4E17;
+  --status-review-muted:      rgba(204,78,23,0.12);
+  --status-review-border:     rgba(204,78,23,0.40);
   --status-success-bright:    #00D68F;
   --status-warning-bright:    #FFB400;
   --status-error-bright:      #FF3D3D;
@@ -238,9 +238,9 @@ html[data-accent="slate"] {
 
   /* Phase colors */
   --phase-detailing:          #C89B20;
-  --phase-fab:                #3B82F6;
-  --phase-delivery:           #14B8A6;
-  --phase-erection:           #22C55E;
+  --phase-fab:                #3F6FB5;
+  --phase-delivery:           #2E8F84;
+  --phase-erection:           #3A9A63;
   --phase-closeout:           #6B7280;
 
   /* Shadows */
@@ -250,9 +250,9 @@ html[data-accent="slate"] {
   --shadow-orange-glow:       0 0 20px rgba(200,155,32,0.15);
   --shadow-cyan-glow:         0 0 20px rgba(200,155,32,0.15);
   --shadow-glow-gold:         0 0 20px rgba(200,155,32,0.20), 0 0 40px rgba(200,155,32,0.08);
-  --shadow-glow-red:          0 0 16px rgba(239,68,68,0.25), 0 0 32px rgba(239,68,68,0.10);
-  --shadow-glow-green:        0 0 16px rgba(34,197,94,0.20), 0 0 32px rgba(34,197,94,0.08);
-  --shadow-glow-blue:         0 0 16px rgba(59,130,246,0.20), 0 0 32px rgba(59,130,246,0.08);
+  --shadow-glow-red:          0 0 16px rgba(210,69,47,0.25), 0 0 32px rgba(210,69,47,0.10);
+  --shadow-glow-green:        0 0 16px rgba(58,154,99,0.20), 0 0 32px rgba(58,154,99,0.08);
+  --shadow-glow-blue:         0 0 16px rgba(63,111,181,0.20), 0 0 32px rgba(63,111,181,0.08);
 
   /* Interaction */
   --hover-bg:                 rgba(255,255,255,0.04);
@@ -375,7 +375,7 @@ html[data-accent="slate"] {
    * gold lives on as the secondary/"orange" alias for components that
    * explicitly want a warm tone. No purple/pink/peach anywhere. */
   --accent:                   #0D9488;  /* teal-600 — DrawControl signature */
-  --accent-light:             #14B8A6;  /* teal-500 */
+  --accent-light:             #2E8F84;  /* teal-500 */
   --accent-hover:             #0F766E;  /* teal-700 — darker for hover/press */
   --accent-muted:             rgba(13,148,136,0.12);
   --accent-border:            rgba(13,148,136,0.45);
@@ -448,7 +448,7 @@ html[data-accent="slate"] {
   --sbd-gantt-preconstruction: #64748B;
   --sbd-gantt-detailing:       #2563EB;
   --sbd-gantt-procurement:     #B45309;
-  --sbd-gantt-fabrication:     #D97706;
+  --sbd-gantt-fabrication:     #B8741A;
   --sbd-gantt-delivery:        #047857;
   --sbd-gantt-installation:    #0891B2;
   --sbd-gantt-closeout:        #475569;
@@ -558,10 +558,10 @@ html .steelbuild-dark,
 
   --success-muted:            rgba(52,211,153,0.12);
   --success-border:           rgba(52,211,153,0.35);
-  --warning-muted:            rgba(245,158,11,0.12);
-  --warning-border:           rgba(245,158,11,0.35);
-  --danger-muted:             rgba(239,68,68,0.12);
-  --danger-border:            rgba(239,68,68,0.35);
+  --warning-muted:            rgba(217,154,43,0.12);
+  --warning-border:           rgba(217,154,43,0.35);
+  --danger-muted:             rgba(210,69,47,0.12);
+  --danger-border:            rgba(210,69,47,0.35);
   --info-muted:               var(--sbd-accent-muted);
   --info-border:              var(--sbd-accent-border);
 

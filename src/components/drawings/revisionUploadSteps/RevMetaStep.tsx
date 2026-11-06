@@ -42,7 +42,7 @@ export default function StepRevMeta(props: any) {
             <button key={s} onClick={() => { set("revisionLabel", s); setAutoFilled(false); }} style={{
               padding: "4px 10px", borderRadius: 6, cursor: "pointer",
               background: revMeta.revisionLabel === s ? "var(--warning-muted)" : "var(--hover-bg)",
-              border: `1px solid ${revMeta.revisionLabel === s ? "rgba(245,158,11,0.35)" : "var(--border-default)"}`,
+              border: `1px solid ${revMeta.revisionLabel === s ? "rgba(217,154,43,0.35)" : "var(--border-default)"}`,
               color: revMeta.revisionLabel === s ? "var(--status-warning)" : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.06em"
             }}>{s}</button>
@@ -76,7 +76,7 @@ export default function StepRevMeta(props: any) {
             <div key={opt.value} onClick={() => set("disposition", opt.value)} style={{
               padding: "8px 12px", borderRadius: 6, cursor: "pointer",
               background: revMeta.disposition === opt.value ? "var(--warning-muted)" : "var(--hover-bg)",
-              border: `1px solid ${revMeta.disposition === opt.value ? "rgba(245,158,11,0.25)" : "var(--divider)"}`,
+              border: `1px solid ${revMeta.disposition === opt.value ? "rgba(217,154,43,0.25)" : "var(--divider)"}`,
               display: "flex", alignItems: "center", gap: 10
             }}>
               <div style={{

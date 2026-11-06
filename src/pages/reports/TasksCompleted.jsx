@@ -143,7 +143,7 @@ export default function TasksCompleted() {
       })}
       filters={
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search completed tasks..." />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search completed tasks…" />
           <ToggleGroup options={WINDOWS} active={windowDays} onChange={setWindowDays} />
         </FilterBar>
       }

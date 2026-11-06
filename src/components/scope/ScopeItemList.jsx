@@ -420,7 +420,7 @@ export default function ScopeItemList({
                     onClick={() => onDelete(item)}
                     style={{
                       background: "transparent",
-                      border: "1px solid rgba(239,68,68,0.3)",
+                      border: "1px solid rgba(210,69,47,0.3)",
                       borderRadius: 4,
                       padding: "3px 7px",
                       color: "var(--status-error)",

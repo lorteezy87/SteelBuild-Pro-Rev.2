@@ -43,7 +43,7 @@ const display = { fontFamily: "var(--font-display)" };
 // translucent tokenized chips so they keep dark-viewer contrast.
 const PROPOSAL_STATUS_COLORS = {
   pending:  { fg: "#00E5FF", bg: "rgba(0,229,255,0.12)",   border: "var(--accent)" },
-  accepted: { fg: "#22C55E", bg: "rgba(34,197,94,0.14)",   border: "var(--status-success)" },
+  accepted: { fg: "#3A9A63", bg: "rgba(58,154,99,0.14)",   border: "var(--status-success)" },
   rejected: { fg: "var(--text-muted)", bg: "rgba(148,163,184,0.12)", border: "var(--text-muted)" },
   merged:   { fg: "#0d9488", bg: "rgba(13,148,136,0.14)",  border: "var(--accent)" },
 };
@@ -51,10 +51,10 @@ const PROPOSAL_STATUS_COLORS = {
 // semantic proposal-severity marks — allowlisted; dots are categorical viewer
 // marks, not surface chrome.
 const SEVERITY_DOT = {
-  critical: "#EF4444",
-  high:     "#F97316",
-  medium:   "#F59E0B",
-  low:      "#3B82F6",
+  critical: "#D2452F",
+  high:     "#CC4E17",
+  medium:   "#D99A2B",
+  low:      "#3F6FB5",
   info:     "#94A3B8",
 };
 
@@ -473,7 +473,7 @@ function ProposalRow({ proposal, onHover, onAccept, onReject, onMerge }) {
           <span
             style={{
               ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.06em",
-              color: conf >= 80 ? "#22C55E" : conf >= 60 ? "#F59E0B" : "var(--text-muted)",
+              color: conf >= 80 ? "#3A9A63" : conf >= 60 ? "#D99A2B" : "var(--text-muted)",
             }}
             title="AI confidence"
           >
@@ -485,7 +485,7 @@ function ProposalRow({ proposal, onHover, onAccept, onReject, onMerge }) {
       {isPending && (
         <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
           <button onClick={onAccept} title="Accept — mint a new zone from this proposal"
-            style={rowBtnStyle("#22C55E")}>
+            style={rowBtnStyle("#3A9A63")}>
             <Check size={11} /> Accept
           </button>
           <button onClick={onMerge} title="Merge findings into an existing zone"

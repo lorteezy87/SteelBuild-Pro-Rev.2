@@ -451,7 +451,7 @@ export default function Documents() {
   const handleBulkDownload = async () => {
     const docs = allDocuments.filter((d) => selectedIds.has(d.id));
     if (docs.length === 0) return;
-    toast.info(`Preparing ${docs.length} file(s)...`);
+    toast.info(`Preparing ${docs.length} file(s)…`);
     const { succeeded, failed } = await batchProcess(docs, async (doc) => {
       const url = await resolveFileUrl(doc.fileUrl || doc.file_url);
       if (!url) throw new Error("No file URL available");

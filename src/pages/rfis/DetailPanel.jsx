@@ -21,6 +21,7 @@ import { isOverdue } from "./utils";
 import { Pill, Section, Meta, ContentBox } from "./subcomponents";
 import CommentThread from "@/components/collaboration/CommentThread";
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
+import { Ban } from "lucide-react";
 
 export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdit, onDelete }) {
   // Reuse the existing constraint engine (no rule duplication) to show the
@@ -191,7 +192,7 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <span style={{ ...mono, fontSize: 8, background: "var(--danger-muted)", border: "1px solid var(--danger-border)", padding: "4px 8px", borderRadius: 4, color: "var(--status-error)", fontWeight: 700 }}>
-                      ⛔ {downstreamHold.constraint_type || "Engineering Hold"}
+                      <Ban size={10} strokeWidth={2.25} aria-hidden="true" style={{ verticalAlign: "-1px", marginRight: 4 }} />{downstreamHold.constraint_type || "Engineering Hold"}
                     </span>
                     <span style={{ ...mono, fontSize: 10, color: "var(--text-primary)" }}>
                       {downstreamHold.priority} priority

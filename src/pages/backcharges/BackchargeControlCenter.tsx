@@ -170,7 +170,7 @@ export default function BackchargeControlCenter(props: BackchargeControlCenterPr
         b.notice_date ? (
           b.notice_date
         ) : (
-          <span className="cmd-row__meta" style={{ color: "var(--color-warn, #f59e0b)" }}>
+          <span className="cmd-row__meta" style={{ color: "var(--color-warn, #d99a2b)" }}>
             Missing
           </span>
         ),

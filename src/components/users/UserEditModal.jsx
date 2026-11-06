@@ -94,7 +94,7 @@ export default function UserEditModal({ open, onClose, user }) {
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={updateMut.isPending} style={{ background: "var(--accent)", color: "var(--on-accent)", fontWeight: 700 }}>
-            {updateMut.isPending ? "Saving..." : "Save Changes"}
+            {updateMut.isPending ? "Saving…" : "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -46,7 +46,7 @@ type SearchableTaskPickerProps = {
 export default function SearchableTaskPicker({
   tasks,
   onSelect,
-  placeholder = "+ Search tasks...",
+  placeholder = "+ Search tasks…",
   value,
   onClear,
   missingLabel = "(task no longer exists)",

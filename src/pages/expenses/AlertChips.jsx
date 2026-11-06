@@ -14,8 +14,8 @@ export default function AlertChips({ alerts, onDismiss }) {
     <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
       {alerts.map((alert) => {
         const color = alert.severity === "red" ? "var(--status-error)" : "var(--status-warning)";
-        const bg = alert.severity === "red" ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)";
-        const border = alert.severity === "red" ? "rgba(239,68,68,0.4)" : "rgba(245,158,11,0.4)";
+        const bg = alert.severity === "red" ? "rgba(210,69,47,0.15)" : "rgba(217,154,43,0.15)";
+        const border = alert.severity === "red" ? "rgba(210,69,47,0.4)" : "rgba(217,154,43,0.4)";
         return (
           <div
             key={alert.key}

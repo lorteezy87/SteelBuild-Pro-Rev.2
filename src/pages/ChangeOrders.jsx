@@ -294,8 +294,8 @@ export default function ChangeOrders() {
       selectedIds={selectedIds} onToggleSelect={toggleSelect}
       onToggleAll={checked => setSelectedIds(checked ? new Set(filtered.map(co => co.id)) : new Set())} />
     <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())} actions={[
-      ...(can("edit", "change_order") ? [{ label: bulkAction === "submit" ? "SUBMITTING..." : "SUBMIT SELECTED", icon: "arrow", disabled: !ready || Boolean(bulkAction), onClick: bulkSubmit }] : []),
-      ...(can("approve", "change_order") ? [{ label: bulkAction === "approve" ? "APPROVING..." : "APPROVE", icon: "check", disabled: !ready || Boolean(bulkAction),
+      ...(can("edit", "change_order") ? [{ label: bulkAction === "submit" ? "SUBMITTING…" : "SUBMIT SELECTED", icon: "arrow", disabled: !ready || Boolean(bulkAction), onClick: bulkSubmit }] : []),
+      ...(can("approve", "change_order") ? [{ label: bulkAction === "approve" ? "APPROVING…" : "APPROVE", icon: "check", disabled: !ready || Boolean(bulkAction),
         onClick: () => {
           const records = cos.filter(co => selectedIds.has(co.id));
           if (records.some(co => co.status === "Approved" || !canMoveChangeOrder(co.status, "Approved"))) {
@@ -303,7 +303,7 @@ export default function ChangeOrders() {
           }
           setApproval({ records, origin });
         } }] : []),
-      ...(can("delete", "change_order") ? [{ label: bulkAction === "delete" ? "ARCHIVING..." : "ARCHIVE", icon: "x", variant: "danger",
+      ...(can("delete", "change_order") ? [{ label: bulkAction === "delete" ? "ARCHIVING…" : "ARCHIVE", icon: "x", variant: "danger",
         disabled: !ready || Boolean(bulkAction), onClick: bulkDelete }] : []),
     ]} />
     <COFormModal key={`editor-${activeEditor?.id || "closed"}`} open={!!activeEditor} onClose={closeEditor} onSave={handleSave} recoveryPending={!!activeEditor?.recoveryPayload}

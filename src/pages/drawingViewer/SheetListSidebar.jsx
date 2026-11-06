@@ -169,7 +169,7 @@ function MiniMetric({ icon, label, value, tone = "normal" }) {
   return (
     <div style={{
       ...miniMetricStyle,
-      borderColor: tone === "risk" ? "rgba(239,68,68,0.32)" : "var(--viewer-line, var(--border-default))",
+      borderColor: tone === "risk" ? "rgba(210,69,47,0.32)" : "var(--viewer-line, var(--border-default))",
       color: tone === "risk" ? "var(--status-error)" : "var(--text-secondary)",
     }}>
       {icon}

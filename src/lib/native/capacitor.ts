@@ -62,7 +62,7 @@ async function applyStatusBar(): Promise<void> {
     // Style.Dark = light (white) glyphs; Style.Light = dark glyphs.
     const rgb = topEdgeColor()
     const light = rgb ? isLight(rgb) : currentTheme() === 'light'
-    const hex = rgb ? toHex(rgb) : light ? '#F2F4F5' : '#0B0E11'
+    const hex = rgb ? toHex(rgb) : light ? '#F7F6F2' : '#0A1118'
     if (hex === paintedStrip) return
     paintedStrip = hex
     await StatusBar.setBackgroundColor({ color: hex })

@@ -34,7 +34,7 @@ export const drawerControlStyle = {
  * the user types. Keyboard-navigable (↑ ↓ Enter Escape).
  */
 export function SearchableTaskPicker(props: any) {
-  const { tasks, onSelect, placeholder = '+ Search tasks...' } = props;
+  const { tasks, onSelect, placeholder = '+ Search tasks…' } = props;
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(0);

@@ -112,7 +112,7 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button variant="primary" onClick={handleSubmit} disabled={createMut.isPending}>
-            {createMut.isPending ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Contact")}
+            {createMut.isPending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Changes" : "Create Contact")}
           </Button>
         </>
       }

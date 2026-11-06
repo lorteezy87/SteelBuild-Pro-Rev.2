@@ -33,7 +33,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const RECT_COLOR = {
   title: "var(--accent)",
   number: "var(--status-success-bright)",
-  revision: "var(--status-warning, #d97706)",
+  revision: "var(--status-warning, #b8741a)",
 };
 
 const overlayStyle = {

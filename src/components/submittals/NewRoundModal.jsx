@@ -365,7 +365,7 @@ export default function NewRoundModal({
               letterSpacing: "0.06em",
             }}
           >
-            {busy ? "CREATING..." : "CREATE ROUND"}
+            {busy ? "CREATING…" : "CREATE ROUND"}
           </button>
         </DialogFooter>
       </DialogContent>

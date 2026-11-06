@@ -295,7 +295,7 @@ export function PhotoUploadItemRow({ item, onChange, onRemove, disabled }: ItemR
             style={{
               position: "absolute",
               inset: 0,
-              background: "rgba(34,197,94,0.4)",
+              background: "rgba(58,154,99,0.4)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -309,7 +309,7 @@ export function PhotoUploadItemRow({ item, onChange, onRemove, disabled }: ItemR
             style={{
               position: "absolute",
               inset: 0,
-              background: "rgba(239,68,68,0.4)",
+              background: "rgba(210,69,47,0.4)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

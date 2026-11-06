@@ -266,7 +266,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
               letterSpacing: "0.08em",
             }}
           >
-            {busy ? "APPLYING..." : `APPLY TO ${count}`}
+            {busy ? "APPLYING…" : `APPLY TO ${count}`}
           </button>
         </div>
       </div>

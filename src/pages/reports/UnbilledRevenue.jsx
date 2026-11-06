@@ -165,7 +165,7 @@ export default function UnbilledRevenue() {
       })}
       filters={
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search projects, clients..." />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search projects, clients…" />
         </FilterBar>
       }
     >

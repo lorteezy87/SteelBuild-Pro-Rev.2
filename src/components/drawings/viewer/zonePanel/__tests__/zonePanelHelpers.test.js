@@ -74,7 +74,7 @@ describe("describeActivity", () => {
       event_type: "link_added",
       metadata: { linked_record_type: "rfi", link_source: "manual" },
     });
-    expect(out.color).toBe("#22C55E");
+    expect(out.color).toBe("#3A9A63");
     expect(out.title).toBe("Linked RFI"); // LINKABLE_TYPE_LABELS["rfi"] === "RFI"
     expect(out.subtitle).toBeNull();
   });

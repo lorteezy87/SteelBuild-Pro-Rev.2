@@ -404,7 +404,7 @@ export default function DailyLogs() {
       <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
         <input
           type="text"
-          placeholder="Search logs..."
+          placeholder="Search logs…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{

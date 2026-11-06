@@ -181,7 +181,7 @@ function DataSourceControls({
           disabled={controller.projectsLoading}
         >
           <option value="">
-            {controller.projectsLoading ? "Loading projects..." : "Select a project"}
+            {controller.projectsLoading ? "Loading projects…" : "Select a project"}
           </option>
           {controller.projectOptions.map((project) => (
             <option key={project.id} value={project.id}>
@@ -320,7 +320,7 @@ function ImportSourceCard({
       <div className="de-import-controls">
         <label className="de-upload">
           <Upload size={16} />
-          <span>{controller.fileBusy ? "Reading file..." : "Upload file"}</span>
+          <span>{controller.fileBusy ? "Reading file…" : "Upload file"}</span>
           <input
             ref={controller.fileInputRef}
             type="file"
@@ -350,7 +350,7 @@ function ImportSourceCard({
         <textarea
           value={controller.importText}
           onChange={(event) => controller.handleImportTextChange(event.target.value)}
-          placeholder="Paste CSV or TSV rows here..."
+          placeholder="Paste CSV or TSV rows here…"
           spellCheck={false}
         />
       </div>
@@ -380,7 +380,7 @@ function ImportSourceCard({
             ? <RefreshCw size={16} />
             : <ClipboardCheck size={16} />}
           {controller.importMutation.isPending
-            ? "Importing..."
+            ? "Importing…"
             : `Commit ${controller.stagedImport.validRecords.length} rows`}
         </button>
       </div>

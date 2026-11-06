@@ -117,7 +117,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Approval notes, conditions, or rejection reason..."
+              placeholder="Approval notes, conditions, or rejection reason…"
               rows={3}
               style={{ width: "100%", resize: "vertical" }}
             />
@@ -137,7 +137,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
             letterSpacing: "0.08em",
             opacity: saving ? 0.7 : 1
           }}>
-            {saving ? "Saving..." : "Approve Set →"}
+            {saving ? "Saving…" : "Approve Set →"}
           </button>
         </div>
       </DialogContent>

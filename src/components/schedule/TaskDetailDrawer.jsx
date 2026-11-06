@@ -670,7 +670,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 <SearchableTaskPicker
                   tasks={availablePreds}
                   onSelect={(id) => addPredecessor(id)}
-                  placeholder="+ Search predecessors..."
+                  placeholder="+ Search predecessors…"
                 />
               </div>
 
@@ -701,7 +701,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 <SearchableTaskPicker
                   tasks={availableSuccessors}
                   onSelect={(id) => addSuccessor(id)}
-                  placeholder="+ Search successors..."
+                  placeholder="+ Search successors…"
                 />
               </div>
             </div>
@@ -724,21 +724,21 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 value={asIdArray(formData.related_rfi_ids)}
                 options={rfiOptions}
                 onChange={(v) => setFormData({ ...formData, related_rfi_ids: v })}
-                placeholder={rfiOptions.length === 0 ? 'No RFIs in project' : 'Add RFI...'}
+                placeholder={rfiOptions.length === 0 ? 'No RFIs in project' : 'Add RFI…'}
               />
               <MultiSelectChips
                 label="Related Change Orders"
                 value={asIdArray(formData.related_change_order_ids)}
                 options={changeOrderOptions}
                 onChange={(v) => setFormData({ ...formData, related_change_order_ids: v })}
-                placeholder={changeOrderOptions.length === 0 ? 'No COs in project' : 'Add change order...'}
+                placeholder={changeOrderOptions.length === 0 ? 'No COs in project' : 'Add change order…'}
               />
               <MultiSelectChips
                 label="Related Action Items"
                 value={asIdArray(formData.related_action_item_ids)}
                 options={actionItemOptions}
                 onChange={(v) => setFormData({ ...formData, related_action_item_ids: v })}
-                placeholder={actionItemOptions.length === 0 ? 'No action items in project' : 'Add action item...'}
+                placeholder={actionItemOptions.length === 0 ? 'No action items in project' : 'Add action item…'}
               />
             </div>
           )}
@@ -754,7 +754,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 padding: 12,
                 resize: 'none',
               }}
-              placeholder="Add notes..."
+              placeholder="Add notes…"
             />
           )}
 

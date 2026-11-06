@@ -31,11 +31,14 @@ The active rebuild covers the entire subcontractor app for structural steel fabr
 - **Vercel is retired.** Don't reintroduce it.
 - **Cloudflare:** `wrangler.jsonc` and `wrangler.staging.jsonc` remain for legacy rollback, staging, and PR previews. Do not attach the production domains to them.
 
-## Design system: Board Report (Document Control v2)
-- The whole app follows the SteelBuild Document Control v2 Board Report design (owner, 2026-10-25): a dark masthead (topbar + sidebar) over a light warm-paper working body.
-- `src/styles/board-report-system.css` is the authoritative layer, imported last by `globals.css`. Its values mirror `src/pages/documentControl/boardReportTheme.ts` (`DC_LIGHT` / `DC_DARK` / `DC_MASTHEAD`); change both together.
-- Colors: CSS variables only (`var(--bg-*)`, `var(--text-*)`, `var(--accent)`, `var(--cmd-*)`, `var(--sbd-*)`). Never hardcode surface/text/border hex in components. Accent is orange `#FF5A1F` in both skins.
-- Light (default look): paper `#FAFAF8`, cards `#FFFFFF`, rules `#DEDCD6`, ink `#17191C`. Dark: `data-theme="dark"` + `html.steelbuild-dark`, body `#0C0F12`, panels `#141A1F`. The masthead stays `#141618` in both.
+## Design system: Board Report — "Blueline" palette (2026-11)
+- The whole app follows the SteelBuild Board Report layout: a dark masthead (topbar + sidebar) over a light working body. The **Blueline** palette (owner, 2026-11-06) replaced the v2 charcoal/neon-orange values: blueprint-navy masthead, warm vellum body, navy-tinted ink, primer orange as the one accent.
+- `src/styles/board-report-system.css` is the authoritative layer, imported last by `globals.css`. Its values mirror `src/pages/documentControl/boardReportTheme.ts` (`DC_LIGHT` / `DC_DARK` / `DC_MASTHEAD` / `DC_SIGNAL`); change both together.
+- Colors: CSS variables only (`var(--bg-*)`, `var(--text-*)`, `var(--accent)`, `var(--status-*)`, `var(--phase-*)`, `var(--cmd-*)`, `var(--sbd-*)`). Never hardcode surface/text/border hex in components, and never reintroduce Tailwind default palette literals (`#F59E0B`, `#EF4444`, `#3B82F6`, `#22C55E`, …) — they read as stock UI. Accent is primer `#CC4E17` (white text holds 4.5:1); `--br-accent-ink` `#A63C12` for orange text on vellum; `--br-accent-hi` `#E36A2C` on dark surfaces.
+- Light (default look): vellum `#F7F6F2`, cards `#FFFFFF`, rules `#DFDBD3`, ink `#141B22`. Dark: `data-theme="dark"` + `html.steelbuild-dark`, body `#0A1118`, panels `#111B25`. The masthead stays `#0E1824` in both.
+- Signals are desaturated and AA on their surface (light: success `#23744A`, warning `#9A5B0B`, error `#B42318`, info `#2A5B9E`). Workflow phases have one hue each — detailing blue, procurement ochre, fab primer, delivery teal, erection green — via `--phase-*` / `--sbd-gantt-*`. Gantt bars are flat fills, no gradients.
+- Icons: lucide line icons only (`src/config/pageIcons.jsx` maps page → icon). No emoji as icons or label prefixes, no "✦ AI" sparkle badges — say what the system did ("Read from title blocks", "Auto-filled").
+- Copy: sentence case for buttons, headings and empty states; real ellipsis `…`, not `...`; plain jobsite language over product voice.
 - The masthead re-points `--bg-*` / `--text-*` on the chrome elements themselves, so anything inside the topbar or sidebar draws dark without component changes. Don't redefine `--bg-sidebar` / `--nav-*` globally; pages reuse them for table headers.
 - Command Control Centers use `[data-skin="command"]` with `--cmd-*`, remapped onto the same paper.
 - Fonts: Archivo for all UI text (display headings use its width axis, `font-stretch: 85%`), IBM Plex Mono for every number, date and document id. Use `var(--font-body|display|mono)`, never a literal family. Barlow, Inter, Space Grotesk and JetBrains Mono are retired and no longer loaded; a test fails if one comes back.

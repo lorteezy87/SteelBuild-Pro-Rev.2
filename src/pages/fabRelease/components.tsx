@@ -290,7 +290,7 @@ export function Toolbar({
         <input
           value={search}
           onChange={(event) => onSearch(event.target.value)}
-          placeholder="Search WP, drawing set, crew, status, flag..."
+          placeholder="Search WP, drawing set, crew, status, flag…"
         />
       </div>
       <FilterSelect value={stageFilter} onChange={onStageFilter} options={STAGE_FILTERS} />

@@ -244,7 +244,7 @@ describe("ChangeOrders edit", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(mocks.changeOrderDelete).toHaveBeenCalledWith("co-1");
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Deleting..." })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Deleting…" })).toBeDisabled();
 
     resolveDelete!({ success: true });
 

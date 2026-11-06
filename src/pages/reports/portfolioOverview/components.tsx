@@ -200,7 +200,7 @@ export function HeroKpiStrip({
         label="Pending COs"
         value={pendingCOsCount}
         sub={`${formatCurrencyShort(pendingCOValue)} pending value`}
-        accent="#F97316"
+        accent="#CC4E17"
         active={kpiFilter === "cos"}
         onClick={() => toggle("cos")}
       />

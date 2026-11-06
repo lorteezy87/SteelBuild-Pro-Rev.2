@@ -261,8 +261,8 @@ export default function FieldPlan() {
         >
           {onlyBlocked ? "BLOCKED ONLY" : "ALL CREWS"}
         </button>
-        <button onClick={exportIcs} style={toolBtn}>📅 EXPORT .ICS</button>
-        <button onClick={printPlan} style={toolBtn}>🖨 PRINT</button>
+        <button onClick={exportIcs} style={toolBtn}>Export .ics</button>
+        <button onClick={printPlan} style={toolBtn}>Print</button>
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>

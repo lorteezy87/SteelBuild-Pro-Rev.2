@@ -507,7 +507,7 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
       <FilterBar
         search={search}
         onSearch={onSearch}
-        searchPlaceholder="Search vendor, PO, load, carrier, truck, work package..."
+        searchPlaceholder="Search vendor, PO, load, carrier, truck, work package…"
         secondaryActions={
           onClearFilters ? (
             <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onClearFilters}>

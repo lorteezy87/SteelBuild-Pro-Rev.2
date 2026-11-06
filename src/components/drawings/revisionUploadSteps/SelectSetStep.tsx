@@ -19,7 +19,7 @@ export default function StepSelectSet(props: any) {
       <div style={{ position: "relative", marginBottom: 12 }}>
         <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 12, pointerEvents: "none" }}>⌕</div>
         <input
-          placeholder="Search drawing sets..."
+          placeholder="Search drawing sets…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
@@ -35,8 +35,8 @@ export default function StepSelectSet(props: any) {
             outline: "none",
           }}
           onFocus={e => {
-            e.target.style.border = "1px solid rgba(245,158,11,0.40)";
-            e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.08)";
+            e.target.style.border = "1px solid rgba(217,154,43,0.40)";
+            e.target.style.boxShadow = "0 0 0 3px rgba(217,154,43,0.08)";
           }}
           onBlur={e => {
             e.target.style.border = "1px solid var(--border-default)";
@@ -47,8 +47,8 @@ export default function StepSelectSet(props: any) {
 
       {loading ? (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 0", gap: 8 }}>
-          <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid rgba(245,158,11,0.2)", borderTopColor: "var(--accent)", animation: "spin 0.7s linear infinite" }} />
-          <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)" }}>Loading drawing sets...</span>
+          <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid rgba(217,154,43,0.2)", borderTopColor: "var(--accent)", animation: "spin 0.7s linear infinite" }} />
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)" }}>Loading drawing sets…</span>
         </div>
       ) : error ? (
         <div style={{ textAlign: "center", padding: "20px 0", fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,61,61,0.60)" }}>
@@ -67,14 +67,14 @@ export default function StepSelectSet(props: any) {
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "0 12px", height: 48,
                 background: isSelected ? "var(--warning-muted)" : "var(--hover-bg)",
-                border: `1px solid ${isSelected ? "rgba(245,158,11,0.35)" : "var(--divider)"}`,
+                border: `1px solid ${isSelected ? "rgba(217,154,43,0.35)" : "var(--divider)"}`,
                 borderRadius: 6, cursor: "pointer",
                 transition: "all 0.1s"
               }}
               onMouseEnter={e => {
                 if (!isSelected) {
                   e.currentTarget.style.background = "var(--warning-muted)";
-                  e.currentTarget.style.borderColor = "rgba(245,158,11,0.20)";
+                  e.currentTarget.style.borderColor = "rgba(217,154,43,0.20)";
                 }
               }}
               onMouseLeave={e => {

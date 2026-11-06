@@ -16,113 +16,114 @@
  * the signed-in organization instead.
  */
 
-/** Light surfaces, text and lines — the default Board Report skin. */
+/** Light surfaces, text and lines — the default "Blueline" vellum skin. */
 export const DC_LIGHT = {
-  pageBg: "#FAFAF8",
-  text: "#17191C",
-  textSecondary: "#45494D",
-  textMuted: "#6B6F73",
-  textFaint: "#8A8D90",
-  rankNumber: "#9A9DA0",
+  pageBg: "#F7F6F2",
+  text: "#141B22",
+  textSecondary: "#3B4652",
+  textMuted: "#5F6974",
+  textFaint: "#848C95",
+  rankNumber: "#959CA4",
 
   paneBg: "#FFFFFF",
-  paneBorder: "#DEDCD6",
-  rowBorder: "#E8E6E0",
-  rowHover: "#F1EFEA",
+  paneBorder: "#DFDBD3",
+  rowBorder: "#E9E6E0",
+  rowHover: "#F3F1EC",
   rowSelectedBg: "#FFFFFF",
-  headerRule: "#17191C",
+  headerRule: "#141B22",
 
-  track: "#ECEAE5",
-  hairline: "#EFEDE8",
-  wellBg: "#F4F3EF",
-  wellBorder: "#E2E0DA",
-  controlBorder: "#CFCCC5",
-  badgeNeutralBg: "#ECEAE5",
-  badgeNeutralFg: "#55595D",
-  badgeNeutralBorder: "#DEDBD4",
-  dashed: "#CFCCC5",
-  dashedFg: "#A3A6A9",
+  track: "#EFEDE7",
+  hairline: "#EFEDE7",
+  wellBg: "#F3F1EC",
+  wellBorder: "#E3DFD8",
+  controlBorder: "#CBC6BC",
+  badgeNeutralBg: "#EFEDE7",
+  badgeNeutralFg: "#4E5965",
+  badgeNeutralBorder: "#DFDBD3",
+  dashed: "#CBC6BC",
+  dashedFg: "#959CA4",
 
-  chipActiveBg: "#17191C",
-  chipActiveFg: "#FAFAF8",
+  chipActiveBg: "#141B22",
+  chipActiveFg: "#F7F6F2",
   chipIdleBg: "#FFFFFF",
-  chipIdleFg: "#45494D",
-  chipIdleBorder: "#DEDCD6",
+  chipIdleFg: "#3B4652",
+  chipIdleBorder: "#DFDBD3",
 
-  btnPrimaryBg: "#17191C",
-  btnPrimaryFg: "#FAFAF8",
-  btnSecondaryBorder: "#CFCCC5",
+  btnPrimaryBg: "#141B22",
+  btnPrimaryFg: "#F7F6F2",
+  btnSecondaryBorder: "#CBC6BC",
 } as const;
 
-/** Dark surfaces — screen 2e. Same system, different skin. */
+/** Dark surfaces — night drafting table. Same system, different skin. */
 export const DC_DARK = {
-  pageBg: "#0C0F12",
-  text: "#F2F4F5",
-  textSecondary: "#A7B0B8",
-  textMuted: "#7D8892",
-  textFaint: "#7D8892",
-  rankNumber: "#5B656E",
+  pageBg: "#0A1118",
+  text: "#ECF0F3",
+  textSecondary: "#A8B5C1",
+  textMuted: "#7F8E9C",
+  textFaint: "#7F8E9C",
+  rankNumber: "#566676",
 
-  paneBg: "#141A1F",
-  paneBorder: "#222A31",
-  rowBorder: "#1C2329",
-  rowHover: "#151D23",
-  rowSelectedBg: "#182027",
-  headerRule: "#303942",
+  paneBg: "#111B25",
+  paneBorder: "#1D2A37",
+  rowBorder: "#18242F",
+  rowHover: "#142030",
+  rowSelectedBg: "#16222E",
+  headerRule: "#2A3A4A",
 
-  track: "#222A31",
-  hairline: "#1C2329",
-  wellBg: "#141A1F",
-  wellBorder: "#222A31",
-  controlBorder: "#303942",
-  badgeNeutralBg: "#222A31",
-  badgeNeutralFg: "#A7B0B8",
-  badgeNeutralBorder: "#303942",
-  dashed: "#303942",
-  dashedFg: "#7D8892",
+  track: "#1D2A37",
+  hairline: "#18242F",
+  wellBg: "#111B25",
+  wellBorder: "#1D2A37",
+  controlBorder: "#2A3A4A",
+  badgeNeutralBg: "#1D2A37",
+  badgeNeutralFg: "#A8B5C1",
+  badgeNeutralBorder: "#2A3A4A",
+  dashed: "#2A3A4A",
+  dashedFg: "#7F8E9C",
 
-  chipActiveBg: "#F2F4F5",
-  chipActiveFg: "#0C0F12",
-  chipIdleBg: "#141A1F",
-  chipIdleFg: "#A7B0B8",
-  chipIdleBorder: "#303942",
+  chipActiveBg: "#ECF0F3",
+  chipActiveFg: "#0A1118",
+  chipIdleBg: "#111B25",
+  chipIdleFg: "#A8B5C1",
+  chipIdleBorder: "#2A3A4A",
 
-  btnPrimaryBg: "#FF5A1F",
-  btnPrimaryFg: "#111417",
-  btnSecondaryBorder: "#303942",
+  btnPrimaryBg: "#CC4E17",
+  btnPrimaryFg: "#FFFFFF",
+  btnSecondaryBorder: "#2A3A4A",
 } as const;
 
 /** The shape both skins share. Keyed off DC_LIGHT so a new token must be added to both. */
 export type DcSkin = Record<keyof typeof DC_LIGHT, string>;
 
-/** The masthead is the same dark band in both skins — it is the brand bar. */
+/** The masthead is the same blueprint-navy band in both skins — it is the brand bar. */
 export const DC_MASTHEAD = {
-  bg: "#141618",
-  fg: "#F2F4F5",
-  muted: "#A7B0B8",
-  mono: "#7D8892",
-  divider: "#46515B",
-  border: "#303942",
+  bg: "#0E1824",
+  fg: "#EEF2F6",
+  muted: "#B3C0CC",
+  mono: "#8698AA",
+  divider: "#36506A",
+  border: "#26384B",
 } as const;
 
 /**
- * Signal colors. These are the design's own oklch values — a status badge's
- * hue is the status, so they are not interchangeable with the app's
- * semantic status tokens.
+ * Signal colors. A status badge's hue is the status, so these are not
+ * interchangeable with the accent. Desaturated from the v2 set so a register
+ * full of status reads as information, and red sits well clear of primer.
  */
 export const DC_SIGNAL = {
-  accent: "#FF5A1F",
-  accentLight: "#FF7442",
-  /** Orange text on light paper — holds 4.5:1 where #FF5A1F does not. */
-  accentInk: "#C2410C",
-  onAccent: "#111417",
-  green: "oklch(0.62 0.13 150)",
-  blue: "oklch(0.62 0.11 245)",
-  amber: "oklch(0.76 0.14 75)",
-  red: "oklch(0.6 0.18 28)",
-  redText: "oklch(0.5 0.18 28)",
-  metricLate: "oklch(0.72 0.16 28)",
-  metricRr: "oklch(0.82 0.13 80)",
+  /** Primer — shop-primed steel. The one accent. White text holds 4.5:1. */
+  accent: "#CC4E17",
+  accentLight: "#E36A2C",
+  /** Primer text on light vellum — 5.9:1. */
+  accentInk: "#A63C12",
+  onAccent: "#FFFFFF",
+  green: "oklch(0.58 0.11 152)",
+  blue: "oklch(0.55 0.10 252)",
+  amber: "oklch(0.74 0.13 78)",
+  red: "oklch(0.56 0.18 22)",
+  redText: "oklch(0.48 0.17 22)",
+  metricLate: "oklch(0.70 0.15 22)",
+  metricRr: "oklch(0.80 0.12 82)",
 } as const;
 
 export const DC_FONT = {

@@ -63,7 +63,7 @@ export function PieceControlDashboardPanel({
         viewAllLabel="Open Piece Register"
       >
         <div className="piece-control-command piece-dashboard-panel">
-          <span className="cmd-row__meta">Loading piece reporting...</span>
+          <span className="cmd-row__meta">Loading piece reporting…</span>
         </div>
       </DecisionPanel>
     );

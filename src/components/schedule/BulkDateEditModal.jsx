@@ -309,7 +309,7 @@ export default function BulkDateEditModal({ open, count = 0, isSaving = false, o
               opacity: validation || isSaving ? 0.65 : 1,
             }}
           >
-            {isSaving ? "APPLYING..." : "APPLY DATES"}
+            {isSaving ? "APPLYING…" : "APPLY DATES"}
           </button>
         </footer>
       </div>

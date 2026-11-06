@@ -141,7 +141,7 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
           <div>
             <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Project</label>
             <select value={formData.project_id} onChange={(e) => { setFormData({ ...formData, project_id: e.target.value }); clearField("project_id"); }} style={{ width: "100%", background: "var(--bg-input)", border: fieldErrors.project_id ? "1px solid var(--status-error)" : "1px solid var(--border-default)", borderRadius: "6px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} required>
-              <option value="">Select project...</option>
+              <option value="">Select project…</option>
               {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
             </select>
             {fieldErrors.project_id && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", marginTop: 2, display: "block" }}>{fieldErrors.project_id}</span>}
@@ -207,12 +207,12 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
           {/* Findings & Corrective Actions */}
           <div>
             <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Findings</label>
-            <textarea value={formData.findings} onChange={(e) => setFormData({ ...formData, findings: e.target.value })} placeholder="What was found during inspection..." style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box", minHeight: "60px", resize: "vertical" }} />
+            <textarea value={formData.findings} onChange={(e) => setFormData({ ...formData, findings: e.target.value })} placeholder="What was found during inspection…" style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box", minHeight: "60px", resize: "vertical" }} />
           </div>
 
           <div>
             <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Corrective Actions</label>
-            <textarea value={formData.corrective_actions} onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })} placeholder="Required corrective actions..." style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box", minHeight: "60px", resize: "vertical" }} />
+            <textarea value={formData.corrective_actions} onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })} placeholder="Required corrective actions…" style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box", minHeight: "60px", resize: "vertical" }} />
           </div>
 
           {/* Sign-off */}
@@ -235,7 +235,7 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
           {/* Actions */}
           <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
             <button type="button" onClick={onClose} disabled={isSaving} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.5 : 1 }}>Cancel</button>
-            <button type="button" onClick={handleSubmit} disabled={isSaving || !formData.project_id || !formData.inspection_date} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving || !formData.project_id || !formData.inspection_date ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !formData.project_id || !formData.inspection_date ? 0.5 : 1 }}>{isSaving ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Inspection" : "Create Inspection")}</button>
+            <button type="button" onClick={handleSubmit} disabled={isSaving || !formData.project_id || !formData.inspection_date} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving || !formData.project_id || !formData.inspection_date ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !formData.project_id || !formData.inspection_date ? 0.5 : 1 }}>{isSaving ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Inspection" : "Create Inspection")}</button>
           </div>
         </div>
       </div>

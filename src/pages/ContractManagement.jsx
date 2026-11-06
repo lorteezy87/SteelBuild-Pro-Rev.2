@@ -33,12 +33,12 @@ const KPICard = ({ label, value, sub, tone }) => (
 const COStatusBadge = ({ status }) => {
   const colors = {
     Draft: { bg: "rgba(128,128,128,0.15)", border: "rgba(128,128,128,0.3)", text: "var(--text-muted)" },
-    Submitted: { bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.3)", text: "var(--status-info)" },
-    "Under Review": { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.3)", text: "var(--status-warning)" },
-    Approved: { bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.3)", text: "var(--status-success)" },
-    Rejected: { bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.3)", text: "var(--status-error)" },
-    Certified: { bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.3)", text: "var(--status-success)" },
-    Paid: { bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.3)", text: "var(--status-info)" },
+    Submitted: { bg: "rgba(63,111,181,0.12)", border: "rgba(63,111,181,0.3)", text: "var(--status-info)" },
+    "Under Review": { bg: "rgba(217,154,43,0.12)", border: "rgba(217,154,43,0.3)", text: "var(--status-warning)" },
+    Approved: { bg: "rgba(58,154,99,0.12)", border: "rgba(58,154,99,0.3)", text: "var(--status-success)" },
+    Rejected: { bg: "rgba(210,69,47,0.12)", border: "rgba(210,69,47,0.3)", text: "var(--status-error)" },
+    Certified: { bg: "rgba(58,154,99,0.12)", border: "rgba(58,154,99,0.3)", text: "var(--status-success)" },
+    Paid: { bg: "rgba(63,111,181,0.12)", border: "rgba(63,111,181,0.3)", text: "var(--status-info)" },
   };
   const c = colors[status] || colors.Draft;
   return (
@@ -297,7 +297,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
     success: { bg: "var(--success-muted)", border: "var(--success-border)", color: "var(--status-success)", icon: "\u2713" },
     warning: { bg: "var(--warning-muted)", border: "var(--warning-border)", color: "var(--status-warning)", icon: "\u26A0" },
     error: { bg: "var(--danger-muted)", border: "var(--danger-border)", color: "var(--status-error)", icon: "\u2717" },
-    info: { bg: "rgba(59,130,246,0.08)", border: "rgba(59,130,246,0.25)", color: "var(--status-info)", icon: "\u2139" },
+    info: { bg: "rgba(63,111,181,0.08)", border: "rgba(63,111,181,0.25)", color: "var(--status-info)", icon: "\u2139" },
   };
 
   return (
@@ -334,8 +334,8 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 16 }}>Key Dates Timeline</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "space-between" }}>
           {[
-            { label: "Contract Start", date: project?.start_date, icon: "\u{1F4C5}" },
-            { label: "Target Completion", date: project?.target_completion_date, icon: "\u{1F3AF}" },
+            { label: "Contract Start", date: project?.start_date, icon: "▸" },
+            { label: "Target Completion", date: project?.target_completion_date, icon: "◆" },
           ].map((item) => (
             <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 200px" }}>
               <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(234,88,12,0.1)", border: "1px solid rgba(234,88,12,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
@@ -350,7 +350,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
           {/* Recent CO dates */}
           {recentApprovedChangeOrders.map((co, i) => (
               <div key={co.id || i} style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 200px" }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(58,154,99,0.1)", border: "1px solid rgba(58,154,99,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
                   {"\u2705"}
                 </div>
                 <div>

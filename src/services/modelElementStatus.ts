@@ -33,12 +33,12 @@ export type ElementStatusKey =
 /** Render metadata per bucket (hex colors for viewer theming + chips). */
 export const ELEMENT_STATUS_META: Record<ElementStatusKey, { label: string; color: string }> = {
   unmapped:        { label: "Unmapped",        color: "#64748b" },
-  rfi_blocked:     { label: "RFI Hold",        color: "#ef4444" },
-  behind_schedule: { label: "Behind Schedule", color: "#f97316" },
+  rfi_blocked:     { label: "RFI Hold",        color: "#d2452f" },
+  behind_schedule: { label: "Behind Schedule", color: "#cc4e17" },
   erection_ready:  { label: "Field stage marked", color: "#64748b" },
   fab_ready:       { label: "Shop stage marked",  color: "#64748b" },
-  in_review:       { label: "In Review",       color: "#3b82f6" },
-  in_detailing:    { label: "In Detailing",    color: "#eab308" },
+  in_review:       { label: "In Review",       color: "#3f6fb5" },
+  in_detailing:    { label: "In Detailing",    color: "#c9a227" },
 };
 
 export interface ModelElementLike {

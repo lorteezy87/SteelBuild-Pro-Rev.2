@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
+import { Brush, Building2, Camera, CircleDot, FileText, Link2, MapPin, Nut, PaintBucket, Pin, Ruler } from "lucide-react";
 
 function asArray(v) {
   if (Array.isArray(v)) return v;
@@ -30,14 +31,14 @@ const PRIORITY_COLORS = {
 };
 
 const CATEGORY_ICONS = {
-  Structural: "🏗",
-  Connections: "⚙",
-  "Painting/Coating": "🎨",
-  Hardware: "🔩",
-  "Fit-Up": "📏",
-  Cleanup: "🧹",
-  Documentation: "📋",
-  Other: "📌",
+  Structural: Building2,
+  Connections: Link2,
+  "Painting/Coating": PaintBucket,
+  Hardware: Nut,
+  "Fit-Up": Ruler,
+  Cleanup: Brush,
+  Documentation: FileText,
+  Other: CircleDot,
 };
 
 export default function PunchlistList({
@@ -91,17 +92,17 @@ export default function PunchlistList({
                 aria-label={`Select ${item.description}`}
               />
             )}
-            <div style={{ fontSize: "20px" }}>{CATEGORY_ICONS[item.category] || "📌"}</div>
+            {(() => { const Icon = CATEGORY_ICONS[item.category] || CircleDot; return <div style={{ width: 32, height: 32, display: "grid", placeItems: "center", borderRadius: 6, background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", color: "var(--text-secondary)", flexShrink: 0 }}><Icon size={16} strokeWidth={1.75} aria-hidden="true" /></div>; })()}
 
             <div>
               <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{item.description}</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: "2px", fontSize: "10px", color: "var(--text-muted)", flexWrap: "wrap" }}>
-                {item.location && <span>📍 {item.location}</span>}
+                {item.location && <span><MapPin size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4 }} />{item.location}</span>}
                 {photos.length > 0 && (
-                  <span style={{ color: "var(--accent)" }}>📷 {photos.length}</span>
+                  <span style={{ color: "var(--text-secondary)" }}><Camera size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4 }} />{photos.length}</span>
                 )}
                 {item.drawing_id && (
-                  <span style={{ color: "var(--status-info)" }} title="Linked to a drawing">📍 PINNED</span>
+                  <span style={{ color: "var(--status-info)" }} title="Linked to a drawing"><Pin size={12} strokeWidth={1.75} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 4 }} />Pinned to drawing</span>
                 )}
                 {(item.inspection_id || item.metadata?.inspection_id) && (
                   <span style={{

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Pencil, Trash2, Plus, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { CalendarRange, ChevronLeft, ChevronRight, ClipboardList, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
@@ -121,7 +121,7 @@ function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = fals
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
           <Button onClick={save} disabled={isSaving || (hasBlockers && !acknowledged)} className="bg-slate-900 hover:bg-slate-800">
-            {isSaving ? (item ? "Updating..." : "Creating...") : (item ? "Update" : "Create")}
+            {isSaving ? (item ? "Updating…" : "Creating…") : (item ? "Update" : "Create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -364,8 +364,8 @@ export default function LookAheadSchedule() {
 
   if (!activeProject?.id) return (
     <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Select a Project</div>
+      <CalendarRange size={32} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-muted)", marginBottom: 10 }} />
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Select a project</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right to view the 2-week look-ahead.</div>
     </div>
   );
@@ -532,8 +532,8 @@ export default function LookAheadSchedule() {
                 <tr>
                   <td colSpan={10}>
                     <div style={{ padding: "64px 24px", textAlign: "center" }}>
-                      <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>No Look-Ahead Items</div>
+                      <ClipboardList size={30} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-muted)", marginBottom: 10 }} />
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>No look-ahead items</div>
                       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
                         Start tracking upcoming work for this 2-week window.
                       </div>

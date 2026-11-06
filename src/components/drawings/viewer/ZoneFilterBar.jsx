@@ -25,11 +25,11 @@ import React from "react";
 // no-purple/no-pink industrial palette — "purple" therefore renders as
 // teal.
 const STATUS_COLOR = {
-  red:     "#EF4444",
-  amber:   "#F59E0B",
+  red:     "#D2452F",
+  amber:   "#D99A2B",
   purple:  "#0d9488",
-  blue:    "#3B82F6",
-  green:   "#22C55E",
+  blue:    "#3F6FB5",
+  green:   "#3A9A63",
   neutral: "#94A3B8",
 };
 

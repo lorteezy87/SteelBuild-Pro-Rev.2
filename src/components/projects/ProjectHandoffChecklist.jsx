@@ -233,7 +233,7 @@ export default function ProjectHandoffChecklist({ projectId }) {
                 padding: "8px 10px",
                 borderBottom: "1px solid var(--divider)",
                 borderLeft: `3px solid ${r.status === "Completed" ? "var(--status-success)" : r.status === "In Progress" ? "var(--status-warning)" : "transparent"}`,
-                background: r.status === "Completed" ? "rgba(34,197,94,0.04)" : "transparent",
+                background: r.status === "Completed" ? "rgba(58,154,99,0.04)" : "transparent",
               }}
             >
               <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", fontWeight: 700 }}>

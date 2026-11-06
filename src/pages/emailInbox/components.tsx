@@ -140,13 +140,13 @@ export function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, on
         onClick={(e) => { e.stopPropagation(); onStar(e); }}
         style={{
           background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 2, flexShrink: 0,
-          color: message.is_starred ? "#F59E0B" : "var(--text-muted)",
+          color: message.is_starred ? "#D99A2B" : "var(--text-muted)",
           opacity: message.is_starred ? 1 : 0.4,
           transition: "all 100ms",
         }}
         title={message.is_starred ? "Unstar" : "Star"}
       >
-        <Star size={13} strokeWidth={2} fill={message.is_starred ? "#F59E0B" : "none"} />
+        <Star size={13} strokeWidth={2} fill={message.is_starred ? "#D99A2B" : "none"} />
       </button>
 
       {/* Content */}
@@ -325,11 +325,11 @@ export function EmailDetail({
               onClick={onStar}
               style={{
                 background: "none", border: "none", cursor: "pointer", padding: 2,
-                color: message.is_starred ? "#F59E0B" : "var(--text-muted)",
+                color: message.is_starred ? "#D99A2B" : "var(--text-muted)",
               }}
               title={message.is_starred ? "Unstar" : "Star"}
             >
-              <Star size={16} strokeWidth={1.75} fill={message.is_starred ? "#F59E0B" : "none"} />
+              <Star size={16} strokeWidth={1.75} fill={message.is_starred ? "#D99A2B" : "none"} />
             </button>
             <span style={{
               padding: "2px 8px", borderRadius: 4,
@@ -417,7 +417,7 @@ export function EmailDetail({
                 }}>
                   <input
                     type="text" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)}
-                    placeholder="Custom..."
+                    placeholder="Custom…"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && customLabel.trim()) {
                         onAddLabel(customLabel.trim());
@@ -571,7 +571,7 @@ export function EmailBodyContent({ message, attachments }: EmailBodyContentProps
         body { margin: 0; padding: 12px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
           font-size: 13px; line-height: 1.5; color: #d4d4d8; background: transparent; }
         img { max-width: 100%; height: auto; }
-        a { color: #60a5fa; }
+        a { color: #6f9ad6; }
         table { border-collapse: collapse; max-width: 100%; }
         td, th { padding: 4px 8px; }
         pre, code { font-family: var(--font-mono, monospace); font-size: 12px;

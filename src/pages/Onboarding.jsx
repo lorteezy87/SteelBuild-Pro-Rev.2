@@ -253,7 +253,7 @@ export default function Onboarding() {
           </button>
           <button type="button" className="onboarding-primary-btn" disabled={createDisabled} onClick={() => createProjectMutation.mutate()}>
             <FolderPlus size={15} />
-            {createProjectMutation.isPending ? "Creating..." : createdProject && setupIncomplete ? "Retry unfinished setup" : "Create project"}
+            {createProjectMutation.isPending ? "Creating…" : createdProject && setupIncomplete ? "Retry unfinished setup" : "Create project"}
           </button>
         </div>
       </header>
@@ -412,7 +412,7 @@ export default function Onboarding() {
               </label>
               <label className="onboarding-upload">
                 <Upload size={16} />
-                <span>{fileBusy ? "Reading file..." : "Upload CSV/XLSX"}</span>
+                <span>{fileBusy ? "Reading file…" : "Upload CSV/XLSX"}</span>
                 <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" onChange={handleImportFile} disabled={fileBusy} />
               </label>
               <button type="button" className="onboarding-secondary-btn" onClick={() => { setImportText(IMPORT_EXAMPLES[importTarget] || ""); setImportSourceName("Pasted sample data"); setImportApproved(false); }}>
@@ -474,7 +474,7 @@ export default function Onboarding() {
             </label>
             <button type="button" className="onboarding-primary-btn" disabled={importDisabled} onClick={() => importMutation.mutate()}>
               <Import size={15} />
-              {importMutation.isPending ? "Importing..." : `Commit ${stagedImport.validRecords.length} rows`}
+              {importMutation.isPending ? "Importing…" : `Commit ${stagedImport.validRecords.length} rows`}
             </button>
           </div>
         </section>

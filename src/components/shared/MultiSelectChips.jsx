@@ -28,7 +28,7 @@ export default function MultiSelectChips({
   value = [],
   options = [],
   onChange,
-  placeholder = "Add...",
+  placeholder = "Add…",
 }) {
   const [open, setOpen] = useState(false);
   const selectedIds = useMemo(
@@ -138,7 +138,7 @@ export default function MultiSelectChips({
               cursor: "pointer",
             }}
           >
-            <option value="">{open ? "Select..." : placeholder}</option>
+            <option value="">{open ? "Select…" : placeholder}</option>
             {availableOpts.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.sublabel ? `${o.label} — ${o.sublabel}` : o.label}

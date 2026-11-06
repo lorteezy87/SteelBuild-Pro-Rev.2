@@ -335,14 +335,14 @@ describe("rollupDrawingStage", () => {
 
 describe("status + operational-state color resolvers", () => {
   it("getStatusColor maps a known status and falls back to muted", () => {
-    expect(getStatusColor("Approved")).toBe("#10b981");
+    expect(getStatusColor("Approved")).toBe("#2f8f6a");
     expect(getStatusColor("Released for Fabrication")).toBe("#0ea5e9");
     expect(getStatusColor("totally-unknown-status")).toBe(textMuted);
   });
 
   it("getOperationalStateColor maps a drafting/release state and falls back to muted", () => {
     expect(getOperationalStateColor("Not Started")).toBe("#64748b");
-    expect(getOperationalStateColor("Partially Released")).toBe("#10b981");
+    expect(getOperationalStateColor("Partially Released")).toBe("#2f8f6a");
     expect(getOperationalStateColor("totally-unknown-state")).toBe(textMuted);
   });
 });

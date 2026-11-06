@@ -41,6 +41,7 @@ import ExpenseTable  from "./expenses/ExpenseTable";
 import BulkActionBar from "./expenses/BulkActionBar";
 import ExpensesControlCenter from "./expenses/ExpensesControlCenter";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
+import { FolderSearch } from "lucide-react";
 
 export default function ExpensesPage() {
   const qc = useQueryClient();
@@ -425,7 +426,7 @@ export default function ExpensesPage() {
   if (!activeProject?.id) {
     return (
       <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>📌</div>
+        <FolderSearch size={32} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-muted)", marginBottom: 10 }} />
         <div style={{ fontFamily: "var(--font-body)", fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>
           Select a project to view Expenses
         </div>

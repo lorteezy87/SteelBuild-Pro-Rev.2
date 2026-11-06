@@ -156,7 +156,7 @@ export function SovRow({
       <PTD right mono style={{ color: variance < 0 ? "var(--status-error)" : "var(--status-success)", fontWeight: 700 }}>
         {formatCurrency(variance)}
       </PTD>
-      <PTD right mono style={c.overBilled ? { color: "var(--status-error)", fontWeight: 700, background: "rgba(239,68,68,0.12)", borderRadius: 4 } : {}}>
+      <PTD right mono style={c.overBilled ? { color: "var(--status-error)", fontWeight: 700, background: "rgba(210,69,47,0.12)", borderRadius: 4 } : {}}>
         <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
           {formatCurrency(c.balance)}
           {c.overBilled && <OverBilledBadge />}

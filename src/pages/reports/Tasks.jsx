@@ -161,7 +161,7 @@ export default function Tasks() {
       })}
       filters={
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search tasks, projects, assignees..." />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search tasks, projects, assignees…" />
           <SelectFilter
             label="Project"
             value={projectFilter}

@@ -38,6 +38,7 @@ import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
 import PayApplicationVoidDialog from "./payApplications/PayApplicationVoidDialog";
 import { buildVoidPayApplicationPatch, canMovePayApplication } from "./payApplications/payApplicationStatus";
 import "./payApplications/payApplicationsLayout.css";
+import { Lock } from "lucide-react";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "var(--payapp-card-padding, 16px)" };
@@ -327,7 +328,7 @@ export default function PayApplications() {
               </div>
               {/* The focusable region lets keyboard users scroll a locked G703 sheet. */}
               <div className="payapp-editor__sheet" style={card} role="region" aria-label="G703 continuation sheet" aria-describedby="payapp-sheet-scroll-note" tabIndex={0}>
-                <div style={{ ...lbl, marginBottom: 8 }}>G703 Continuation Sheet — {isDraft ? "enter % complete & stored" : <span style={{ color: "var(--status-warning, var(--accent))" }}>🔒 {PAY_APP_STATUS_LABELS[selectedApp.status] || selectedApp.status} — figures locked</span>}</div>
+                <div style={{ ...lbl, marginBottom: 8 }}>G703 Continuation Sheet — {isDraft ? "enter % complete & stored" : <span style={{ color: "var(--status-warning, var(--accent))" }}><Lock size={11} strokeWidth={2} aria-hidden="true" style={{ verticalAlign: "-1px", marginRight: 4 }} />{PAY_APP_STATUS_LABELS[selectedApp.status] || selectedApp.status} — figures locked</span>}</div>
                 <p id="payapp-sheet-scroll-note" className="payapp-editor__scroll-note">Scroll within this sheet to review all G703 columns.</p>
                 <table className="payapp-editor__table" style={{ ...mono, width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>

@@ -320,7 +320,7 @@ export default function DocumentStorageSettings({ projectId }) {
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
             <button onClick={resetForm} style={secondaryBtnStyle}>Cancel</button>
             <button onClick={handleAdd} disabled={createMut.isPending} style={primaryBtnStyle}>
-              {createMut.isPending ? "Linking..." : "Add Folder"}
+              {createMut.isPending ? "Linking…" : "Add Folder"}
             </button>
           </div>
         </div>
