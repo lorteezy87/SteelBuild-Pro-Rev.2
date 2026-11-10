@@ -117,7 +117,7 @@
     "vaul": "^1.1.2",
     "web-ifc": "^0.0.77",
     "xlsx": "npm:@e965/xlsx@0.20.3",
-    "zod": "^3.24.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.1",
